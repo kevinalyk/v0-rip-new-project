@@ -1,0 +1,281 @@
+2025-10-14T03:12:35.221Z [info] Middleware running for: /api/campaigns/detect
+2025-10-14T03:12:35.221Z [info] Auth token from cookie: Found
+2025-10-14T03:12:35.221Z [info] Verifying token: eyJhbGciOiJIUzI1NiJ9...
+2025-10-14T03:12:35.222Z [info] Token verified successfully: {
+  userId: '2943cc79-f353-410e-813e-10169e41ddab',
+  email: 'kevinalyk@gmail.com',
+  firstName: 'Kevin',
+  lastName: 'Lyk',
+  role: 'super_admin',
+  clientId: 'RIP',
+  clientSlug: 'rip',
+  iat: 1760379562,
+  exp: 1760984362
+}
+2025-10-14T03:12:35.222Z [info] Valid token found, allowing access to: /api/campaigns/detect
+2025-10-14T03:12:35.523Z [info] Verifying token: eyJhbGciOiJIUzI1NiJ9...
+2025-10-14T03:12:35.524Z [info] Token verified successfully: {
+  userId: '2943cc79-f353-410e-813e-10169e41ddab',
+  email: 'kevinalyk@gmail.com',
+  firstName: 'Kevin',
+  lastName: 'Lyk',
+  role: 'super_admin',
+  clientId: 'RIP',
+  clientSlug: 'rip',
+  iat: 1760379562,
+  exp: 1760984362
+}
+2025-10-14T03:12:35.526Z [info] Starting campaign detection with params: days=1, minCount=2, maxEmails=50
+2025-10-14T03:12:35.526Z [info] 🔍 Starting campaign detection scan (1 days, min count: 2)
+2025-10-14T03:12:35.574Z [info] 📧 Found 27 active seed emails to scan
+2025-10-14T03:12:35.574Z [info] 📅 Scanning emails since: 2025-10-13T03:12:35.574Z
+2025-10-14T03:12:35.574Z [info] 📬 Scanning riptest1@aol.com (aol)...
+2025-10-14T03:12:35.574Z [info] 📨 Using IMAP for riptest1@aol.com
+2025-10-14T03:12:35.576Z [info] 🔌 Connecting to IMAP for riptest1@aol.com
+2025-10-14T03:12:38.041Z [info] ✅ IMAP connected for riptest1@aol.com
+2025-10-14T03:12:38.878Z [info] 📂 Opened INBOX for riptest1@aol.com - 17 total messages
+2025-10-14T03:12:38.878Z [info] 🔍 Searching INBOX for riptest1@aol.com since Oct 13, 2025
+2025-10-14T03:12:39.669Z [info] 📧 Found 0 emails in INBOX for riptest1@aol.com since Oct 13, 2025
+2025-10-14T03:12:39.669Z [info] 🗑️ Checking spam folder: Spam for riptest1@aol.com
+2025-10-14T03:12:44.051Z [info] ❌ Spam folder Spam doesn't exist for riptest1@aol.com, trying next
+2025-10-14T03:12:44.051Z [info] 🗑️ Checking spam folder: Junk for riptest1@aol.com
+2025-10-14T03:12:48.501Z [info] ❌ Spam folder Junk doesn't exist for riptest1@aol.com, trying next
+2025-10-14T03:12:48.501Z [info] 🗑️ Checking spam folder: [Gmail]/Spam for riptest1@aol.com
+2025-10-14T03:12:52.975Z [info] ❌ Spam folder [Gmail]/Spam doesn't exist for riptest1@aol.com, trying next
+2025-10-14T03:12:52.975Z [info] 🗑️ Checking spam folder: INBOX.Spam for riptest1@aol.com
+2025-10-14T03:12:57.390Z [info] ❌ Spam folder INBOX.Spam doesn't exist for riptest1@aol.com, trying next
+2025-10-14T03:12:57.390Z [info] 🗑️ Checking spam folder: Junk Email for riptest1@aol.com
+2025-10-14T03:13:01.789Z [info] ❌ Spam folder Junk Email doesn't exist for riptest1@aol.com, trying next
+2025-10-14T03:13:01.789Z [info] 🗑️ Checking spam folder: Bulk for riptest1@aol.com
+2025-10-14T03:13:02.406Z [info] 📂 Opened spam folder Bulk for riptest1@aol.com - 1 messages
+2025-10-14T03:13:03.189Z [info] 📭 No emails found in Bulk for riptest1@aol.com, trying next
+2025-10-14T03:13:03.189Z [info] 🗑️ Checking spam folder: Bulk Mail for riptest1@aol.com
+2025-10-14T03:13:07.634Z [info] ❌ Spam folder Bulk Mail doesn't exist for riptest1@aol.com, trying next
+2025-10-14T03:13:07.634Z [info] 🏁 Finished scanning riptest1@aol.com, found 0 total emails
+2025-10-14T03:13:07.635Z [info] 📊 Found 0 emails in riptest1@aol.com
+2025-10-14T03:13:08.635Z [info] 📬 Scanning submarineblue9@gmail.com (gmail)...
+2025-10-14T03:13:08.636Z [info] 📨 Using IMAP for submarineblue9@gmail.com
+2025-10-14T03:13:08.636Z [info] 🔌 Connecting to IMAP for submarineblue9@gmail.com
+2025-10-14T03:13:08.861Z [info] ✅ IMAP connected for submarineblue9@gmail.com
+2025-10-14T03:13:08.889Z [info] 📂 Opened INBOX for submarineblue9@gmail.com - 1 total messages
+2025-10-14T03:13:08.889Z [info] 🔍 Searching INBOX for submarineblue9@gmail.com since Oct 13, 2025
+2025-10-14T03:13:08.915Z [info] 📧 Found 0 emails in INBOX for submarineblue9@gmail.com since Oct 13, 2025
+2025-10-14T03:13:08.915Z [info] 🗑️ Checking spam folder: Spam for submarineblue9@gmail.com
+2025-10-14T03:13:08.925Z [info] ❌ Spam folder Spam doesn't exist for submarineblue9@gmail.com, trying next
+2025-10-14T03:13:08.925Z [info] 🗑️ Checking spam folder: Junk for submarineblue9@gmail.com
+2025-10-14T03:13:08.936Z [info] ❌ Spam folder Junk doesn't exist for submarineblue9@gmail.com, trying next
+2025-10-14T03:13:08.937Z [info] 🗑️ Checking spam folder: [Gmail]/Spam for submarineblue9@gmail.com
+2025-10-14T03:13:08.953Z [info] 📂 Opened spam folder [Gmail]/Spam for submarineblue9@gmail.com - 0 messages
+2025-10-14T03:13:08.963Z [info] 📭 No emails found in [Gmail]/Spam for submarineblue9@gmail.com, trying next
+2025-10-14T03:13:08.963Z [info] 🗑️ Checking spam folder: INBOX.Spam for submarineblue9@gmail.com
+2025-10-14T03:13:08.973Z [info] ❌ Spam folder INBOX.Spam doesn't exist for submarineblue9@gmail.com, trying next
+2025-10-14T03:13:08.973Z [info] 🗑️ Checking spam folder: Junk Email for submarineblue9@gmail.com
+2025-10-14T03:13:08.984Z [info] ❌ Spam folder Junk Email doesn't exist for submarineblue9@gmail.com, trying next
+2025-10-14T03:13:08.984Z [info] 🗑️ Checking spam folder: Bulk for submarineblue9@gmail.com
+2025-10-14T03:13:08.995Z [info] ❌ Spam folder Bulk doesn't exist for submarineblue9@gmail.com, trying next
+2025-10-14T03:13:08.995Z [info] 🗑️ Checking spam folder: Bulk Mail for submarineblue9@gmail.com
+2025-10-14T03:13:09.005Z [info] ❌ Spam folder Bulk Mail doesn't exist for submarineblue9@gmail.com, trying next
+2025-10-14T03:13:09.005Z [info] 🏁 Finished scanning submarineblue9@gmail.com, found 0 total emails
+2025-10-14T03:13:09.006Z [info] 📊 Found 0 emails in submarineblue9@gmail.com
+2025-10-14T03:13:10.006Z [info] 📬 Scanning riptool@yahoo.com (yahoo)...
+2025-10-14T03:13:10.006Z [info] 📨 Using IMAP for riptool@yahoo.com
+2025-10-14T03:13:10.006Z [info] 🔌 Connecting to IMAP for riptool@yahoo.com
+2025-10-14T03:13:12.598Z [info] ✅ IMAP connected for riptool@yahoo.com
+2025-10-14T03:13:13.391Z [info] 📂 Opened INBOX for riptool@yahoo.com - 19 total messages
+2025-10-14T03:13:13.391Z [info] 🔍 Searching INBOX for riptool@yahoo.com since Oct 13, 2025
+2025-10-14T03:13:14.393Z [info] 📧 Found 0 emails in INBOX for riptool@yahoo.com since Oct 13, 2025
+2025-10-14T03:13:14.393Z [info] 🗑️ Checking spam folder: Spam for riptool@yahoo.com
+2025-10-14T03:14:52.478Z [info] 📭 No emails found in Bulk for ripreporting@aol.com, trying next
+2025-10-14T03:14:52.478Z [info] 🗑️ Checking spam folder: Bulk Mail for ripreporting@aol.com
+2025-10-14T03:14:56.871Z [info] ❌ Spam folder Bulk Mail doesn't exist for ripreporting@aol.com, trying next
+2025-10-14T03:14:56.871Z [info] 🏁 Finished scanning ripreporting@aol.com, found 0 total emails
+2025-10-14T03:14:56.871Z [info] 📊 Found 0 emails in ripreporting@aol.com
+2025-10-14T03:14:57.871Z [info] 📬 Scanning ontopwater3@aol.com (aol)...
+2025-10-14T03:14:57.871Z [info] 📨 Using IMAP for ontopwater3@aol.com
+2025-10-14T03:14:57.872Z [info] 🔌 Connecting to IMAP for ontopwater3@aol.com
+2025-10-14T03:14:42.124Z [info] ❌ Spam folder [Gmail]/Spam doesn't exist for ripreporting@aol.com, trying next
+2025-10-14T03:14:42.125Z [info] 🗑️ Checking spam folder: INBOX.Spam for ripreporting@aol.com
+2025-10-14T03:14:46.542Z [info] ❌ Spam folder INBOX.Spam doesn't exist for ripreporting@aol.com, trying next
+2025-10-14T03:14:46.542Z [info] 🗑️ Checking spam folder: Junk Email for ripreporting@aol.com
+2025-10-14T03:15:22.500Z [info] ❌ Spam folder Junk doesn't exist for ripreporting@yahoo.com, trying next
+2025-10-14T03:15:22.500Z [info] 🗑️ Checking spam folder: [Gmail]/Spam for ripreporting@yahoo.com
+2025-10-14T03:13:52.241Z [info] 📧 Found 0 emails in INBOX for riptest2@yahoo.com since Oct 13, 2025
+2025-10-14T03:13:52.241Z [info] 🗑️ Checking spam folder: Spam for riptest2@yahoo.com
+2025-10-14T03:13:56.685Z [info] ❌ Spam folder Spam doesn't exist for riptest2@yahoo.com, trying next
+2025-10-14T03:13:56.685Z [info] 🗑️ Checking spam folder: Junk for riptest2@yahoo.com
+2025-10-14T03:14:01.062Z [info] ❌ Spam folder Junk doesn't exist for riptest2@yahoo.com, trying next
+2025-10-14T03:14:01.062Z [info] 🗑️ Checking spam folder: [Gmail]/Spam for riptest2@yahoo.com
+2025-10-14T03:14:05.438Z [info] ❌ Spam folder [Gmail]/Spam doesn't exist for riptest2@yahoo.com, trying next
+2025-10-14T03:14:05.438Z [info] 🗑️ Checking spam folder: INBOX.Spam for riptest2@yahoo.com
+2025-10-14T03:14:09.810Z [info] ❌ Spam folder INBOX.Spam doesn't exist for riptest2@yahoo.com, trying next
+2025-10-14T03:14:09.810Z [info] 🗑️ Checking spam folder: Junk Email for riptest2@yahoo.com
+2025-10-14T03:14:14.181Z [info] ❌ Spam folder Junk Email doesn't exist for riptest2@yahoo.com, trying next
+2025-10-14T03:14:14.181Z [info] 🗑️ Checking spam folder: Bulk for riptest2@yahoo.com
+2025-10-14T03:14:14.716Z [info] 📂 Opened spam folder Bulk for riptest2@yahoo.com - 1 messages
+2025-10-14T03:14:15.397Z [info] 📭 No emails found in Bulk for riptest2@yahoo.com, trying next
+2025-10-14T03:14:15.397Z [info] 🗑️ Checking spam folder: Bulk Mail for riptest2@yahoo.com
+2025-10-14T03:14:19.732Z [info] ❌ Spam folder Bulk Mail doesn't exist for riptest2@yahoo.com, trying next
+2025-10-14T03:14:19.732Z [info] 🏁 Finished scanning riptest2@yahoo.com, found 0 total emails
+2025-10-14T03:14:19.732Z [info] 📊 Found 0 emails in riptest2@yahoo.com
+2025-10-14T03:14:20.733Z [info] 📬 Scanning ripreporting@gmail.com (gmail)...
+2025-10-14T03:14:20.733Z [info] 📨 Using IMAP for ripreporting@gmail.com
+2025-10-14T03:14:20.733Z [info] 🔌 Connecting to IMAP for ripreporting@gmail.com
+2025-10-14T03:14:21.884Z [info] ✅ IMAP connected for ripreporting@gmail.com
+2025-10-14T03:14:22.041Z [info] 📂 Opened INBOX for ripreporting@gmail.com - 4 total messages
+2025-10-14T03:14:22.041Z [info] 🔍 Searching INBOX for ripreporting@gmail.com since Oct 13, 2025
+2025-10-14T03:14:22.187Z [info] 📧 Found 0 emails in INBOX for ripreporting@gmail.com since Oct 13, 2025
+2025-10-14T03:14:22.187Z [info] 🗑️ Checking spam folder: Spam for ripreporting@gmail.com
+2025-10-14T03:14:22.307Z [info] ❌ Spam folder Spam doesn't exist for ripreporting@gmail.com, trying next
+2025-10-14T03:14:22.307Z [info] 🗑️ Checking spam folder: Junk for ripreporting@gmail.com
+2025-10-14T03:14:22.429Z [info] ❌ Spam folder Junk doesn't exist for ripreporting@gmail.com, trying next
+2025-10-14T03:14:22.429Z [info] 🗑️ Checking spam folder: [Gmail]/Spam for ripreporting@gmail.com
+2025-10-14T03:14:22.561Z [info] 📂 Opened spam folder [Gmail]/Spam for ripreporting@gmail.com - 0 messages
+2025-10-14T03:14:22.683Z [info] 📭 No emails found in [Gmail]/Spam for ripreporting@gmail.com, trying next
+2025-10-14T03:14:22.683Z [info] 🗑️ Checking spam folder: INBOX.Spam for ripreporting@gmail.com
+2025-10-14T03:14:22.808Z [info] ❌ Spam folder INBOX.Spam doesn't exist for ripreporting@gmail.com, trying next
+2025-10-14T03:14:22.808Z [info] 🗑️ Checking spam folder: Junk Email for ripreporting@gmail.com
+2025-10-14T03:14:22.937Z [info] ❌ Spam folder Junk Email doesn't exist for ripreporting@gmail.com, trying next
+2025-10-14T03:14:22.937Z [info] 🗑️ Checking spam folder: Bulk for ripreporting@gmail.com
+2025-10-14T03:14:23.058Z [info] ❌ Spam folder Bulk doesn't exist for ripreporting@gmail.com, trying next
+2025-10-14T03:14:23.058Z [info] 🗑️ Checking spam folder: Bulk Mail for ripreporting@gmail.com
+2025-10-14T03:14:23.179Z [info] ❌ Spam folder Bulk Mail doesn't exist for ripreporting@gmail.com, trying next
+2025-10-14T03:14:23.179Z [info] 🏁 Finished scanning ripreporting@gmail.com, found 0 total emails
+2025-10-14T03:14:23.179Z [info] 📊 Found 0 emails in ripreporting@gmail.com
+2025-10-14T03:14:24.182Z [info] 📬 Scanning ripreporting@aol.com (aol)...
+2025-10-14T03:14:24.182Z [info] 📨 Using IMAP for ripreporting@aol.com
+2025-10-14T03:14:24.182Z [info] 🔌 Connecting to IMAP for ripreporting@aol.com
+2025-10-14T03:14:26.736Z [info] ✅ IMAP connected for ripreporting@aol.com
+2025-10-14T03:14:27.547Z [info] 📂 Opened INBOX for ripreporting@aol.com - 5 total messages
+2025-10-14T03:14:27.547Z [info] 🔍 Searching INBOX for ripreporting@aol.com since Oct 13, 2025
+2025-10-14T03:14:37.689Z [info] ❌ Spam folder Junk doesn't exist for ripreporting@aol.com, trying next
+2025-10-14T03:14:37.689Z [info] 🗑️ Checking spam folder: [Gmail]/Spam for ripreporting@aol.com
+2025-10-14T03:14:51.034Z [info] ❌ Spam folder Junk Email doesn't exist for ripreporting@aol.com, trying next
+2025-10-14T03:14:51.034Z [info] 🗑️ Checking spam folder: Bulk for ripreporting@aol.com
+2025-10-14T03:14:51.662Z [info] 📂 Opened spam folder Bulk for ripreporting@aol.com - 5 messages
+2025-10-14T03:15:06.475Z [error] ❌ Graph API error for other: 400 {"error":{"code":"ErrorInvalidIdMalformed","message":"Id is malformed."}}
+2025-10-14T03:15:06.475Z [info] 📊 Found 0 total emails for survivorhan@outlook.com via Graph API
+2025-10-14T03:15:06.475Z [info] 📊 Found 0 emails in survivorhan@outlook.com
+2025-10-14T03:15:07.476Z [info] 📬 Scanning energeticfrog2025@outlook.com (outlook)...
+2025-10-14T03:15:07.476Z [info] 🔗 Using Graph API for energeticfrog2025@outlook.com
+2025-10-14T03:15:07.476Z [info] 🔍 Fetching Outlook emails for energeticfrog2025@outlook.com using Graph API
+2025-10-14T03:15:07.480Z [info] Token expired for energeticfrog2025@outlook.com, attempting refresh...
+2025-10-14T03:15:07.714Z [info] Token refreshed successfully for energeticfrog2025@outlook.com
+2025-10-14T03:15:07.724Z [info] 📂 Fetching from inbox folder since 2025-10-13T03:12:35.574Z
+2025-10-14T03:15:07.724Z [info] 🌐 Graph API URL: https://graph.microsoft.com/v1.0/me/mailfolders/inbox/messages?$filter=receivedDateTime ge 2025-10-13T03:12:35.574Z&$select=subject,from,receivedDateTime,internetMessageId&$orderby=receivedDateTime desc&$top=50
+2025-10-14T03:15:07.900Z [info] 📧 Found 0 messages in inbox
+2025-10-14T03:15:07.900Z [info] 📂 Fetching from junkemail folder since 2025-10-13T03:12:35.574Z
+2025-10-14T03:15:07.900Z [info] 🌐 Graph API URL: https://graph.microsoft.com/v1.0/me/mailfolders/junkemail/messages?$filter=receivedDateTime ge 2025-10-13T03:12:35.574Z&$select=subject,from,receivedDateTime,internetMessageId&$orderby=receivedDateTime desc&$top=50
+2025-10-14T03:15:07.973Z [info] 📧 Found 0 messages in junkemail
+2025-10-14T03:15:07.973Z [info] 📂 Fetching from other folder since 2025-10-13T03:12:35.574Z
+2025-10-14T03:15:07.973Z [info] 🌐 Graph API URL: https://graph.microsoft.com/v1.0/me/mailfolders/other/messages?$filter=receivedDateTime ge 2025-10-13T03:12:35.574Z&$select=subject,from,receivedDateTime,internetMessageId&$orderby=receivedDateTime desc&$top=50
+2025-10-14T03:15:08.231Z [error] ❌ Graph API error for other: 400 {"error":{"code":"ErrorInvalidIdMalformed","message":"Id is malformed."}}
+2025-10-14T03:15:08.231Z [info] 📊 Found 0 total emails for energeticfrog2025@outlook.com via Graph API
+2025-10-14T03:15:08.231Z [info] 📊 Found 0 emails in energeticfrog2025@outlook.com
+2025-10-14T03:15:09.232Z [info] 📬 Scanning ripreporting@yahoo.com (yahoo)...
+2025-10-14T03:15:09.232Z [info] 📨 Using IMAP for ripreporting@yahoo.com
+2025-10-14T03:15:09.232Z [info] 🔌 Connecting to IMAP for ripreporting@yahoo.com
+2025-10-14T03:15:02.733Z [error] ❌ IMAP error for ontopwater3@aol.com: LOGIN Invalid credentials
+2025-10-14T03:15:02.733Z [info] 📊 Found 0 emails in ontopwater3@aol.com
+2025-10-14T03:15:03.734Z [info] 📬 Scanning clearbluetoken@outlook.com (outlook)...
+2025-10-14T03:15:03.734Z [info] 🔗 Using Graph API for clearbluetoken@outlook.com
+2025-10-14T03:15:03.734Z [info] 🔍 Fetching Outlook emails for clearbluetoken@outlook.com using Graph API
+2025-10-14T03:15:03.741Z [info] Token expired for clearbluetoken@outlook.com, attempting refresh...
+2025-10-14T03:15:04.003Z [info] Token refreshed successfully for clearbluetoken@outlook.com
+2025-10-14T03:15:04.006Z [info] 📂 Fetching from inbox folder since 2025-10-13T03:12:35.574Z
+2025-10-14T03:15:04.006Z [info] 🌐 Graph API URL: https://graph.microsoft.com/v1.0/me/mailfolders/inbox/messages?$filter=receivedDateTime ge 2025-10-13T03:12:35.574Z&$select=subject,from,receivedDateTime,internetMessageId&$orderby=receivedDateTime desc&$top=50
+2025-10-14T03:15:04.130Z [info] 📧 Found 0 messages in inbox
+2025-10-14T03:15:04.130Z [info] 📂 Fetching from junkemail folder since 2025-10-13T03:12:35.574Z
+2025-10-14T03:15:04.130Z [info] 🌐 Graph API URL: https://graph.microsoft.com/v1.0/me/mailfolders/junkemail/messages?$filter=receivedDateTime ge 2025-10-13T03:12:35.574Z&$select=subject,from,receivedDateTime,internetMessageId&$orderby=receivedDateTime desc&$top=50
+2025-10-14T03:15:04.186Z [info] 📧 Found 0 messages in junkemail
+2025-10-14T03:15:04.186Z [info] 📂 Fetching from other folder since 2025-10-13T03:12:35.574Z
+2025-10-14T03:15:04.186Z [info] 🌐 Graph API URL: https://graph.microsoft.com/v1.0/me/mailfolders/other/messages?$filter=receivedDateTime ge 2025-10-13T03:12:35.574Z&$select=subject,from,receivedDateTime,internetMessageId&$orderby=receivedDateTime desc&$top=50
+2025-10-14T03:15:04.730Z [error] ❌ Graph API error for other: 400 {"error":{"code":"ErrorInvalidIdMalformed","message":"Id is malformed."}}
+2025-10-14T03:15:04.730Z [info] 📊 Found 0 total emails for clearbluetoken@outlook.com via Graph API
+2025-10-14T03:15:04.731Z [info] 📊 Found 0 emails in clearbluetoken@outlook.com
+2025-10-14T03:15:05.731Z [info] 📬 Scanning survivorhan@outlook.com (outlook)...
+2025-10-14T03:15:05.731Z [info] 🔗 Using Graph API for survivorhan@outlook.com
+2025-10-14T03:15:05.731Z [info] 🔍 Fetching Outlook emails for survivorhan@outlook.com using Graph API
+2025-10-14T03:15:05.735Z [info] Token expired for survivorhan@outlook.com, attempting refresh...
+2025-10-14T03:15:05.931Z [info] Token refreshed successfully for survivorhan@outlook.com
+2025-10-14T03:15:05.935Z [info] 📂 Fetching from inbox folder since 2025-10-13T03:12:35.574Z
+2025-10-14T03:15:05.935Z [info] 🌐 Graph API URL: https://graph.microsoft.com/v1.0/me/mailfolders/inbox/messages?$filter=receivedDateTime ge 2025-10-13T03:12:35.574Z&$select=subject,from,receivedDateTime,internetMessageId&$orderby=receivedDateTime desc&$top=50
+2025-10-14T03:15:06.049Z [info] 📧 Found 0 messages in inbox
+2025-10-14T03:15:06.049Z [info] 📂 Fetching from junkemail folder since 2025-10-13T03:12:35.574Z
+2025-10-14T03:15:06.049Z [info] 🌐 Graph API URL: https://graph.microsoft.com/v1.0/me/mailfolders/junkemail/messages?$filter=receivedDateTime ge 2025-10-13T03:12:35.574Z&$select=subject,from,receivedDateTime,internetMessageId&$orderby=receivedDateTime desc&$top=50
+2025-10-14T03:15:06.143Z [info] 📧 Found 0 messages in junkemail
+2025-10-14T03:15:06.143Z [info] 📂 Fetching from other folder since 2025-10-13T03:12:35.574Z
+2025-10-14T03:15:06.143Z [info] 🌐 Graph API URL: https://graph.microsoft.com/v1.0/me/mailfolders/other/messages?$filter=receivedDateTime ge 2025-10-13T03:12:35.574Z&$select=subject,from,receivedDateTime,internetMessageId&$orderby=receivedDateTime desc&$top=50
+2025-10-14T03:15:11.768Z [info] ✅ IMAP connected for ripreporting@yahoo.com
+2025-10-14T03:15:12.601Z [info] 📂 Opened INBOX for ripreporting@yahoo.com - 5 total messages
+2025-10-14T03:15:12.601Z [info] 🔍 Searching INBOX for ripreporting@yahoo.com since Oct 13, 2025
+2025-10-14T03:15:13.547Z [info] 📧 Found 0 emails in INBOX for ripreporting@yahoo.com since Oct 13, 2025
+2025-10-14T03:15:13.547Z [info] 🗑️ Checking spam folder: Spam for ripreporting@yahoo.com
+2025-10-14T03:15:18.023Z [info] ❌ Spam folder Spam doesn't exist for ripreporting@yahoo.com, trying next
+2025-10-14T03:15:18.023Z [info] 🗑️ Checking spam folder: Junk for ripreporting@yahoo.com
+2025-10-14T03:15:26.914Z [info] ❌ Spam folder [Gmail]/Spam doesn't exist for ripreporting@yahoo.com, trying next
+2025-10-14T03:14:28.731Z [info] 📧 Found 0 emails in INBOX for ripreporting@aol.com since Oct 13, 2025
+2025-10-14T03:14:28.731Z [info] 🗑️ Checking spam folder: Spam for ripreporting@aol.com
+2025-10-14T03:14:33.221Z [info] ❌ Spam folder Spam doesn't exist for ripreporting@aol.com, trying next
+2025-10-14T03:14:33.221Z [info] 🗑️ Checking spam folder: Junk for ripreporting@aol.com
+2025-10-14T03:13:18.891Z [info] ❌ Spam folder Spam doesn't exist for riptool@yahoo.com, trying next
+2025-10-14T03:13:18.891Z [info] 🗑️ Checking spam folder: Junk for riptool@yahoo.com
+2025-10-14T03:13:23.381Z [info] ❌ Spam folder Junk doesn't exist for riptool@yahoo.com, trying next
+2025-10-14T03:13:23.381Z [info] 🗑️ Checking spam folder: [Gmail]/Spam for riptool@yahoo.com
+2025-10-14T03:13:27.820Z [info] ❌ Spam folder [Gmail]/Spam doesn't exist for riptool@yahoo.com, trying next
+2025-10-14T03:13:27.820Z [info] 🗑️ Checking spam folder: INBOX.Spam for riptool@yahoo.com
+2025-10-14T03:13:32.279Z [info] ❌ Spam folder INBOX.Spam doesn't exist for riptool@yahoo.com, trying next
+2025-10-14T03:13:32.279Z [info] 🗑️ Checking spam folder: Junk Email for riptool@yahoo.com
+2025-10-14T03:13:36.775Z [info] ❌ Spam folder Junk Email doesn't exist for riptool@yahoo.com, trying next
+2025-10-14T03:13:36.775Z [info] 🗑️ Checking spam folder: Bulk for riptool@yahoo.com
+2025-10-14T03:13:37.381Z [info] 📂 Opened spam folder Bulk for riptool@yahoo.com - 0 messages
+2025-10-14T03:13:38.049Z [info] 📭 No emails found in Bulk for riptool@yahoo.com, trying next
+2025-10-14T03:13:38.049Z [info] 🗑️ Checking spam folder: Bulk Mail for riptool@yahoo.com
+2025-10-14T03:13:42.478Z [info] ❌ Spam folder Bulk Mail doesn't exist for riptool@yahoo.com, trying next
+2025-10-14T03:13:42.478Z [info] 🏁 Finished scanning riptool@yahoo.com, found 0 total emails
+2025-10-14T03:13:42.478Z [info] 📊 Found 0 emails in riptool@yahoo.com
+2025-10-14T03:13:43.478Z [info] 📬 Scanning jscwindmill@gmail.com (gmail)...
+2025-10-14T03:13:43.478Z [info] 📨 Using IMAP for jscwindmill@gmail.com
+2025-10-14T03:13:43.478Z [info] 🔌 Connecting to IMAP for jscwindmill@gmail.com
+2025-10-14T03:13:44.197Z [info] ✅ IMAP connected for jscwindmill@gmail.com
+2025-10-14T03:13:44.341Z [info] 📂 Opened INBOX for jscwindmill@gmail.com - 4 total messages
+2025-10-14T03:13:44.341Z [info] 🔍 Searching INBOX for jscwindmill@gmail.com since Oct 13, 2025
+2025-10-14T03:13:44.495Z [info] 📧 Found 0 emails in INBOX for jscwindmill@gmail.com since Oct 13, 2025
+2025-10-14T03:13:44.495Z [info] 🗑️ Checking spam folder: Spam for jscwindmill@gmail.com
+2025-10-14T03:13:44.620Z [info] ❌ Spam folder Spam doesn't exist for jscwindmill@gmail.com, trying next
+2025-10-14T03:13:44.620Z [info] 🗑️ Checking spam folder: Junk for jscwindmill@gmail.com
+2025-10-14T03:13:44.736Z [info] ❌ Spam folder Junk doesn't exist for jscwindmill@gmail.com, trying next
+2025-10-14T03:13:44.736Z [info] 🗑️ Checking spam folder: [Gmail]/Spam for jscwindmill@gmail.com
+2025-10-14T03:13:44.854Z [info] 📂 Opened spam folder [Gmail]/Spam for jscwindmill@gmail.com - 0 messages
+2025-10-14T03:13:44.965Z [info] 📭 No emails found in [Gmail]/Spam for jscwindmill@gmail.com, trying next
+2025-10-14T03:13:44.965Z [info] 🗑️ Checking spam folder: INBOX.Spam for jscwindmill@gmail.com
+2025-10-14T03:13:45.077Z [info] ❌ Spam folder INBOX.Spam doesn't exist for jscwindmill@gmail.com, trying next
+2025-10-14T03:13:45.077Z [info] 🗑️ Checking spam folder: Junk Email for jscwindmill@gmail.com
+2025-10-14T03:13:45.188Z [info] ❌ Spam folder Junk Email doesn't exist for jscwindmill@gmail.com, trying next
+2025-10-14T03:13:45.188Z [info] 🗑️ Checking spam folder: Bulk for jscwindmill@gmail.com
+2025-10-14T03:13:45.301Z [info] ❌ Spam folder Bulk doesn't exist for jscwindmill@gmail.com, trying next
+2025-10-14T03:13:45.301Z [info] 🗑️ Checking spam folder: Bulk Mail for jscwindmill@gmail.com
+2025-10-14T03:13:45.412Z [info] ❌ Spam folder Bulk Mail doesn't exist for jscwindmill@gmail.com, trying next
+2025-10-14T03:13:45.412Z [info] 🏁 Finished scanning jscwindmill@gmail.com, found 0 total emails
+2025-10-14T03:13:45.413Z [info] 📊 Found 0 emails in jscwindmill@gmail.com
+2025-10-14T03:13:46.413Z [info] 📬 Scanning cmpntty@outlook.com (outlook)...
+2025-10-14T03:13:46.414Z [info] 🔗 Using Graph API for cmpntty@outlook.com
+2025-10-14T03:13:46.414Z [info] 🔍 Fetching Outlook emails for cmpntty@outlook.com using Graph API
+2025-10-14T03:13:46.423Z [info] Token expired for cmpntty@outlook.com, attempting refresh...
+2025-10-14T03:13:46.950Z [info] Token refreshed successfully for cmpntty@outlook.com
+2025-10-14T03:13:46.960Z [info] 📂 Fetching from inbox folder since 2025-10-13T03:12:35.574Z
+2025-10-14T03:13:46.960Z [info] 🌐 Graph API URL: https://graph.microsoft.com/v1.0/me/mailfolders/inbox/messages?$filter=receivedDateTime ge 2025-10-13T03:12:35.574Z&$select=subject,from,receivedDateTime,internetMessageId&$orderby=receivedDateTime desc&$top=50
+2025-10-14T03:13:47.060Z [info] 📧 Found 0 messages in inbox
+2025-10-14T03:13:47.060Z [info] 📂 Fetching from junkemail folder since 2025-10-13T03:12:35.574Z
+2025-10-14T03:13:47.060Z [info] 🌐 Graph API URL: https://graph.microsoft.com/v1.0/me/mailfolders/junkemail/messages?$filter=receivedDateTime ge 2025-10-13T03:12:35.574Z&$select=subject,from,receivedDateTime,internetMessageId&$orderby=receivedDateTime desc&$top=50
+2025-10-14T03:13:47.121Z [info] 📧 Found 0 messages in junkemail
+2025-10-14T03:13:47.121Z [info] 📂 Fetching from other folder since 2025-10-13T03:12:35.574Z
+2025-10-14T03:13:47.121Z [info] 🌐 Graph API URL: https://graph.microsoft.com/v1.0/me/mailfolders/other/messages?$filter=receivedDateTime ge 2025-10-13T03:12:35.574Z&$select=subject,from,receivedDateTime,internetMessageId&$orderby=receivedDateTime desc&$top=50
+2025-10-14T03:13:47.334Z [error] ❌ Graph API error for other: 400 {"error":{"code":"ErrorInvalidIdMalformed","message":"Id is malformed."}}
+2025-10-14T03:13:47.334Z [info] 📊 Found 0 total emails for cmpntty@outlook.com via Graph API
+2025-10-14T03:13:47.334Z [info] 📊 Found 0 emails in cmpntty@outlook.com
+2025-10-14T03:13:48.335Z [info] 📬 Scanning riptest2@yahoo.com (yahoo)...
+2025-10-14T03:13:48.335Z [info] 📨 Using IMAP for riptest2@yahoo.com
+2025-10-14T03:13:48.335Z [info] 🔌 Connecting to IMAP for riptest2@yahoo.com
+2025-10-14T03:13:51.005Z [info] ✅ IMAP connected for riptest2@yahoo.com
+2025-10-14T03:13:51.564Z [info] 📂 Opened INBOX for riptest2@yahoo.com - 12 total messages
+2025-10-14T03:13:51.564Z [info] 🔍 Searching INBOX for riptest2@yahoo.com since Oct 13, 2025

@@ -1,0 +1,143 @@
+# EMAIL SERVER SETTINGS FOR SEED ACCOUNTS
+
+This document contains the server settings for various email providers used in our seed list.
+These settings are particularly useful if we implement automated email checking via IMAP/POP3 in the future.
+
+## YAHOO MAIL
+
+### IMAP (Recommended)
+- Incoming Mail (IMAP) Server: imap.mail.yahoo.com
+- Port: 993
+- Requires SSL: Yes
+
+- Outgoing Mail (SMTP) Server: smtp.mail.yahoo.com
+- Port: 465 or 587
+- Requires SSL: Yes
+- Requires Authentication: Yes
+
+- Login Info:
+  - Username: Your full Yahoo email address
+  - Password: Your normal password (or app password if using 2FA)
+
+### POP (If needed)
+- Incoming Mail (POP) Server: pop.mail.yahoo.com
+- Port: 995
+- Requires SSL: Yes
+
+- Outgoing Mail (SMTP) Server: smtp.mail.yahoo.com
+- Port: 465 or 587
+- Requires SSL: Yes
+- Requires Authentication: Yes
+
+- Login Info:
+  - Username: Your full Yahoo email address
+  - Password: Your normal password (or app password if using 2FA)
+
+## AOL MAIL
+
+### IMAP (Recommended)
+- Incoming Mail (IMAP) Server: imap.aol.com
+- Port: 993
+- Requires SSL: Yes
+
+- Outgoing Mail (SMTP) Server: smtp.aol.com
+- Port: 465 or 587
+- Requires SSL: Yes
+- Requires Authentication: Yes
+
+- Login Info:
+  - Username: Your full AOL email address
+  - Password: Your normal password (or app password if using 2FA)
+
+### POP (If needed)
+- Incoming Mail (POP) Server: pop.aol.com
+- Port: 995
+- Requires SSL: Yes
+
+- Outgoing Mail (SMTP) Server: smtp.aol.com
+- Port: 465 or 587
+- Requires SSL: Yes
+- Requires Authentication: Yes
+
+- Login Info:
+  - Username: Your full AOL email address
+  - Password: Your normal password (or app password if using 2FA)
+
+## GMAIL
+
+### IMAP (Recommended)
+- Incoming Mail (IMAP) Server: imap.gmail.com
+- Port: 993
+- Requires SSL: Yes
+
+- Outgoing Mail (SMTP) Server: smtp.gmail.com
+- Port: 465 (SSL) or 587 (TLS)
+- Requires SSL/TLS: Yes
+- Requires Authentication: Yes
+
+- Login Info:
+  - Username: Your full Gmail address
+  - Password: Your normal password (or app password if using 2FA)
+
+### POP (If needed)
+- Incoming Mail (POP) Server: pop.gmail.com
+- Port: 995
+- Requires SSL: Yes
+
+- Outgoing Mail (SMTP) Server: smtp.gmail.com
+- Port: 465 (SSL) or 587 (TLS)
+- Requires SSL/TLS: Yes
+- Requires Authentication: Yes
+
+- Login Info:
+  - Username: Your full Gmail address
+  - Password: Your normal password (or app password if using 2FA)
+
+## OUTLOOK/HOTMAIL
+
+### IMAP (Recommended)
+- Incoming Mail (IMAP) Server: outlook.office365.com
+- Port: 993
+- Requires SSL: Yes
+
+- Outgoing Mail (SMTP) Server: smtp.office365.com
+- Port: 587
+- Requires TLS: Yes
+- Requires Authentication: Yes
+
+- Login Info:
+  - Username: Your full Outlook/Hotmail address
+  - Password: Your normal password (or app password if using 2FA)
+
+### POP (If needed)
+- Incoming Mail (POP) Server: outlook.office365.com
+- Port: 995
+- Requires SSL: Yes
+
+- Outgoing Mail (SMTP) Server: smtp.office365.com
+- Port: 587
+- Requires TLS: Yes
+- Requires Authentication: Yes
+
+- Login Info:
+  - Username: Your full Outlook/Hotmail address
+  - Password: Your normal password (or app password if using 2FA)
+
+## NOTES
+
+1. For Yahoo and AOL:
+   - IMAP and POP access appears to be enabled by default as of May 2025
+   - No manual enabling required in account settings
+
+2. For Gmail:
+   - IMAP and POP must be manually enabled in account settings
+   - Path: Settings > See all settings > Forwarding and POP/IMAP
+
+3. For Outlook/Hotmail:
+   - IMAP and POP must be manually enabled in account settings
+   - Path: Settings > View all Outlook settings > Mail > Sync email
+
+4. App Passwords:
+   - If 2FA is enabled on any account, you'll likely need to generate an app password
+   - App passwords bypass 2FA for specific applications
+   - Each provider has different methods for generating app passwords

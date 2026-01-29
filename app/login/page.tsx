@@ -188,7 +188,7 @@ function LoginForm({ successMessage = "" }) {
               className="w-full"
               disabled={loading || dbStatus === "disconnected" || checkingDb}
             >
-              {loading ? "Signing in..." : "Sign in"}
+              {loading ? "Signing in..." : "CLICK HERE TO LOGIN"}
             </Button>
           </form>
         </CardContent>

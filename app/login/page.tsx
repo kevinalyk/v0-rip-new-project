@@ -128,8 +128,8 @@ function LoginForm({ successMessage = "" }) {
 
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl">🔴 TEST - Sign in to your account 🔴</CardTitle>
-          <CardDescription>🟢 TEST MODE ACTIVE - If you see this, changes are working! 🟢</CardDescription>
+          <CardTitle className="text-2xl">Sign in to your account</CardTitle>
+          <CardDescription>Enter your email and password to access the RIP tool</CardDescription>
         </CardHeader>
         <CardContent>
           {dbStatus === "disconnected" && (
@@ -188,7 +188,7 @@ function LoginForm({ successMessage = "" }) {
               className="w-full"
               disabled={loading || dbStatus === "disconnected" || checkingDb}
             >
-              {loading ? "Signing in..." : "CLICK HERE TO LOGIN"}
+              {loading ? "Signing in..." : "Sign in"}
             </Button>
           </form>
         </CardContent>

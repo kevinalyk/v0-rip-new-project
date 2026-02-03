@@ -225,6 +225,7 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
         } else if (response.status === 204 || response.status === 405) {
           // 204 No Content or HEAD not allowed - try GET
           let getResponse: any
+          let usedCustomFetchForGet = useCustomFetch
           
           if (useCustomFetch) {
             getResponse = await customFetch(currentUrl, {
@@ -237,21 +238,49 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
               },
             })
           } else {
-            getResponse = await fetch(currentUrl, {
-              method: "GET",
-              redirect: "manual",
-              headers: {
-                "User-Agent":
-                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-              },
-              signal: controller.signal,
-              // @ts-ignore - Node.js specific agent to handle SSL issues
-              agent: currentUrl.startsWith("https") ? httpsAgent : undefined,
-            })
+            // Try standard fetch first, fall back to custom fetch on SSL errors
+            try {
+              getResponse = await fetch(currentUrl, {
+                method: "GET",
+                redirect: "manual",
+                headers: {
+                  "User-Agent":
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                },
+                signal: controller.signal,
+                // @ts-ignore - Node.js specific agent to handle SSL issues
+                agent: currentUrl.startsWith("https") ? httpsAgent : undefined,
+              })
+            } catch (getFetchError: any) {
+              // Check if this is an SSL/timeout error - if so, retry with custom fetch
+              const isSSLError = getFetchError.message?.includes("certificate") || 
+                                getFetchError.message?.includes("SSL") || 
+                                getFetchError.message?.includes("TLS") ||
+                                getFetchError.message?.includes("self-signed") ||
+                                getFetchError.message?.includes("unable to verify") ||
+                                getFetchError.name === "AbortError"
+              
+              if (isSSLError && currentUrl.startsWith("https")) {
+                // Retry with custom fetch that bypasses SSL
+                getResponse = await customFetch(currentUrl, {
+                  method: "GET",
+                  timeout: 10000,
+                  headers: {
+                    "User-Agent":
+                      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                  },
+                })
+                usedCustomFetchForGet = true
+              } else {
+                // Not an SSL error, propagate it
+                throw getFetchError
+              }
+            }
           }
 
           if (getResponse.status >= 300 && getResponse.status < 400) {
-            const location = useCustomFetch
+            const location = usedCustomFetchForGet
               ? (Array.isArray(getResponse.headers.location) ? getResponse.headers.location[0] : getResponse.headers.location)
               : getResponse.headers.get("location")
             if (location) {
@@ -261,7 +290,7 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
             }
           }
 
-          const html = useCustomFetch ? (getResponse.body || "") : await getResponse.text()
+          const html = usedCustomFetchForGet ? (getResponse.body || "") : await getResponse.text()
 
           // Check meta/JS redirects same as above
           const metaPatterns = [

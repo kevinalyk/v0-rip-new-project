@@ -30,6 +30,8 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
             "Accept-Language": "en-US,en;q=0.5",
           },
           signal: controller.signal,
+          // @ts-ignore - Node.js specific options to handle SSL issues
+          rejectUnauthorized: false,
         })
 
         clearTimeout(timeoutId)
@@ -52,6 +54,8 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
               Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             },
             signal: controller.signal,
+            // @ts-ignore - Node.js specific options to handle SSL issues
+            rejectUnauthorized: false,
           })
 
           const html = await getResponse.text()
@@ -105,6 +109,8 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             },
             signal: controller.signal,
+            // @ts-ignore - Node.js specific options to handle SSL issues
+            rejectUnauthorized: false,
           })
 
           if (getResponse.status >= 300 && getResponse.status < 400) {

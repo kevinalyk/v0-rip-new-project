@@ -261,7 +261,7 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
             }
           }
 
-          const html = await getResponse.text()
+          const html = useCustomFetch ? (getResponse.body || "") : await getResponse.text()
 
           // Check meta/JS redirects same as above
           const metaPatterns = [

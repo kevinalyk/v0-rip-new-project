@@ -2,6 +2,9 @@ import { NextResponse } from "next/server"
 import { verifyAuth } from "@/lib/auth"
 import { neon } from "@neondatabase/serverless"
 import https from "https"
+import http from "http"
+import { URL } from "url"
+import { AbortController } from "node-fetch"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -9,6 +12,56 @@ const sql = neon(process.env.DATABASE_URL!)
 const httpsAgent = new https.Agent({
   rejectUnauthorized: false,
 })
+
+// Custom fetch using Node's http/https modules to properly handle SSL
+async function customFetch(
+  urlString: string,
+  options: { method: string; timeout: number; headers: Record<string, string> }
+): Promise<{ status: number; headers: Record<string, string | string[]>; body?: string }> {
+  return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(urlString)
+    const isHttps = parsedUrl.protocol === "https:"
+    const lib = isHttps ? https : http
+
+    const requestOptions = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (isHttps ? 443 : 80),
+      path: parsedUrl.pathname + parsedUrl.search,
+      method: options.method,
+      headers: options.headers,
+      rejectUnauthorized: false, // This is the key to bypassing SSL errors
+      timeout: options.timeout,
+    }
+
+    const req = lib.request(requestOptions, (res) => {
+      let body = ""
+      res.on("data", (chunk) => {
+        if (options.method === "GET") {
+          body += chunk.toString()
+        }
+      })
+
+      res.on("end", () => {
+        resolve({
+          status: res.statusCode || 0,
+          headers: res.headers,
+          body: body || undefined,
+        })
+      })
+    })
+
+    req.on("error", (error) => {
+      reject(error)
+    })
+
+    req.on("timeout", () => {
+      req.destroy()
+      reject(new Error("Request timeout"))
+    })
+
+    req.end()
+  })
+}
 
 // Same unwrapping logic as test-unwrap-url
 async function resolveRedirectsWithSteps(url: string): Promise<{
@@ -19,31 +72,28 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
   let currentUrl = url
   let redirectCount = 0
   const startTime = Date.now()
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => {
+    controller.abort()
+  }, 30000)
 
   try {
     while (redirectCount < maxRedirects) {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000)
-
       try {
-        const response = await fetch(currentUrl, {
+        const response = await customFetch(currentUrl, {
           method: "HEAD",
-          redirect: "manual",
+          timeout: 10000,
           headers: {
             "User-Agent":
               "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
           },
-          signal: controller.signal,
-          // @ts-ignore - Node.js specific agent to handle SSL issues
-          agent: currentUrl.startsWith("https") ? httpsAgent : undefined,
         })
 
-        clearTimeout(timeoutId)
-
         if (response.status >= 300 && response.status < 400) {
-          const location = response.headers.get("location")
+          const locationHeader = response.headers.location
+          const location = Array.isArray(locationHeader) ? locationHeader[0] : locationHeader
           if (!location) {
             break
           }
@@ -51,20 +101,17 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
           redirectCount++
         } else if (response.status === 200) {
           // Check for meta/JS redirects
-          const getResponse = await fetch(currentUrl, {
+          const getResponse = await customFetch(currentUrl, {
             method: "GET",
-            redirect: "manual",
+            timeout: 10000,
             headers: {
               "User-Agent":
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
               Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             },
-            signal: controller.signal,
-            // @ts-ignore - Node.js specific agent to handle SSL issues
-            agent: currentUrl.startsWith("https") ? httpsAgent : undefined,
           })
 
-          const html = await getResponse.text()
+          const html = getResponse.body || ""
 
           // Check meta refresh
           const metaPatterns = [
@@ -105,22 +152,20 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
 
           // No redirect found - final destination
           return { finalUrl: currentUrl }
-        } else if (response.status === 405) {
-          // HEAD not allowed - try GET
-          const getResponse = await fetch(currentUrl, {
+        } else if (response.status === 204 || response.status === 405) {
+          // No content (204) or HEAD not allowed (405) - try GET
+          const getResponse = await customFetch(currentUrl, {
             method: "GET",
-            redirect: "manual",
+            timeout: 10000,
             headers: {
               "User-Agent":
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             },
-            signal: controller.signal,
-            // @ts-ignore - Node.js specific agent to handle SSL issues
-            agent: currentUrl.startsWith("https") ? httpsAgent : undefined,
           })
 
           if (getResponse.status >= 300 && getResponse.status < 400) {
-            const location = getResponse.headers.get("location")
+            const locationHeader = getResponse.headers.location
+            const location = Array.isArray(locationHeader) ? locationHeader[0] : locationHeader
             if (location) {
               currentUrl = new URL(location, currentUrl).toString()
               redirectCount++
@@ -128,7 +173,7 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
             }
           }
 
-          const html = await getResponse.text()
+          const html = getResponse.body || ""
 
           // Check meta/JS redirects same as above
           const metaPatterns = [
@@ -169,10 +214,7 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
           return { finalUrl: currentUrl }
         }
       } catch (fetchError: any) {
-        clearTimeout(timeoutId)
-        if (fetchError.name === "AbortError") {
-          return { finalUrl: currentUrl, error: "Request timeout after 30 seconds" }
-        }
+        // SSL/timeout errors - return current URL as final
         return { finalUrl: currentUrl, error: fetchError.message }
       }
     }

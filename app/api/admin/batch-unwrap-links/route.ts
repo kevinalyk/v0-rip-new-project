@@ -182,6 +182,8 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
           redirectCount++
         } else if (response.status === 200) {
           // Check for meta/JS redirects
+          console.log("[v0] 200 handler: Fetching HTML for:", currentUrl)
+          
           let getResponse: any
           let html: string
           
@@ -212,6 +214,9 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
             html = await getResponse.text()
           }
 
+          console.log("[v0] 200 handler: HTML length:", html.length)
+          console.log("[v0] 200 handler: HTML preview (first 500 chars):", html.substring(0, 500))
+
           // Check meta refresh
           const metaPatterns = [
             /<meta[^>]*http-equiv=["']?refresh["']?[^>]*content=["']?\d+(?:\.\d+)?;\s*url=([^"'>]+)["']?/i,
@@ -225,10 +230,13 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
           }
 
           if (metaMatch && metaMatch[1]) {
+            console.log("[v0] 200 handler: Found meta refresh redirect to:", metaMatch[1])
             currentUrl = new URL(metaMatch[1], currentUrl).toString()
             redirectCount++
             continue
           }
+
+          console.log("[v0] 200 handler: No meta refresh found, checking JS redirects")
 
           // Check JS redirects
           const jsPatterns = [
@@ -244,11 +252,13 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
           }
 
           if (jsMatch && jsMatch[1]) {
+            console.log("[v0] 200 handler: Found JS redirect to:", jsMatch[1])
             currentUrl = new URL(jsMatch[1], currentUrl).toString()
             redirectCount++
             continue
           }
 
+          console.log("[v0] 200 handler: No redirects found - marking as final destination")
           // No redirect found - final destination
           return { finalUrl: currentUrl }
         } else if (response.status === 204 || response.status === 405) {

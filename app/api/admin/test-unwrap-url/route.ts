@@ -37,7 +37,7 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
     while (redirectCount < maxRedirects) {
       const stepStartTime = Date.now()
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000)
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // Reduced to 10s for faster feedback
 
       try {
         console.log("[v0] About to fetch:", currentUrl)
@@ -338,35 +338,51 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
         clearTimeout(timeoutId)
         const stepEndTime = Date.now()
         const timing = stepEndTime - stepStartTime
-
+        
+        console.log("[v0] Fetch error caught in loop:", fetchError.message)
+        console.log("[v0] Error name:", fetchError.name)
+        
+        // Check if this is an SSL/TLS error
+        const isSSLError = fetchError.message?.includes("certificate") || 
+                          fetchError.message?.includes("SSL") || 
+                          fetchError.message?.includes("TLS") ||
+                          fetchError.message?.includes("self-signed") ||
+                          fetchError.message?.includes("unable to verify")
+        
         if (fetchError.name === "AbortError") {
           steps.push({
             step: redirectCount + 1,
             url: currentUrl,
             status: 0,
-            redirectType: "Request timeout (30s)",
+            redirectType: "Request timeout (10s) - possible SSL issue",
             timing,
+            htmlSnippet: isSSLError ? "SSL certificate error prevented connection" : undefined,
           })
+          // Mark as error but still return current URL as final since we can't go further
           return {
             finalUrl: currentUrl,
             steps,
             totalTime: Date.now() - startTime,
-            error: "Request timeout after 30 seconds",
+            hasError: true,
+            error: "Request timeout (SSL certificate issue likely)",
           }
         }
-
+        
         steps.push({
           step: redirectCount + 1,
           url: currentUrl,
           status: 0,
-          redirectType: `Fetch error: ${fetchError.message}`,
+          redirectType: `Fetch error: ${fetchError.message}${isSSLError ? " (SSL)" : ""}`,
           timing,
+          htmlSnippet: isSSLError ? "This URL has SSL certificate issues but may still be valid" : undefined,
         })
+        // Mark as error but return current URL as final
         return {
           finalUrl: currentUrl,
           steps,
           totalTime: Date.now() - startTime,
-          error: fetchError.message,
+          hasError: true,
+          error: `${fetchError.message}${isSSLError ? " - URL has SSL issues but may be accessible in browser" : ""}`,
         }
       }
     }

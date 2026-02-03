@@ -251,12 +251,14 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
             steps,
             totalTime: Date.now() - startTime,
           }
-        } else if (response.status === 405) {
+        } else if (response.status === 204 || response.status === 405) {
           steps.push({
             step: redirectCount + 1,
             url: currentUrl,
             status: response.status,
-            redirectType: "HEAD not allowed - trying GET",
+            redirectType: response.status === 204 
+              ? "No content (204) - trying GET" 
+              : "HEAD not allowed - trying GET",
             timing,
           })
 

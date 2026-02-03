@@ -532,14 +532,19 @@ export async function POST(request: Request) {
           continue
         }
 
+        console.log(`[v0] Processing campaign ${campaign.id} with ${links.length} links`)
+        
         let anyUnwrapped = false
         let linkErrors: string[] = []
+        let skipped = 0
         const updatedLinks = await Promise.all(
           links.map(async (link) => {
             const result = await processLink(link)
             if (result.unwrapped) {
               anyUnwrapped = true
               results.emails.linksUnwrapped++
+            } else if (!result.error) {
+              skipped++
             }
             if (result.error) {
               linkErrors.push(`${link.url}: ${result.error}`)
@@ -547,6 +552,8 @@ export async function POST(request: Request) {
             return result.link
           })
         )
+        
+        console.log(`[v0] Campaign ${campaign.id} complete - Unwrapped: ${anyUnwrapped ? 'yes' : 'no'}, Skipped: ${skipped}, Errors: ${linkErrors.length}`)
 
         // Always update with processed links
         await sql`UPDATE "CompetitiveInsightCampaign" SET "ctaLinks" = ${JSON.stringify(updatedLinks)}::jsonb WHERE id = ${campaign.id}`
@@ -586,14 +593,19 @@ export async function POST(request: Request) {
           continue
         }
 
+        console.log(`[v0] Processing SMS ${sms.id} with ${links.length} links`)
+        
         let anyUnwrapped = false
         let linkErrors: string[] = []
+        let skipped = 0
         const updatedLinks = await Promise.all(
           links.map(async (link) => {
             const result = await processLink(link)
             if (result.unwrapped) {
               anyUnwrapped = true
               results.sms.linksUnwrapped++
+            } else if (!result.error) {
+              skipped++
             }
             if (result.error) {
               linkErrors.push(`${link.url}: ${result.error}`)
@@ -601,6 +613,8 @@ export async function POST(request: Request) {
             return result.link
           })
         )
+        
+        console.log(`[v0] SMS ${sms.id} complete - Unwrapped: ${anyUnwrapped ? 'yes' : 'no'}, Skipped: ${skipped}, Errors: ${linkErrors.length}`)
 
         // Always update with processed links
         await sql`UPDATE "SmsQueue" SET "ctaLinks" = ${JSON.stringify(updatedLinks)}::jsonb WHERE id = ${sms.id}`

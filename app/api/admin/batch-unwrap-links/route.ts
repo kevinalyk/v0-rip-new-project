@@ -4,7 +4,6 @@ import { neon } from "@neondatabase/serverless"
 import https from "https"
 import http from "http"
 import { URL } from "url"
-import { AbortController } from "node-fetch"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -72,28 +71,81 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
   let currentUrl = url
   let redirectCount = 0
   const startTime = Date.now()
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => {
-    controller.abort()
-  }, 30000)
 
   try {
     while (redirectCount < maxRedirects) {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000)
+
+      let response: { status: number; headers: any }
+      let useCustomFetch = false
+
       try {
-        const response = await customFetch(currentUrl, {
+        // Try standard fetch first (works for most URLs)
+        response = await fetch(currentUrl, {
           method: "HEAD",
-          timeout: 10000,
+          redirect: "manual",
           headers: {
             "User-Agent":
               "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
           },
+          signal: controller.signal,
+          // @ts-ignore - Node.js specific agent to handle SSL issues
+          agent: currentUrl.startsWith("https") ? httpsAgent : undefined,
         })
 
+        clearTimeout(timeoutId)
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId)
+        
+        // Check if this is an SSL/timeout error - if so, retry with custom fetch
+        const isSSLError = fetchError.message?.includes("certificate") || 
+                          fetchError.message?.includes("SSL") || 
+                          fetchError.message?.includes("TLS") ||
+                          fetchError.message?.includes("self-signed") ||
+                          fetchError.message?.includes("unable to verify") ||
+                          fetchError.name === "AbortError"
+        
+        if (isSSLError && currentUrl.startsWith("https")) {
+          // Retry with custom fetch that bypasses SSL
+          try {
+            response = await customFetch(currentUrl, {
+              method: "HEAD",
+              timeout: 10000,
+              headers: {
+                "User-Agent":
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+              },
+            })
+            useCustomFetch = true
+          } catch (customFetchError) {
+            // If custom fetch also fails, return error
+            return {
+              finalUrl: currentUrl,
+              error: `Fetch failed: ${fetchError.message}`,
+            }
+          }
+        } else {
+          // Not an SSL error, return the original error
+          return {
+            finalUrl: currentUrl,
+            error: fetchError.message,
+          }
+        }
+      }
+
+      try {
+
         if (response.status >= 300 && response.status < 400) {
-          const locationHeader = response.headers.location
-          const location = Array.isArray(locationHeader) ? locationHeader[0] : locationHeader
+          // Handle headers differently based on whether we used custom fetch
+          const location = useCustomFetch 
+            ? (Array.isArray(response.headers.location) ? response.headers.location[0] : response.headers.location)
+            : response.headers.get("location")
+          
           if (!location) {
             break
           }
@@ -101,17 +153,35 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
           redirectCount++
         } else if (response.status === 200) {
           // Check for meta/JS redirects
-          const getResponse = await customFetch(currentUrl, {
-            method: "GET",
-            timeout: 10000,
-            headers: {
-              "User-Agent":
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-              Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            },
-          })
-
-          const html = getResponse.body || ""
+          let getResponse: any
+          let html: string
+          
+          if (useCustomFetch) {
+            getResponse = await customFetch(currentUrl, {
+              method: "GET",
+              timeout: 10000,
+              headers: {
+                "User-Agent":
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              },
+            })
+            html = getResponse.body || ""
+          } else {
+            getResponse = await fetch(currentUrl, {
+              method: "GET",
+              redirect: "manual",
+              headers: {
+                "User-Agent":
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              },
+              signal: controller.signal,
+              // @ts-ignore - Node.js specific agent to handle SSL issues
+              agent: currentUrl.startsWith("https") ? httpsAgent : undefined,
+            })
+            html = await getResponse.text()
+          }
 
           // Check meta refresh
           const metaPatterns = [
@@ -153,19 +223,37 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
           // No redirect found - final destination
           return { finalUrl: currentUrl }
         } else if (response.status === 204 || response.status === 405) {
-          // No content (204) or HEAD not allowed (405) - try GET
-          const getResponse = await customFetch(currentUrl, {
-            method: "GET",
-            timeout: 10000,
-            headers: {
-              "User-Agent":
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            },
-          })
+          // 204 No Content or HEAD not allowed - try GET
+          let getResponse: any
+          
+          if (useCustomFetch) {
+            getResponse = await customFetch(currentUrl, {
+              method: "GET",
+              timeout: 10000,
+              headers: {
+                "User-Agent":
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              },
+            })
+          } else {
+            getResponse = await fetch(currentUrl, {
+              method: "GET",
+              redirect: "manual",
+              headers: {
+                "User-Agent":
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              },
+              signal: controller.signal,
+              // @ts-ignore - Node.js specific agent to handle SSL issues
+              agent: currentUrl.startsWith("https") ? httpsAgent : undefined,
+            })
+          }
 
           if (getResponse.status >= 300 && getResponse.status < 400) {
-            const locationHeader = getResponse.headers.location
-            const location = Array.isArray(locationHeader) ? locationHeader[0] : locationHeader
+            const location = useCustomFetch
+              ? (Array.isArray(getResponse.headers.location) ? getResponse.headers.location[0] : getResponse.headers.location)
+              : getResponse.headers.get("location")
             if (location) {
               currentUrl = new URL(location, currentUrl).toString()
               redirectCount++
@@ -173,7 +261,7 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
             }
           }
 
-          const html = getResponse.body || ""
+          const html = await getResponse.text()
 
           // Check meta/JS redirects same as above
           const metaPatterns = [
@@ -214,7 +302,10 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
           return { finalUrl: currentUrl }
         }
       } catch (fetchError: any) {
-        // SSL/timeout errors - return current URL as final
+        clearTimeout(timeoutId)
+        if (fetchError.name === "AbortError") {
+          return { finalUrl: currentUrl, error: "Request timeout after 30 seconds" }
+        }
         return { finalUrl: currentUrl, error: fetchError.message }
       }
     }

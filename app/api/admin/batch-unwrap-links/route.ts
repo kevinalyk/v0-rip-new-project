@@ -100,15 +100,25 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
       } catch (fetchError: any) {
         clearTimeout(timeoutId)
         
+        console.log("[v0] Initial HEAD fetch failed for:", currentUrl)
+        console.log("[v0] Error message:", fetchError.message)
+        console.log("[v0] Error name:", fetchError.name)
+        console.log("[v0] Error type:", fetchError.constructor?.name)
+        
         // Check if this is an SSL/timeout error - if so, retry with custom fetch
+        // Also treat generic "fetch failed" on HTTPS as potential SSL issue
         const isSSLError = fetchError.message?.includes("certificate") || 
                           fetchError.message?.includes("SSL") || 
                           fetchError.message?.includes("TLS") ||
                           fetchError.message?.includes("self-signed") ||
                           fetchError.message?.includes("unable to verify") ||
-                          fetchError.name === "AbortError"
+                          fetchError.name === "AbortError" ||
+                          (fetchError.message?.includes("fetch failed") && currentUrl.startsWith("https"))
+        
+        console.log("[v0] Is SSL error?", isSSLError)
         
         if (isSSLError && currentUrl.startsWith("https")) {
+          console.log("[v0] Retrying with customFetch...")
           // Retry with custom fetch that bypasses SSL
           try {
             response = await customFetch(currentUrl, {
@@ -121,8 +131,10 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
                 "Accept-Language": "en-US,en;q=0.5",
               },
             })
+            console.log("[v0] customFetch HEAD succeeded with status:", response.status)
             useCustomFetch = true
           } catch (customFetchError) {
+            console.log("[v0] customFetch HEAD also failed:", customFetchError)
             // If custom fetch also fails, return error
             return {
               finalUrl: currentUrl,

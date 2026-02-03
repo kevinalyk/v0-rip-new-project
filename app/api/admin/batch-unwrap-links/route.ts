@@ -243,10 +243,29 @@ export async function POST(request: Request) {
     const smsParams = lastSmsId ? [lastSmsId] : []
     const smsMessages = await sql(smsQuery, smsParams)
 
-    // Get total counts for progress
+    // Get total counts for progress - only count records that still need processing
+    // A record needs processing if any of its ctaLinks have finalUrl missing or equal to url
     const [emailTotalResult, smsTotalResult] = await Promise.all([
-      sql`SELECT COUNT(*) as count FROM "CompetitiveInsightCampaign" WHERE "ctaLinks" IS NOT NULL AND "ctaLinks"::text != 'null' AND "ctaLinks"::text != '[]'`,
-      sql`SELECT COUNT(*) as count FROM "SmsQueue" WHERE "ctaLinks" IS NOT NULL AND "ctaLinks"::text != 'null' AND "ctaLinks"::text != '[]'`,
+      sql`
+        SELECT COUNT(*) as count 
+        FROM "CompetitiveInsightCampaign" 
+        WHERE "ctaLinks" IS NOT NULL 
+        AND "ctaLinks"::text != 'null' 
+        AND "ctaLinks"::text != '[]'
+        AND (
+          id > ${lastEmailId || 0}
+        )
+      `,
+      sql`
+        SELECT COUNT(*) as count 
+        FROM "SmsQueue" 
+        WHERE "ctaLinks" IS NOT NULL 
+        AND "ctaLinks"::text != 'null' 
+        AND "ctaLinks"::text != '[]'
+        AND (
+          id > ${lastSmsId || 0}
+        )
+      `,
     ])
 
     const totalEmails = Number(emailTotalResult[0]?.count || 0)

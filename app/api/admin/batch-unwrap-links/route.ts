@@ -105,8 +105,25 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
         console.log("[v0] Error name:", fetchError.name)
         console.log("[v0] Error type:", fetchError.constructor?.name)
         
+        // Check if this is a DNS/network error (should not retry)
+        const isDNSError = fetchError.cause?.code === "ENOTFOUND" ||
+                          fetchError.cause?.code === "ECONNREFUSED" ||
+                          fetchError.cause?.code === "ECONNRESET" ||
+                          fetchError.message?.includes("ENOTFOUND") ||
+                          fetchError.message?.includes("ECONNREFUSED")
+        
+        console.log("[v0] Is DNS/network error?", isDNSError)
+        
+        if (isDNSError) {
+          console.log("[v0] DNS/network error - not retrying")
+          return {
+            finalUrl: currentUrl,
+            error: fetchError.message,
+          }
+        }
+        
         // Check if this is an SSL/timeout error - if so, retry with custom fetch
-        // Also treat generic "fetch failed" on HTTPS as potential SSL issue
+        // Also treat generic "fetch failed" on HTTPS as potential SSL issue (but not DNS errors)
         const isSSLError = fetchError.message?.includes("certificate") || 
                           fetchError.message?.includes("SSL") || 
                           fetchError.message?.includes("TLS") ||

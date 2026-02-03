@@ -100,11 +100,6 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
       } catch (fetchError: any) {
         clearTimeout(timeoutId)
         
-        console.log("[v0] Initial HEAD fetch failed for:", currentUrl)
-        console.log("[v0] Error message:", fetchError.message)
-        console.log("[v0] Error name:", fetchError.name)
-        console.log("[v0] Error type:", fetchError.constructor?.name)
-        
         // Check if this is a DNS/network error (should not retry)
         const isDNSError = fetchError.cause?.code === "ENOTFOUND" ||
                           fetchError.cause?.code === "ECONNREFUSED" ||
@@ -112,10 +107,7 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
                           fetchError.message?.includes("ENOTFOUND") ||
                           fetchError.message?.includes("ECONNREFUSED")
         
-        console.log("[v0] Is DNS/network error?", isDNSError)
-        
         if (isDNSError) {
-          console.log("[v0] DNS/network error - not retrying")
           return {
             finalUrl: currentUrl,
             error: fetchError.message,
@@ -132,10 +124,7 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
                           fetchError.name === "AbortError" ||
                           (fetchError.message?.includes("fetch failed") && currentUrl.startsWith("https"))
         
-        console.log("[v0] Is SSL error?", isSSLError)
-        
         if (isSSLError && currentUrl.startsWith("https")) {
-          console.log("[v0] Retrying with customFetch...")
           // Retry with custom fetch that bypasses SSL
           try {
             response = await customFetch(currentUrl, {
@@ -148,10 +137,8 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
                 "Accept-Language": "en-US,en;q=0.5",
               },
             })
-            console.log("[v0] customFetch HEAD succeeded with status:", response.status)
             useCustomFetch = true
           } catch (customFetchError) {
-            console.log("[v0] customFetch HEAD also failed:", customFetchError)
             // If custom fetch also fails, return error
             return {
               finalUrl: currentUrl,
@@ -182,8 +169,6 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
           redirectCount++
         } else if (response.status === 200) {
           // Check for meta/JS redirects
-          console.log("[v0] 200 handler: Fetching HTML for:", currentUrl)
-          
           let getResponse: any
           let html: string
           
@@ -214,9 +199,6 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
             html = await getResponse.text()
           }
 
-          console.log("[v0] 200 handler: HTML length:", html.length)
-          console.log("[v0] 200 handler: HTML preview (first 500 chars):", html.substring(0, 500))
-
           // Check meta refresh
           const metaPatterns = [
             /<meta[^>]*http-equiv=["']?refresh["']?[^>]*content=["']?\d+(?:\.\d+)?;\s*url=([^"'>]+)["']?/i,
@@ -230,13 +212,10 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
           }
 
           if (metaMatch && metaMatch[1]) {
-            console.log("[v0] 200 handler: Found meta refresh redirect to:", metaMatch[1])
             currentUrl = new URL(metaMatch[1], currentUrl).toString()
             redirectCount++
             continue
           }
-
-          console.log("[v0] 200 handler: No meta refresh found, checking JS redirects")
 
           // Check JS redirects
           const jsPatterns = [
@@ -252,25 +231,19 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
           }
 
           if (jsMatch && jsMatch[1]) {
-            console.log("[v0] 200 handler: Found JS redirect to:", jsMatch[1])
             currentUrl = new URL(jsMatch[1], currentUrl).toString()
             redirectCount++
             continue
           }
 
-          console.log("[v0] 200 handler: No redirects found - marking as final destination")
           // No redirect found - final destination
           return { finalUrl: currentUrl }
         } else if (response.status === 204 || response.status === 405) {
-          console.log("[v0] 204/405 handler: Received status", response.status, "for URL:", currentUrl)
-          console.log("[v0] 204/405 handler: useCustomFetch =", useCustomFetch)
-          
           // 204 No Content or HEAD not allowed - try GET
           let getResponse: any
           let usedCustomFetchForGet = useCustomFetch
           
           if (useCustomFetch) {
-            console.log("[v0] 204/405 handler: Using customFetch for GET")
             getResponse = await customFetch(currentUrl, {
               method: "GET",
               timeout: 10000,
@@ -280,10 +253,8 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
                 Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
               },
             })
-            console.log("[v0] 204/405 handler: customFetch GET response status:", getResponse.status)
           } else {
             // Try standard fetch first, fall back to custom fetch on SSL errors
-            console.log("[v0] 204/405 handler: Trying standard fetch GET")
             try {
               getResponse = await fetch(currentUrl, {
                 method: "GET",
@@ -296,9 +267,7 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
                 // @ts-ignore - Node.js specific agent to handle SSL issues
                 agent: currentUrl.startsWith("https") ? httpsAgent : undefined,
               })
-              console.log("[v0] 204/405 handler: Standard fetch GET response status:", getResponse.status)
             } catch (getFetchError: any) {
-              console.log("[v0] 204/405 handler: Standard fetch GET failed:", getFetchError.message)
               // Check if this is an SSL/timeout error - if so, retry with custom fetch
               const isSSLError = getFetchError.message?.includes("certificate") || 
                                 getFetchError.message?.includes("SSL") || 
@@ -307,10 +276,7 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
                                 getFetchError.message?.includes("unable to verify") ||
                                 getFetchError.name === "AbortError"
               
-              console.log("[v0] 204/405 handler: Is SSL error?", isSSLError)
-              
               if (isSSLError && currentUrl.startsWith("https")) {
-                console.log("[v0] 204/405 handler: Retrying with customFetch")
                 // Retry with custom fetch that bypasses SSL
                 getResponse = await customFetch(currentUrl, {
                   method: "GET",
@@ -321,32 +287,24 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
                     Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                   },
                 })
-                console.log("[v0] 204/405 handler: customFetch GET response status:", getResponse.status)
                 usedCustomFetchForGet = true
               } else {
-                console.log("[v0] 204/405 handler: Not SSL error, throwing")
                 // Not an SSL error, propagate it
                 throw getFetchError
               }
             }
           }
-
-          console.log("[v0] 204/405 handler: GET response status =", getResponse.status)
           
           if (getResponse.status >= 300 && getResponse.status < 400) {
             const location = usedCustomFetchForGet
               ? (Array.isArray(getResponse.headers.location) ? getResponse.headers.location[0] : getResponse.headers.location)
               : getResponse.headers.get("location")
-            console.log("[v0] 204/405 handler: Redirect detected, location =", location)
             if (location) {
               currentUrl = new URL(location, currentUrl).toString()
-              console.log("[v0] 204/405 handler: Updated currentUrl to:", currentUrl)
               redirectCount++
               continue
             }
           }
-          
-          console.log("[v0] 204/405 handler: No redirect found, checking for meta/JS redirects")
 
           const html = usedCustomFetchForGet ? (getResponse.body || "") : await getResponse.text()
 
@@ -547,19 +505,14 @@ export async function POST(request: Request) {
           continue
         }
 
-        console.log(`[v0] Processing campaign ${campaign.id} with ${links.length} links`)
-        
         let anyUnwrapped = false
         let linkErrors: string[] = []
-        let skipped = 0
         const updatedLinks = await Promise.all(
           links.map(async (link) => {
             const result = await processLink(link)
             if (result.unwrapped) {
               anyUnwrapped = true
               results.emails.linksUnwrapped++
-            } else if (!result.error) {
-              skipped++
             }
             if (result.error) {
               linkErrors.push(`${link.url}: ${result.error}`)
@@ -567,8 +520,6 @@ export async function POST(request: Request) {
             return result.link
           })
         )
-        
-        console.log(`[v0] Campaign ${campaign.id} complete - Unwrapped: ${anyUnwrapped ? 'yes' : 'no'}, Skipped: ${skipped}, Errors: ${linkErrors.length}`)
 
         // Always update with processed links
         await sql`UPDATE "CompetitiveInsightCampaign" SET "ctaLinks" = ${JSON.stringify(updatedLinks)}::jsonb WHERE id = ${campaign.id}`
@@ -608,19 +559,14 @@ export async function POST(request: Request) {
           continue
         }
 
-        console.log(`[v0] Processing SMS ${sms.id} with ${links.length} links`)
-        
         let anyUnwrapped = false
         let linkErrors: string[] = []
-        let skipped = 0
         const updatedLinks = await Promise.all(
           links.map(async (link) => {
             const result = await processLink(link)
             if (result.unwrapped) {
               anyUnwrapped = true
               results.sms.linksUnwrapped++
-            } else if (!result.error) {
-              skipped++
             }
             if (result.error) {
               linkErrors.push(`${link.url}: ${result.error}`)
@@ -628,8 +574,6 @@ export async function POST(request: Request) {
             return result.link
           })
         )
-        
-        console.log(`[v0] SMS ${sms.id} complete - Unwrapped: ${anyUnwrapped ? 'yes' : 'no'}, Skipped: ${skipped}, Errors: ${linkErrors.length}`)
 
         // Always update with processed links
         await sql`UPDATE "SmsQueue" SET "ctaLinks" = ${JSON.stringify(updatedLinks)}::jsonb WHERE id = ${sms.id}`

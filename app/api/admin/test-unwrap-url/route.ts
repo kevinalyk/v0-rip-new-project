@@ -40,6 +40,10 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
       const timeoutId = setTimeout(() => controller.abort(), 30000)
 
       try {
+        console.log("[v0] About to fetch:", currentUrl)
+        console.log("[v0] Using HTTPS agent:", currentUrl.startsWith("https"))
+        console.log("[v0] Agent object:", currentUrl.startsWith("https") ? "httpsAgent defined" : "undefined")
+        
         const response = await fetch(currentUrl, {
           method: "HEAD",
           redirect: "manual",
@@ -53,6 +57,8 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
           // @ts-ignore - Node.js specific agent to handle SSL issues
           agent: currentUrl.startsWith("https") ? httpsAgent : undefined,
         })
+        
+        console.log("[v0] Fetch successful, status:", response.status)
 
         clearTimeout(timeoutId)
         const stepEndTime = Date.now()
@@ -380,6 +386,13 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
       error: "Max redirects (10) reached",
     }
   } catch (error: any) {
+    console.log("[v0] Top-level catch in resolveRedirectsWithSteps:", error)
+    console.log("[v0] Error type:", error?.constructor?.name)
+    console.log("[v0] Error message:", error?.message)
+    console.log("[v0] Error stack:", error?.stack)
+    if (error && 'cause' in error) {
+      console.log("[v0] Error cause:", error.cause)
+    }
     return {
       finalUrl: currentUrl,
       steps,

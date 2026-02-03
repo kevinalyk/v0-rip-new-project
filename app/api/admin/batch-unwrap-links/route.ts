@@ -223,11 +223,15 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
           // No redirect found - final destination
           return { finalUrl: currentUrl }
         } else if (response.status === 204 || response.status === 405) {
+          console.log("[v0] 204/405 handler: Received status", response.status, "for URL:", currentUrl)
+          console.log("[v0] 204/405 handler: useCustomFetch =", useCustomFetch)
+          
           // 204 No Content or HEAD not allowed - try GET
           let getResponse: any
           let usedCustomFetchForGet = useCustomFetch
           
           if (useCustomFetch) {
+            console.log("[v0] 204/405 handler: Using customFetch for GET")
             getResponse = await customFetch(currentUrl, {
               method: "GET",
               timeout: 10000,
@@ -237,8 +241,10 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
                 Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
               },
             })
+            console.log("[v0] 204/405 handler: customFetch GET response status:", getResponse.status)
           } else {
             // Try standard fetch first, fall back to custom fetch on SSL errors
+            console.log("[v0] 204/405 handler: Trying standard fetch GET")
             try {
               getResponse = await fetch(currentUrl, {
                 method: "GET",
@@ -251,7 +257,9 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
                 // @ts-ignore - Node.js specific agent to handle SSL issues
                 agent: currentUrl.startsWith("https") ? httpsAgent : undefined,
               })
+              console.log("[v0] 204/405 handler: Standard fetch GET response status:", getResponse.status)
             } catch (getFetchError: any) {
+              console.log("[v0] 204/405 handler: Standard fetch GET failed:", getFetchError.message)
               // Check if this is an SSL/timeout error - if so, retry with custom fetch
               const isSSLError = getFetchError.message?.includes("certificate") || 
                                 getFetchError.message?.includes("SSL") || 
@@ -260,7 +268,10 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
                                 getFetchError.message?.includes("unable to verify") ||
                                 getFetchError.name === "AbortError"
               
+              console.log("[v0] 204/405 handler: Is SSL error?", isSSLError)
+              
               if (isSSLError && currentUrl.startsWith("https")) {
+                console.log("[v0] 204/405 handler: Retrying with customFetch")
                 // Retry with custom fetch that bypasses SSL
                 getResponse = await customFetch(currentUrl, {
                   method: "GET",
@@ -271,24 +282,32 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
                     Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                   },
                 })
+                console.log("[v0] 204/405 handler: customFetch GET response status:", getResponse.status)
                 usedCustomFetchForGet = true
               } else {
+                console.log("[v0] 204/405 handler: Not SSL error, throwing")
                 // Not an SSL error, propagate it
                 throw getFetchError
               }
             }
           }
 
+          console.log("[v0] 204/405 handler: GET response status =", getResponse.status)
+          
           if (getResponse.status >= 300 && getResponse.status < 400) {
             const location = usedCustomFetchForGet
               ? (Array.isArray(getResponse.headers.location) ? getResponse.headers.location[0] : getResponse.headers.location)
               : getResponse.headers.get("location")
+            console.log("[v0] 204/405 handler: Redirect detected, location =", location)
             if (location) {
               currentUrl = new URL(location, currentUrl).toString()
+              console.log("[v0] 204/405 handler: Updated currentUrl to:", currentUrl)
               redirectCount++
               continue
             }
           }
+          
+          console.log("[v0] 204/405 handler: No redirect found, checking for meta/JS redirects")
 
           const html = usedCustomFetchForGet ? (getResponse.body || "") : await getResponse.text()
 

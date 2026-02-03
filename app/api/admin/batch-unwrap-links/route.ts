@@ -416,13 +416,18 @@ async function processLink(link: CtaLink): Promise<{ link: CtaLink; unwrapped: b
     return { link, unwrapped: false }
   }
 
-  console.log("[v0] === STARTING UNWRAP FOR URL:", link.url, "===")
-  
   try {
     const result = await resolveRedirectsWithSteps(link.url)
-    console.log("[v0] === UNWRAP COMPLETE FOR:", link.url, "===")
-    console.log("[v0] Final URL:", result.finalUrl)
-    console.log("[v0] Error:", result.error || "none")
+    
+    // If there's an error, don't mark as unwrapped
+    if (result.error) {
+      return {
+        link,
+        unwrapped: false,
+        error: result.error,
+      }
+    }
+    
     const finalStripped = stripQueryParams(result.finalUrl)
 
     return {
@@ -432,7 +437,7 @@ async function processLink(link: CtaLink): Promise<{ link: CtaLink; unwrapped: b
         displayUrl: finalStripped,
       },
       unwrapped: true,
-      error: result.error,
+      error: undefined,
     }
   } catch (error: any) {
     return { link, unwrapped: false, error: error.message }

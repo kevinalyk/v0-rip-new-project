@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server"
 import { verifyAuth } from "@/lib/auth"
 import { neon } from "@neondatabase/serverless"
+import https from "https"
 
 const sql = neon(process.env.DATABASE_URL!)
+
+// Custom HTTPS agent that ignores SSL certificate errors
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: false,
+})
 
 // Same unwrapping logic as test-unwrap-url
 async function resolveRedirectsWithSteps(url: string): Promise<{
@@ -30,8 +36,8 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
             "Accept-Language": "en-US,en;q=0.5",
           },
           signal: controller.signal,
-          // @ts-ignore - Node.js specific options to handle SSL issues
-          rejectUnauthorized: false,
+          // @ts-ignore - Node.js specific agent to handle SSL issues
+          agent: currentUrl.startsWith("https") ? httpsAgent : undefined,
         })
 
         clearTimeout(timeoutId)
@@ -54,8 +60,8 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
               Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             },
             signal: controller.signal,
-            // @ts-ignore - Node.js specific options to handle SSL issues
-            rejectUnauthorized: false,
+            // @ts-ignore - Node.js specific agent to handle SSL issues
+            agent: currentUrl.startsWith("https") ? httpsAgent : undefined,
           })
 
           const html = await getResponse.text()
@@ -109,8 +115,8 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             },
             signal: controller.signal,
-            // @ts-ignore - Node.js specific options to handle SSL issues
-            rejectUnauthorized: false,
+            // @ts-ignore - Node.js specific agent to handle SSL issues
+            agent: currentUrl.startsWith("https") ? httpsAgent : undefined,
           })
 
           if (getResponse.status >= 300 && getResponse.status < 400) {

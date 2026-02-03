@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server"
 import { verifyAuth } from "@/lib/auth"
+import https from "https"
+
+// Custom HTTPS agent that ignores SSL certificate errors
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: false,
+})
 
 async function resolveRedirectsWithSteps(url: string): Promise<{
   finalUrl: string
@@ -44,8 +50,8 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
             "Accept-Language": "en-US,en;q=0.5",
           },
           signal: controller.signal,
-          // @ts-ignore - Node.js specific options to handle SSL issues
-          rejectUnauthorized: false,
+          // @ts-ignore - Node.js specific agent to handle SSL issues
+          agent: currentUrl.startsWith("https") ? httpsAgent : undefined,
         })
 
         clearTimeout(timeoutId)
@@ -88,8 +94,8 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
               "Accept-Language": "en-US,en;q=0.5",
             },
             signal: controller.signal,
-            // @ts-ignore - Node.js specific options to handle SSL issues
-            rejectUnauthorized: false,
+            // @ts-ignore - Node.js specific agent to handle SSL issues
+            agent: currentUrl.startsWith("https") ? httpsAgent : undefined,
           })
 
           const html = await getResponse.text()
@@ -199,8 +205,8 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
               "Accept-Language": "en-US,en;q=0.5",
             },
             signal: controller.signal,
-            // @ts-ignore - Node.js specific options to handle SSL issues
-            rejectUnauthorized: false,
+            // @ts-ignore - Node.js specific agent to handle SSL issues
+            agent: currentUrl.startsWith("https") ? httpsAgent : undefined,
           })
           const getTiming = Date.now() - getStepStartTime
 

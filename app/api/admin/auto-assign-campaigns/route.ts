@@ -74,9 +74,29 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Step 2: Process unassigned email campaigns
+    // Step 2: Get domains linked to data broker entities
+    const dataBrokerDomains = await prisma.ciDomainToEntity.findMany({
+      where: {
+        entity: {
+          type: "data_broker",
+        },
+      },
+      select: {
+        domainId: true,
+      },
+    })
+
+    const dataBrokerDomainIds = dataBrokerDomains.map((d) => d.domainId)
+
+    // Process unassigned email campaigns (excluding data broker campaigns)
     const unassignedCampaigns = await prisma.competitiveInsightCampaign.findMany({
-      where: { entityId: null },
+      where: {
+        entityId: null,
+        // Exclude campaigns from data broker domains
+        domainId: {
+          notIn: dataBrokerDomainIds,
+        },
+      },
       select: {
         id: true,
         subject: true,

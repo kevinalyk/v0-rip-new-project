@@ -847,12 +847,18 @@ export async function extractCTALinks(
 
   const linksWithFinalUrls = await Promise.all(
     topLinks.map(async (link) => {
+      console.log("[v0] Resolving redirects for:", link.url)
       const finalUrl = await resolveRedirects(link.url)
+      console.log("[v0] Final URL:", finalUrl)
       const cleanedUrl = stripQueryParams(link.url)
       const cleanedFinalUrl = stripQueryParams(finalUrl)
+      console.log("[v0] Cleaned original:", cleanedUrl)
+      console.log("[v0] Cleaned final:", cleanedFinalUrl)
 
       const isDifferent =
         cleanedFinalUrl !== cleanedUrl && !cleanedFinalUrl.includes("click.") && !cleanedFinalUrl.includes("track.")
+
+      console.log("[v0] Is different?:", isDifferent)
 
       return {
         url: cleanedUrl, // Use cleaned URL instead of original

@@ -147,6 +147,20 @@ export function AdminContent({ user }: AdminContentProps) {
   const [bulkUnwrapResults, setBulkUnwrapResults] = useState<any>(null)
 
   const [isAnalyzingPlatforms, setIsAnalyzingPlatforms] = useState(false)
+
+  const [isAutoAssigningCampaigns, setIsAutoAssigningCampaigns] = useState(false)
+  const [campaignsAutoAssignResults, setCampaignsAutoAssignResults] = useState<{
+    summary: {
+      totalEmails: number
+      totalSms: number
+      emailsAssigned: number
+      smsAssigned: number
+    }
+    samples: {
+      emails: Array<{ id: string; subject: string; entityName: string; identifier: string }>
+      sms: Array<{ id: string; phoneNumber: string; entityName: string; identifier: string }>
+    }
+  } | null>(null)
   const [platformAnalysisResults, setPlatformAnalysisResults] = useState<{
     summary: {
       totalEmailCampaigns: number
@@ -797,6 +811,41 @@ export function AdminContent({ user }: AdminContentProps) {
       setIsAutoAssigningSms(false)
     }
   }
+
+  const handleAutoAssignCampaigns = async () => {
+    if (
+      !confirm(
+        "This will process all unassigned campaigns (emails and SMS) and auto-assign them based on donation identifiers found in their links. Continue?",
+      )
+    ) {
+      return
+    }
+
+    setIsAutoAssigningCampaigns(true)
+    setCampaignsAutoAssignResults(null)
+
+    try {
+      const response = await fetch("/api/admin/auto-assign-campaigns", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to auto-assign campaigns")
+      }
+
+      const data = await response.json()
+      setCampaignsAutoAssignResults(data)
+      toast.success(
+        `Processed campaigns: ${data.summary.emailsAssigned} emails and ${data.summary.smsAssigned} SMS assigned to entities`,
+      )
+    } catch (error) {
+      console.error("Error auto-assigning campaigns:", error)
+      toast.error("Failed to auto-assign campaigns")
+    } finally {
+      setIsAutoAssigningCampaigns(false)
+    }
+  }
   // </CHANGE>
 
   const handleBulkUnwrapAll = async () => {
@@ -1425,621 +1474,116 @@ export function AdminContent({ user }: AdminContentProps) {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Analyze PSQ Impact URL Patterns</CardTitle>
+          <CardTitle>Auto-Assign All Unassigned Campaigns</CardTitle>
           <CardDescription>
-            Scan all campaigns and SMS messages to identify PSQ Impact URL patterns. This helps understand the different
-            URL structures used by PSQ Impact (donate/, donate-page/, etc.) and their identifiers. Results are sorted
-            alphabetically and can be exported as CSV.
+            Automatically process all unassigned campaigns (both emails and SMS) and assign them to entities based on
+            WinRed, ActBlue, Anedot, or PSQ donation identifiers found in their CTA links.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Button onClick={handleAnalyzePSQ} disabled={isAnalyzingPSQ} className="gap-2">
-            {isAnalyzingPSQ ? (
+          <Button onClick={handleAutoAssignCampaigns} disabled={isAutoAssigningCampaigns} className="gap-2">
+            {isAutoAssigningCampaigns ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
-                Analyzing...
+                Processing Campaigns...
               </>
             ) : (
               <>
                 <Play size={16} />
-                Analyze PSQ Impact Patterns
+                Process & Auto-Assign All Campaigns
               </>
             )}
           </Button>
 
-          {psqPatterns && (
-            <div className="space-y-4">
-              <div className="rounded-lg border p-4 space-y-2">
-                <h4 className="font-semibold">Summary</h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Total Unique Patterns:</span>
-                    <span className="ml-2 font-medium">{psqPatterns.summary.totalPatterns}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Total Occurrences:</span>
-                    <span className="ml-2 font-medium">{psqPatterns.summary.totalOccurrences}</span>
-                  </div>
-                </div>
-                <div className="pt-2">
-                  <p className="text-sm text-muted-foreground mb-2">Pattern Types:</p>
-                  <div className="space-y-1">
-                    {Object.entries(psqPatterns.summary.patternTypes).map(([pattern, count]) => (
-                      <div key={pattern} className="text-sm">
-                        <span className="font-mono">{pattern}</span>:{" "}
-                        <span className="font-medium">{count as number}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <Button onClick={downloadPSQPatterns} variant="outline" className="gap-2 bg-transparent">
-                Download CSV Export
-              </Button>
-
-              <div className="rounded-lg border max-h-96 overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-background border-b">
-                    <tr>
-                      <th className="text-left p-2 font-medium">Pattern</th>
-                      <th className="text-left p-2 font-medium">Identifier</th>
-                      <th className="text-right p-2 font-medium">Count</th>
-                      <th className="text-left p-2 font-medium">Example URL</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {psqPatterns.patterns.map((pattern: any, index: number) => (
-                      <tr key={index} className="border-b last:border-b-0">
-                        <td className="p-2 font-mono text-xs">{pattern.pattern}</td>
-                        <td className="p-2 font-mono text-xs">{pattern.identifier}</td>
-                        <td className="p-2 text-right">{pattern.count}</td>
-                        <td className="p-2 text-xs text-muted-foreground truncate max-w-md" title={pattern.fullUrl}>
-                          {pattern.fullUrl}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Bulk Reassign Data Broker Campaigns</CardTitle>
-          <CardDescription>
-            Re-evaluate campaigns assigned to data broker entities and reassign them based on WinRed/Anedot donation
-            identifiers found in their CTA links. This fixes campaigns that were incorrectly assigned via domain
-            matching when they should be assigned based on donation links.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2 mb-4">
-            <Button
-              onClick={handleUnassignDataBrokers}
-              disabled={isUnassigning}
-              variant="destructive"
-              className="gap-2"
-            >
-              {isUnassigning ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Unassigning...
-                </>
-              ) : (
-                <>
-                  <X size={16} />
-                  Unassign All Data Broker Campaigns
-                </>
-              )}
-            </Button>
-
-            <Button onClick={handleAssignDataBrokers} disabled={isAssigningDataBrokers} className="gap-2">
-              {isAssigningDataBrokers ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Assigning...
-                </>
-              ) : (
-                <>
-                  <Play size={16} />
-                  Assign Data Broker Campaigns
-                </>
-              )}
-            </Button>
-
-            <Button onClick={handleAssignDailyGOPNews} disabled={isDailyGOPAssigning} className="gap-2">
-              {isDailyGOPAssigning ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Assigning...
-                </>
-              ) : (
-                <>
-                  <Play size={16} />
-                  Assign Daily GOP News Campaigns
-                </>
-              )}
-            </Button>
-
-            <Button onClick={handleAssignLibertyMuse} disabled={isLibertyMuseAssigning} className="gap-2">
-              {isLibertyMuseAssigning ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Assigning...
-                </>
-              ) : (
-                <>
-                  <Play size={16} />
-                  Assign American Liberty Muse Campaigns
-                </>
-              )}
-            </Button>
-
-            <Button onClick={handleAssignStayInformedNow} disabled={isStayInformedAssigning} className="gap-2">
-              {isStayInformedAssigning ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Assigning...
-                </>
-              ) : (
-                <>
-                  <Play size={16} />
-                  Assign Stay Informed Now Campaigns
-                </>
-              )}
-            </Button>
-
-            <Button onClick={handleAssignLibertyActionNews} disabled={isLibertyActionAssigning} className="gap-2">
-              {isLibertyActionAssigning ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Assigning...
-                </>
-              ) : (
-                <>
-                  <Play size={16} />
-                  Assign Liberty Action News Campaigns
-                </>
-              )}
-            </Button>
-
-            <Button onClick={handleAssignMagaDailyUpdates} disabled={isMagaDailyAssigning} className="gap-2">
-              {isMagaDailyAssigning ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Assigning...
-                </>
-              ) : (
-                <>
-                  <Play size={16} />
-                  Assign MAGA Daily Updates Campaigns
-                </>
-              )}
-            </Button>
-
-            <Button
-              onClick={handleAssignOfficialTrumpTracker}
-              disabled={isOfficialTrumpTrackerAssigning}
-              className="gap-2"
-            >
-              {isOfficialTrumpTrackerAssigning ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Assigning...
-                </>
-              ) : (
-                <>
-                  <Play size={16} />
-                  Assign Official Trump Tracker Campaigns
-                </>
-              )}
-            </Button>
-
-            <Button onClick={handleBulkReassign} disabled={isReassigning} className="gap-2">
-              {isReassigning ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Reassigning...
-                </>
-              ) : (
-                <>
-                  <Play size={16} />
-                  Bulk Reassign Data Broker Campaigns
-                </>
-              )}
-            </Button>
-
-            {/* --- NEW BUTTON FOR SMS FIX --- */}
-            <Button onClick={handleFixSMS5417204415} disabled={isFixingSMS5417204415} className="gap-2">
-              {isFixingSMS5417204415 ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Fixing...
-                </>
-              ) : (
-                <>
-                  <Play size={16} />
-                  Fix SMS 5417204415
-                </>
-              )}
-            </Button>
-            {/* --- END NEW BUTTON --- */}
-          </div>
-
-          {unassignResults && (
-            <div className="mb-4 rounded-lg border border-orange-200 bg-orange-50 p-4">
-              <h3 className="font-semibold mb-2">Unassignment Complete</h3>
-              <div className="text-sm space-y-1">
-                <div>Campaigns unassigned: {unassignResults.summary.unassigned}</div>
-                <div>Data broker entities: {unassignResults.summary.dataBrokers}</div>
-                <div className="text-xs text-gray-600 mt-2">
-                  Affected entities: {unassignResults.dataBrokerNames.join(", ")}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {reassignmentResults && (
-            <div className="mt-4 space-y-4">
-              <div className="rounded-lg border p-4">
-                <h3 className="font-semibold mb-2">Summary</h3>
-                <div className="text-sm space-y-1">
-                  <div>Total campaigns scanned: {reassignmentResults.summary.total}</div>
-                  <div className="text-green-600">Reassigned: {reassignmentResults.summary.reassigned}</div>
-                  <div className="text-gray-600">Skipped: {reassignmentResults.summary.skipped}</div>
-                  <div className="text-red-600">Errors: {reassignmentResults.summary.errors}</div>
-                </div>
-              </div>
-
-              {reassignmentResults.reassignments && reassignmentResults.reassignments.length > 0 && (
-                <div className="rounded-lg border p-4 max-h-96 overflow-y-auto">
-                  <h3 className="font-semibold mb-2">Reassignments (First 100)</h3>
-                  <div className="space-y-2">
-                    {reassignmentResults.reassignments.map((r: any, idx: number) => (
-                      <div key={idx} className="text-sm border-b pb-2">
-                        <div className="font-medium">{r.subject}</div>
-                        <div className="text-muted-foreground">
-                          From: <span className="font-medium">{r.from}</span> → To:{" "}
-                          <span className="font-medium text-green-600">{r.to}</span>
-                          <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
-                            {r.method.replace("auto_", "")}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {dailyGOPResults && (
-            <div className="mt-4 p-4 bg-muted rounded-lg">
-              <h4 className="font-semibold mb-2">Daily GOP News Assignment Results</h4>
-              <div className="space-y-2 text-sm">
-                <div>Total unassigned campaigns processed: {dailyGOPResults.summary.total}</div>
-                <div>Assigned via WinRed identifiers: {dailyGOPResults.summary.assigned}</div>
-                <div>No match found: {dailyGOPResults.summary.noMatch}</div>
-
-                {dailyGOPResults.sampleAssignments.length > 0 && (
-                  <div className="mt-3 text-xs">
-                    <div className="font-semibold mb-1">Sample assignments:</div>
-                    {dailyGOPResults.sampleAssignments.slice(0, 5).map((assignment, i) => (
-                      <div key={i} className="text-gray-600">
-                        "{assignment.campaign}" → {assignment.entity} ({assignment.identifier})
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {libertyMuseResults && (
-            <div className="mt-4 p-4 bg-muted rounded-lg">
-              <h4 className="font-semibold mb-2">American Liberty Muse Assignment Results</h4>
-              <div className="space-y-2 text-sm">
-                <div>Total unassigned campaigns processed: {libertyMuseResults.results.total}</div>
-                <div>Assigned to data brokers (newsletters): {libertyMuseResults.results.assignedToDataBroker}</div>
-                <div>Assigned via WinRed identifiers: {libertyMuseResults.results.assignedViaWinRed}</div>
-                <div>Assigned via Anedot identifiers: {libertyMuseResults.results.assignedViaAnedot}</div>
-                <div>No match found: {libertyMuseResults.results.noMatch}</div>
-
-                {libertyMuseResults.results.assignments && libertyMuseResults.results.assignments.length > 0 && (
-                  <div className="mt-3 text-xs">
-                    <div className="font-semibold mb-1">Sample assignments:</div>
-                    {libertyMuseResults.results.assignments.slice(0, 5).map((assignment: any, i: number) => (
-                      <div key={i} className="text-gray-600">
-                        "{assignment.campaign}" → {assignment.entity} ({assignment.method})
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {stayInformedResults && (
-            <div className="mt-4 p-4 bg-muted rounded-lg">
-              <h4 className="font-semibold mb-2">Stay Informed Now Assignment Results</h4>
-              <div className="space-y-2 text-sm">
-                <div>Total unassigned campaigns processed: {stayInformedResults.summary.total}</div>
-                <div>Assigned via WinRed identifiers: {stayInformedResults.summary.assigned}</div>
-                <div>No match found: {stayInformedResults.summary.noMatch}</div>
-
-                {stayInformedResults.sampleAssignments.length > 0 && (
-                  <div className="mt-3 text-xs">
-                    <div className="font-semibold mb-1">Sample assignments:</div>
-                    {stayInformedResults.sampleAssignments.slice(0, 5).map((assignment, i) => (
-                      <div key={i} className="text-gray-600">
-                        "{assignment.campaign}" → {assignment.entity} ({assignment.identifier})
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {libertyActionResults && (
-            <div className="mt-4 p-4 bg-muted rounded-lg">
-              <h4 className="font-semibold mb-2">Liberty Action News Assignment Results</h4>
-              <div className="space-y-2 text-sm">
-                <div>Total unassigned campaigns processed: {libertyActionResults.results.total}</div>
-                <div>Assigned to data brokers (newsletters): {libertyActionResults.results.assignedToDataBroker}</div>
-                <div>Assigned via WinRed identifiers: {libertyActionResults.results.assignedViaWinRed}</div>
-                <div>Assigned via Anedot identifiers: {libertyActionResults.results.assignedViaAnedot}</div>
-                <div>No match found: {libertyActionResults.results.noMatch}</div>
-
-                {libertyActionResults.results.assignments && libertyActionResults.results.assignments.length > 0 && (
-                  <div className="mt-3 text-xs">
-                    <div className="font-semibold mb-1">Sample assignments:</div>
-                    {libertyActionResults.results.assignments.slice(0, 5).map((assignment: any, i: number) => (
-                      <div key={i} className="text-gray-600">
-                        "{assignment.campaign}" → {assignment.entity} ({assignment.method})
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {magaDailyResults && (
-            <div className="mt-4 p-4 bg-muted rounded-lg">
-              <h4 className="font-semibold mb-2">MAGA Daily Updates Assignment Results</h4>
-              <div className="space-y-2 text-sm">
-                <div>Total unassigned campaigns processed: {magaDailyResults.totalProcessed}</div>
-                <div>Assigned via WinRed identifiers: {magaDailyResults.assignedCount}</div>
-                <div>Skipped: {magaDailyResults.skippedCount}</div>
-
-                {magaDailyResults.results.length > 0 && (
-                  <div className="mt-3 text-xs">
-                    <div className="font-semibold mb-1">Sample assignments:</div>
-                    {magaDailyResults.results.slice(0, 5).map((assignment, i) => (
-                      <div key={i} className="text-gray-600">
-                        "{assignment.subject}" → {assignment.action}{" "}
-                        {assignment.entityName ? `(${assignment.entityName})` : ""}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {officialTrumpTrackerResults && (
-            <div className="mt-4 p-4 bg-muted rounded-lg">
-              <h4 className="font-semibold mb-2">Official Trump Tracker Assignment Results</h4>
-              <div className="space-y-2 text-sm">
-                <div>Total unassigned campaigns processed: {officialTrumpTrackerResults.totalProcessed}</div>
-                <div>Assigned via WinRed identifiers: {officialTrumpTrackerResults.assignedCount}</div>
-                <div>Skipped: {officialTrumpTrackerResults.skippedCount}</div>
-
-                {officialTrumpTrackerResults.results.length > 0 && (
-                  <div className="mt-3 text-xs">
-                    <div className="font-semibold mb-1">Sample assignments:</div>
-                    {officialTrumpTrackerResults.results.slice(0, 5).map((assignment, i) => (
-                      <div key={i} className="text-gray-600">
-                        "{assignment.subject}" → {assignment.action}{" "}
-                        {assignment.entityName ? `(${assignment.entityName})` : ""}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {dataBrokerAssignmentResults && (
-            <div className="mt-4 p-4 bg-muted rounded-lg">
-              <h4 className="font-semibold mb-2">Data Broker Assignment Results</h4>
-              <div className="space-y-2 text-sm">
-                <div>Total unassigned campaigns processed: {dataBrokerAssignmentResults.total}</div>
-                <div>Assigned to data brokers (newsletters): {dataBrokerAssignmentResults.assignedToDataBroker}</div>
-                <div>Assigned via WinRed identifiers: {dataBrokerAssignmentResults.assignedViaWinRed}</div>
-                <div>Assigned via Anedot identifiers: {dataBrokerAssignmentResults.assignedViaAnedot}</div>
-                <div>No match found: {dataBrokerAssignmentResults.noMatch}</div>
-
-                {dataBrokerAssignmentResults.assignments.length > 0 && (
-                  <div className="mt-3 text-xs">
-                    <div className="font-semibold mb-1">Sample assignments:</div>
-                    {dataBrokerAssignmentResults.assignments.slice(0, 5).map((assignment: any, i: number) => (
-                      <div key={i} className="text-gray-600">
-                        "{assignment.campaign}" → {assignment.entity} ({assignment.method})
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* --- NEW RESULTS CARD FOR SMS FIX --- */}
-          {smsFixResults && (
-            <div className="space-y-3 rounded-lg border p-4">
-              <div className="space-y-2">
-                <div className="text-sm font-medium">Results Summary</div>
-                <div className="grid grid-cols-4 gap-4 text-sm">
-                  <div>
-                    <div className="text-muted-foreground">Total</div>
-                    <div className="font-semibold">{smsFixResults.summary.total}</div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground">Updated</div>
-                    <div className="font-semibold text-green-600">{smsFixResults.summary.updated}</div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground">Skipped</div>
-                    <div className="font-semibold text-yellow-600">{smsFixResults.summary.skipped}</div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground">Errors</div>
-                    <div className="font-semibold text-red-600">{smsFixResults.summary.errors}</div>
-                  </div>
-                </div>
-              </div>
-
-              {smsFixResults.sampleResults.length > 0 && (
-                <div className="space-y-2">
-                  <div className="text-sm font-medium">Sample Updates</div>
-                  <div className="space-y-2">
-                    {smsFixResults.sampleResults.map((result, idx) => (
-                      <div key={idx} className="rounded border bg-muted/50 p-3 text-xs">
-                        <div className="mb-2 font-mono text-muted-foreground">ID: {result.id}</div>
-                        <div className="space-y-1">
-                          <div>
-                            <span className="font-semibold">Phone:</span> {result.oldPhone} → {result.newPhone}
-                          </div>
-                          <div>
-                            <span className="font-semibold">Old Message:</span> {result.oldMessage}
-                          </div>
-                          <div>
-                            <span className="font-semibold">New Message:</span> {result.newMessage}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          {/* --- END NEW RESULTS CARD --- */}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Auto-Assign Unassigned SMS</CardTitle>
-          <CardDescription>
-            Automatically process all unassigned SMS messages: unwrap shortened URLs and auto-assign to entities based
-            on WinRed, Anedot, or PSQ donation identifiers found in the links.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Button onClick={handleAutoAssignSms} disabled={isAutoAssigningSms} className="gap-2">
-            {isAutoAssigningSms ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                Processing SMS...
-              </>
-            ) : (
-              <>
-                <Play size={16} />
-                Process & Auto-Assign SMS
-              </>
-            )}
-          </Button>
-
-          {smsAutoAssignResults && (
+          {campaignsAutoAssignResults && (
             <div className="mt-4 space-y-4">
               {/* Summary */}
               <div className="rounded-lg border bg-muted/50 p-4">
                 <h4 className="mb-2 font-semibold">Summary</h4>
-                <div className="grid grid-cols-3 gap-4 text-sm">
+                <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <div className="text-muted-foreground">Total Processed</div>
-                    <div className="text-2xl font-bold">{smsAutoAssignResults.summary.totalProcessed}</div>
+                    <div className="text-muted-foreground">Total Emails Processed</div>
+                    <div className="text-2xl font-bold">{campaignsAutoAssignResults.summary.totalEmails}</div>
                   </div>
                   <div>
-                    <div className="text-muted-foreground">URLs Unwrapped</div>
-                    <div className="text-2xl font-bold text-blue-600">{smsAutoAssignResults.summary.urlsUnwrapped}</div>
+                    <div className="text-muted-foreground">Emails Assigned</div>
+                    <div className="text-2xl font-bold text-green-600">
+                      {campaignsAutoAssignResults.summary.emailsAssigned}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Total SMS Processed</div>
+                    <div className="text-2xl font-bold">{campaignsAutoAssignResults.summary.totalSms}</div>
                   </div>
                   <div>
                     <div className="text-muted-foreground">SMS Assigned</div>
-                    <div className="text-2xl font-bold text-green-600">{smsAutoAssignResults.summary.smsAssigned}</div>
+                    <div className="text-2xl font-bold text-green-600">
+                      {campaignsAutoAssignResults.summary.smsAssigned}
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Detailed Results */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-semibold text-sm">Detailed Results ({smsAutoAssignResults.results.length})</h4>
-                  <Button variant="ghost" size="sm" onClick={() => setSmsAutoAssignResults(null)}>
-                    <X size={16} />
-                  </Button>
-                </div>
-                <div className="max-h-96 space-y-2 overflow-y-auto rounded-lg border p-3">
-                  {smsAutoAssignResults.results.map((result, idx) => (
-                    <div
-                      key={idx}
-                      className={`rounded border p-3 text-xs ${
-                        result.assigned
-                          ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/20"
-                          : "bg-muted/30"
-                      }`}
-                    >
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="font-mono text-muted-foreground">{result.phoneNumber || "Unknown Phone"}</span>
-                        {result.assigned ? (
+              {/* Sample Assignments */}
+              {campaignsAutoAssignResults.samples.emails.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">Sample Email Assignments</div>
+                  <div className="space-y-2">
+                    {campaignsAutoAssignResults.samples.emails.map((result, idx) => (
+                      <div key={idx} className="rounded border border-green-200 bg-green-50 p-3 text-xs dark:border-green-800 dark:bg-green-950/20">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="font-mono text-muted-foreground">{result.subject}</span>
                           <span className="rounded bg-green-600 px-2 py-0.5 text-xs font-medium text-white">
                             Assigned
                           </span>
-                        ) : (
-                          <span className="rounded bg-gray-400 px-2 py-0.5 text-xs font-medium text-white">
-                            Unassigned
-                          </span>
-                        )}
-                      </div>
-                      <div className="space-y-1">
-                        {result.originalUrl && (
+                        </div>
+                        <div className="space-y-1">
                           <div>
-                            <span className="font-semibold text-muted-foreground">Original URL:</span>
-                            <div className="mt-0.5 break-all font-mono">{result.originalUrl}</div>
-                          </div>
-                        )}
-                        {result.unwrappedUrl && result.unwrappedUrl !== result.originalUrl && (
-                          <div>
-                            <span className="font-semibold text-blue-600">Unwrapped URL:</span>
-                            <div className="mt-0.5 break-all font-mono text-blue-600">{result.unwrappedUrl}</div>
-                          </div>
-                        )}
-                        {result.assigned && result.entityName && (
-                          <div>
-                            <span className="font-semibold text-green-600">Assigned to:</span>
+                            <span className="font-semibold text-green-600">Entity:</span>
                             <span className="ml-2 font-medium text-green-600">{result.entityName}</span>
                           </div>
-                        )}
-                        {result.error && (
-                          <div className="text-red-600">
-                            <span className="font-semibold">Error:</span> {result.error}
+                          <div>
+                            <span className="font-semibold text-muted-foreground">Identifier:</span>
+                            <span className="ml-2 font-mono">{result.identifier}</span>
                           </div>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {campaignsAutoAssignResults.samples.sms.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">Sample SMS Assignments</div>
+                  <div className="space-y-2">
+                    {campaignsAutoAssignResults.samples.sms.map((result, idx) => (
+                      <div key={idx} className="rounded border border-green-200 bg-green-50 p-3 text-xs dark:border-green-800 dark:bg-green-950/20">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="font-mono text-muted-foreground">{result.phoneNumber}</span>
+                          <span className="rounded bg-green-600 px-2 py-0.5 text-xs font-medium text-white">
+                            Assigned
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          <div>
+                            <span className="font-semibold text-green-600">Entity:</span>
+                            <span className="ml-2 font-medium text-green-600">{result.entityName}</span>
+                          </div>
+                          <div>
+                            <span className="font-semibold text-muted-foreground">Identifier:</span>
+                            <span className="ml-2 font-mono">{result.identifier}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
-      {/* </CHANGE> */}
       <Card>
         <CardHeader>
           <CardTitle>Platform Usage Analysis</CardTitle>

@@ -76,13 +76,16 @@ importers:
         version: 0.24.0
       ai:
         specifier: ^3.4.33
-        version: 3.4.33(openai@6.17.0(ws@8.19.0)(zod@3.24.1))(react@19.0.0)(sswr@2.2.0(svelte@5.49.0))(svelte@5.49.0)(vue@3.5.27(typescript@5.7.2))(zod@3.24.1)
+        version: 3.4.33(openai@6.17.0(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.24.1))(react@19.0.0)(sswr@2.2.0(svelte@5.49.0))(svelte@5.49.0)(vue@3.5.27(typescript@5.7.2))(zod@3.24.1)
       axios:
         specifier: ^1.7.7
         version: 1.7.7
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3
+      bufferutil:
+        specifier: latest
+        version: 4.1.0
       cheerio:
         specifier: ^1.0.0
         version: 1.0.0
@@ -139,7 +142,7 @@ importers:
         version: 6.9.15
       openai:
         specifier: latest
-        version: 6.17.0(ws@8.19.0)(zod@3.24.1)
+        version: 6.17.0(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.24.1)
       prisma:
         specifier: 5.22.0
         version: 5.22.0
@@ -176,12 +179,15 @@ importers:
       tw-animate-css:
         specifier: ^1.0.1
         version: 1.2.0
+      utf-8-validate:
+        specifier: latest
+        version: 6.0.6
       uuid:
         specifier: ^11.0.3
         version: 11.0.3
       ws:
         specifier: latest
-        version: 8.19.0
+        version: 8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       zod:
         specifier: ^3.24.1
         version: 3.24.1
@@ -1964,6 +1970,10 @@ packages:
   buffer-equal-constant-time@1.0.1:
     resolution: {integrity: sha512-zRpUiDwd/xk6ADqPMATG8vc9VPrkck7T07OIx0gnjmJAnHnTVXNQG3vfvWNuiZIkwu9KrKdA1iJKfsfTVxE6NA==}
 
+  bufferutil@4.1.0:
+    resolution: {integrity: sha512-ZMANVnAixE6AWWnPzlW2KpUrxhm9woycYvPOo67jWHyFowASTEd9s+QN1EIMsSDtwhIxN4sWE1jotpuDUIgyIw==}
+    engines: {node: '>=6.14.2'}
+
   busboy@1.6.0:
     resolution: {integrity: sha512-8SFQbg/0hQ9xy3UNTB0YEnsNBbWfhf7RtnzpL7TkBiTBRfrQ9Fxcnz7VJsleJpyp6rVLvXiuORqjlHi5q+PYuA==}
     engines: {node: '>=10.16.0'}
@@ -3057,6 +3067,10 @@ packages:
       encoding:
         optional: true
 
+  node-gyp-build@4.8.4:
+    resolution: {integrity: sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ==}
+    hasBin: true
+
   node-imap@0.9.6:
     resolution: {integrity: sha512-pYQ2AtjQwrSvILq8EYInv3E3svrJwrTOxzW7uBGpP//AkCs/pMdO+O6KEgUlSchh/0/N0MSWs5io3xZhxJ9yLg==}
     engines: {node: '>=0.8.0'}
@@ -3706,6 +3720,10 @@ packages:
     resolution: {integrity: sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==}
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
+  utf-8-validate@6.0.6:
+    resolution: {integrity: sha512-q3l3P9UtEEiAHcsgsqTgf9PPjctrDWoIXW3NpOHFdRDbLvu4DLIcxHangJ4RLrWkBcKjmcs/6NkerI8T/rE4LA==}
+    engines: {node: '>=6.14.2'}
 
   utf7@1.0.2:
     resolution: {integrity: sha512-qQrPtYLLLl12NF4DrM9CvfkxkYI97xOb5dsnGZHE3teFr0tWiEZ9UdgMPczv24vl708cYMpe6mGXGHrotIp3Bw==}
@@ -5305,7 +5323,7 @@ snapshots:
 
   acorn@8.15.0: {}
 
-  ai@3.4.33(openai@6.17.0(ws@8.19.0)(zod@3.24.1))(react@19.0.0)(sswr@2.2.0(svelte@5.49.0))(svelte@5.49.0)(vue@3.5.27(typescript@5.7.2))(zod@3.24.1):
+  ai@3.4.33(openai@6.17.0(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.24.1))(react@19.0.0)(sswr@2.2.0(svelte@5.49.0))(svelte@5.49.0)(vue@3.5.27(typescript@5.7.2))(zod@3.24.1):
     dependencies:
       '@ai-sdk/provider': 0.0.26
       '@ai-sdk/provider-utils': 1.0.22(zod@3.24.1)
@@ -5321,7 +5339,7 @@ snapshots:
       secure-json-parse: 2.7.0
       zod-to-json-schema: 3.25.1(zod@3.24.1)
     optionalDependencies:
-      openai: 6.17.0(ws@8.19.0)(zod@3.24.1)
+      openai: 6.17.0(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.24.1)
       react: 19.0.0
       sswr: 2.2.0(svelte@5.49.0)
       svelte: 5.49.0
@@ -5462,6 +5480,10 @@ snapshots:
       fill-range: 7.1.1
 
   buffer-equal-constant-time@1.0.1: {}
+
+  bufferutil@4.1.0:
+    dependencies:
+      node-gyp-build: 4.8.4
 
   busboy@1.6.0:
     dependencies:
@@ -6709,6 +6731,8 @@ snapshots:
     dependencies:
       whatwg-url: 5.0.0
 
+  node-gyp-build@4.8.4: {}
+
   node-imap@0.9.6:
     dependencies:
       readable-stream: 3.6.2
@@ -6766,9 +6790,9 @@ snapshots:
 
   obuf@1.1.2: {}
 
-  openai@6.17.0(ws@8.19.0)(zod@3.24.1):
+  openai@6.17.0(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.24.1):
     optionalDependencies:
-      ws: 8.19.0
+      ws: 8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       zod: 3.24.1
 
   optionator@0.9.4:
@@ -7464,6 +7488,10 @@ snapshots:
     dependencies:
       react: 19.0.0
 
+  utf-8-validate@6.0.6:
+    dependencies:
+      node-gyp-build: 4.8.4
+
   utf7@1.0.2:
     dependencies:
       semver: 5.3.0
@@ -7563,7 +7591,10 @@ snapshots:
 
   word-wrap@1.2.5: {}
 
-  ws@8.19.0: {}
+  ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6):
+    optionalDependencies:
+      bufferutil: 4.1.0
+      utf-8-validate: 6.0.6
 
   yallist@5.0.0: {}
 

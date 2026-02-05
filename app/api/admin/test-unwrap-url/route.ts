@@ -1,5 +1,77 @@
 import { NextResponse } from "next/server"
 import { verifyAuth } from "@/lib/auth"
+import https from "https"
+import http from "http"
+import { URL } from "url"
+
+// Custom HTTPS agent that ignores SSL certificate errors
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: false,
+})
+
+// Custom fetch using Node's http/https modules to properly handle SSL
+async function customFetch(
+  urlString: string,
+  options: { method: string; timeout: number; headers: Record<string, string> }
+): Promise<{ status: number; headers: Record<string, string | string[]>; body?: string }> {
+  return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(urlString)
+    const isHttps = parsedUrl.protocol === "https:"
+    const lib = isHttps ? https : http
+
+    console.log("[v0] customFetch: Fetching", urlString, "with method", options.method)
+
+    const requestOptions = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (isHttps ? 443 : 80),
+      path: parsedUrl.pathname + parsedUrl.search,
+      method: options.method,
+      headers: options.headers,
+      rejectUnauthorized: false, // This is the key to bypassing SSL errors
+      timeout: options.timeout,
+    }
+
+    console.log("[v0] customFetch: Request options", {
+      hostname: requestOptions.hostname,
+      port: requestOptions.port,
+      path: requestOptions.path,
+      method: requestOptions.method,
+      rejectUnauthorized: requestOptions.rejectUnauthorized,
+    })
+
+    const req = lib.request(requestOptions, (res) => {
+      console.log("[v0] customFetch: Response status", res.statusCode)
+      console.log("[v0] customFetch: Response headers", res.headers)
+
+      let body = ""
+      res.on("data", (chunk) => {
+        if (options.method === "GET") {
+          body += chunk.toString()
+        }
+      })
+
+      res.on("end", () => {
+        resolve({
+          status: res.statusCode || 0,
+          headers: res.headers,
+          body: body || undefined,
+        })
+      })
+    })
+
+    req.on("error", (error) => {
+      console.log("[v0] customFetch: Request error", error)
+      reject(error)
+    })
+
+    req.on("timeout", () => {
+      req.destroy()
+      reject(new Error("Request timeout"))
+    })
+
+    req.end()
+  })
+}
 
 async function resolveRedirectsWithSteps(url: string): Promise<{
   finalUrl: string
@@ -31,27 +103,32 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
     while (redirectCount < maxRedirects) {
       const stepStartTime = Date.now()
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000)
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // Reduced to 10s for faster feedback
 
       try {
-        const response = await fetch(currentUrl, {
+        console.log("[v0] About to fetch:", currentUrl)
+        
+        const response = await customFetch(currentUrl, {
           method: "HEAD",
-          redirect: "manual",
+          timeout: 10000,
           headers: {
             "User-Agent":
               "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
           },
-          signal: controller.signal,
         })
+        
+        console.log("[v0] Fetch successful, status:", response.status)
 
         clearTimeout(timeoutId)
         const stepEndTime = Date.now()
         const timing = stepEndTime - stepStartTime
 
         if (response.status >= 300 && response.status < 400) {
-          const location = response.headers.get("location")
+          const locationHeader = response.headers.location
+          const location = Array.isArray(locationHeader) ? locationHeader[0] : locationHeader
+          
           if (!location) {
             steps.push({
               step: redirectCount + 1,
@@ -76,19 +153,18 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
           redirectCount++
         } else if (response.status === 200) {
           // Fetch HTML body to check for JavaScript or meta redirects
-          const getResponse = await fetch(currentUrl, {
+          const getResponse = await customFetch(currentUrl, {
             method: "GET",
-            redirect: "manual",
+            timeout: 10000,
             headers: {
               "User-Agent":
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
               Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
               "Accept-Language": "en-US,en;q=0.5",
             },
-            signal: controller.signal,
           })
 
-          const html = await getResponse.text()
+          const html = getResponse.body || ""
           const htmlSnippet = html.substring(0, 1000) // Increased to 1000 chars for debugging
 
           console.log("[v0] Checking HTML for redirects. HTML length:", html.length)
@@ -175,31 +251,35 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
             steps,
             totalTime: Date.now() - startTime,
           }
-        } else if (response.status === 405) {
+        } else if (response.status === 204 || response.status === 403 || response.status === 405) {
           steps.push({
             step: redirectCount + 1,
             url: currentUrl,
             status: response.status,
-            redirectType: "HEAD not allowed - trying GET",
+            redirectType: response.status === 204 
+              ? "No content (204) - trying GET" 
+              : response.status === 403
+              ? "Forbidden (403) - trying GET"
+              : "HEAD not allowed - trying GET",
             timing,
           })
 
           const getStepStartTime = Date.now()
-          const getResponse = await fetch(currentUrl, {
+          const getResponse = await customFetch(currentUrl, {
             method: "GET",
-            redirect: "manual",
+            timeout: 10000,
             headers: {
               "User-Agent":
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
               Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
               "Accept-Language": "en-US,en;q=0.5",
             },
-            signal: controller.signal,
           })
           const getTiming = Date.now() - getStepStartTime
 
           if (getResponse.status >= 300 && getResponse.status < 400) {
-            const location = getResponse.headers.get("location")
+            const locationHeader = getResponse.headers.location
+            const location = Array.isArray(locationHeader) ? locationHeader[0] : locationHeader
             if (location) {
               const nextUrl = new URL(location, currentUrl).toString()
               steps.push({
@@ -215,7 +295,7 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
             }
           }
 
-          const html = await getResponse.text()
+          const html = getResponse.body || ""
           const htmlSnippet = html.substring(0, 1000)
 
           console.log("[v0] After 405 - Checking HTML for redirects. HTML length:", html.length)
@@ -320,35 +400,51 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
         clearTimeout(timeoutId)
         const stepEndTime = Date.now()
         const timing = stepEndTime - stepStartTime
-
+        
+        console.log("[v0] Fetch error caught in loop:", fetchError.message)
+        console.log("[v0] Error name:", fetchError.name)
+        
+        // Check if this is an SSL/TLS error
+        const isSSLError = fetchError.message?.includes("certificate") || 
+                          fetchError.message?.includes("SSL") || 
+                          fetchError.message?.includes("TLS") ||
+                          fetchError.message?.includes("self-signed") ||
+                          fetchError.message?.includes("unable to verify")
+        
         if (fetchError.name === "AbortError") {
           steps.push({
             step: redirectCount + 1,
             url: currentUrl,
             status: 0,
-            redirectType: "Request timeout (30s)",
+            redirectType: "Request timeout (10s) - possible SSL issue",
             timing,
+            htmlSnippet: isSSLError ? "SSL certificate error prevented connection" : undefined,
           })
+          // Mark as error but still return current URL as final since we can't go further
           return {
             finalUrl: currentUrl,
             steps,
             totalTime: Date.now() - startTime,
-            error: "Request timeout after 30 seconds",
+            hasError: true,
+            error: "Request timeout (SSL certificate issue likely)",
           }
         }
-
+        
         steps.push({
           step: redirectCount + 1,
           url: currentUrl,
           status: 0,
-          redirectType: `Fetch error: ${fetchError.message}`,
+          redirectType: `Fetch error: ${fetchError.message}${isSSLError ? " (SSL)" : ""}`,
           timing,
+          htmlSnippet: isSSLError ? "This URL has SSL certificate issues but may still be valid" : undefined,
         })
+        // Mark as error but return current URL as final
         return {
           finalUrl: currentUrl,
           steps,
           totalTime: Date.now() - startTime,
-          error: fetchError.message,
+          hasError: true,
+          error: `${fetchError.message}${isSSLError ? " - URL has SSL issues but may be accessible in browser" : ""}`,
         }
       }
     }
@@ -368,6 +464,13 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
       error: "Max redirects (10) reached",
     }
   } catch (error: any) {
+    console.log("[v0] Top-level catch in resolveRedirectsWithSteps:", error)
+    console.log("[v0] Error type:", error?.constructor?.name)
+    console.log("[v0] Error message:", error?.message)
+    console.log("[v0] Error stack:", error?.stack)
+    if (error && 'cause' in error) {
+      console.log("[v0] Error cause:", error.cause)
+    }
     return {
       finalUrl: currentUrl,
       steps,

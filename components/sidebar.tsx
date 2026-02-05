@@ -333,7 +333,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                 {expandedSections.admin && !collapsed && (
                   <div className="ml-4 space-y-1">
                     <NavItem
-                      icon={<Wrench size={18} />}
+                      icon={<Settings size={18} />}
                       label="Admin Tools"
                       active={pathname === "/admin/tools"}
                       collapsed={false}

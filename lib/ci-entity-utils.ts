@@ -65,7 +65,6 @@ async function analyzeEmailWithAI(
 
     const result = await generateObject({
       model: "openai/gpt-4o-mini",
-      mode: "json",
       schema: z.object({
         type: z.enum(["newsletter", "sponsored_campaign"]),
         confidence: z.number().min(0).max(1),

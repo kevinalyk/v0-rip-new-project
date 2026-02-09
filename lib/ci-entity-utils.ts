@@ -400,6 +400,7 @@ export async function getUnassignedSms() {
       where: {
         entityId: null,
         processed: true,
+        isDeleted: false,
       },
       orderBy: { createdAt: "desc" },
       take: 100, // Limit to recent 100 unassigned

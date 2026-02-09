@@ -847,18 +847,33 @@ export async function extractCTALinks(
 
   const linksWithFinalUrls = await Promise.all(
     topLinks.map(async (link) => {
-      console.log("[v0] Resolving redirects for:", link.url)
+      const isTrkLink = link.url.includes(".trk.") || link.url.includes("/trk.")
+      
+      if (isTrkLink) {
+        console.log("[v0] TRK LINK START:", link.url.substring(0, 100))
+      }
+      
       const finalUrl = await resolveRedirects(link.url)
-      console.log("[v0] Final URL:", finalUrl)
+      
+      if (isTrkLink) {
+        console.log("[v0] TRK resolved to:", finalUrl)
+      }
+      
       const cleanedUrl = stripQueryParams(link.url)
       const cleanedFinalUrl = stripQueryParams(finalUrl)
-      console.log("[v0] Cleaned original:", cleanedUrl)
-      console.log("[v0] Cleaned final:", cleanedFinalUrl)
+      
+      if (isTrkLink) {
+        console.log("[v0] TRK cleaned original:", cleanedUrl)
+        console.log("[v0] TRK cleaned final:", cleanedFinalUrl)
+      }
 
       const isDifferent =
         cleanedFinalUrl !== cleanedUrl && !cleanedFinalUrl.includes("click.") && !cleanedFinalUrl.includes("track.")
 
-      console.log("[v0] Is different?:", isDifferent)
+      if (isTrkLink) {
+        console.log("[v0] TRK isDifferent:", isDifferent)
+        console.log("[v0] TRK finalUrl will be:", isDifferent ? cleanedFinalUrl : "undefined (not saved)")
+      }
 
       return {
         url: cleanedUrl, // Use cleaned URL instead of original

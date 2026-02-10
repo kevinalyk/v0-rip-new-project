@@ -174,7 +174,29 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
           if (currentUrl.includes('hubspotlinks.com')) {
             console.log("[v0] HubSpot link detected - checking for HubSpot-specific patterns")
             
-            // HubSpot often uses a data attribute or hidden form for redirects
+            // HubSpot uses JavaScript variables to store redirect URLs
+            // Look for: var targetURL = "https://..."
+            const targetURLPattern = /var\s+targetURL\s*=\s*"([^"]+)"/i
+            const targetURLMatch = html.match(targetURLPattern)
+            
+            if (targetURLMatch && targetURLMatch[1]) {
+              console.log("[v0] HubSpot targetURL found:", targetURLMatch[1])
+              const nextUrl = targetURLMatch[1]
+              console.log("[v0] Following HubSpot JavaScript redirect to:", nextUrl)
+              steps.push({
+                step: redirectCount + 1,
+                url: currentUrl,
+                status: response.status,
+                redirectType: "HubSpot JavaScript redirect (targetURL)",
+                timing,
+                htmlSnippet,
+              })
+              currentUrl = nextUrl
+              redirectCount++
+              continue
+            }
+            
+            // Also try other HubSpot patterns
             const hubspotPatterns = [
               /data-redirect-url=["']([^"']+)["']/i,
               /data-target=["']([^"']+)["']/i,
@@ -202,8 +224,7 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
               }
             }
             
-            // Also look for the full HTML more thoroughly
-            console.log("[v0] Full HTML for HubSpot (first 3000 chars):", html.substring(0, 3000))
+            console.log("[v0] No HubSpot redirect pattern found")
           }
 
           const metaPatterns = [

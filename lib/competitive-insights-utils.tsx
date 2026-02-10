@@ -179,6 +179,18 @@ export async function resolveRedirects(url: string, maxRedirects = 10): Promise<
             html = await getResponse.text()
           }
 
+          // Special handling for HubSpot links - they use JavaScript variables
+          if (currentUrl.includes('hubspotlinks.com')) {
+            const targetURLPattern = /var\s+targetURL\s*=\s*"([^"]+)"/i
+            const targetURLMatch = html.match(targetURLPattern)
+            
+            if (targetURLMatch && targetURLMatch[1]) {
+              currentUrl = targetURLMatch[1]
+              redirectCount++
+              continue
+            }
+          }
+
           // Check for meta refresh redirects
           const metaRefreshPatterns = [
             /<meta[^>]*http-equiv=["']?refresh["']?[^>]*content=["']?\d+(?:\.\d+)?;\s*url=([^"'>]+)["']?/i,

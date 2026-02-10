@@ -169,6 +169,42 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
 
           console.log("[v0] Checking HTML for redirects. HTML length:", html.length)
           console.log("[v0] HTML preview (first 1000 chars):", htmlSnippet)
+          
+          // Special handling for HubSpot links - look for their specific redirect pattern
+          if (currentUrl.includes('hubspotlinks.com')) {
+            console.log("[v0] HubSpot link detected - checking for HubSpot-specific patterns")
+            
+            // HubSpot often uses a data attribute or hidden form for redirects
+            const hubspotPatterns = [
+              /data-redirect-url=["']([^"']+)["']/i,
+              /data-target=["']([^"']+)["']/i,
+              /<a[^>]*href=["']([^"']+)["'][^>]*class=["'][^"']*redirect/i,
+              /<form[^>]*action=["']([^"']+)["']/i,
+            ]
+            
+            for (const pattern of hubspotPatterns) {
+              const match = html.match(pattern)
+              if (match && match[1]) {
+                console.log("[v0] HubSpot redirect pattern match:", match[1])
+                const nextUrl = new URL(match[1], currentUrl).toString()
+                console.log("[v0] Following HubSpot redirect to:", nextUrl)
+                steps.push({
+                  step: redirectCount + 1,
+                  url: currentUrl,
+                  status: response.status,
+                  redirectType: "HubSpot data redirect",
+                  timing,
+                  htmlSnippet,
+                })
+                currentUrl = nextUrl
+                redirectCount++
+                continue
+              }
+            }
+            
+            // Also look for the full HTML more thoroughly
+            console.log("[v0] Full HTML for HubSpot (first 3000 chars):", html.substring(0, 3000))
+          }
 
           const metaPatterns = [
             /<meta[^>]*http-equiv=["']?refresh["']?[^>]*content=["']?\d+(?:\.\d+)?;\s*url=([^"'>]+)["']?/i,

@@ -179,6 +179,18 @@ export async function resolveRedirects(url: string, maxRedirects = 10): Promise<
             html = await getResponse.text()
           }
 
+          // Special handling for HubSpot links - they use JavaScript variables
+          if (currentUrl.includes('hubspotlinks.com')) {
+            const targetURLPattern = /var\s+targetURL\s*=\s*"([^"]+)"/i
+            const targetURLMatch = html.match(targetURLPattern)
+            
+            if (targetURLMatch && targetURLMatch[1]) {
+              currentUrl = targetURLMatch[1]
+              redirectCount++
+              continue
+            }
+          }
+
           // Check for meta refresh redirects
           const metaRefreshPatterns = [
             /<meta[^>]*http-equiv=["']?refresh["']?[^>]*content=["']?\d+(?:\.\d+)?;\s*url=([^"'>]+)["']?/i,
@@ -671,6 +683,7 @@ export async function extractCTALinks(
   seedEmails: string[] = [],
 ): Promise<Array<{ url: string; finalUrl?: string; originalUrl?: string; type: string }>> {
   const links: Array<{ url: string; text?: string; context?: string }> = []
+  const seenUrls = new Map<string, boolean>()
 
   const $ = cheerio.load(htmlContent)
 
@@ -848,35 +861,37 @@ export async function extractCTALinks(
   const linksWithFinalUrls = await Promise.all(
     topLinks.map(async (link) => {
       const isTrkLink = link.url.includes(".trk.") || link.url.includes("/trk.")
-      
-      if (isTrkLink) {
-        console.log("[v0] TRK LINK START:", link.url.substring(0, 100))
-      }
-      
-      const finalUrl = await resolveRedirects(link.url)
-      
-      if (isTrkLink) {
-        console.log("[v0] TRK resolved to:", finalUrl)
-      }
-      
-      const cleanedUrl = stripQueryParams(link.url)
-      const cleanedFinalUrl = stripQueryParams(finalUrl)
-      
-      if (isTrkLink) {
-        console.log("[v0] TRK cleaned original:", cleanedUrl)
-        console.log("[v0] TRK cleaned final:", cleanedFinalUrl)
-      }
-
-      const isDifferent =
-        cleanedFinalUrl !== cleanedUrl && !cleanedFinalUrl.includes("click.") && !cleanedFinalUrl.includes("track.")
+      let finalUrl = ""
+      let cleanedUrl = ""
+      let cleanedFinalUrl = ""
+      let isDifferent = false
 
       if (isTrkLink) {
-        console.log("[v0] TRK isDifferent:", isDifferent)
-        console.log("[v0] TRK finalUrl will be:", isDifferent ? cleanedFinalUrl : "undefined (not saved)")
+        // Resolve redirects
+        finalUrl = await resolveRedirects(link.url)
+
+        // Strip query params to protect privacy
+        cleanedUrl = stripQueryParams(link.url)
+        cleanedFinalUrl = stripQueryParams(finalUrl)
+
+        // Only save finalUrl if it's different from the original URL
+        isDifferent = cleanedUrl.toLowerCase() !== cleanedFinalUrl.toLowerCase()
+
+        // Check if this URL has already been seen (either as original or final URL)
+        const existingLink = seenUrls.get(cleanedUrl) || seenUrls.get(cleanedFinalUrl)
+        if (existingLink) {
+          return {
+            url: cleanedUrl, // Use cleaned URL instead of original
+            finalUrl: undefined,
+            text: link.text,
+          }
+        }
+        seenUrls.set(cleanedUrl, true)
+        seenUrls.set(cleanedFinalUrl, true)
       }
 
       return {
-        url: cleanedUrl, // Use cleaned URL instead of original
+        url: cleanedUrl || link.url, // Use cleaned URL instead of original
         finalUrl: isDifferent ? cleanedFinalUrl : undefined,
         text: link.text,
       }

@@ -169,6 +169,63 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
 
           console.log("[v0] Checking HTML for redirects. HTML length:", html.length)
           console.log("[v0] HTML preview (first 1000 chars):", htmlSnippet)
+          
+          // Special handling for HubSpot links - look for their specific redirect pattern
+          if (currentUrl.includes('hubspotlinks.com')) {
+            console.log("[v0] HubSpot link detected - checking for HubSpot-specific patterns")
+            
+            // HubSpot uses JavaScript variables to store redirect URLs
+            // Look for: var targetURL = "https://..."
+            const targetURLPattern = /var\s+targetURL\s*=\s*"([^"]+)"/i
+            const targetURLMatch = html.match(targetURLPattern)
+            
+            if (targetURLMatch && targetURLMatch[1]) {
+              console.log("[v0] HubSpot targetURL found:", targetURLMatch[1])
+              const nextUrl = targetURLMatch[1]
+              console.log("[v0] Following HubSpot JavaScript redirect to:", nextUrl)
+              steps.push({
+                step: redirectCount + 1,
+                url: currentUrl,
+                status: response.status,
+                redirectType: "HubSpot JavaScript redirect (targetURL)",
+                timing,
+                htmlSnippet,
+              })
+              currentUrl = nextUrl
+              redirectCount++
+              continue
+            }
+            
+            // Also try other HubSpot patterns
+            const hubspotPatterns = [
+              /data-redirect-url=["']([^"']+)["']/i,
+              /data-target=["']([^"']+)["']/i,
+              /<a[^>]*href=["']([^"']+)["'][^>]*class=["'][^"']*redirect/i,
+              /<form[^>]*action=["']([^"']+)["']/i,
+            ]
+            
+            for (const pattern of hubspotPatterns) {
+              const match = html.match(pattern)
+              if (match && match[1]) {
+                console.log("[v0] HubSpot redirect pattern match:", match[1])
+                const nextUrl = new URL(match[1], currentUrl).toString()
+                console.log("[v0] Following HubSpot redirect to:", nextUrl)
+                steps.push({
+                  step: redirectCount + 1,
+                  url: currentUrl,
+                  status: response.status,
+                  redirectType: "HubSpot data redirect",
+                  timing,
+                  htmlSnippet,
+                })
+                currentUrl = nextUrl
+                redirectCount++
+                continue
+              }
+            }
+            
+            console.log("[v0] No HubSpot redirect pattern found")
+          }
 
           const metaPatterns = [
             /<meta[^>]*http-equiv=["']?refresh["']?[^>]*content=["']?\d+(?:\.\d+)?;\s*url=([^"'>]+)["']?/i,

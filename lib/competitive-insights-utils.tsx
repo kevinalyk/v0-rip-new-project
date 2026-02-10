@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma"
 import { generateText } from "ai"
+import { openai } from "@ai-sdk/openai"
 import * as cheerio from "cheerio"
 import { sanitizeSubject } from "@/lib/campaign-detector"
 import https from "https"
@@ -546,7 +547,7 @@ petition
 other`
 
     const { text } = await generateText({
-      model: "openai/gpt-4o-mini",
+      model: openai("gpt-4o-mini"),
       prompt,
       temperature: 0.1,
     })
@@ -637,11 +638,11 @@ async function detectUnsubscribeLinksWithAI(links: Array<{ url: string; text?: s
 ${links.map((link, i) => `${i + 1}. URL: ${link.url}${link.text ? `\n   Link text: "${link.text}"` : ""}`).join("\n\n")}
 
 **Instructions:** Respond with ONLY the numbers of links that are unsubscribe/opt-out links (comma-separated). If none are unsubscribe links, respond with "none".
-
-Example response: "1, 3, 5" or "none"`
-
+  
+  Example response: "1, 3, 5" or "none"`
+  
     const { text } = await generateText({
-      model: "openai/gpt-4o-mini",
+      model: openai("gpt-4o-mini"),
       prompt,
       temperature: 0.1,
     })

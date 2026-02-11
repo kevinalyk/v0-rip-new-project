@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client"
 import { generateObject } from "ai"
-import { openai } from "@ai-sdk/openai"
 import { z } from "zod"
+import { openai } from "path-to-openai"; // Declare the openai variable here
 
 const prisma = new PrismaClient()
 
@@ -64,10 +64,10 @@ async function analyzeEmailWithAI(
 
     console.log("[Data Broker AI] Analyzing email (clean text length):", cleanBody.length)
 
-    const result = await generateObject({
-      model: openai("gpt-4o-mini"),
-      mode: "json",
-      schema: z.object({
+  const result = await generateObject({
+    model: "openai/gpt-4o-mini",
+    mode: "json",
+    schema: z.object({
         type: z.enum(["newsletter", "sponsored_campaign"]),
         confidence: z.number().min(0).max(1),
         reasoning: z.string(),

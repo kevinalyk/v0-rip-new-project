@@ -6,6 +6,8 @@ async function resolveRedirects(url: string): Promise<string> {
   let currentUrl = url
   let redirectCount = 0
 
+  console.log(`[v0] Starting redirect resolution for: ${url.substring(0, 100)}...`)
+
   try {
     while (redirectCount < maxRedirects) {
       const controller = new AbortController()
@@ -13,45 +15,54 @@ async function resolveRedirects(url: string): Promise<string> {
 
       try {
         const response = await fetch(currentUrl, {
-          method: "GET",
+          method: "HEAD", // Use HEAD to avoid downloading full page content
           redirect: "manual",
           headers: {
             "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
           },
           signal: controller.signal,
         })
 
         clearTimeout(timeoutId)
 
+        console.log(`[v0] Redirect step ${redirectCount + 1}: ${response.status} - ${currentUrl.substring(0, 100)}...`)
+
         if (response.status >= 300 && response.status < 400) {
           const location = response.headers.get("location")
           if (!location) {
+            console.log(`[v0] No location header found, stopping at: ${currentUrl.substring(0, 100)}...`)
             return currentUrl
           }
 
           const nextUrl = new URL(location, currentUrl).toString()
+          console.log(`[v0] Following redirect to: ${nextUrl.substring(0, 100)}...`)
           currentUrl = nextUrl
           redirectCount++
         } else if (response.status === 200) {
+          console.log(`[v0] Reached final destination: ${currentUrl.substring(0, 100)}...`)
           return currentUrl
         } else {
+          console.log(`[v0] Unexpected status ${response.status}, stopping at: ${currentUrl.substring(0, 100)}...`)
           return currentUrl
         }
       } catch (fetchError: any) {
         clearTimeout(timeoutId)
         if (fetchError.name === "AbortError") {
+          console.log(`[v0] Request timeout, stopping at: ${currentUrl.substring(0, 100)}...`)
           return currentUrl
         }
         throw fetchError
       }
     }
 
+    console.log(`[v0] Max redirects reached, stopping at: ${currentUrl.substring(0, 100)}...`)
     return currentUrl
   } catch (error: any) {
-    console.error("[Admin] Error resolving redirects:", error.message)
+    console.error("[v0] Error resolving redirects:", error.message, "for URL:", url.substring(0, 100))
     return currentUrl
   }
 }

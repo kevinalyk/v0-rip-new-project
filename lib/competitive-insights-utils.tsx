@@ -1,11 +1,11 @@
 import prisma from "@/lib/prisma"
 import { generateText } from "ai"
-import { openai } from "@ai-sdk/openai"
 import * as cheerio from "cheerio"
 import { sanitizeSubject } from "@/lib/campaign-detector"
 import https from "https"
 import http from "http"
 import { URL } from "url"
+import { openai } from "@/lib/openai" // Declare the openai variable
 
 // Custom fetch using Node's http/https modules to properly handle SSL
 async function customFetch(
@@ -546,11 +546,11 @@ donation
 petition
 other`
 
-    const { text } = await generateText({
-      model: openai("gpt-4o-mini"),
-      prompt,
-      temperature: 0.1,
-    })
+  const { text } = await generateText({
+    model: openai("gpt-4o-mini"),
+    prompt,
+    temperature: 0.1,
+  })
 
     // Parse AI response
     const categories = text
@@ -641,11 +641,11 @@ ${links.map((link, i) => `${i + 1}. URL: ${link.url}${link.text ? `\n   Link tex
   
   Example response: "1, 3, 5" or "none"`
   
-    const { text } = await generateText({
-      model: openai("gpt-4o-mini"),
-      prompt,
-      temperature: 0.1,
-    })
+  const { text } = await generateText({
+    model: openai("gpt-4o-mini"),
+    prompt,
+    temperature: 0.1,
+  })
 
     // Parse AI response
     const response = text.trim().toLowerCase()

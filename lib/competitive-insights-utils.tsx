@@ -5,7 +5,6 @@ import { sanitizeSubject } from "@/lib/campaign-detector"
 import https from "https"
 import http from "http"
 import { URL } from "url"
-import { openai } from "@/lib/openai" // Declare the openai variable
 
 // Custom fetch using Node's http/https modules to properly handle SSL
 async function customFetch(
@@ -544,10 +543,10 @@ ${stillUncategorized.map((cta, i) => `${i + 1}. URL: ${cta.finalUrl || cta.url}$
 Example response format:
 donation
 petition
-other`
-
+  other`
+  
   const { text } = await generateText({
-    model: openai("gpt-4o-mini"),
+    model: "openai:gpt-4o-mini",
     prompt,
     temperature: 0.1,
   })
@@ -642,7 +641,7 @@ ${links.map((link, i) => `${i + 1}. URL: ${link.url}${link.text ? `\n   Link tex
   Example response: "1, 3, 5" or "none"`
   
   const { text } = await generateText({
-    model: openai("gpt-4o-mini"),
+    model: "openai:gpt-4o-mini",
     prompt,
     temperature: 0.1,
   })

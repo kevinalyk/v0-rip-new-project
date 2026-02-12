@@ -42,6 +42,6 @@ DO $$
 BEGIN
   RAISE NOTICE 'Successfully added Quinn Huckeba to Campaign Engine as admin';
   RAISE NOTICE 'Email: quinn@campaignengine.io';
-  RAISE NOTICE 'Temporary password: TempPassword2026!!';
+  RAISE NOTICE 'Temporary password: TempPassword2026!';
   RAISE NOTICE 'User will need to reset password on first login';
 END $$;

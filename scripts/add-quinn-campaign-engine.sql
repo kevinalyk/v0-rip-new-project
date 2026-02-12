@@ -18,7 +18,7 @@ INSERT INTO "User" (
   'quinn@campaignengine.io',
   'Quinn',
   'Huckeba',
-  '$2y$10$Wl4OnPaukRiHPGpEtrtBm.ei0rOowKRttbVBuV7EdV86Whge3N6uG', -- bcrypt hash for "TempCE2024!"
+  '$2y$10$URuEJH1dVrdd1qIwoDnGfutZGOpF9wIJnT8LkMP9l8svfJ2nlKL8e', -- bcrypt hash for "TempCE2024!"
   'admin',
   'campaign_engine',
   true,

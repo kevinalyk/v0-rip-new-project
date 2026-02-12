@@ -82,7 +82,7 @@ INSERT INTO "User" (
   'Brandon',                                                                -- firstName
   '',                                                                       -- lastName (unknown)
   '$2y$10$URuEJH1dVrdd1qIwoDnGfutZGOpF9wIJnT8LkMP9l8svfJ2nlKL8e',          -- password (TempPassword2026!)
-  'admin',                                                                  -- role
+  'owner',                                                                  -- role
   true,                                                                     -- firstLogin (must reset password)
   NULL,                                                                     -- lastActive
   NOW(),                                                                    -- createdAt

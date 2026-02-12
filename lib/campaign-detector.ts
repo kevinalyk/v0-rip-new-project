@@ -838,7 +838,7 @@ export async function scanForCompetitiveInsights(options: {
       }))
 
       const ctaLinksForLookup = firstEmail.emailContent
-        ? await extractCTALinksFromEmailContent(firstEmail.emailContent, ripSeedEmailAddresses)
+        ? await extractCTALinksFromEmailContent(firstEmail.emailContent, ripSeedEmailAddresses, firstEmail.subject)
         : []
 
       const entityAssignment = await findEntityForSender(
@@ -950,6 +950,7 @@ async function createCampaignsFromDetected(detectedCampaigns: DetectedCampaign[]
         ? await extractCTALinksFromEmailContent(
             emailContent,
             seedEmails.map((se) => se.email),
+            detected.subject,
           )
         : []
 
@@ -1032,7 +1033,8 @@ function determineEmailProvider(email: string): string {
 async function extractCTALinksFromEmailContent(
   emailContent: string,
   seedEmails: string[],
+  emailSubject?: string,
 ): Promise<Array<{ url: string; finalUrl?: string; originalUrl?: string; type: string }>> {
   const { extractCTALinks } = await import("./competitive-insights-utils")
-  return await extractCTALinks(emailContent, seedEmails)
+  return await extractCTALinks(emailContent, seedEmails, emailSubject)
 }

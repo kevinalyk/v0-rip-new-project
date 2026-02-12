@@ -860,15 +860,36 @@ export async function extractCTALinks(
 
   const linksWithFinalUrls = await Promise.all(
     topLinks.map(async (link) => {
-      const isTrkLink = link.url.includes(".trk.") || link.url.includes("/trk.")
+      // Enhanced tracking link detection
+      const isTrkLink = 
+        link.url.includes(".trk.") || 
+        link.url.includes("/trk.") ||
+        /trk\./.test(link.url) ||
+        link.url.includes("tracking") ||
+        link.url.includes("click.") ||
+        link.url.includes("redirect.") ||
+        link.url.includes("links.")
+      
+      console.log("[v0] Link processing:", {
+        url: link.url.substring(0, 100),
+        isTrkLink,
+        includes_trk_dot: link.url.includes(".trk."),
+        includes_slash_trk: link.url.includes("/trk."),
+        regex_match: /trk\./.test(link.url),
+      })
+      
       let finalUrl = ""
       let cleanedUrl = ""
       let cleanedFinalUrl = ""
       let isDifferent = false
 
       if (isTrkLink) {
+        console.log("[v0] Resolving tracking link:", link.url.substring(0, 100))
+        
         // Resolve redirects
         finalUrl = await resolveRedirects(link.url)
+        
+        console.log("[v0] Resolved to:", finalUrl.substring(0, 100))
 
         // Strip query params to protect privacy
         cleanedUrl = stripQueryParams(link.url)
@@ -876,6 +897,12 @@ export async function extractCTALinks(
 
         // Only save finalUrl if it's different from the original URL
         isDifferent = cleanedUrl.toLowerCase() !== cleanedFinalUrl.toLowerCase()
+        
+        console.log("[v0] After stripping params:", {
+          cleanedUrl: cleanedUrl.substring(0, 100),
+          cleanedFinalUrl: cleanedFinalUrl.substring(0, 100),
+          isDifferent,
+        })
 
         // Check if this URL has already been seen (either as original or final URL)
         const existingLink = seenUrls.get(cleanedUrl) || seenUrls.get(cleanedFinalUrl)

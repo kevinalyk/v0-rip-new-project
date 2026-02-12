@@ -681,6 +681,7 @@ ${links.map((link, i) => `${i + 1}. URL: ${link.url}${link.text ? `\n   Link tex
 export async function extractCTALinks(
   htmlContent: string,
   seedEmails: string[] = [],
+  emailSubject?: string,
 ): Promise<Array<{ url: string; finalUrl?: string; originalUrl?: string; type: string }>> {
   const links: Array<{ url: string; text?: string; context?: string }> = []
   const seenUrls = new Map<string, boolean>()
@@ -878,7 +879,8 @@ export async function extractCTALinks(
     link.url.includes("links.")
   ).length
   
-  console.log(`[v0] Processing ${topLinks.length} links (${trackingLinkCount} tracking): ${linkDomains}`)
+  const subjectPrefix = emailSubject ? `"${emailSubject}" - ` : ""
+  console.log(`[v0] ${subjectPrefix}Processing ${topLinks.length} links (${trackingLinkCount} tracking): ${linkDomains}`)
 
   const linksWithFinalUrls = await Promise.all(
     topLinks.map(async (link) => {
@@ -1324,7 +1326,7 @@ export async function processCompetitiveInsights(
     const inboxRate = totalCount > 0 ? (inboxCount / totalCount) * 100 : 0
 
     const seedEmailsList = Array.from(ripEmailAddresses)
-    const ctaLinks = emailContent ? await extractCTALinks(emailContent, seedEmailsList) : []
+    const ctaLinks = emailContent ? await extractCTALinks(emailContent, seedEmailsList, sanitizedSubject) : []
 
     const tags = autoGenerateTags(senderEmail, senderName, sanitizedSubject, emailContent)
 

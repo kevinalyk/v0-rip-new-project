@@ -107,6 +107,7 @@ interface EntityMapping {
   id: string
   senderEmail: string | null
   senderDomain: string | null
+  senderPhone: string | null
   createdAt: string
 }
 
@@ -1749,24 +1750,28 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                         No mappings yet. Add an email or domain above.
                       </div>
                     ) : (
-                      entityMappings.map((mapping) => (
-                        <div
-                          key={mapping.id}
-                          className="flex items-center justify-between p-2 bg-muted rounded-md text-sm"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Mail className="h-4 w-4 text-muted-foreground" />
-                            <span>{mapping.senderEmail || mapping.senderDomain}</span>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveMapping(mapping.id)}
-                            className="h-8 w-8 p-0"
-                          >
-                            ×
-                          </Button>
-                        </div>
+                  entityMappings.map((mapping) => (
+                    <div
+                      key={mapping.id}
+                      className="flex items-center justify-between p-2 bg-muted rounded-md text-sm"
+                    >
+                      <div className="flex items-center gap-2">
+                        {mapping.senderPhone ? (
+                          <Phone className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Mail className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        <span>{mapping.senderPhone || mapping.senderEmail || mapping.senderDomain}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveMapping(mapping.id)}
+                        className="h-8 w-8 p-0"
+                      >
+                        ×
+                      </Button>
+                    </div>
                       ))
                     )}
                   </div>

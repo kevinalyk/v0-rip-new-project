@@ -100,6 +100,7 @@ export async function resolveRedirects(url: string, maxRedirects = 10): Promise<
           fetchError.message?.includes("ECONNREFUSED")
 
         if (isDNSError) {
+          console.log(`[v0] DNS/Network error resolving ${currentUrl.substring(0, 80)}: ${fetchError.message}`)
           return currentUrl
         }
 
@@ -128,9 +129,11 @@ export async function resolveRedirects(url: string, maxRedirects = 10): Promise<
             })
             useCustomFetch = true
           } catch (customFetchError) {
+            console.log(`[v0] SSL/Custom fetch failed for ${currentUrl.substring(0, 80)}: ${customFetchError}`)
             return currentUrl
           }
         } else {
+          console.log(`[v0] Fetch error for ${currentUrl.substring(0, 80)}: ${fetchError.message}`)
           return currentUrl
         }
       }
@@ -909,6 +912,11 @@ export async function extractCTALinks(
 
         // Only save finalUrl if it's different from the original URL
         isDifferent = cleanedUrl.toLowerCase() !== cleanedFinalUrl.toLowerCase()
+        
+        // Log if unwrapping failed (URL didn't change)
+        if (!isDifferent) {
+          console.log(`[v0] ⚠️ Link unwrap failed or unchanged: ${link.url.substring(0, 100)}...`)
+        }
 
         // Check if this URL has already been seen (either as original or final URL)
         const existingLink = seenUrls.get(cleanedUrl) || seenUrls.get(cleanedFinalUrl)

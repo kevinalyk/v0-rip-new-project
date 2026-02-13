@@ -474,10 +474,18 @@ export function CompetitiveInsights({
       params.append("limit", itemsPerPage.toString())
 
       console.log("[v0] Fetching with query string:", params.toString())
+      console.log("[v0] Current page state:", currentPage, "Items per page:", itemsPerPage)
 
       const endpoint = apiEndpoint || `/api/competitive-insights?${params.toString()}`
       const response = await fetch(endpoint)
       const data = await response.json()
+
+      console.log("[v0] API response:", { 
+        insightsCount: data.insights?.length, 
+        pagination: data.pagination,
+        firstInsightDate: data.insights?.[0]?.dateReceived,
+        lastInsightDate: data.insights?.[data.insights?.length - 1]?.dateReceived
+      })
 
       // Filter out hidden campaigns unless the user is a super admin
       const insights = data.insights || []

@@ -185,61 +185,97 @@ export async function GET(request: NextRequest) {
 
     const shouldFetchAll = donationPlatform && donationPlatform !== "all"
     const fetchAllForCombining = messageType === "all" || !messageType
+    
+    // Safety limit: when fetching all for filtering, cap at 5000 records to prevent timeout
+    const SAFETY_LIMIT = 5000
 
-    if (messageType === "all" || messageType === "email" || !messageType) {
-      emailInsights = await prisma.competitiveInsightCampaign.findMany({
-        where: emailWhere,
-        include: {
-          entity: {
-            select: {
-              id: true,
-              name: true,
-              type: true,
-              party: true,
-              state: true,
-              tags: {
-                where: { clientId: authResult.user.clientId! },
-                select: {
-                  tagName: true,
-                  tagColor: true,
+    console.log("[v0] Fetch strategy:", { shouldFetchAll, fetchAllForCombining, donationPlatform })
+
+    try {
+      if (messageType === "all" || messageType === "email" || !messageType) {
+        console.log("[v0] About to fetch emails...")
+        const emailQuery = {
+          where: emailWhere,
+          include: {
+            entity: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+                party: true,
+                state: true,
+                tags: {
+                  where: { clientId: authResult.user.clientId! },
+                  select: {
+                    tagName: true,
+                    tagColor: true,
+                  },
                 },
               },
             },
           },
-        },
-        orderBy: {
-          dateReceived: "desc",
-        },
-        ...(shouldFetchAll || fetchAllForCombining ? {} : { skip, take: limit }),
-      })
-    }
+          orderBy: {
+            dateReceived: "desc",
+          } as const,
+          ...(shouldFetchAll || fetchAllForCombining
+            ? { take: SAFETY_LIMIT }
+            : { skip, take: limit }),
+        }
+        
+        console.log("[v0] Email query params:", { 
+          shouldFetchAll, 
+          fetchAllForCombining, 
+          skip, 
+          take: shouldFetchAll || fetchAllForCombining ? SAFETY_LIMIT : limit 
+        })
+        
+        emailInsights = await prisma.competitiveInsightCampaign.findMany(emailQuery)
+        console.log("[v0] Fetched emails:", emailInsights.length)
+      }
 
-    if (messageType === "all" || messageType === "sms" || !messageType) {
-      smsMessages = await prisma.smsQueue.findMany({
-        where: smsWhere,
-        include: {
-          entity: {
-            select: {
-              id: true,
-              name: true,
-              type: true,
-              party: true,
-              state: true,
-              tags: {
-                where: { clientId: authResult.user.clientId! },
-                select: {
-                  tagName: true,
-                  tagColor: true,
+      if (messageType === "all" || messageType === "sms" || !messageType) {
+        console.log("[v0] About to fetch SMS...")
+        const smsQuery = {
+          where: smsWhere,
+          include: {
+            entity: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+                party: true,
+                state: true,
+                tags: {
+                  where: { clientId: authResult.user.clientId! },
+                  select: {
+                    tagName: true,
+                    tagColor: true,
+                  },
                 },
               },
             },
           },
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-        ...(shouldFetchAll || fetchAllForCombining ? {} : { skip, take: limit }),
-      })
+          orderBy: {
+            createdAt: "desc",
+          } as const,
+          ...(shouldFetchAll || fetchAllForCombining
+            ? { take: SAFETY_LIMIT }
+            : { skip, take: limit }),
+        }
+        
+        console.log("[v0] SMS query params:", { 
+          shouldFetchAll, 
+          fetchAllForCombining, 
+          skip, 
+          take: shouldFetchAll || fetchAllForCombining ? SAFETY_LIMIT : limit 
+        })
+        
+        smsMessages = await prisma.smsQueue.findMany(smsQuery)
+        console.log("[v0] Fetched SMS:", smsMessages.length)
+      }
+    } catch (dbError) {
+      console.error("[v0] Database query error:", dbError)
+      throw dbError
     }
 
     console.log("[v0] Raw results:", { emailCount: emailInsights.length, smsCount: smsMessages.length })

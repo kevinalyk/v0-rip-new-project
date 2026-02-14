@@ -244,42 +244,76 @@ export async function GET(request: NextRequest) {
 
     console.log("[v0] Raw results:", { emailCount: emailInsights.length, smsCount: smsMessages.length })
 
-    const parsedEmailInsights = emailInsights.map((insight) => ({
-      ...insight,
-      type: "email" as const,
-      ctaLinks: Array.isArray(insight.ctaLinks)
-        ? insight.ctaLinks
-        : insight.ctaLinks
-          ? JSON.parse(insight.ctaLinks as string)
-          : [],
-      tags: Array.isArray(insight.tags) ? insight.tags : insight.tags ? JSON.parse(insight.tags as string) : [],
-      clientId: insight.clientId,
-      source: insight.source,
-    }))
+    const parsedEmailInsights = emailInsights.map((insight) => {
+      let ctaLinks = []
+      let tags = []
+      
+      try {
+        ctaLinks = Array.isArray(insight.ctaLinks)
+          ? insight.ctaLinks
+          : insight.ctaLinks
+            ? JSON.parse(insight.ctaLinks as string)
+            : []
+      } catch (e) {
+        console.error("[v0] Error parsing ctaLinks for insight", insight.id, e)
+        ctaLinks = []
+      }
+      
+      try {
+        tags = Array.isArray(insight.tags) 
+          ? insight.tags 
+          : insight.tags 
+            ? JSON.parse(insight.tags as string) 
+            : []
+      } catch (e) {
+        console.error("[v0] Error parsing tags for insight", insight.id, e)
+        tags = []
+      }
+      
+      return {
+        ...insight,
+        type: "email" as const,
+        ctaLinks,
+        tags,
+        clientId: insight.clientId,
+        source: insight.source,
+      }
+    })
 
-    const parsedSmsInsights = smsMessages.map((sms) => ({
-      id: sms.id,
-      type: "sms" as const,
-      senderName: sms.phoneNumber || "Unknown",
-      senderEmail: sms.phoneNumber || "",
-      subject: sms.message?.substring(0, 100) || "SMS Message",
-      dateReceived: sms.createdAt.toISOString(),
-      inboxRate: 100,
-      inboxCount: 1,
-      spamCount: 0,
-      notDeliveredCount: 0,
-      ctaLinks: sms.ctaLinks ? JSON.parse(sms.ctaLinks) : [],
-      tags: [],
-      emailPreview: sms.message || "",
-      emailContent: sms.message || null,
-      entityId: sms.entityId,
-      entity: sms.entity || null,
-      phoneNumber: sms.phoneNumber,
-      toNumber: sms.toNumber,
-      isHidden: sms.isHidden,
-      clientId: null,
-      source: "seed",
-    }))
+    const parsedSmsInsights = smsMessages.map((sms) => {
+      let ctaLinks = []
+      
+      try {
+        ctaLinks = sms.ctaLinks ? JSON.parse(sms.ctaLinks) : []
+      } catch (e) {
+        console.error("[v0] Error parsing ctaLinks for SMS", sms.id, e)
+        ctaLinks = []
+      }
+      
+      return {
+        id: sms.id,
+        type: "sms" as const,
+        senderName: sms.phoneNumber || "Unknown",
+        senderEmail: sms.phoneNumber || "",
+        subject: sms.message?.substring(0, 100) || "SMS Message",
+        dateReceived: sms.createdAt.toISOString(),
+        inboxRate: 100,
+        inboxCount: 1,
+        spamCount: 0,
+        notDeliveredCount: 0,
+        ctaLinks,
+        tags: [],
+        emailPreview: sms.message || "",
+        emailContent: sms.message || null,
+        entityId: sms.entityId,
+        entity: sms.entity || null,
+        phoneNumber: sms.phoneNumber,
+        toNumber: sms.toNumber,
+        isHidden: sms.isHidden,
+        clientId: null,
+        source: "seed",
+      }
+    })
 
     let allInsights = [...parsedEmailInsights, ...parsedSmsInsights].sort((a, b) => {
       const dateA = new Date(a.dateReceived).getTime()

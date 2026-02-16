@@ -345,8 +345,8 @@ export async function GET(request: Request) {
         const updatedCtaLinks = []
 
         for (const link of ctaLinks) {
-          if (link.finalURL) {
-            // Already has finalURL, skip
+          if (link.finalUrl || link.finalURL) {
+            // Already has finalUrl/finalURL, skip
             updatedCtaLinks.push(link)
             continue
           }
@@ -419,8 +419,8 @@ export async function GET(request: Request) {
         const updatedCtaLinks = []
 
         for (const link of ctaLinks) {
-          if (link.finalURL) {
-            // Already has finalURL, skip
+          if (link.finalUrl || link.finalURL) {
+            // Already has finalUrl/finalURL, skip
             updatedCtaLinks.push(link)
             continue
           }

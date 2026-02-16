@@ -181,7 +181,7 @@ const globalForPrisma = (typeof globalThis !== "undefined" ? globalThis : {}) as
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
-    log: ["error", "warn"],
+    log: process.env.NODE_ENV === "production" ? ["error"] : ["error", "warn"],
     datasources: {
       db: {
         url: process.env.DATABASE_URL || "postgresql://mock:mock@localhost:5432/mock",
@@ -190,8 +190,8 @@ export const prisma =
     errorFormat: "pretty",
   })
 
-// Only set global in non-production environments and when globalThis is available
-if (process.env.NODE_ENV !== "production" && typeof globalThis !== "undefined") {
+// Set global in all environments to reuse connections
+if (typeof globalThis !== "undefined") {
   globalForPrisma.prisma = prisma
 }
 
@@ -214,16 +214,28 @@ async function warmupDatabase() {
   }
 }
 
-export async function ensureDatabaseConnection() {
-  try {
-    // Simple connection test without explicit connect/disconnect
-    // Prisma handles connection pooling automatically in serverless
-    await prisma.$queryRaw`SELECT 1`
-    return true
-  } catch (error) {
-    console.error("Failed to establish database connection:", error)
-    return false
+export async function ensureDatabaseConnection(maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      // Simple connection test without explicit connect/disconnect
+      // Prisma handles connection pooling automatically in serverless
+      await Promise.race([
+        prisma.$queryRaw`SELECT 1`,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout')), 5000))
+      ])
+      return true
+    } catch (error: any) {
+      console.error(`Database connection attempt ${attempt + 1}/${maxRetries} failed:`, error.message)
+      
+      if (attempt < maxRetries - 1) {
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)))
+      }
+    }
   }
+  
+  console.error("Failed to establish database connection after all retries")
+  return false
 }
 
 // Only warm up in production

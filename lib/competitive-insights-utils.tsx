@@ -885,65 +885,30 @@ export async function extractCTALinks(
   const subjectPrefix = emailSubject ? `"${emailSubject}" - ` : ""
   console.log(`[v0] ${subjectPrefix}Processing ${topLinks.length} links (${trackingLinkCount} tracking): ${linkDomains}`)
 
-  const linksWithFinalUrls = await Promise.all(
-    topLinks.map(async (link) => {
-      // Enhanced tracking link detection
-      const isTrkLink = 
-        link.url.includes(".trk.") || 
-        link.url.includes("/trk.") ||
-        /trk\./.test(link.url) ||
-        link.url.includes("tracking") ||
-        link.url.includes("click.") ||
-        link.url.includes("redirect.") ||
-        link.url.includes("links.")
-      
-      let finalUrl = ""
-      let cleanedUrl = ""
-      let cleanedFinalUrl = ""
-      let isDifferent = false
-
-      if (isTrkLink) {
-        // Resolve redirects
-        finalUrl = await resolveRedirects(link.url)
-
-        // Strip query params to protect privacy
-        cleanedUrl = stripQueryParams(link.url)
-        cleanedFinalUrl = stripQueryParams(finalUrl)
-
-        // Only save finalUrl if it's different from the original URL
-        isDifferent = cleanedUrl.toLowerCase() !== cleanedFinalUrl.toLowerCase()
-        
-        // Log if unwrapping failed (URL didn't change)
-        if (!isDifferent) {
-          console.log(`[v0] ⚠️ Link unwrap failed or unchanged: ${link.url.substring(0, 100)}...`)
-        }
-
-        // Check if this URL has already been seen (either as original or final URL)
-        const existingLink = seenUrls.get(cleanedUrl) || seenUrls.get(cleanedFinalUrl)
-        if (existingLink) {
-          return {
-            url: cleanedUrl, // Use cleaned URL instead of original
-            finalUrl: undefined,
-            text: link.text,
-          }
-        }
-        seenUrls.set(cleanedUrl, true)
-        seenUrls.set(cleanedFinalUrl, true)
-      }
-
+  // Skip unwrapping during campaign creation to avoid timeouts
+  // The unwrap-links cron job will handle all unwrapping with proper retry logic
+  const linksWithFinalUrls = topLinks.map((link) => {
+    // Strip query params to protect privacy
+    const cleanedUrl = stripQueryParams(link.url)
+    
+    // Check if this URL has already been seen
+    if (seenUrls.get(cleanedUrl)) {
       return {
-        url: cleanedUrl || link.url, // Use cleaned URL instead of original
-        finalUrl: isDifferent ? cleanedFinalUrl : undefined,
+        url: cleanedUrl,
+        finalUrl: undefined,
         text: link.text,
       }
-    }),
-  )
+    }
+    seenUrls.set(cleanedUrl, true)
+
+    return {
+      url: cleanedUrl,
+      finalUrl: undefined, // Will be populated by unwrap-links cron job
+      text: link.text,
+    }
+  })
   
-  // Log summary of resolved tracking links
-  const resolvedLinks = linksWithFinalUrls.filter(link => link.finalUrl)
-  if (resolvedLinks.length > 0) {
-    console.log(`[v0] ✓ Resolved ${resolvedLinks.length} tracking links to final destinations`)
-  }
+  console.log(`[v0] ✓ Extracted ${linksWithFinalUrls.length} links (unwrapping deferred to cron job)`)
 
   const categorizedLinks = await categorizeCtasWithAI(linksWithFinalUrls)
 

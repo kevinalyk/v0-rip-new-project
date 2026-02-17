@@ -84,7 +84,7 @@ export default function SharePageClient() {
     setDialogOpen(false)
     setTimeout(() => {
       if (isAuthenticated) {
-        router.push("/admin/ci/campaigns")
+        router.push("/rip/ci/campaigns")
       } else {
         router.push("/login")
       }

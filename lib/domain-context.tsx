@@ -34,8 +34,8 @@ export function DomainProvider({ children }: { children: React.ReactNode }) {
       try {
         setLoading(true)
 
-        // Special routes to exclude: /admin, /login, /reset-password, /debug
-        const specialRoutes = ["/admin", "/login", "/reset-password", "/debug", "/"]
+        // Special routes to exclude: /login, /reset-password, /debug
+        const specialRoutes = ["/login", "/reset-password", "/debug", "/"]
         let clientSlug: string | null = null
 
         if (pathname && !specialRoutes.includes(pathname)) {

@@ -54,7 +54,7 @@ export default function AccountSettingsPage() {
         if (!verifyResponse.ok) {
           // No access to this client
           if (userData.role === "super_admin") {
-            router.push("/admin")
+            router.push("/rip/ci/campaigns")
           } else if (userData.clientSlug) {
             router.push(`/${userData.clientSlug}`)
           } else {

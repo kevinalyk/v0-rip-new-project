@@ -23,9 +23,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "User not found or not associated with a client" }, { status: 404 })
     }
 
+    // Get clientSlug from query params for super_admins
+    const searchParams = request.nextUrl.searchParams
+    const clientSlug = searchParams.get("clientSlug")
+    
+    let targetClientId = user.clientId
+    if (user.role === "super_admin" && clientSlug) {
+      const targetClient = await prisma.client.findUnique({
+        where: { slug: clientSlug },
+        select: { id: true },
+      })
+      if (targetClient) {
+        targetClientId = targetClient.id
+      }
+    }
+
     // Get all subscribed entity IDs for this client
     const subscriptions = await prisma.ciEntitySubscription.findMany({
-      where: { clientId: user.clientId },
+      where: { clientId: targetClientId },
       select: { entityId: true },
     })
 

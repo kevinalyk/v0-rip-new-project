@@ -15,30 +15,14 @@ import {
 } from "@/components/ui/dialog"
 import { CompetitiveInsights } from "@/components/competitive-insights"
 
-export function PersonalEmailContent() {
-  const [clientSlug, setClientSlug] = useState<string>("")
-  const [loading, setLoading] = useState(true)
+interface PersonalEmailContentProps {
+  clientSlug: string
+}
+
+export function PersonalEmailContent({ clientSlug }: PersonalEmailContentProps) {
+  const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const { toast } = useToast()
-
-  useEffect(() => {
-    const fetchClientSlug = async () => {
-      try {
-        const response = await fetch("/api/auth/me")
-        if (response.ok) {
-          const userData = await response.json()
-          if (userData.client?.slug) {
-            setClientSlug(userData.client.slug)
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching client slug:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchClientSlug()
-  }, [])
 
   const personalEmail = clientSlug ? `${clientSlug}@realdailyreview.com` : ""
 
@@ -61,14 +45,6 @@ export function PersonalEmailContent() {
         variant: "destructive",
       })
     }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    )
   }
 
   return (
@@ -161,7 +137,7 @@ export function PersonalEmailContent() {
         </CardContent>
       </Card>
 
-      <CompetitiveInsights apiEndpoint="/api/ci/personal" showPersonalBadge={true} />
+      <CompetitiveInsights clientSlug={clientSlug} apiEndpoint="/api/ci/personal" showPersonalBadge={true} />
     </div>
   )
 }

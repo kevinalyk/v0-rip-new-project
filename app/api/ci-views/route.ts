@@ -24,9 +24,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Client slug is required" }, { status: 400 })
     }
 
-    // Get user's client
+    // Get user info
     const userResult = await sql`
-      SELECT "clientId" 
+      SELECT "clientId", role 
       FROM "User" 
       WHERE id = ${decoded.userId}
     `
@@ -35,7 +35,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    const clientId = userResult[0].clientId
+    // Determine target client - for super_admins, use the selected client
+    let clientId = userResult[0].clientId
+    if (userResult[0].role === "super_admin") {
+      const targetClientResult = await sql`
+        SELECT id 
+        FROM "Client" 
+        WHERE slug = ${clientSlug}
+      `
+      if (targetClientResult && targetClientResult.length > 0) {
+        clientId = targetClientResult[0].id
+      }
+    }
 
     // Fetch all views for this client
     const views = await sql`

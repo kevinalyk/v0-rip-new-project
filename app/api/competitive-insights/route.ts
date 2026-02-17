@@ -9,16 +9,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const searchParams = request.nextUrl.searchParams
+    const clientSlug = searchParams.get("clientSlug")
+    
+    // Determine which client to use - for super_admins with clientSlug, use that client
+    let targetClientId = authResult.user.clientId!
+    if (authResult.user.role === "super_admin" && clientSlug) {
+      const targetClient = await prisma.client.findUnique({
+        where: { slug: clientSlug },
+        select: { id: true },
+      })
+      if (targetClient) {
+        targetClientId = targetClient.id
+      }
+    }
+
     const client = await prisma.client.findUnique({
-      where: { id: authResult.user.clientId! },
+      where: { id: targetClientId },
       select: { subscriptionPlan: true, id: true },
     })
 
     if (!client) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 })
     }
-
-    const searchParams = request.nextUrl.searchParams
     const search = searchParams.get("search") || ""
     const sender = searchParams.get("sender") || ""
     const party = searchParams.get("party") || ""
@@ -47,7 +60,7 @@ export async function GET(request: NextRequest) {
     let subscribedEntityIds: string[] = []
     if (subscriptionsOnly) {
       const subscriptions = await prisma.ciEntitySubscription.findMany({
-        where: { clientId: authResult.user.clientId! },
+        where: { clientId: targetClientId },
         select: { entityId: true },
       })
       subscribedEntityIds = subscriptions.map((sub) => sub.entityId)
@@ -69,12 +82,12 @@ export async function GET(request: NextRequest) {
     if (tag && tag !== "all") {
       const taggedEntities = await prisma.entityTag.findMany({
         where: {
-          clientId: authResult.user.clientId!,
+          clientId: targetClientId,
           tagName: tag,
         },
         select: { entityId: true },
       })
-      taggedEntityIds = taggedEntities.map((t) => t.entityId)
+      taggedEntityIds = taggedEntityIds.map((t) => t.entityId)
 
       if (taggedEntityIds.length === 0) {
         return NextResponse.json({
@@ -246,7 +259,7 @@ export async function GET(request: NextRequest) {
                 party: true,
                 state: true,
                 tags: {
-                  where: { clientId: authResult.user.clientId! },
+                  where: { clientId: targetClientId },
                   select: {
                     tagName: true,
                     tagColor: true,

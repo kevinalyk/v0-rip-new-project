@@ -473,10 +473,15 @@ export function CompetitiveInsights({
       params.append("page", currentPage.toString())
       params.append("limit", itemsPerPage.toString())
 
+      // Add clientSlug to params
+      if (clientSlug) params.append("clientSlug", clientSlug)
+
       console.log("[v0] Fetching with query string:", params.toString())
       console.log("[v0] Current page state:", currentPage, "Items per page:", itemsPerPage)
 
-      const endpoint = apiEndpoint || `/api/competitive-insights?${params.toString()}`
+      const endpoint = apiEndpoint 
+        ? `${apiEndpoint}?${params.toString()}` 
+        : `/api/competitive-insights?${params.toString()}`
       const response = await fetch(endpoint)
       const data = await response.json()
 

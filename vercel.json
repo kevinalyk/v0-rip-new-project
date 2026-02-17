@@ -22,6 +22,10 @@
     {
       "path": "/api/cron/simulate-engagement",
       "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/unwrap-links",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

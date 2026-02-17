@@ -32,22 +32,25 @@ export async function GET(request: NextRequest) {
     if (!client) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 })
     }
-    const search = searchParams.get("search") || ""
-    const sender = searchParams.get("sender") || ""
-    const party = searchParams.get("party") || ""
-    const messageType = searchParams.get("messageType") || ""
-    const donationPlatform = searchParams.get("donationPlatform") || ""
-    const fromDate = searchParams.get("fromDate")
-    const toDate = searchParams.get("toDate")
+
+    const search = searchParams.get("search") || undefined
+    const sender = searchParams.get("sender") || undefined
+    const party = searchParams.get("party") || undefined
+    const state = searchParams.get("state") || undefined
+    const messageType = searchParams.get("messageType") || undefined
+    const donationPlatform = searchParams.get("donationPlatform") || undefined
+    const fromDate = searchParams.get("fromDate") || undefined
+    const toDate = searchParams.get("toDate") || undefined
     const page = Number.parseInt(searchParams.get("page") || "1")
     const limit = Number.parseInt(searchParams.get("limit") || "10")
-    const tag = searchParams.get("tag") || ""
+    const tag = searchParams.get("tag") || undefined
     const subscriptionsOnly = searchParams.get("subscriptionsOnly") === "true"
 
     console.log("[v0] API params:", {
       search,
       sender,
       party,
+      state,
       messageType,
       donationPlatform,
       donationPlatformRaw: searchParams.get("donationPlatform"),
@@ -161,6 +164,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    if (state && state !== "all") {
+      emailWhere.entity = {
+        ...emailWhere.entity,
+        state: { equals: state, mode: "insensitive" },
+      }
+    }
+
     const smsWhere: any = {
       processed: true,
       isHidden: authResult.user.role === "super_admin" ? undefined : false,
@@ -190,6 +200,13 @@ export async function GET(request: NextRequest) {
       smsWhere.entity = {
         ...smsWhere.entity,
         party: { equals: party, mode: "insensitive" },
+      }
+    }
+
+    if (state && state !== "all") {
+      smsWhere.entity = {
+        ...smsWhere.entity,
+        state: { equals: state, mode: "insensitive" },
       }
     }
 

@@ -115,6 +115,14 @@ interface EntityMapping {
   phones: string[]
 }
 
+const US_STATES = [
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+  "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+  "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+  "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+  "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+]
+
 export function CompetitiveInsights({
   clientSlug,
   defaultView = "emails",
@@ -131,7 +139,7 @@ export function CompetitiveInsights({
   const [activeSearchQuery, setActiveSearchQuery] = useState("")
   const [selectedSender, setSelectedSender] = useState<string>("all")
   const [selectedPartyFilter, setSelectedPartyFilter] = useState<string>("all") // Renamed to avoid conflict
-  const [selectedStateFilter, setSelectedStateFilter] = useState<string>("all") // Added state filter
+  const [selectedStateFilter, setSelectedStateFilter] = useState<string>("all")
   const [selectedMessageType, setSelectedMessageType] = useState<string>("all")
   const [selectedDonationPlatform, setSelectedDonationPlatform] = useState<string>("all")
   const [senderSearchTerm, setSenderSearchTerm] = useState("") // Declared senderSearchTerm
@@ -148,16 +156,16 @@ export function CompetitiveInsights({
   const searchRef = useRef<HTMLDivElement>(null)
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>("active")
   const [hasCompetitiveInsights, setHasCompetitiveInsights] = useState(false)
-  const [entityMappings, setEntityMappings] = useState<Record<string, EntityMapping>>({}) // Manage entity mappings as state
-  const [currentPage, setCurrentPage] = useState(1)
+  const [loadingSubscription, setLoadingSubscription] = useState(true)
+  const [hasAdminAccess, setHasAdminAccess] = useState(false)
 
-  const US_STATES = [
-    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
-    "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
-    "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
-    "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
-    "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
-  ]
+  useEffect(() => {
+    if (searchTerm === "" && activeSearchQuery !== "") {
+      setActiveSearchQuery("")
+    }
+  }, [searchTerm, activeSearchQuery])
+
+  const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
   const [totalCampaigns, setTotalCampaigns] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
@@ -194,7 +202,6 @@ export function CompetitiveInsights({
     activeSearchQuery,
     selectedSender,
     selectedPartyFilter,
-    selectedStateFilter,
     selectedMessageType,
     selectedDonationPlatform,
     dateRange.from,
@@ -315,7 +322,6 @@ export function CompetitiveInsights({
     dateRange.to,
     currentPage,
     itemsPerPage,
-    clientSlug,
   ])
 
   useEffect(() => {
@@ -397,9 +403,6 @@ export function CompetitiveInsights({
     const campaignParty = campaign.entity?.party?.toLowerCase()
     const matchesParty = selectedPartyFilter === "all" || campaignParty === selectedPartyFilter.toLowerCase() // Use renamed state
 
-    const campaignState = campaign.entity?.state
-    const matchesState = selectedStateFilter === "all" || campaignState === selectedStateFilter
-
     const matchesMessageType = selectedMessageType === "all" || campaign.type === selectedMessageType
 
     let matchesDonationPlatform = true
@@ -448,7 +451,6 @@ export function CompetitiveInsights({
       matchesSearch &&
       matchesSender &&
       matchesParty &&
-      matchesState &&
       matchesMessageType &&
       matchesDonationPlatform &&
       matchesDateRange
@@ -531,11 +533,11 @@ export function CompetitiveInsights({
   }, [
     selectedSender,
     selectedPartyFilter,
+    selectedStateFilter,
     selectedMessageType,
     selectedDonationPlatform,
     dateRange.from,
     dateRange.to,
-    itemsPerPage,
   ])
 
   // This was causing only the current page's entities to show in the dropdown
@@ -1119,6 +1121,24 @@ export function CompetitiveInsights({
                     <SelectItem value="republican">Republican</SelectItem>
                     <SelectItem value="democrat">Democrat</SelectItem>
                     <SelectItem value="independent">Independent</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={selectedStateFilter}
+                  onValueChange={setSelectedStateFilter}
+                  disabled={shouldShowPaywall || shouldShowPreview}
+                >
+                  <SelectTrigger className="w-full md:w-[180px]">
+                    <SelectValue placeholder="Filter by state" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    <SelectItem value="all">All States</SelectItem>
+                    {US_STATES.map((state) => (
+                      <SelectItem key={state} value={state}>
+                        {state}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
 

@@ -39,6 +39,8 @@ interface Client {
   id: string
   name: string
   slug: string
+  subscriptionPlan: string
+  hasCompetitiveInsights: boolean
 }
 
 interface SidebarProps {
@@ -168,6 +170,21 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
     router.push(path)
   }
 
+  // Check if selected client has inbox access
+  const selectedClient = clients.find((client) => client.slug === selectedClientSlug)
+  const hasInboxAccess = selectedClient
+    ? selectedClient.subscriptionPlan === "basic_inboxing" ||
+      selectedClient.subscriptionPlan === "all" ||
+      selectedClient.subscriptionPlan === "enterprise"
+    : false
+
+  // Only show inbox tools if super admin AND selected client has access
+  const showInboxTools = userRole === "super_admin" && hasInboxAccess
+
+  // Admin section should NEVER show when viewing as a client - only when no specific client context
+  // This means the admin tools are only visible from /admin routes, not from /{clientSlug} routes
+  const showAdminSection = userRole === "super_admin" && !selectedClient && pathname.startsWith("/admin")
+
   const handleClientSwitch = (newClientSlug: string) => {
     const pathParts = pathname.split("/").filter(Boolean)
 
@@ -284,7 +301,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
               </div>
             )}
 
-            {userRole === "super_admin" && (
+            {showInboxTools && (
               <>
                 <NavSection
                   icon={<Inbox size={20} />}
@@ -321,7 +338,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
               </>
             )}
 
-            {userRole === "super_admin" && (
+            {showAdminSection && (
               <>
                 <NavSection
                   icon={<Shield size={20} />}

@@ -284,7 +284,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
               </div>
             )}
 
-            {userRole === "super_admin" && (selectedClientSlug === "rip" || !selectedClientSlug) && (
+            {userRole === "super_admin" && (selectedClientSlug === "rip" || selectedClientSlug === "" || selectedClientSlug === "admin") && (
               <>
                 <NavSection
                   icon={<Inbox size={20} />}
@@ -321,7 +321,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
               </>
             )}
 
-            {userRole === "super_admin" && (selectedClientSlug === "rip" || !selectedClientSlug) && (
+            {userRole === "super_admin" && (selectedClientSlug === "rip" || selectedClientSlug === "" || selectedClientSlug === "admin") && (
               <>
                 <NavSection
                   icon={<Shield size={20} />}

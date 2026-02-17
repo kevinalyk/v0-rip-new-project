@@ -283,7 +283,9 @@ export function CompetitiveInsights({
           if (userData.client?.id) {
             setCurrentUserClient(userData.client.id)
 
-            const subscriptionsResponse = await fetch("/api/ci/subscriptions/check-all")
+            const subscriptionsResponse = await fetch(
+              `/api/ci/subscriptions/check-all?clientSlug=${clientSlug}`
+            )
             if (subscriptionsResponse.ok) {
               const subscriptionsData = await subscriptionsResponse.json()
               setSubscribedEntityIds(subscriptionsData.entityIds || [])
@@ -551,7 +553,7 @@ export function CompetitiveInsights({
   // Fetch subscribed entities once
   const fetchSubscribedEntities = async () => {
     try {
-      const response = await fetch("/api/ci/subscriptions/check-all")
+      const response = await fetch(`/api/ci/subscriptions/check-all?clientSlug=${clientSlug}`)
       if (response.ok) {
         const data = await response.json()
         setSubscribedEntityIds(data.entityIds || [])

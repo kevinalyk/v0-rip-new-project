@@ -109,15 +109,6 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
   }, [userRole])
 
   useEffect(() => {
-    if (userRole === "super_admin" && clients.length > 0 && !selectedClientSlug) {
-      const ripClient = clients.find((client) => client.slug === "rip")
-      if (ripClient) {
-        setSelectedClientSlug("rip")
-      }
-    }
-  }, [userRole, clients, selectedClientSlug])
-
-  useEffect(() => {
     const pathParts = pathname.split("/").filter(Boolean)
     if (pathParts.length > 0 && pathParts[0] !== "admin") {
       setSelectedClientSlug(pathParts[0])
@@ -125,6 +116,21 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
       setSelectedClientSlug("admin")
     }
   }, [pathname])
+
+  // Auto-select RIP for super_admins on initial load
+  useEffect(() => {
+    if (userRole === "super_admin" && clients.length > 0 && !selectedClientSlug) {
+      const ripClient = clients.find((client) => client.slug === "rip")
+      if (ripClient) {
+        setSelectedClientSlug("rip")
+        // If we're not already on a client path, navigate to RIP's CI campaigns
+        const pathParts = pathname.split("/").filter(Boolean)
+        if (pathParts.length === 0 || pathParts[0] === "admin") {
+          router.push("/rip/ci/campaigns")
+        }
+      }
+    }
+  }, [userRole, clients, selectedClientSlug, pathname, router])
 
   useEffect(() => {
     if (pathname.includes("/account/")) {
@@ -284,7 +290,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
               </div>
             )}
 
-            {userRole === "super_admin" && (selectedClientSlug === "rip" || selectedClientSlug === "" || selectedClientSlug === "admin") && (
+            {userRole === "super_admin" && (selectedClientSlug === "rip" || !selectedClientSlug) && (
               <>
                 <NavSection
                   icon={<Inbox size={20} />}
@@ -321,7 +327,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
               </>
             )}
 
-            {userRole === "super_admin" && (selectedClientSlug === "rip" || selectedClientSlug === "" || selectedClientSlug === "admin") && (
+            {userRole === "super_admin" && (selectedClientSlug === "rip" || !selectedClientSlug) && (
               <>
                 <NavSection
                   icon={<Shield size={20} />}

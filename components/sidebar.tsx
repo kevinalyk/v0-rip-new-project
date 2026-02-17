@@ -341,23 +341,23 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                     <NavItem
                       icon={<Settings size={18} />}
                       label="Admin Tools"
-                      active={pathname === "/admin/tools"}
+                      active={pathname === "/rip/admin/tools"}
                       collapsed={false}
-                      onClick={() => navigate("/admin/tools")}
+                      onClick={() => navigate("/rip/admin/tools")}
                     />
                     <NavItem
                       icon={<Building2 size={18} />}
                       label="CI Entities"
-                      active={pathname === "/admin/ci-entities"}
+                      active={pathname === "/rip/admin/ci-entities"}
                       collapsed={false}
-                      onClick={() => navigate("/admin/ci-entities")}
+                      onClick={() => navigate("/rip/admin/ci-entities")}
                     />
                     <NavItem
                       icon={<Shield size={18} />}
                       label="Blocked Domains"
-                      active={pathname === "/admin/blocked-domains"}
+                      active={pathname === "/rip/admin/blocked-domains"}
                       collapsed={false}
-                      onClick={() => navigate("/admin/blocked-domains")}
+                      onClick={() => navigate("/rip/admin/blocked-domains")}
                     />
                   </div>
                 )}

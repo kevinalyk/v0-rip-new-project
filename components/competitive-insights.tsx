@@ -131,6 +131,7 @@ export function CompetitiveInsights({
   const [activeSearchQuery, setActiveSearchQuery] = useState("")
   const [selectedSender, setSelectedSender] = useState<string>("all")
   const [selectedPartyFilter, setSelectedPartyFilter] = useState<string>("all") // Renamed to avoid conflict
+  const [selectedStateFilter, setSelectedStateFilter] = useState<string>("all") // Added state filter
   const [selectedMessageType, setSelectedMessageType] = useState<string>("all")
   const [selectedDonationPlatform, setSelectedDonationPlatform] = useState<string>("all")
   const [senderSearchTerm, setSenderSearchTerm] = useState("") // Declared senderSearchTerm
@@ -147,16 +148,16 @@ export function CompetitiveInsights({
   const searchRef = useRef<HTMLDivElement>(null)
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>("active")
   const [hasCompetitiveInsights, setHasCompetitiveInsights] = useState(false)
-  const [loadingSubscription, setLoadingSubscription] = useState(true)
-  const [hasAdminAccess, setHasAdminAccess] = useState(false)
-
-  useEffect(() => {
-    if (searchTerm === "" && activeSearchQuery !== "") {
-      setActiveSearchQuery("")
-    }
-  }, [searchTerm, activeSearchQuery])
-
+  const [entityMappings, setEntityMappings] = useState<Record<string, EntityMapping>>({}) // Manage entity mappings as state
   const [currentPage, setCurrentPage] = useState(1)
+
+  const US_STATES = [
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+    "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+    "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+    "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+    "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+  ]
   const [itemsPerPage, setItemsPerPage] = useState(10)
   const [totalCampaigns, setTotalCampaigns] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
@@ -193,6 +194,7 @@ export function CompetitiveInsights({
     activeSearchQuery,
     selectedSender,
     selectedPartyFilter,
+    selectedStateFilter,
     selectedMessageType,
     selectedDonationPlatform,
     dateRange.from,
@@ -306,6 +308,7 @@ export function CompetitiveInsights({
     activeSearchQuery, // Changed from debouncedSearchTerm to activeSearchQuery
     selectedSender,
     selectedPartyFilter,
+    selectedStateFilter,
     selectedMessageType,
     selectedDonationPlatform,
     dateRange.from,
@@ -394,6 +397,9 @@ export function CompetitiveInsights({
     const campaignParty = campaign.entity?.party?.toLowerCase()
     const matchesParty = selectedPartyFilter === "all" || campaignParty === selectedPartyFilter.toLowerCase() // Use renamed state
 
+    const campaignState = campaign.entity?.state
+    const matchesState = selectedStateFilter === "all" || campaignState === selectedStateFilter
+
     const matchesMessageType = selectedMessageType === "all" || campaign.type === selectedMessageType
 
     let matchesDonationPlatform = true
@@ -442,6 +448,7 @@ export function CompetitiveInsights({
       matchesSearch &&
       matchesSender &&
       matchesParty &&
+      matchesState &&
       matchesMessageType &&
       matchesDonationPlatform &&
       matchesDateRange
@@ -462,6 +469,7 @@ export function CompetitiveInsights({
       if (activeSearchQuery) params.append("search", activeSearchQuery)
       if (selectedSender && selectedSender !== "all") params.append("sender", selectedSender)
       if (selectedPartyFilter && selectedPartyFilter !== "all") params.append("party", selectedPartyFilter)
+      if (selectedStateFilter && selectedStateFilter !== "all") params.append("state", selectedStateFilter)
       if (selectedMessageType && selectedMessageType !== "all") params.append("messageType", selectedMessageType)
       console.log("[v0] Frontend platform filter state:", selectedDonationPlatform)
       if (selectedDonationPlatform && selectedDonationPlatform !== "all")

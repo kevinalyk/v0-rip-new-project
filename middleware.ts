@@ -79,8 +79,7 @@ export async function middleware(request: NextRequest) {
         if (!isSuperAdmin && !request.nextUrl.pathname.startsWith("/api") && clientSlug) {
           const currentPath = request.nextUrl.pathname
 
-          // Check if user is trying to access /admin or a different client's route
-          const isAccessingAdmin = currentPath.startsWith("/admin")
+          // Check if user is trying to access a different client's route
           const isAccessingDifferentClient =
             currentPath.startsWith("/") &&
             !currentPath.startsWith("/login") &&
@@ -88,16 +87,7 @@ export async function middleware(request: NextRequest) {
             !currentPath.startsWith("/signup") &&
             !currentPath.startsWith("/set-password") &&
             !currentPath.startsWith("/share/") &&
-            !currentPath.startsWith(`/${clientSlug}`) &&
-            !currentPath.startsWith("/admin")
-
-          if (isAccessingAdmin) {
-            // Extract the path after /admin (e.g., /admin/insights -> /insights)
-            const pathAfterAdmin = currentPath.replace("/admin", "")
-            const redirectPath = `/${clientSlug}${pathAfterAdmin}`
-            console.log(`Redirecting ${userRole} user from ${currentPath} to ${redirectPath}`)
-            return NextResponse.redirect(new URL(redirectPath, request.url))
-          }
+            !currentPath.startsWith(`/${clientSlug}`)
 
           // Redirect to their client's page if accessing unauthorized routes
           if (isAccessingDifferentClient) {

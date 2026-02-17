@@ -51,7 +51,7 @@ export default function InboxSeedListPage({ params }: { params: { clientSlug: st
         if (!verifyResponse.ok) {
           // User doesn't have access to this client
           if (userData.role === "super_admin") {
-            router.push("/admin")
+            router.push("/rip/ci/campaigns")
           } else {
             router.push(`/${userData.clientSlug || "login"}`)
           }

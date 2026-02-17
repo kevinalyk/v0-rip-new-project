@@ -109,15 +109,6 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
   }, [userRole])
 
   useEffect(() => {
-    if (userRole === "super_admin" && clients.length > 0 && !selectedClientSlug) {
-      const ripClient = clients.find((client) => client.slug === "rip")
-      if (ripClient) {
-        setSelectedClientSlug("rip")
-      }
-    }
-  }, [userRole, clients, selectedClientSlug])
-
-  useEffect(() => {
     const pathParts = pathname.split("/").filter(Boolean)
     if (pathParts.length > 0 && pathParts[0] !== "admin") {
       setSelectedClientSlug(pathParts[0])
@@ -125,6 +116,21 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
       setSelectedClientSlug("admin")
     }
   }, [pathname])
+
+  // Auto-select RIP for super_admins on initial load
+  useEffect(() => {
+    if (userRole === "super_admin" && clients.length > 0 && !selectedClientSlug) {
+      const ripClient = clients.find((client) => client.slug === "rip")
+      if (ripClient) {
+        setSelectedClientSlug("rip")
+        // If we're not already on a client path, navigate to RIP's CI campaigns
+        const pathParts = pathname.split("/").filter(Boolean)
+        if (pathParts.length === 0 || pathParts[0] === "admin") {
+          router.push("/rip/ci/campaigns")
+        }
+      }
+    }
+  }, [userRole, clients, selectedClientSlug, pathname, router])
 
   useEffect(() => {
     if (pathname.includes("/account/")) {
@@ -335,23 +341,23 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                     <NavItem
                       icon={<Settings size={18} />}
                       label="Admin Tools"
-                      active={pathname === "/admin/tools"}
+                      active={pathname === "/rip/admin/tools"}
                       collapsed={false}
-                      onClick={() => navigate("/admin/tools")}
+                      onClick={() => navigate("/rip/admin/tools")}
                     />
                     <NavItem
                       icon={<Building2 size={18} />}
                       label="CI Entities"
-                      active={pathname === "/admin/ci-entities"}
+                      active={pathname === "/rip/admin/ci-entities"}
                       collapsed={false}
-                      onClick={() => navigate("/admin/ci-entities")}
+                      onClick={() => navigate("/rip/admin/ci-entities")}
                     />
                     <NavItem
                       icon={<Shield size={18} />}
                       label="Blocked Domains"
-                      active={pathname === "/admin/blocked-domains"}
+                      active={pathname === "/rip/admin/blocked-domains"}
                       collapsed={false}
-                      onClick={() => navigate("/admin/blocked-domains")}
+                      onClick={() => navigate("/rip/admin/blocked-domains")}
                     />
                   </div>
                 )}

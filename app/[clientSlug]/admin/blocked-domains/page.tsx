@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -32,6 +32,8 @@ import AppLayout from "@/components/app-layout"
 
 export default function BlockedDomainsPage() {
   const router = useRouter()
+  const params = useParams()
+  const clientSlug = params.clientSlug as string
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(true)
   const [isAuthorized, setIsAuthorized] = useState(false)
@@ -47,6 +49,12 @@ export default function BlockedDomainsPage() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        // First check if clientSlug is 'rip'
+        if (clientSlug !== "rip") {
+          router.push(`/${clientSlug}/ci/campaigns`)
+          return
+        }
+
         const response = await fetch("/api/auth/me")
         if (!response.ok) {
           router.push("/login")
@@ -70,7 +78,7 @@ export default function BlockedDomainsPage() {
     }
 
     checkAuth()
-  }, [router])
+  }, [router, clientSlug])
 
   const fetchBlockedDomains = async () => {
     try {

@@ -1,18 +1,26 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { AdminContent } from "@/components/admin-content"
 import { AppLayout } from "@/components/app-layout"
 
 export default function AdminToolsPage() {
   const router = useRouter()
+  const params = useParams()
+  const clientSlug = params.clientSlug as string
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const checkSuperAdmin = async () => {
       try {
+        // First check if clientSlug is 'rip'
+        if (clientSlug !== "rip") {
+          router.push(`/${clientSlug}/ci/campaigns`)
+          return
+        }
+
         const response = await fetch("/api/auth/me", {
           credentials: "include",
         })
@@ -48,7 +56,7 @@ export default function AdminToolsPage() {
     }
 
     checkSuperAdmin()
-  }, [router])
+  }, [router, clientSlug])
 
   if (error) {
     return (

@@ -115,6 +115,14 @@ interface EntityMapping {
   phones: string[]
 }
 
+const US_STATES = [
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+  "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+  "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+  "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+  "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+]
+
 export function CompetitiveInsights({
   clientSlug,
   defaultView = "emails",
@@ -131,6 +139,7 @@ export function CompetitiveInsights({
   const [activeSearchQuery, setActiveSearchQuery] = useState("")
   const [selectedSender, setSelectedSender] = useState<string>("all")
   const [selectedPartyFilter, setSelectedPartyFilter] = useState<string>("all") // Renamed to avoid conflict
+  const [selectedStateFilter, setSelectedStateFilter] = useState<string>("all")
   const [selectedMessageType, setSelectedMessageType] = useState<string>("all")
   const [selectedDonationPlatform, setSelectedDonationPlatform] = useState<string>("all")
   const [senderSearchTerm, setSenderSearchTerm] = useState("") // Declared senderSearchTerm
@@ -283,7 +292,9 @@ export function CompetitiveInsights({
           if (userData.client?.id) {
             setCurrentUserClient(userData.client.id)
 
-            const subscriptionsResponse = await fetch("/api/ci/subscriptions/check-all")
+            const subscriptionsResponse = await fetch(
+              `/api/ci/subscriptions/check-all?clientSlug=${clientSlug}`
+            )
             if (subscriptionsResponse.ok) {
               const subscriptionsData = await subscriptionsResponse.json()
               setSubscribedEntityIds(subscriptionsData.entityIds || [])
@@ -304,13 +315,13 @@ export function CompetitiveInsights({
     activeSearchQuery, // Changed from debouncedSearchTerm to activeSearchQuery
     selectedSender,
     selectedPartyFilter,
+    selectedStateFilter,
     selectedMessageType,
     selectedDonationPlatform,
     dateRange.from,
     dateRange.to,
     currentPage,
     itemsPerPage,
-    clientSlug,
   ])
 
   useEffect(() => {
@@ -460,6 +471,7 @@ export function CompetitiveInsights({
       if (activeSearchQuery) params.append("search", activeSearchQuery)
       if (selectedSender && selectedSender !== "all") params.append("sender", selectedSender)
       if (selectedPartyFilter && selectedPartyFilter !== "all") params.append("party", selectedPartyFilter)
+      if (selectedStateFilter && selectedStateFilter !== "all") params.append("state", selectedStateFilter)
       if (selectedMessageType && selectedMessageType !== "all") params.append("messageType", selectedMessageType)
       console.log("[v0] Frontend platform filter state:", selectedDonationPlatform)
       if (selectedDonationPlatform && selectedDonationPlatform !== "all")
@@ -473,10 +485,15 @@ export function CompetitiveInsights({
       params.append("page", currentPage.toString())
       params.append("limit", itemsPerPage.toString())
 
+      // Add clientSlug to params
+      if (clientSlug) params.append("clientSlug", clientSlug)
+
       console.log("[v0] Fetching with query string:", params.toString())
       console.log("[v0] Current page state:", currentPage, "Items per page:", itemsPerPage)
 
-      const endpoint = apiEndpoint || `/api/competitive-insights?${params.toString()}`
+      const endpoint = apiEndpoint 
+        ? `${apiEndpoint}?${params.toString()}` 
+        : `/api/competitive-insights?${params.toString()}`
       const response = await fetch(endpoint)
       const data = await response.json()
 
@@ -516,11 +533,11 @@ export function CompetitiveInsights({
   }, [
     selectedSender,
     selectedPartyFilter,
+    selectedStateFilter,
     selectedMessageType,
     selectedDonationPlatform,
     dateRange.from,
     dateRange.to,
-    itemsPerPage,
   ])
 
   // This was causing only the current page's entities to show in the dropdown
@@ -546,7 +563,7 @@ export function CompetitiveInsights({
   // Fetch subscribed entities once
   const fetchSubscribedEntities = async () => {
     try {
-      const response = await fetch("/api/ci/subscriptions/check-all")
+      const response = await fetch(`/api/ci/subscriptions/check-all?clientSlug=${clientSlug}`)
       if (response.ok) {
         const data = await response.json()
         setSubscribedEntityIds(data.entityIds || [])
@@ -1104,6 +1121,24 @@ export function CompetitiveInsights({
                     <SelectItem value="republican">Republican</SelectItem>
                     <SelectItem value="democrat">Democrat</SelectItem>
                     <SelectItem value="independent">Independent</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={selectedStateFilter}
+                  onValueChange={setSelectedStateFilter}
+                  disabled={shouldShowPaywall || shouldShowPreview}
+                >
+                  <SelectTrigger className="w-full md:w-[180px]">
+                    <SelectValue placeholder="Filter by state" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    <SelectItem value="all">All States</SelectItem>
+                    {US_STATES.map((state) => (
+                      <SelectItem key={state} value={state}>
+                        {state}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
 

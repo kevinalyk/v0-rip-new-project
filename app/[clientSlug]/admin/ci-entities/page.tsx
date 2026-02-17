@@ -1,18 +1,26 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { CiEntityManagement } from "@/components/ci-entity-management"
 import { AppLayout } from "@/components/app-layout"
 
 export default function AdminCiEntitiesPage() {
   const router = useRouter()
+  const params = useParams()
+  const clientSlug = params.clientSlug as string
   const [loading, setLoading] = useState(true)
   const [authorized, setAuthorized] = useState(false)
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        // First check if clientSlug is 'rip'
+        if (clientSlug !== "rip") {
+          router.push(`/${clientSlug}/ci/campaigns`)
+          return
+        }
+
         const response = await fetch("/api/auth/me")
         if (!response.ok) {
           router.push("/login")
@@ -43,7 +51,7 @@ export default function AdminCiEntitiesPage() {
     }
 
     checkAuth()
-  }, [router])
+  }, [router, clientSlug])
 
   if (loading) {
     return (

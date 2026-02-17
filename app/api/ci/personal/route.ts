@@ -23,8 +23,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "User not found or not associated with a client" }, { status: 404 })
     }
 
+    // Get clientSlug from query params for super_admins
+    const searchParams = request.nextUrl.searchParams
+    const clientSlug = searchParams.get("clientSlug")
+    
+    let targetClientId = user.clientId
+    if (user.role === "super_admin" && clientSlug) {
+      const targetClient = await prisma.client.findUnique({
+        where: { slug: clientSlug },
+        select: { id: true },
+      })
+      if (targetClient) {
+        targetClientId = targetClient.id
+      }
+    }
+
     const client = await prisma.client.findUnique({
-      where: { id: user.clientId },
+      where: { id: targetClientId },
       select: { subscriptionPlan: true },
     })
 
@@ -46,7 +61,7 @@ export async function GET(request: NextRequest) {
     // Fetch only campaigns from client's personal email
     const emailCampaigns = await prisma.competitiveInsightCampaign.findMany({
       where: {
-        clientId: user.clientId,
+        clientId: targetClientId,
         source: "personal",
         isHidden: false,
         ...(dateFilter && { dateReceived: dateFilter }),
@@ -58,7 +73,7 @@ export async function GET(request: NextRequest) {
       take: 1000,
     })
 
-    console.log("[v0] Personal Email API - Client ID:", user.clientId)
+    console.log("[v0] Personal Email API - Client ID:", targetClientId)
     console.log("[v0] Personal Email API - Found campaigns:", emailCampaigns.length)
     console.log(
       "[v0] Personal Email API - Sample campaign:",

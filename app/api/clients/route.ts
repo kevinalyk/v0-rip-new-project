@@ -43,8 +43,6 @@ export async function GET() {
         id: true,
         name: true,
         slug: true,
-        subscriptionPlan: true,
-        hasCompetitiveInsights: true,
       },
       orderBy: {
         name: "asc",

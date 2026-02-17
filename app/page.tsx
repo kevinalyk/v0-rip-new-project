@@ -29,7 +29,7 @@ export default function RootPage() {
 
         // Redirect based on role
         if (user.role === "super_admin") {
-          router.push("/admin")
+          router.push("/rip/ci/campaigns")
         } else {
           // Get user's client slug and redirect
           const clientResponse = await fetch("/api/client/slug", {

@@ -46,7 +46,7 @@ export default function ClientPage() {
         if (!accessResponse.ok) {
           // User doesn't have access to this client
           if (user.role === "super_admin") {
-            router.push("/rip/admin/tools")
+            router.push("/admin/tools")
           } else {
             // Redirect to their own client
             const clientResponse = await fetch("/api/client/slug", {

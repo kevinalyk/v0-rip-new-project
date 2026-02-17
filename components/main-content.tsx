@@ -150,9 +150,9 @@ export function MainContent({ collapsed, activeTab, clientSlug, isAdminView = fa
   }, [])
 
   const handleClientSwitch = (client: { id: string; name: string; slug: string | null }) => {
-    // Special case: RIP client goes to /rip/admin/tools
+    // Special case: RIP client goes to /admin
     if (client.id === "RIP" || client.slug === "rip") {
-      router.push("/rip/admin/tools")
+      router.push("/admin")
     } else if (client.slug) {
       router.push(`/${client.slug}`)
     }
@@ -185,7 +185,7 @@ export function MainContent({ collapsed, activeTab, clientSlug, isAdminView = fa
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               {/* RIP option to go back to admin */}
-              <DropdownMenuItem onClick={() => router.push("/rip/admin/tools")} className="flex items-center justify-between">
+              <DropdownMenuItem onClick={() => router.push("/admin")} className="flex items-center justify-between">
                 <span>RIP (Admin)</span>
                 {isAdminView && <Check size={16} />}
               </DropdownMenuItem>

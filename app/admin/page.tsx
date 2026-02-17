@@ -35,7 +35,7 @@ export default function AdminPage() {
           return
         }
 
-        router.push("/rip/ci/campaigns")
+        router.push("/admin/ci/campaigns")
       } catch (error) {
         console.error("Auth check error:", error)
         router.push("/login")

@@ -1,34 +1,84 @@
-import { redirect } from "next/navigation"
-import { cookies } from "next/headers"
-import { verifyToken } from "@/lib/auth"
+"use client"
+
+import { useEffect, useState } from "react"
+import { useRouter, useParams } from "next/navigation"
 import { AdminContent } from "@/components/admin-content"
 import { AppLayout } from "@/components/app-layout"
 
-export default async function AdminToolsPage({ params }: { params: { clientSlug: string } }) {
-  const cookieStore = await cookies()
-  const token = cookieStore.get("auth_token")?.value
+export default function AdminToolsPage() {
+  const router = useRouter()
+  const params = useParams()
+  const clientSlug = params.clientSlug as string
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  if (!token) {
-    redirect("/login")
+  useEffect(() => {
+    const checkSuperAdmin = async () => {
+      try {
+        // First check if clientSlug is 'rip'
+        if (clientSlug !== "rip") {
+          router.push(`/${clientSlug}/ci/campaigns`)
+          return
+        }
+
+        const response = await fetch("/api/auth/me", {
+          credentials: "include",
+        })
+
+        if (!response.ok) {
+          router.push("/login")
+          return
+        }
+
+        const user = await response.json()
+
+        if (user.role !== "super_admin") {
+          // Not a super-admin, redirect to their client page
+          const clientResponse = await fetch("/api/client/slug", {
+            credentials: "include",
+          })
+
+          if (clientResponse.ok) {
+            const { slug } = await clientResponse.json()
+            router.push(`/${slug}`)
+          } else {
+            router.push("/login")
+          }
+          return
+        }
+
+        setLoading(false)
+      } catch (error) {
+        console.error("Auth check error:", error)
+        setError("Authentication error. Please try logging in again.")
+        setTimeout(() => router.push("/login"), 1000)
+      }
+    }
+
+    checkSuperAdmin()
+  }, [router, clientSlug])
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center">
+        <div className="text-red-500 mb-4">{error}</div>
+        <button className="px-4 py-2 bg-rip-red text-white rounded" onClick={() => router.push("/login")}>
+          Go to Login
+        </button>
+      </div>
+    )
   }
 
-  const payload = await verifyToken(token)
-  if (!payload) {
-    redirect("/login")
-  }
-
-  // Only super_admins can access admin tools
-  if (payload.role !== "super_admin") {
-    redirect(`/${params.clientSlug}`)
-  }
-
-  // Only RIP client can access admin pages
-  if (params.clientSlug !== "rip") {
-    redirect(`/${params.clientSlug}`)
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-rip-red"></div>
+      </div>
+    )
   }
 
   return (
-    <AppLayout clientSlug="rip" isAdminView={true}>
+    <AppLayout isAdminView={true}>
       <div className="container mx-auto py-8 px-4">
         <AdminContent />
       </div>

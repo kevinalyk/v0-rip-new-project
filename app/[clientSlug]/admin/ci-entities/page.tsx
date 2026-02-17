@@ -1,35 +1,73 @@
-import { redirect } from "next/navigation"
-import { cookies } from "next/headers"
-import { verifyToken } from "@/lib/auth"
+"use client"
+
+import { useEffect, useState } from "react"
+import { useRouter, useParams } from "next/navigation"
 import { CiEntityManagement } from "@/components/ci-entity-management"
 import { AppLayout } from "@/components/app-layout"
 
-export default async function AdminCiEntitiesPage({ params }: { params: { clientSlug: string } }) {
-  const cookieStore = await cookies()
-  const token = cookieStore.get("auth_token")?.value
+export default function AdminCiEntitiesPage() {
+  const router = useRouter()
+  const params = useParams()
+  const clientSlug = params.clientSlug as string
+  const [loading, setLoading] = useState(true)
+  const [authorized, setAuthorized] = useState(false)
 
-  if (!token) {
-    redirect("/login")
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        // First check if clientSlug is 'rip'
+        if (clientSlug !== "rip") {
+          router.push(`/${clientSlug}/ci/campaigns`)
+          return
+        }
+
+        const response = await fetch("/api/auth/me")
+        if (!response.ok) {
+          router.push("/login")
+          return
+        }
+
+        const user = await response.json()
+
+        // Check if user needs to reset password
+        if (user.firstLogin) {
+          router.push("/reset-password")
+          return
+        }
+
+        // Only super_admins can access admin CI entities
+        if (user.role !== "super_admin") {
+          router.push("/login")
+          return
+        }
+
+        setAuthorized(true)
+      } catch (error) {
+        console.error("Auth check failed:", error)
+        router.push("/login")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    checkAuth()
+  }, [router, clientSlug])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    )
   }
 
-  const payload = await verifyToken(token)
-  if (!payload) {
-    redirect("/login")
-  }
-
-  // Only super_admins can access admin pages
-  if (payload.role !== "super_admin") {
-    redirect(`/${params.clientSlug}`)
-  }
-
-  // Only RIP client can access admin pages
-  if (params.clientSlug !== "rip") {
-    redirect(`/${params.clientSlug}`)
+  if (!authorized) {
+    return null
   }
 
   return (
-    <AppLayout clientSlug="rip" isAdminView={true}>
-      <CiEntityManagement clientSlug="rip" />
+    <AppLayout isAdminView={true}>
+      <CiEntityManagement clientSlug="admin" />
     </AppLayout>
   )
 }

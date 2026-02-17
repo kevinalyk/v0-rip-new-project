@@ -52,7 +52,7 @@ export default function AccountBillingPage() {
 
         if (!verifyResponse.ok) {
           if (user.role === "super_admin") {
-            router.push("/rip/admin/tools")
+            router.push("/admin")
           } else {
             router.push("/login")
           }

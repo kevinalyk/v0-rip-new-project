@@ -13,7 +13,7 @@
 ## Current Architecture Analysis
 
 ### Database Schema
-```
+\`\`\`
 CompetitiveInsightCampaign
 ├── id (indexed)
 ├── senderEmail (indexed)
@@ -33,7 +33,7 @@ SmsQueue
 ├── processed (NOT indexed)
 ├── isDeleted (NOT indexed)
 └── isHidden (NOT indexed)
-```
+\`\`\`
 
 ### Current Query Flow (Lines 188-396 in route.ts)
 1. Determine if donation platform filter is set
@@ -60,7 +60,7 @@ SmsQueue
 **File:** `app/api/competitive-insights/route.ts` (Lines 188-272)
 
 **Change:**
-```typescript
+\`\`\`typescript
 // REMOVE THIS:
 const shouldFetchAll = donationPlatform && donationPlatform !== "all"
 const fetchAllForCombining = messageType === "all" || !messageType
@@ -73,7 +73,7 @@ const emailInsights = await prisma.competitiveInsightCampaign.findMany({
   take: limit,
   orderBy: { dateReceived: 'desc' }
 })
-```
+\`\`\`
 
 **Tradeoff:** This will break donation platform filtering temporarily (will return 0 results). That's OK - we fix it in Step 1.2.
 
@@ -87,7 +87,7 @@ const emailInsights = await prisma.competitiveInsightCampaign.findMany({
 **File:** `app/api/competitive-insights/route.ts` (Lines 144-176)
 
 **Add to WHERE clause:**
-```typescript
+\`\`\`typescript
 if (donationPlatform && donationPlatform !== "all") {
   const platformDomains: Record<string, string[]> = {
     winred: ["winred.com", "secure.winred.com"],
@@ -111,7 +111,7 @@ if (donationPlatform && donationPlatform !== "all") {
     array_contains: domains
   }
 }
-```
+\`\`\`
 
 **Note:** This uses Prisma's JSON filter operators. The exact syntax may need adjustment based on testing.
 
@@ -126,13 +126,13 @@ if (donationPlatform && donationPlatform !== "all") {
 **File:** `app/api/competitive-insights/route.ts` (Lines 346-385)
 
 **Delete entire block:**
-```typescript
+\`\`\`typescript
 // DELETE THIS:
 if (donationPlatform && donationPlatform !== "all") {
   const platformDomains = {...}
   allInsights = allInsights.filter((insight) => {...})
 }
-```
+\`\`\`
 
 **Testing:**
 - Results should match Step 1.2
@@ -146,7 +146,7 @@ if (donationPlatform && donationPlatform !== "all") {
 **Problem:** `totalCount = allInsights.length` only counts in-memory results
 
 **Fix:**
-```typescript
+\`\`\`typescript
 // Instead of: const totalCount = allInsights.length
 // Do separate count queries:
 
@@ -162,7 +162,7 @@ if (messageType === "all" || !messageType) {
 } else {
   totalCount = await prisma.smsQueue.count({ where: smsWhere })
 }
-```
+\`\`\`
 
 **Testing:**
 - Verify pagination shows correct total pages
@@ -178,7 +178,7 @@ if (messageType === "all" || !messageType) {
 #### Step 2.1: Add Composite Indexes
 **File:** `scripts/32-add-performance-indexes.sql`
 
-```sql
+\`\`\`sql
 -- For competitive insights campaigns
 CREATE INDEX idx_campaign_common_filters 
 ON "CompetitiveInsightCampaign"("isDeleted", "isHidden", "dateReceived" DESC)
@@ -199,7 +199,7 @@ WHERE "isDeleted" = false;
 CREATE INDEX idx_sms_entity_date 
 ON "SmsQueue"("entityId", "createdAt" DESC)
 WHERE "processed" = true AND "isDeleted" = false AND "isHidden" = false;
-```
+\`\`\`
 
 **Testing:**
 - Run in dev environment first
@@ -211,14 +211,14 @@ WHERE "processed" = true AND "isDeleted" = false AND "isHidden" = false;
 #### Step 2.2: Add GIN Index for JSON Search
 **File:** `scripts/32-add-performance-indexes.sql`
 
-```sql
+\`\`\`sql
 -- For fast JSON searching on ctaLinks
 CREATE INDEX idx_campaign_cta_links_gin 
 ON "CompetitiveInsightCampaign" USING gin (("ctaLinks"::jsonb));
 
 CREATE INDEX idx_sms_cta_links_gin 
 ON "SmsQueue" USING gin (("ctaLinks"::jsonb));
-```
+\`\`\`
 
 **Purpose:** Makes JSON filtering in Step 1.2 much faster
 
@@ -236,7 +236,7 @@ ON "SmsQueue" USING gin (("ctaLinks"::jsonb));
 #### Step 3.1: Add Column to Schema
 **File:** `scripts/33-add-donation-platform.sql`
 
-```sql
+\`\`\`sql
 -- Add donation platform column
 ALTER TABLE "CompetitiveInsightCampaign" 
 ADD COLUMN "donationPlatform" TEXT;
@@ -250,7 +250,7 @@ ON "CompetitiveInsightCampaign"("donationPlatform", "dateReceived" DESC);
 
 CREATE INDEX idx_sms_donation_platform 
 ON "SmsQueue"("donationPlatform", "createdAt" DESC);
-```
+\`\`\`
 
 **Testing:**
 - Verify column added successfully
@@ -261,7 +261,7 @@ ON "SmsQueue"("donationPlatform", "createdAt" DESC);
 #### Step 3.2: Backfill Existing Data
 **File:** `scripts/34-backfill-donation-platforms.ts`
 
-```typescript
+\`\`\`typescript
 import { PrismaClient } from "@prisma/client"
 
 const prisma = new PrismaClient()
@@ -320,7 +320,7 @@ async function backfillDonationPlatforms() {
 }
 
 backfillDonationPlatforms()
-```
+\`\`\`
 
 **Testing:**
 - Run on subset first
@@ -333,7 +333,7 @@ backfillDonationPlatforms()
 **File:** `lib/ci-entity-utils.ts` (where campaigns are created)
 
 **Add to campaign creation:**
-```typescript
+\`\`\`typescript
 // After detecting CTA links, determine platform
 function detectDonationPlatform(ctaLinks: any[]): string | null {
   const platformDomains = {
@@ -362,7 +362,7 @@ await prisma.competitiveInsightCampaign.create({
     donationPlatform: detectDonationPlatform(ctaLinks)
   }
 })
-```
+\`\`\`
 
 **Testing:**
 - Create new test campaigns
@@ -375,12 +375,12 @@ await prisma.competitiveInsightCampaign.create({
 **File:** `app/api/competitive-insights/route.ts`
 
 **Replace JSON filtering with simple column filter:**
-```typescript
+\`\`\`typescript
 if (donationPlatform && donationPlatform !== "all") {
   emailWhere.donationPlatform = donationPlatform
   smsWhere.donationPlatform = donationPlatform
 }
-```
+\`\`\`
 
 **Testing:**
 - Test all donation platform filters
@@ -398,7 +398,7 @@ if (donationPlatform && donationPlatform !== "all") {
 **File:** `app/api/competitive-insights/route.ts`
 
 **Only select needed fields:**
-```typescript
+\`\`\`typescript
 select: {
   id: true,
   senderName: true,
@@ -428,7 +428,7 @@ select: {
   }
   // Don't fetch emailContent, resultIds, etc.
 }
-```
+\`\`\`
 
 **Testing:**
 - Frontend should still work
@@ -439,7 +439,7 @@ select: {
 #### Step 4.2: Parallel Queries
 **File:** `app/api/competitive-insights/route.ts`
 
-```typescript
+\`\`\`typescript
 // Instead of sequential queries:
 const [emailInsights, smsMessages, emailCount, smsCount] = await Promise.all([
   messageType !== "sms" ? prisma.competitiveInsightCampaign.findMany(emailQuery) : Promise.resolve([]),
@@ -447,7 +447,7 @@ const [emailInsights, smsMessages, emailCount, smsCount] = await Promise.all([
   messageType !== "sms" ? prisma.competitiveInsightCampaign.count({ where: emailWhere }) : Promise.resolve(0),
   messageType !== "email" ? prisma.smsQueue.count({ where: smsWhere }) : Promise.resolve(0),
 ])
-```
+\`\`\`
 
 **Testing:**
 - Verify counts match

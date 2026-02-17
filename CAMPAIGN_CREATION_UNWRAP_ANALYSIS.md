@@ -14,7 +14,7 @@ During the campaign creation process (detect-competitive-insights cron), only 1 
 Lines 684-951 - This is where unwrapping SHOULD happen during campaign creation
 
 **Key Code Flow:**
-```typescript
+\`\`\`typescript
 // Line 888-940: Process links with Promise.all
 const linksWithFinalUrls = await Promise.all(
   topLinks.map(async (link) => {
@@ -55,14 +55,14 @@ const linksWithFinalUrls = await Promise.all(
     }
   }),
 )
-```
+\`\`\`
 
 ## Root Cause Analysis
 
 ### Issue #1: Overly Strict Tracking Link Detection
 **Lines 891-898** use a very specific pattern matching:
 
-```typescript
+\`\`\`typescript
 const isTrkLink = 
   link.url.includes(".trk.") ||      // Only matches *.trk.* domains
   link.url.includes("/trk.") ||      // Only matches /trk/ paths
@@ -71,7 +71,7 @@ const isTrkLink =
   link.url.includes("click.") ||      // Only *.click.* domains
   link.url.includes("redirect.") ||   // Only *.redirect.* domains
   link.url.includes("links.")         // Only *.links.* domains
-```
+\`\`\`
 
 **Problems:**
 1. **Misses common tracking domains:**
@@ -113,27 +113,27 @@ Looking at real donation platforms:
 
 The test tool (`app/api/admin/test-unwrap-url/route.ts`) ALWAYS calls `resolveRedirects()` without checking if it's a tracking link:
 
-```typescript
+\`\`\`typescript
 // Test tool just unwraps whatever you give it
 const finalUrl = await resolveRedirects(url)
-```
+\`\`\`
 
 No pattern matching → Always works
 
 ## Evidence from Code
 
 **Line 886:** Console log shows which links are being processed
-```typescript
+\`\`\`typescript
 console.log(`[v0] ${subjectPrefix}Processing ${topLinks.length} links (${trackingLinkCount} tracking): ${linkDomains}`)
-```
+\`\`\`
 
 **Lines 943-946:** Only logs successful unwraps
-```typescript
+\`\`\`typescript
 const resolvedLinks = linksWithFinalUrls.filter(link => link.finalUrl)
 if (resolvedLinks.length > 0) {
   console.log(`[v0] ✓ Resolved ${resolvedLinks.length} tracking links to final destinations`)
 }
-```
+\`\`\`
 
 So if you see "Processing 5 links (1 tracking)" → Only 1 will be unwrapped
 
@@ -147,17 +147,17 @@ So if you see "Processing 5 links (1 tracking)" → Only 1 will be unwrapped
 5. No error/warning for the 4 that weren't unwrapped
 
 **You'd see in logs:**
-```
+\`\`\`
 [v0] "Donate Now" - Processing 5 links (1 tracking): winred.com, actblue.com, example.com, ...
 [v0] ✓ Resolved 1 tracking links to final destinations
-```
+\`\`\`
 
 ## Solutions
 
 ### Option 1: Expand Tracking Link Detection (Conservative)
 Add more patterns to catch common political tracking domains:
 
-```typescript
+\`\`\`typescript
 const isTrkLink = 
   // Original patterns
   link.url.includes(".trk.") ||
@@ -179,7 +179,7 @@ const isTrkLink =
   /go\./i.test(link.url) ||       // go.domain.com
   /link\./i.test(link.url) ||     // link.domain.com
   /donate\./i.test(link.url)      // donate.domain.com
-```
+\`\`\`
 
 **Pros:** 
 - More links get unwrapped
@@ -192,7 +192,7 @@ const isTrkLink =
 ### Option 2: Unwrap ALL Links (Aggressive)
 Remove the `isTrkLink` check entirely - unwrap everything:
 
-```typescript
+\`\`\`typescript
 const linksWithFinalUrls = await Promise.all(
   topLinks.map(async (link) => {
     let finalUrl = ""
@@ -229,7 +229,7 @@ const linksWithFinalUrls = await Promise.all(
     }
   }),
 )
-```
+\`\`\`
 
 **Pros:** 
 - Unwraps ALL links, no exceptions
@@ -244,7 +244,7 @@ const linksWithFinalUrls = await Promise.all(
 ### Option 3: Hybrid Approach (Recommended)
 Try to detect tracking links, but unwrap ALL on failure:
 
-```typescript
+\`\`\`typescript
 const linksWithFinalUrls = await Promise.all(
   topLinks.map(async (link) => {
     // Try pattern detection first
@@ -276,7 +276,7 @@ const linksWithFinalUrls = await Promise.all(
     }
   }),
 )
-```
+\`\`\`
 
 ## Performance Considerations
 
@@ -314,10 +314,10 @@ const linksWithFinalUrls = await Promise.all(
 
 ### Current State Analysis
 Your logs probably show something like:
-```
+\`\`\`
 [v0] "Support President Trump" - Processing 8 links (1 tracking): winred.com, actblue.com, secure.winred.com, ...
 [v0] ✓ Resolved 1 tracking links to final destinations
-```
+\`\`\`
 
 This means only 1 of the 8 links matched the tracking pattern, so 7 were saved wrapped.
 

@@ -7,13 +7,13 @@ Links are coming in unwrapped - some links get unwrapped but others don't. The T
 
 ### 1. **Links ARE Getting Unwrapped Initially** ✅
 When campaigns are created in `lib/competitive-insights-utils.tsx` (lines 1337, 1403):
-```typescript
+\`\`\`typescript
 const ctaLinks = emailContent ? await extractCTALinks(emailContent, seedEmailsList, sanitizedSubject) : []
 ctaLinks: ctaLinks.length > 0 ? JSON.stringify(ctaLinks) : null,
-```
+\`\`\`
 
 The `extractCTALinks` function (lines 684-950) DOES call `resolveRedirects()` which unwraps links:
-```typescript
+\`\`\`typescript
 // Line 886-920: The function unwraps links when processing
 const unwrappedResults = await Promise.all(
   topLinks.map(async (link) => {
@@ -29,13 +29,13 @@ const unwrappedResults = await Promise.all(
     }
   })
 )
-```
+\`\`\`
 
 ### 2. **The Problem: Links Get Saved BEFORE Unwrapping Completes** ❌
 
 Here's the timeline of what happens:
 
-```
+\`\`\`
 1. Campaign detection cron runs (detect-competitive-insights)
    ↓
 2. extractCTALinks() is called
@@ -51,17 +51,17 @@ Here's the timeline of what happens:
 7. <-- Hours/days later, unwrap-links cron runs
    ↓
 8. Tries to unwrap but links ALREADY HAVE finalURL set
-```
+\`\`\`
 
 Look at the unwrap-links cron (lines 364-372):
-```typescript
+\`\`\`typescript
 for (const link of ctaLinks) {
   if (link.finalURL) {  // ← THIS IS THE PROBLEM
     // Already has finalURL, skip
     updatedCtaLinks.push(link)
     continue
   }
-```
+\`\`\`
 
 ### 3. **Why Some Links Don't Get Unwrapped**
 
@@ -70,32 +70,32 @@ The cron skips links that ALREADY have a `finalURL` field. But when links are in
 #### Three Scenarios:
 
 **Scenario A: Link unwraps successfully during creation**
-```json
+\`\`\`json
 {
   "url": "https://tracking.com/abc",
   "finalURL": "https://donate.com/page",  // ← Has finalURL
   "type": "donation"
 }
-```
+\`\`\`
 → **Cron skips it** (line 366: `if (link.finalURL)`)
 
 **Scenario B: Link fails to unwrap during creation (timeout, SSL error)**
-```json
+\`\`\`json
 {
   "url": "https://tracking.com/xyz",
   "type": "other"  // ← No finalURL
 }
-```
+\`\`\`
 → **Cron tries to unwrap it**
 
 **Scenario C: Link unwraps to itself (no redirect)**
-```json
+\`\`\`json
 {
   "url": "https://donate.com/direct",
   "finalURL": undefined,  // ← resolveRedirects returned same URL
   "type": "donation"
 }
-```
+\`\`\`
 → **Cron tries to unwrap it**
 
 ### 4. **Why Test Unwrap Tool Works**
@@ -148,13 +148,13 @@ The test unwrap tool (`app/api/admin/test-unwrap-url/route.ts`) ALWAYS unwraps t
 ## Visual Example
 
 ### What You're Seeing:
-```
+\`\`\`
 Campaign: "Support Trump 2024"
 CTA Links:
 1. [✅ Unwrapped] https://tracking.winred.com/abc → https://secure.winred.com/trump/donate
 2. [❌ Not Unwrapped] https://go.donaldtrump.com/xyz → (no finalURL)
 3. [✅ Unwrapped] https://action.gop/support → https://secure.anedot.com/gop/contribute
-```
+\`\`\`
 
 ### Why #2 Isn't Unwrapped:
 - During campaign creation, it might have returned `finalURL: "https://go.donaldtrump.com/xyz"` (unwrapped to itself, then finalURL set to undefined)
@@ -168,7 +168,7 @@ Wait, let me check the actual cron logic more carefully...
 
 Looking at lines 364-383 in `app/api/cron/unwrap-links/route.ts`:
 
-```typescript
+\`\`\`typescript
 for (const link of ctaLinks) {
   if (link.finalURL) {
     // Already has finalURL, skip
@@ -187,33 +187,33 @@ for (const link of ctaLinks) {
       finalURL: finalURL,
       strippedFinalURL: strippedFinalURL,
     })
-```
+\`\`\`
 
 The bug is: **The cron checks for `link.finalURL` but the actual field name saved is `finalUrl` (lowercase 'u')!**
 
 Let me verify by checking how links are saved...
 
 Looking at `extractCTALinks` return type (line 688):
-```typescript
+\`\`\`typescript
 Promise<Array<{ url: string; finalUrl?: string; originalUrl?: string; type: string }>>
                               ^^^^^^^^^ lowercase 'u'
-```
+\`\`\`
 
 And the actual return (lines 906-920):
-```typescript
+\`\`\`typescript
 return {
   url: link.url,
   finalUrl: finalUrl !== link.url ? finalUrl : undefined,
          ^^^^^^^^ lowercase 'u'
   originalUrl: link.url,
 }
-```
+\`\`\`
 
 But the cron checks for (line 366):
-```typescript
+\`\`\`typescript
 if (link.finalURL) {  // ← UPPERCASE 'URL'
      ^^^^^^^^^ This never matches!
-```
+\`\`\`
 
 ## The Real Problem: Case Sensitivity Bug
 
@@ -244,13 +244,13 @@ Not sure what you mean by this specifically, but likely:
 
 ### Fix Required
 Change line 366 in `app/api/cron/unwrap-links/route.ts` from:
-```typescript
+\`\`\`typescript
 if (link.finalURL) {
-```
+\`\`\`
 to:
-```typescript
+\`\`\`typescript
 if (link.finalUrl) {  // Match the actual field name
-```
+\`\`\`
 
 And same for SMS on line 449.
 

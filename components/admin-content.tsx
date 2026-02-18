@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Loader2, Play, X } from "lucide-react"
+import { Loader2, Play, X, Mail, MessageSquare, TrendingUp } from "lucide-react"
 import { toast } from "sonner"
 import { CampaignDetectionDialog } from "@/components/campaign-detection-dialog"
 import { CompetitiveInsightsDetectionDialog } from "@/components/competitive-insights-detection-dialog"
@@ -16,6 +16,11 @@ interface AdminContentProps {
 
 export function AdminContent({ user }: AdminContentProps) {
   const [isRunning, setIsRunning] = useState(false)
+  const [messageStats, setMessageStats] = useState<{
+    today: { emails: number; sms: number; total: number }
+    yesterday: { emails: number; sms: number; total: number }
+  } | null>(null)
+  const [loadingStats, setLoadingStats] = useState(true)
   const [isMigratingSMS, setIsMigratingSMS] = useState(false)
   const [isSanitizingEmails, setIsSanitizingEmails] = useState(false)
   const [isBackfillingSMSLinks, setIsBackfillingSMSLinks] = useState(false)
@@ -195,6 +200,27 @@ export function AdminContent({ user }: AdminContentProps) {
     message: string
   } | null>(null)
   const [totalBatchesRun, setTotalBatchesRun] = useState(0)
+
+  // Fetch message stats on component mount
+  useEffect(() => {
+    const fetchMessageStats = async () => {
+      try {
+        const response = await fetch("/api/admin/message-stats")
+        if (response.ok) {
+          const data = await response.json()
+          setMessageStats(data)
+        } else {
+          console.error("Failed to fetch message stats")
+        }
+      } catch (error) {
+        console.error("Error fetching message stats:", error)
+      } finally {
+        setLoadingStats(false)
+      }
+    }
+
+    fetchMessageStats()
+  }, [])
 
   const handleRunEngagement = async () => {
     setIsRunning(true)
@@ -1117,14 +1143,96 @@ export function AdminContent({ user }: AdminContentProps) {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {" "}
-      {/* Changed from "space-y-6" to "container mx-auto p-6 space-y-6" */}
-      <div>
-        <h2 className="text-2xl font-bold">Admin Tools</h2>
-        <p className="text-muted-foreground">Administrative tools and utilities</p>
-      </div>
-      <Card>
+  <div className="container mx-auto p-6 space-y-6">
+  {" "}
+  {/* Changed from "space-y-6" to "container mx-auto p-6 space-y-6" */}
+  <div>
+  <h2 className="text-2xl font-bold">Admin Tools</h2>
+  <p className="text-muted-foreground">Administrative tools and utilities</p>
+  </div>
+
+  {/* Message Stats */}
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          Today
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loadingStats ? (
+          <div className="flex items-center justify-center py-4">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Mail className="h-4 w-4 text-blue-500" />
+                <span className="text-sm text-muted-foreground">Emails</span>
+              </div>
+              <span className="text-2xl font-bold">{messageStats?.today.emails || 0}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-green-500" />
+                <span className="text-sm text-muted-foreground">SMS</span>
+              </div>
+              <span className="text-2xl font-bold">{messageStats?.today.sms || 0}</span>
+            </div>
+            <div className="pt-3 border-t">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Total</span>
+                <span className="text-2xl font-bold text-primary">{messageStats?.today.total || 0}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          Yesterday
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loadingStats ? (
+          <div className="flex items-center justify-center py-4">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Mail className="h-4 w-4 text-blue-500" />
+                <span className="text-sm text-muted-foreground">Emails</span>
+              </div>
+              <span className="text-2xl font-bold">{messageStats?.yesterday.emails || 0}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-green-500" />
+                <span className="text-sm text-muted-foreground">SMS</span>
+              </div>
+              <span className="text-2xl font-bold">{messageStats?.yesterday.sms || 0}</span>
+            </div>
+            <div className="pt-3 border-t">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Total</span>
+                <span className="text-2xl font-bold text-primary">{messageStats?.yesterday.total || 0}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  </div>
+
+  <Card>
         <CardHeader>
           <CardTitle>Campaign Detection</CardTitle>
           <CardDescription>Scan seed email accounts to automatically detect new campaigns</CardDescription>

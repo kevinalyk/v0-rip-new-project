@@ -1,0 +1,448 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  firstName     String?
+  lastName      String?
+  password      String
+  role          String    @default("viewer") // "admin", "editor", "viewer"
+  clientId      String?   // Links user to their client organization
+  firstLogin    Boolean   @default(true)
+  lastActive    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  client        Client?   @relation(fields: [clientId], references: [id])
+  
+  // Domain relationships
+  domainAccess  UserDomainAccess[]
+  ciViews       CiView[]
+  entityTags    EntityTag[] // Added relation to entity tags created by this user
+}
+
+model Domain {
+  id                String    @id @default(cuid())
+  name              String    @unique // e.g., "Company ABC", "Acme Corp"
+  domain            String    @unique // e.g., "company-abc.com", "acme.com"
+  description       String?
+  active            Boolean   @default(true)
+  assignedToClientId String?  // Link to client who owns this domain
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relationships
+  campaigns         Campaign[]
+  userAccess        UserDomainAccess[]
+  assignedToClient  Client?   @relation("DomainToClient", fields: [assignedToClientId], references: [id], onDelete: SetNull)
+
+  @@index([assignedToClientId])
+}
+
+model UserDomainAccess {
+  id       String @id @default(cuid())
+  userId   String
+  domainId String
+  role     String @default("viewer") // "admin", "editor", "viewer" - role within this domain
+
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  domain   Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, domainId])
+}
+
+model Campaign {
+  id                 String        @id @default(cuid())
+  subject            String
+  sender             String
+  fromEmail          String
+  deliveryRate       Float         @default(0)
+  sentDate           DateTime
+  summaryData        String?       @db.Text // JSON field for provider breakdown summary
+  domainId           String        // NEW: Link to domain
+  assignedToClientId String?       // Link to client who owns this campaign
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  // Relationships
+  domain             Domain        @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  assignedToClient   Client?       @relation(fields: [assignedToClientId], references: [id], onDelete: SetNull)
+  results            Result[]
+  emailContent       EmailContent?
+
+  @@index([domainId])
+  @@index([domainId, sentDate])
+  @@index([assignedToClientId])
+}
+
+model Result {
+  id              String    @id @default(cuid())
+  campaignId      String
+  campaign        Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  seedEmail       String
+  delivered       Boolean   @default(false)
+  inboxed         Boolean   @default(false)
+  placementStatus String?
+  emailProvider   String?
+  emailHeaders    String?   @db.Text
+  forwardedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EmailQueue {
+  id                 String    @id @default(cuid())
+  rawData            String    @db.Text
+  processed          Boolean   @default(false)
+  processingAttempts Int       @default(0)
+  error              String?   @db.Text
+  createdAt          DateTime  @default(now())
+  processedAt        DateTime?
+}
+
+model EmailContent {
+  id          String   @id @default(cuid())
+  campaignId  String   @unique
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  subject     String
+  sender      String
+  senderEmail String
+  htmlContent String?  @db.Text
+  textContent String?  @db.Text
+  receivedAt  DateTime
+  createdAt   DateTime @default(now())
+}
+
+model Client {
+  id                String     @id // e.g., "red_spark_strategy"
+  name              String     @unique // e.g., "Red Spark Strategy"
+  description       String?
+  active            Boolean    @default(true)
+  dataRetentionDays Int        @default(90)
+  slug              String     @unique // e.g., "redsparkstrategy"
+  
+  subscriptionPlan       String    @default("free") // "free", "paid", "all", "basic_inboxing", "enterprise"
+  subscriptionStatus     String    @default("active") // "active", "cancelled", "past_due"
+  hasCompetitiveInsights Boolean   @default(false) // CI add-on
+  emailVolumeLimit       Int       @default(20000) // Based on plan
+  emailVolumeUsed        Int       @default(0) // Resets monthly (frozen when cancelled)
+  subscriptionStartDate  DateTime  @default(now())
+  subscriptionRenewDate  DateTime? // Next billing date
+  lastUsageReset         DateTime  @default(now()) // Last time emailVolumeUsed was reset
+  
+  stripeCustomerId           String?   @unique // Stripe customer ID
+  stripeSubscriptionId       String?   @unique // Main Stripe subscription ID for base plan (sub_xxx)
+  stripeCiSubscriptionId     String?   @unique // Separate Stripe subscription ID for CI if bought separately (sub_xxx)
+  stripeSubscriptionItemId   String?   @unique // Subscription item ID for base plan within main subscription (si_xxx)
+  stripeCiSubscriptionItemId String?   @unique // Subscription item ID for CI add-on (si_xxx)
+  stripeUserSeatsItemId      String?   @unique // Subscription item ID for additional user seats (si_xxx)
+  cancelAtPeriodEnd          Boolean   @default(false) // Added to track scheduled cancellation
+  scheduledDowngradePlan     String? // Plan tier user will downgrade to at next renewal
+  
+  userSeatsIncluded      Int       @default(0) // Number of user seats included in plan
+  additionalUserSeats    Int       @default(0) // Extra user seats purchased
+  stripeUserSeatPriceId  String?   // Stripe price ID for additional user seats
+  totalUsers             Int       @default(0) // Auto-updated count of users
+  
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  
+  users             User[]
+  campaigns         Campaign[] // Add relation to campaigns
+  domains           Domain[]   @relation("DomainToClient")
+  ciEntitySubscriptions CiEntitySubscription[]
+  ciViews           CiView[] // Added relation to CI Views owned by this client
+  entityTags        EntityTag[] // Added relation to entity tags
+  
+  @@index([totalUsers])
+}
+
+model BlockedDomain {
+  id        String   @id @default(cuid())
+  domain    String   @unique // e.g., "gmail.com", "microsoft.com"
+  reason    String?  // Why this domain is blocked
+  createdBy String   // User ID who added it
+  createdAt DateTime @default(now())
+
+  @@index([domain])
+}
+
+model EngagementLog {
+  id               Int       @id @default(autoincrement())
+  seedEmailId      String
+  action           String    // e.g., "open", "click", "reply", "delete"
+  emailSubject     String?   @db.Text
+  emailSender      String?
+  emailReceivedAt  DateTime?
+  performedAt      DateTime  @default(now())
+  success          Boolean   @default(true)
+  errorMessage     String?   @db.Text
+
+  seedEmail        SeedEmail @relation(fields: [seedEmailId], references: [id], onDelete: Cascade)
+
+  @@index([seedEmailId])
+  @@index([performedAt])
+}
+
+model SenderFamiliarity {
+  id                Int       @id @default(autoincrement())
+  seedEmailId       String
+  senderEmail       String
+  engagementCount   Int       @default(0)
+  lastEngagementAt  DateTime?
+  trustScore        Float     @default(0.5)
+  createdAt         DateTime  @default(now())
+
+  seedEmail         SeedEmail @relation(fields: [seedEmailId], references: [id], onDelete: Cascade)
+
+  @@unique([seedEmailId, senderEmail])
+  @@index([seedEmailId])
+}
+
+model SeedEmail {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  password        String    @db.Text
+  provider        String    // e.g., "gmail", "yahoo", "outlook", "aol"
+  creationDate    DateTime  @default(now())
+  recoveryEmail   String?
+  recoveryPhone   String?
+  securityInfo    String?   @db.Text // JSON string with security questions/answers
+  imapEnabled     Boolean   @default(false)
+  popEnabled      Boolean   @default(false)
+  twoFactorEnabled Boolean  @default(false)
+  appPassword     String?   @db.Text
+  notes           String?   @db.Text
+  active          Boolean   @default(true)
+  lastImapCheck   DateTime?
+  lastPopCheck    DateTime?
+  imapStatus      String?
+  popStatus       String?
+  ownedByClient   String?   // Who originally uploaded/owns this seed (never changes)
+  assignedToClient String?  // Who can currently use this seed (can be reassigned)
+  locked          Boolean   @default(false) // If true, seed cannot be reassigned by admins
+  // OAuth fields for Outlook integration
+  accessToken     String?   @db.Text // Encrypted OAuth access token
+  refreshToken    String?   @db.Text // Encrypted OAuth refresh token
+  tokenExpiry     DateTime? // When the access token expires
+  oauthConnected  Boolean   @default(false) // Whether OAuth is set up and working
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  engagementLogs  EngagementLog[]
+  senderFamiliarity SenderFamiliarity[]
+
+  @@index([oauthConnected])
+  @@index([provider, oauthConnected])
+  @@index([ownedByClient])
+  @@index([assignedToClient])
+  @@index([ownedByClient, assignedToClient])
+}
+
+model CompetitiveInsightCampaign {
+  id                  String   @id @default(cuid())
+  senderName          String
+  senderEmail         String
+  subject             String
+  dateReceived        DateTime // When first detected
+  inboxCount          Int      @default(0) // How many of the 8 RIP emails went to inbox
+  spamCount           Int      @default(0) // How many went to spam
+  notDeliveredCount   Int      @default(0) // How many weren't delivered
+  inboxRate           Float    @default(0) // Calculated percentage
+  ctaLinks            Json?    // Array of CTA links found in email
+  tags                Json?    // Array of tags (Politician, PAC, Committee, etc.)
+  emailPreview        String?  @db.Text // Text snippet of email
+  emailContent        String?  @db.Text // Full email content for reference
+  resultIds           Json?    // Array of Result IDs that contributed to this campaign
+  entityId            String?  // Link to assigned entity
+  entity              CiEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  assignmentMethod    String?  // "auto_winred", "auto_anedot", "auto_domain", "auto_phone", "manual"
+  assignedAt          DateTime? // When the campaign was assigned to an entity
+  clientId            String?  // Client who subscribed via personal email
+  source              String   @default("seed") // "seed" or "personal"
+  shareToken          String?  @unique // Unique token for sharing
+  shareTokenCreatedAt DateTime? // When the share token was created
+  shareCount          Int      @default(0) // How many times share button was clicked
+  shareViewCount      Int      @default(0) // How many times shared link was viewed
+  isHidden            Boolean  @default(false) // Super admin hide/unhide control
+  hiddenAt            DateTime? // When it was hidden
+  hiddenBy            String?  // Which admin hid it
+  isDeleted           Boolean  @default(false) // Soft delete flag
+  deletedAt           DateTime? // When it was deleted
+  deletedBy           String?  // Which admin deleted it
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([senderEmail, subject]) // Prevent duplicate campaigns
+  @@index([senderEmail])
+  @@index([subject])
+  @@index([dateReceived])
+  @@index([inboxRate])
+  @@index([entityId])
+  @@index([clientId])
+  @@index([source])
+  @@index([shareToken])
+  @@index([isHidden])
+  @@index([assignedAt])
+  @@index([isDeleted])
+}
+
+model CiEntity {
+  id                 String   @id @default(cuid())
+  name               String   @unique // e.g., "Donald Trump Campaign", "Democratic National Committee"
+  type               String   // "politician", "pac", "organization"
+  description        String?
+  party              String?  // "republican", "democrat", "independent"
+  state              String?  // State abbreviation (e.g., "CA", "NY") or "Nationwide"
+  donationIdentifiers Json?   // Platform-specific donation identifiers: {"winred": ["nrcc"], "anedot": ["jeff-hurd-for-congress"]}
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  campaigns   CompetitiveInsightCampaign[]
+  smsMessages SmsQueue[]
+  mappings    CiEntityMapping[]
+  subscriptions CiEntitySubscription[]
+  tags        EntityTag[] // Added relation to entity tags
+  
+  @@index([party])
+  @@index([state])
+}
+
+model CiEntityMapping {
+  id           String   @id @default(cuid())
+  entityId     String
+  senderEmail  String?  // Exact email match (e.g., "info@donaldtrump.com")
+  senderDomain String?  // Domain match (e.g., "donaldtrump.com")
+  senderPhone  String?  // Phone number match (e.g., "+14342298933")
+  createdAt    DateTime @default(now())
+
+  entity       CiEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityId])
+  @@index([senderEmail])
+  @@index([senderDomain])
+  @@index([senderPhone])
+}
+
+model CtaCategory {
+  id         String   @id @default(cuid())
+  url        String   @unique // The CTA URL (normalized)
+  category   String   // "donation", "petition", "event", "volunteer", "other"
+  confidence Float?   // AI confidence score (0-1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([url])
+  @@index([category])
+}
+
+model SmsQueue {
+  id                 String    @id @default(cuid())
+  rawData            String    @db.Text // Raw webhook payload from FullStack
+  processed          Boolean   @default(false)
+  processingAttempts Int       @default(0)
+  error              String?   @db.Text
+  phoneNumber        String?   // Extracted sender phone number
+  toNumber           String?   // Extracted recipient phone number
+  message            String?   @db.Text // Extracted SMS content
+  campaignId         String?   // Campaign ID from FullStack
+  companyId          Int?      // Company ID from FullStack
+  entityId           String?   // Link to assigned entity
+  entity             CiEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  assignmentMethod   String?  // "auto_winred", "auto_anedot", "auto_phone", "manual"
+  assignedAt         DateTime? // When the SMS was assigned to an entity
+  ctaLinks           String?   @db.Text // JSON array of CTA links extracted from message
+  shareToken          String?  @unique // Unique token for sharing
+  shareTokenCreatedAt DateTime? // When the share token was created
+  shareCount          Int      @default(0) // How many times share button was clicked
+  shareViewCount      Int      @default(0) // How many times shared link was viewed
+  isHidden            Boolean  @default(false) // Super admin hide/unhide control
+  hiddenAt            DateTime? // When it was hidden
+  hiddenBy            String?  // Which admin hid it
+  isDeleted           Boolean  @default(false) // Soft delete flag
+  deletedAt           DateTime? // When it was deleted
+  deletedBy           String?  // Which admin deleted it
+  createdAt          DateTime  @default(now())
+  processedAt        DateTime?
+
+  @@index([phoneNumber])
+  @@index([toNumber])
+  @@index([processed])
+  @@index([createdAt])
+  @@index([entityId])
+  @@index([isHidden])
+  @@index([shareToken])
+  @@index([assignedAt])
+  @@index([isDeleted])
+}
+
+model CiEntitySubscription {
+  id        String   @id @default(cuid())
+  clientId  String
+  entityId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  entity    CiEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, entityId])
+  @@index([clientId])
+  @@index([entityId])
+}
+
+model CiView {
+  id             String   @id @default(cuid())
+  name           String
+  clientId       String
+  filterSettings Json     // Stores all filter state as JSON
+  createdBy      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdByUser  User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([name])
+}
+
+model EntityTag {
+  id        String   @id @default(cuid())
+  clientId  String
+  entityId  String
+  tagName   String   @db.VarChar(50)
+  tagColor  String   @db.VarChar(7) // Hex color like #FF5733
+  createdBy String
+  createdAt DateTime @default(now())
+
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  entity    CiEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, entityId, tagName])
+  @@index([clientId])
+  @@index([entityId])
+  @@index([clientId, tagName])
+}

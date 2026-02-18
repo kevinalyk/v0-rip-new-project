@@ -217,19 +217,32 @@ async function warmupDatabase() {
 export async function ensureDatabaseConnection(maxRetries = 3) {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      // Simple connection test without explicit connect/disconnect
-      // Prisma handles connection pooling automatically in serverless
+      // Explicitly connect first in case connection was closed
+      await prisma.$connect()
+      
+      // Then test the connection
       await Promise.race([
         prisma.$queryRaw`SELECT 1`,
         new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout')), 5000))
       ])
+      
+      console.log(`Database connection established successfully on attempt ${attempt + 1}`)
       return true
     } catch (error: any) {
       console.error(`Database connection attempt ${attempt + 1}/${maxRetries} failed:`, error.message)
       
+      // Try to disconnect before retrying to ensure clean state
+      try {
+        await prisma.$disconnect()
+      } catch (disconnectError) {
+        // Ignore disconnect errors
+      }
+      
       if (attempt < maxRetries - 1) {
         // Wait before retrying (exponential backoff)
-        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)))
+        const delay = 1000 * Math.pow(2, attempt)
+        console.log(`Waiting ${delay}ms before retry...`)
+        await new Promise(resolve => setTimeout(resolve, delay))
       }
     }
   }

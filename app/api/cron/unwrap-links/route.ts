@@ -321,17 +321,57 @@ export async function GET(request: Request) {
     }
 
     // Process Email Campaigns CTA Links (limit to 100 per run)
-    const emailCampaigns = await prisma.competitiveInsightCampaign.findMany({
-      where: {
-        ctaLinks: {
-          not: null,
+    let emailCampaigns = []
+    try {
+      emailCampaigns = await prisma.competitiveInsightCampaign.findMany({
+        where: {
+          ctaLinks: {
+            not: null,
+          },
         },
-      },
-      take: 100,
-      orderBy: {
-        createdAt: "desc",
-      },
-    })
+        take: 100,
+        orderBy: {
+          createdAt: "desc",
+        },
+      })
+    } catch (error: any) {
+      console.error("Error fetching email campaigns:", error.message)
+      
+      // Try to reconnect and retry once
+      const reconnected = await ensureDatabaseConnection()
+      if (reconnected) {
+        try {
+          emailCampaigns = await prisma.competitiveInsightCampaign.findMany({
+            where: {
+              ctaLinks: {
+                not: null,
+              },
+            },
+            take: 100,
+            orderBy: {
+              createdAt: "desc",
+            },
+          })
+        } catch (retryError: any) {
+          console.error("Retry failed:", retryError.message)
+          return NextResponse.json(
+            {
+              error: "Database connection failed during email campaigns fetch",
+              details: retryError.message,
+            },
+            { status: 500 }
+          )
+        }
+      } else {
+        return NextResponse.json(
+          {
+            error: "Could not reconnect to database",
+            details: error.message,
+          },
+          { status: 500 }
+        )
+      }
+    }
 
     for (const campaign of emailCampaigns) {
       try {
@@ -390,17 +430,46 @@ export async function GET(request: Request) {
     }
 
     // Process SMS Messages CTA Links (limit to 100 per run)
-    const smsMessages = await prisma.smsQueue.findMany({
-      where: {
-        ctaLinks: {
-          not: null,
+    let smsMessages = []
+    try {
+      smsMessages = await prisma.smsQueue.findMany({
+        where: {
+          ctaLinks: {
+            not: null,
+          },
         },
-      },
-      take: 100,
-      orderBy: {
-        createdAt: "desc",
-      },
-    })
+        take: 100,
+        orderBy: {
+          createdAt: "desc",
+        },
+      })
+    } catch (error: any) {
+      console.error("Error fetching SMS messages:", error.message)
+      
+      // Try to reconnect and retry once
+      const reconnected = await ensureDatabaseConnection()
+      if (reconnected) {
+        try {
+          smsMessages = await prisma.smsQueue.findMany({
+            where: {
+              ctaLinks: {
+                not: null,
+              },
+            },
+            take: 100,
+            orderBy: {
+              createdAt: "desc",
+            },
+          })
+        } catch (retryError: any) {
+          console.error("Retry failed:", retryError.message)
+          // Continue with empty array instead of failing completely
+          console.log("Continuing without SMS messages...")
+        }
+      } else {
+        console.log("Could not reconnect, continuing without SMS messages...")
+      }
+    }
 
     for (const sms of smsMessages) {
       try {

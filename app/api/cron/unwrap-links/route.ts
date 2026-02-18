@@ -378,9 +378,21 @@ export async function GET(request: Request) {
     console.log(`[v0] Processing ${emailCampaigns.length} email campaigns...`)
     for (const campaign of emailCampaigns) {
       try {
-        const ctaLinks = campaign.ctaLinks as any[]
+        // Handle ctaLinks - could be array, JSON object, or string
+        let ctaLinks: any[]
+        if (Array.isArray(campaign.ctaLinks)) {
+          ctaLinks = campaign.ctaLinks
+        } else if (typeof campaign.ctaLinks === 'string') {
+          ctaLinks = JSON.parse(campaign.ctaLinks)
+        } else if (campaign.ctaLinks && typeof campaign.ctaLinks === 'object') {
+          // It's a JSON object from Prisma, try to use it directly or check if it has array-like properties
+          ctaLinks = campaign.ctaLinks as any[]
+        } else {
+          ctaLinks = []
+        }
+
         if (!Array.isArray(ctaLinks) || ctaLinks.length === 0) {
-          console.log(`[v0] Campaign ${campaign.id}: No valid ctaLinks array`)
+          console.log(`[v0] Campaign ${campaign.id}: No valid ctaLinks array, type: ${typeof campaign.ctaLinks}`)
           stats.emailCampaigns.skipped++
           continue
         }
@@ -486,7 +498,19 @@ export async function GET(request: Request) {
           continue
         }
 
-        const ctaLinks = JSON.parse(sms.ctaLinks)
+        // Handle ctaLinks - could be array, JSON object, or string
+        let ctaLinks: any[]
+        if (Array.isArray(sms.ctaLinks)) {
+          ctaLinks = sms.ctaLinks
+        } else if (typeof sms.ctaLinks === 'string') {
+          ctaLinks = JSON.parse(sms.ctaLinks)
+        } else if (typeof sms.ctaLinks === 'object') {
+          // It's a JSON object from Prisma, try to use it directly
+          ctaLinks = sms.ctaLinks as any[]
+        } else {
+          ctaLinks = []
+        }
+
         if (!Array.isArray(ctaLinks) || ctaLinks.length === 0) {
           stats.smsMessages.skipped++
           continue

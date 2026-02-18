@@ -4,23 +4,35 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Loader2, Play, X, Mail, MessageSquare, TrendingUp } from "lucide-react"
+import { Loader2, Play, X, Mail, MessageSquare, TrendingUp, CalendarIcon } from "lucide-react"
 import { toast } from "sonner"
 import { CampaignDetectionDialog } from "@/components/campaign-detection-dialog"
 import { CompetitiveInsightsDetectionDialog } from "@/components/competitive-insights-detection-dialog"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
+import { Label } from "@/components/ui/label"
 
 // Define AdminContentProps if it's not defined elsewhere
 interface AdminContentProps {
   user?: any // Replace 'any' with the actual user type if known
 }
 
+interface DailyStats {
+  date: string
+  emails: number
+  sms: number
+  total: number
+  emailsAvg: number
+  smsAvg: number
+  totalAvg: number
+}
+
 export function AdminContent({ user }: AdminContentProps) {
   const [isRunning, setIsRunning] = useState(false)
-  const [messageStats, setMessageStats] = useState<{
-    today: { emails: number; sms: number; total: number }
-    yesterday: { emails: number; sms: number; total: number }
-  } | null>(null)
+  const [dailyStats, setDailyStats] = useState<DailyStats[]>([])
   const [loadingStats, setLoadingStats] = useState(true)
+  const [dateRange, setDateRange] = useState({ days: 30 })
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
   const [isMigratingSMS, setIsMigratingSMS] = useState(false)
   const [isSanitizingEmails, setIsSanitizingEmails] = useState(false)
   const [isBackfillingSMSLinks, setIsBackfillingSMSLinks] = useState(false)
@@ -201,26 +213,38 @@ export function AdminContent({ user }: AdminContentProps) {
   } | null>(null)
   const [totalBatchesRun, setTotalBatchesRun] = useState(0)
 
-  // Fetch message stats on component mount
+  // Fetch message stats on component mount and when date range changes
   useEffect(() => {
     const fetchMessageStats = async () => {
+      setLoadingStats(true)
       try {
-        const response = await fetch("/api/admin/message-stats")
+        const params = new URLSearchParams()
+        
+        if (startDate && endDate) {
+          params.append("startDate", startDate)
+          params.append("endDate", endDate)
+        } else {
+          params.append("days", dateRange.days.toString())
+        }
+
+        const response = await fetch(`/api/admin/message-stats?${params.toString()}`)
         if (response.ok) {
           const data = await response.json()
-          setMessageStats(data)
+          setDailyStats(data.dailyData)
         } else {
           console.error("Failed to fetch message stats")
+          toast.error("Failed to fetch message stats")
         }
       } catch (error) {
         console.error("Error fetching message stats:", error)
+        toast.error("Error fetching message stats")
       } finally {
         setLoadingStats(false)
       }
     }
 
     fetchMessageStats()
-  }, [])
+  }, [dateRange, startDate, endDate])
 
   const handleRunEngagement = async () => {
     setIsRunning(true)
@@ -1151,86 +1175,156 @@ export function AdminContent({ user }: AdminContentProps) {
   <p className="text-muted-foreground">Administrative tools and utilities</p>
   </div>
 
-  {/* Message Stats */}
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          Today
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {loadingStats ? (
-          <div className="flex items-center justify-center py-4">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-blue-500" />
-                <span className="text-sm text-muted-foreground">Emails</span>
-              </div>
-              <span className="text-2xl font-bold">{messageStats?.today.emails || 0}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-green-500" />
-                <span className="text-sm text-muted-foreground">SMS</span>
-              </div>
-              <span className="text-2xl font-bold">{messageStats?.today.sms || 0}</span>
-            </div>
-            <div className="pt-3 border-t">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Total</span>
-                <span className="text-2xl font-bold text-primary">{messageStats?.today.total || 0}</span>
-              </div>
-            </div>
-          </div>
+  {/* Message Stats Chart */}
+  <Card>
+    <CardHeader>
+      <div className="flex items-center justify-between">
+        <div>
+          <CardTitle>Messages Received</CardTitle>
+          <CardDescription>Daily email and SMS volume with 7-day moving average</CardDescription>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={!startDate && !endDate && dateRange.days === 7 ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              setStartDate("")
+              setEndDate("")
+              setDateRange({ days: 7 })
+            }}
+          >
+            7d
+          </Button>
+          <Button
+            variant={!startDate && !endDate && dateRange.days === 30 ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              setStartDate("")
+              setEndDate("")
+              setDateRange({ days: 30 })
+            }}
+          >
+            30d
+          </Button>
+          <Button
+            variant={!startDate && !endDate && dateRange.days === 90 ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              setStartDate("")
+              setEndDate("")
+              setDateRange({ days: 90 })
+            }}
+          >
+            90d
+          </Button>
+        </div>
+      </div>
+      <div className="flex items-center gap-4 mt-4">
+        <div className="flex items-center gap-2">
+          <Label htmlFor="start-date" className="text-sm">Start Date</Label>
+          <Input
+            id="start-date"
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-auto"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="end-date" className="text-sm">End Date</Label>
+          <Input
+            id="end-date"
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="w-auto"
+          />
+        </div>
+        {(startDate || endDate) && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setStartDate("")
+              setEndDate("")
+            }}
+          >
+            Clear
+          </Button>
         )}
-      </CardContent>
-    </Card>
-
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          Yesterday
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {loadingStats ? (
-          <div className="flex items-center justify-center py-4">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-blue-500" />
-                <span className="text-sm text-muted-foreground">Emails</span>
-              </div>
-              <span className="text-2xl font-bold">{messageStats?.yesterday.emails || 0}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-green-500" />
-                <span className="text-sm text-muted-foreground">SMS</span>
-              </div>
-              <span className="text-2xl font-bold">{messageStats?.yesterday.sms || 0}</span>
-            </div>
-            <div className="pt-3 border-t">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Total</span>
-                <span className="text-2xl font-bold text-primary">{messageStats?.yesterday.total || 0}</span>
-              </div>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  </div>
+      </div>
+    </CardHeader>
+    <CardContent>
+      {loadingStats ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : dailyStats.length === 0 ? (
+        <div className="flex items-center justify-center py-20 text-muted-foreground">
+          No data available for the selected date range
+        </div>
+      ) : (
+        <div className="h-[400px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={dailyStats} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis 
+                dataKey="date" 
+                tick={{ fontSize: 12 }}
+                tickFormatter={(value) => {
+                  const date = new Date(value)
+                  return `${date.getMonth() + 1}/${date.getDate()}`
+                }}
+              />
+              <YAxis tick={{ fontSize: 12 }} />
+              <Tooltip 
+                contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}
+                labelFormatter={(value) => {
+                  const date = new Date(value as string)
+                  return date.toLocaleDateString()
+                }}
+              />
+              <Legend />
+              <Line 
+                type="monotone" 
+                dataKey="emails" 
+                stroke="#3b82f6" 
+                strokeWidth={2}
+                name="Emails"
+                dot={{ fill: '#3b82f6', r: 3 }}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="sms" 
+                stroke="#10b981" 
+                strokeWidth={2}
+                name="SMS"
+                dot={{ fill: '#10b981', r: 3 }}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="emailsAvg" 
+                stroke="#93c5fd" 
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                name="Emails (7d avg)"
+                dot={false}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="smsAvg" 
+                stroke="#6ee7b7" 
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                name="SMS (7d avg)"
+                dot={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </CardContent>
+  </Card>
 
   <Card>
         <CardHeader>

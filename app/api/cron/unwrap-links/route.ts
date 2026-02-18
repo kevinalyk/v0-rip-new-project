@@ -323,7 +323,7 @@ export async function GET(request: Request) {
     // Process Email Campaigns CTA Links (limit to 100 per run)
     let emailCampaigns = []
     try {
-      console.log("[v0] Fetching email campaigns with ctaLinks...")
+      console.log("[v0] Unwrap Links Cron: Starting - fetching email campaigns...")
       emailCampaigns = await prisma.competitiveInsightCampaign.findMany({
         where: {
           ctaLinks: {
@@ -335,9 +335,9 @@ export async function GET(request: Request) {
           createdAt: "desc",
         },
       })
-      console.log(`[v0] Found ${emailCampaigns.length} email campaigns with ctaLinks`)
+      console.log(`[v0] Unwrap Links Cron: Found ${emailCampaigns.length} email campaigns to process`)
     } catch (error: any) {
-      console.error("Error fetching email campaigns:", error.message)
+      console.error("[v0] Unwrap Links Cron: Error fetching email campaigns:", error.message)
       
       // Try to reconnect and retry once
       const reconnected = await ensureDatabaseConnection()
@@ -375,7 +375,6 @@ export async function GET(request: Request) {
       }
     }
 
-    console.log(`[v0] Processing ${emailCampaigns.length} email campaigns...`)
     for (const campaign of emailCampaigns) {
       try {
         // Handle ctaLinks - could be array, JSON object, or string
@@ -392,23 +391,21 @@ export async function GET(request: Request) {
         }
 
         if (!Array.isArray(ctaLinks) || ctaLinks.length === 0) {
-          console.log(`[v0] Campaign ${campaign.id}: No valid ctaLinks array, type: ${typeof campaign.ctaLinks}`)
           stats.emailCampaigns.skipped++
           continue
         }
 
-        console.log(`[v0] Campaign ${campaign.id}: Found ${ctaLinks.length} CTA links`)
         let updated = false
         const updatedCtaLinks = []
 
         for (const link of ctaLinks) {
           if (link.finalUrl || link.finalURL) {
-            // Already has finalUrl/finalURL, skip
-            console.log(`[v0] Link already unwrapped: ${link.url} → ${link.finalURL || link.finalUrl}`)
+            // Already has finalUrl/finalURL, skip silently
             updatedCtaLinks.push(link)
             continue
           }
 
+          // Found a link that needs unwrapping
           stats.emailCampaigns.processed++
 
           try {
@@ -423,6 +420,7 @@ export async function GET(request: Request) {
 
             updated = true
             stats.emailCampaigns.succeeded++
+            console.log(`[v0] Unwrap Links Cron: SUCCESS - ${link.url} → ${finalURL}`)
 
             // Small delay to avoid rate limiting
             await sleep(100)
@@ -430,6 +428,7 @@ export async function GET(request: Request) {
             // Failed to unwrap, keep original
             updatedCtaLinks.push(link)
             stats.emailCampaigns.failed++
+            console.log(`[v0] Unwrap Links Cron: FAILED - ${link.url} (${error instanceof Error ? error.message : 'Unknown error'})`)
           }
         }
 
@@ -450,7 +449,7 @@ export async function GET(request: Request) {
     // Process SMS Messages CTA Links (limit to 100 per run)
     let smsMessages = []
     try {
-      console.log("[v0] Fetching SMS messages with ctaLinks...")
+      console.log("[v0] Unwrap Links Cron: Fetching SMS messages...")
       smsMessages = await prisma.smsQueue.findMany({
         where: {
           ctaLinks: {
@@ -462,7 +461,7 @@ export async function GET(request: Request) {
           createdAt: "desc",
         },
       })
-      console.log(`[v0] Found ${smsMessages.length} SMS messages with ctaLinks`)
+      console.log(`[v0] Unwrap Links Cron: Found ${smsMessages.length} SMS messages to process`)
     } catch (error: any) {
       console.error("Error fetching SMS messages:", error.message)
       
@@ -521,11 +520,12 @@ export async function GET(request: Request) {
 
         for (const link of ctaLinks) {
           if (link.finalUrl || link.finalURL) {
-            // Already has finalUrl/finalURL, skip
+            // Already has finalUrl/finalURL, skip silently
             updatedCtaLinks.push(link)
             continue
           }
 
+          // Found a link that needs unwrapping
           stats.smsMessages.processed++
 
           try {
@@ -540,6 +540,7 @@ export async function GET(request: Request) {
 
             updated = true
             stats.smsMessages.succeeded++
+            console.log(`[v0] Unwrap Links Cron: SUCCESS - ${link.url} → ${finalURL}`)
 
             // Small delay to avoid rate limiting
             await sleep(100)
@@ -547,6 +548,7 @@ export async function GET(request: Request) {
             // Failed to unwrap, keep original
             updatedCtaLinks.push(link)
             stats.smsMessages.failed++
+            console.log(`[v0] Unwrap Links Cron: FAILED - ${link.url} (${error instanceof Error ? error.message : 'Unknown error'})`)
           }
         }
 
@@ -564,7 +566,7 @@ export async function GET(request: Request) {
       }
     }
 
-    console.log("[v0] Unwrap links cron job completed:", JSON.stringify(stats, null, 2))
+    console.log("[v0] Unwrap Links Cron: Completed - Stats:", JSON.stringify(stats, null, 2))
     return NextResponse.json({
       success: true,
       stats,

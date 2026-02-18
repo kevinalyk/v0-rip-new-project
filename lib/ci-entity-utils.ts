@@ -750,6 +750,50 @@ export async function getTotalCampaignCount() {
 }
 
 /**
+ * Try to decode a tracking URL to extract the embedded destination URL
+ * Common tracking formats: base64-encoded JSON with "u" field, query param "url", etc.
+ */
+function tryDecodeTrackingUrl(url: string): string | null {
+  try {
+    const urlObj = new URL(url)
+    
+    // Check for common tracking URL query parameters
+    const urlParam = urlObj.searchParams.get("url") || urlObj.searchParams.get("u") || urlObj.searchParams.get("target")
+    if (urlParam) {
+      return urlParam
+    }
+    
+    // Try to decode base64-encoded path segments (common in tracking links)
+    const pathSegments = urlObj.pathname.split("/").filter(Boolean)
+    for (const segment of pathSegments) {
+      try {
+        // Try base64 decoding
+        const decoded = Buffer.from(segment, "base64").toString("utf-8")
+        
+        // Check if it's JSON
+        try {
+          const json = JSON.parse(decoded)
+          if (json.u) return json.u // Common field name for destination URL
+          if (json.url) return json.url
+          if (json.target) return json.target
+        } catch {
+          // Not JSON, check if it's a raw URL
+          if (decoded.startsWith("http")) {
+            return decoded
+          }
+        }
+      } catch {
+        // Not base64 or failed to decode
+      }
+    }
+  } catch {
+    // Invalid URL
+  }
+  
+  return null
+}
+
+/**
  * Extract WinRed identifiers from CTA links
  */
 export function extractWinRedIdentifiers(ctaLinks: any): Set<string> {
@@ -759,9 +803,10 @@ export function extractWinRedIdentifiers(ctaLinks: any): Set<string> {
   const links = Array.isArray(ctaLinks) ? ctaLinks : []
 
   for (const link of links) {
-    const url = typeof link === "string" ? link : link.finalUrl || link.url
+    let url = typeof link === "string" ? link : link.finalUrl || link.url
     if (!url) continue
 
+    // Try the URL directly first
     try {
       const urlObj = new URL(url)
       if (urlObj.hostname.includes("winred.com")) {
@@ -769,10 +814,30 @@ export function extractWinRedIdentifiers(ctaLinks: any): Set<string> {
         if (pathParts.length > 0 && pathParts[0]) {
           const identifier = pathParts[0].toLowerCase()
           identifiers.add(identifier)
+          continue
         }
       }
     } catch {
       // Invalid URL, skip
+    }
+    
+    // If finalUrl is undefined, try decoding the tracking URL
+    if ((typeof link !== "string" && !link.finalUrl) || url.includes("trk.") || url.includes("tracking") || url.includes("click.")) {
+      const decodedUrl = tryDecodeTrackingUrl(url)
+      if (decodedUrl) {
+        try {
+          const urlObj = new URL(decodedUrl)
+          if (urlObj.hostname.includes("winred.com")) {
+            const pathParts = urlObj.pathname.split("/").filter(Boolean)
+            if (pathParts.length > 0 && pathParts[0]) {
+              const identifier = pathParts[0].toLowerCase()
+              identifiers.add(identifier)
+            }
+          }
+        } catch {
+          // Invalid decoded URL, skip
+        }
+      }
     }
   }
 
@@ -789,9 +854,10 @@ export function extractAnedotIdentifiers(ctaLinks: any): Set<string> {
   const links = Array.isArray(ctaLinks) ? ctaLinks : []
 
   for (const link of links) {
-    const url = typeof link === "string" ? link : link.finalUrl || link.url
+    let url = typeof link === "string" ? link : link.finalUrl || link.url
     if (!url) continue
 
+    // Try the URL directly first
     try {
       const urlObj = new URL(url)
       if (urlObj.hostname.includes("anedot.com")) {
@@ -799,10 +865,30 @@ export function extractAnedotIdentifiers(ctaLinks: any): Set<string> {
         if (pathParts.length > 0 && pathParts[0]) {
           const identifier = pathParts[0].toLowerCase()
           identifiers.add(identifier)
+          continue
         }
       }
     } catch {
       // Invalid URL, skip
+    }
+    
+    // If finalUrl is undefined, try decoding the tracking URL
+    if ((typeof link !== "string" && !link.finalUrl) || url.includes("trk.") || url.includes("tracking") || url.includes("click.")) {
+      const decodedUrl = tryDecodeTrackingUrl(url)
+      if (decodedUrl) {
+        try {
+          const urlObj = new URL(decodedUrl)
+          if (urlObj.hostname.includes("anedot.com")) {
+            const pathParts = urlObj.pathname.split("/").filter(Boolean)
+            if (pathParts.length > 0 && pathParts[0]) {
+              const identifier = pathParts[0].toLowerCase()
+              identifiers.add(identifier)
+            }
+          }
+        } catch {
+          // Invalid decoded URL, skip
+        }
+      }
     }
   }
 
@@ -819,9 +905,10 @@ export function extractPSQIdentifiers(ctaLinks: any): Set<string> {
   const links = Array.isArray(ctaLinks) ? ctaLinks : []
 
   for (const link of links) {
-    const url = typeof link === "string" ? link : link.finalUrl || link.url
+    let url = typeof link === "string" ? link : link.finalUrl || link.url
     if (!url) continue
 
+    // Try the URL directly first
     try {
       const urlObj = new URL(url)
       if (urlObj.hostname.includes("psqimpact.com")) {
@@ -830,10 +917,31 @@ export function extractPSQIdentifiers(ctaLinks: any): Set<string> {
           const identifier = pathParts[1]
           identifiers.add(identifier)
           console.log(`[Data Broker] Extracted PSQ identifier: ${identifier}`)
+          continue
         }
       }
     } catch {
       // Invalid URL, skip
+    }
+    
+    // If finalUrl is undefined, try decoding the tracking URL
+    if ((typeof link !== "string" && !link.finalUrl) || url.includes("trk.") || url.includes("tracking") || url.includes("click.")) {
+      const decodedUrl = tryDecodeTrackingUrl(url)
+      if (decodedUrl) {
+        try {
+          const urlObj = new URL(decodedUrl)
+          if (urlObj.hostname.includes("psqimpact.com")) {
+            const pathParts = urlObj.pathname.split("/").filter(Boolean)
+            if (pathParts.length >= 2 && pathParts[0] === "donate") {
+              const identifier = pathParts[1]
+              identifiers.add(identifier)
+              console.log(`[Data Broker] Extracted PSQ identifier from tracking URL: ${identifier}`)
+            }
+          }
+        } catch {
+          // Invalid decoded URL, skip
+        }
+      }
     }
   }
 
@@ -850,9 +958,10 @@ export function extractNGPVANIdentifiers(ctaLinks: any): Set<string> {
   const links = Array.isArray(ctaLinks) ? ctaLinks : []
 
   for (const link of links) {
-    const url = typeof link === "string" ? link : link.finalUrl || link.url
+    let url = typeof link === "string" ? link : link.finalUrl || link.url
     if (!url) continue
 
+    // Try the URL directly first
     try {
       const urlObj = new URL(url)
       if (urlObj.hostname.includes("ngpvan.com")) {
@@ -860,10 +969,30 @@ export function extractNGPVANIdentifiers(ctaLinks: any): Set<string> {
         if (pathParts.length > 0 && pathParts[0]) {
           const identifier = pathParts[0].toLowerCase()
           identifiers.add(identifier)
+          continue
         }
       }
     } catch {
       // Invalid URL, skip
+    }
+    
+    // If finalUrl is undefined, try decoding the tracking URL
+    if ((typeof link !== "string" && !link.finalUrl) || url.includes("trk.") || url.includes("tracking") || url.includes("click.")) {
+      const decodedUrl = tryDecodeTrackingUrl(url)
+      if (decodedUrl) {
+        try {
+          const urlObj = new URL(decodedUrl)
+          if (urlObj.hostname.includes("ngpvan.com")) {
+            const pathParts = urlObj.pathname.split("/").filter(Boolean)
+            if (pathParts.length > 0 && pathParts[0]) {
+              const identifier = pathParts[0].toLowerCase()
+              identifiers.add(identifier)
+            }
+          }
+        } catch {
+          // Invalid decoded URL, skip
+        }
+      }
     }
   }
 

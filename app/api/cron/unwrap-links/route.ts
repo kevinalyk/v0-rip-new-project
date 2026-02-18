@@ -323,6 +323,7 @@ export async function GET(request: Request) {
     // Process Email Campaigns CTA Links (limit to 100 per run)
     let emailCampaigns = []
     try {
+      console.log("[v0] Fetching email campaigns with ctaLinks...")
       emailCampaigns = await prisma.competitiveInsightCampaign.findMany({
         where: {
           ctaLinks: {
@@ -334,6 +335,7 @@ export async function GET(request: Request) {
           createdAt: "desc",
         },
       })
+      console.log(`[v0] Found ${emailCampaigns.length} email campaigns with ctaLinks`)
     } catch (error: any) {
       console.error("Error fetching email campaigns:", error.message)
       
@@ -373,20 +375,24 @@ export async function GET(request: Request) {
       }
     }
 
+    console.log(`[v0] Processing ${emailCampaigns.length} email campaigns...`)
     for (const campaign of emailCampaigns) {
       try {
         const ctaLinks = campaign.ctaLinks as any[]
         if (!Array.isArray(ctaLinks) || ctaLinks.length === 0) {
+          console.log(`[v0] Campaign ${campaign.id}: No valid ctaLinks array`)
           stats.emailCampaigns.skipped++
           continue
         }
 
+        console.log(`[v0] Campaign ${campaign.id}: Found ${ctaLinks.length} CTA links`)
         let updated = false
         const updatedCtaLinks = []
 
         for (const link of ctaLinks) {
           if (link.finalUrl || link.finalURL) {
             // Already has finalUrl/finalURL, skip
+            console.log(`[v0] Link already unwrapped: ${link.url}`)
             updatedCtaLinks.push(link)
             continue
           }
@@ -432,6 +438,7 @@ export async function GET(request: Request) {
     // Process SMS Messages CTA Links (limit to 100 per run)
     let smsMessages = []
     try {
+      console.log("[v0] Fetching SMS messages with ctaLinks...")
       smsMessages = await prisma.smsQueue.findMany({
         where: {
           ctaLinks: {
@@ -443,6 +450,7 @@ export async function GET(request: Request) {
           createdAt: "desc",
         },
       })
+      console.log(`[v0] Found ${smsMessages.length} SMS messages with ctaLinks`)
     } catch (error: any) {
       console.error("Error fetching SMS messages:", error.message)
       
@@ -532,6 +540,7 @@ export async function GET(request: Request) {
       }
     }
 
+    console.log("[v0] Unwrap links cron job completed:", JSON.stringify(stats, null, 2))
     return NextResponse.json({
       success: true,
       stats,

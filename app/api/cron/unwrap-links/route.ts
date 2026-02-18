@@ -405,7 +405,7 @@ export async function GET(request: Request) {
           if (link.finalUrl || link.finalURL) {
             // Already has finalUrl/finalURL, skip
             const finalUrl = link.finalURL || link.finalUrl
-            console.log(`[v0] Link already unwrapped: ${link.url} -> ${finalUrl}`)
+            console.log(`[v0] Link already unwrapped: ${link.url} -> Final: ${finalUrl}`)
             updatedCtaLinks.push(link)
             continue
           }

@@ -420,7 +420,7 @@ export async function GET(request: Request) {
 
             updated = true
             stats.emailCampaigns.succeeded++
-            console.log(`[v0] Unwrap Links Cron: SUCCESS - ${link.url} → ${finalURL}`)
+            console.log(`[v0] Unwrap Links Cron: Email Campaign ID ${campaign.id} - SUCCESS - ${link.url} → ${finalURL}`)
 
             // Small delay to avoid rate limiting
             await sleep(100)
@@ -428,7 +428,7 @@ export async function GET(request: Request) {
             // Failed to unwrap, keep original
             updatedCtaLinks.push(link)
             stats.emailCampaigns.failed++
-            console.log(`[v0] Unwrap Links Cron: FAILED - ${link.url} (${error instanceof Error ? error.message : 'Unknown error'})`)
+            console.log(`[v0] Unwrap Links Cron: Email Campaign ID ${campaign.id} - FAILED - ${link.url} (${error instanceof Error ? error.message : 'Unknown error'})`)
           }
         }
 
@@ -540,7 +540,7 @@ export async function GET(request: Request) {
 
             updated = true
             stats.smsMessages.succeeded++
-            console.log(`[v0] Unwrap Links Cron: SUCCESS - ${link.url} → ${finalURL}`)
+            console.log(`[v0] Unwrap Links Cron: SMS ID ${sms.id} - SUCCESS - ${link.url} → ${finalURL}`)
 
             // Small delay to avoid rate limiting
             await sleep(100)
@@ -548,7 +548,7 @@ export async function GET(request: Request) {
             // Failed to unwrap, keep original
             updatedCtaLinks.push(link)
             stats.smsMessages.failed++
-            console.log(`[v0] Unwrap Links Cron: FAILED - ${link.url} (${error instanceof Error ? error.message : 'Unknown error'})`)
+            console.log(`[v0] Unwrap Links Cron: SMS ID ${sms.id} - FAILED - ${link.url} (${error instanceof Error ? error.message : 'Unknown error'})`)
           }
         }
 

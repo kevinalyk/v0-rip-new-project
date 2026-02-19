@@ -134,17 +134,27 @@ function cleanEmailPreview(preview: string): string {
   // Remove CSS blocks and media queries (greedy match for anything between { })
   cleaned = cleaned.replace(/\{[^}]*\}/g, " ")
   
+  // Remove CSS pseudo-classes like :hover, :active, :visited
+  cleaned = cleaned.replace(/:[a-z-]+/g, " ")
+  
   // Remove CSS selectors and class names (starting with . or #)
   cleaned = cleaned.replace(/[.#][a-zA-Z0-9_-]+/g, " ")
+  
+  // Remove CSS selector lists (p, div, span, body, a, etc.)
+  cleaned = cleaned.replace(/\b(p|div|span|body|a|td|tr|table|img|h[1-6])\s*,/gi, " ")
+  cleaned = cleaned.replace(/\b(p|div|span|body|a|td|tr|table|img|h[1-6])\s+\{/gi, " ")
   
   // Remove @media queries and @import statements
   cleaned = cleaned.replace(/@[a-z-]+[^;{]*[;{]/gi, " ")
   
-  // Remove CSS property-like patterns (word: value;)
-  cleaned = cleaned.replace(/[a-z-]+:\s*[^;]+;/gi, " ")
+  // Remove CSS property-like patterns (word: value; or word: value)
+  cleaned = cleaned.replace(/[a-z-]+\s*:\s*[^;]+[;,]/gi, " ")
   
   // Remove common CSS/HTML patterns
-  cleaned = cleaned.replace(/ReadMsgBody|ExternalClass|mso-|webkit-|interpolation-mode/gi, " ")
+  cleaned = cleaned.replace(/ReadMsgBody|ExternalClass|mso-|webkit-|interpolation-mode|text-decoration/gi, " ")
+  
+  // Remove any remaining curly braces or semicolons
+  cleaned = cleaned.replace(/[{};]/g, " ")
   
   // Remove CSS comments
   cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, " ")

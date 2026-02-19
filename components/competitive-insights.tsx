@@ -128,20 +128,26 @@ const US_STATES = [
 function cleanEmailPreview(preview: string): string {
   if (!preview) return ""
   
+  // Detect CSS selector patterns like ", p, span, font, td, div" (comma-separated element names)
+  // This is the most common bad pattern from style blocks
+  if (/^[\s,]*[a-z]+(\s*,\s*[a-z]+)+/i.test(preview)) {
+    return "" // This is CSS selector list, not content
+  }
+  
   // Common HTML/CSS element and property keywords that indicate this is code, not content
   const codeKeywords = [
     'div', 'span', 'body', 'html', 'font', 'table', 'td', 'tr', 'tab',
-    'img', 'header', 'footer', 'nav', 'section', 'article',
-    'margin', 'padding', 'border', 'width', 'height', 'display',
+    'img', 'header', 'footer', 'nav', 'section', 'article', 'background-color',
+    'margin', 'padding', 'border', 'width', 'height', 'display', 'var',
     'position', 'top', 'left', 'right', 'bottom', 'float',
     'color', 'background', 'text-align', 'font-size', 'line-height'
   ]
   
   // Check if preview is mostly code keywords (early detection)
-  const words = preview.toLowerCase().split(/[\s,;]+/).filter(w => w.length > 1)
+  const words = preview.toLowerCase().split(/[\s,;:()]+/).filter(w => w.length > 1)
   const codeWordCount = words.filter(word => codeKeywords.includes(word)).length
-  if (words.length > 0 && codeWordCount / words.length > 0.4) {
-    // More than 40% of words are code keywords, this is likely CSS/HTML
+  if (words.length > 0 && codeWordCount / words.length > 0.35) {
+    // More than 35% of words are code keywords, this is likely CSS/HTML
     return ""
   }
   
@@ -164,10 +170,10 @@ function cleanEmailPreview(preview: string): string {
   cleaned = cleaned.replace(/[a-z-]+\s*:\s*[^;]+;/gi, " ")
   
   // Remove common CSS patterns and keywords
-  cleaned = cleaned.replace(/ReadMsgBody|ExternalClass|mso-|webkit-|interpolation-mode|text-decoration/gi, " ")
+  cleaned = cleaned.replace(/ReadMsgBody|ExternalClass|mso-|webkit-|interpolation-mode|text-decoration|var\(--/gi, " ")
   
-  // Remove curly braces, semicolons, and other CSS punctuation
-  cleaned = cleaned.replace(/[{};]/g, " ")
+  // Remove curly braces, semicolons, parentheses and other CSS punctuation
+  cleaned = cleaned.replace(/[{};()]/g, " ")
   
   // Remove CSS comments
   cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, " ")
@@ -193,7 +199,7 @@ function cleanEmailPreview(preview: string): string {
   
   const finalWords = cleaned.toLowerCase().split(/\s+/)
   const finalCodeCount = finalWords.filter(word => codeKeywords.includes(word)).length
-  if (finalWords.length > 0 && finalCodeCount / finalWords.length > 0.3) {
+  if (finalWords.length > 0 && finalCodeCount / finalWords.length > 0.25) {
     // Still too many code keywords after cleaning
     return ""
   }

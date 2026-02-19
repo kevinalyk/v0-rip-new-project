@@ -2015,8 +2015,9 @@ export function CompetitiveInsights({
                           {selectedCampaign.ctaLinks.map((link, idx) => {
                             const url = typeof link === "string" ? link : link.url
                             const finalUrl = typeof link === "string" ? null : link.finalUrl
+                            const strippedFinalURL = typeof link === "string" ? null : link.strippedFinalURL
                             const type = typeof link === "string" ? null : link.type
-                            const displayUrl = finalUrl || url // Show final URL if available
+                            const displayUrl = strippedFinalURL || finalUrl || url // Show stripped URL first, then final URL, then original
 
                             return (
                               <div key={idx} className="rounded-lg border bg-muted/20 p-3">

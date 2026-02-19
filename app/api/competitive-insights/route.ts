@@ -412,17 +412,24 @@ export async function GET(request: NextRequest) {
       allInsights = allInsights.filter((insight) => {
         const ctaLinks = insight.ctaLinks || []
         const hasMatchingLink = ctaLinks.some((link: any) => {
-          let urlToCheck = ""
+          let urlsToCheck: string[] = []
+          
           if (typeof link === "string") {
-            urlToCheck = link
-          } else if (link.finalUrl) {
-            urlToCheck = link.finalUrl
-          } else if (link.url) {
-            urlToCheck = link.url
+            urlsToCheck = [link]
+          } else {
+            // Check all available URL fields
+            if (link.strippedFinalURL) urlsToCheck.push(link.strippedFinalURL)
+            if (link.finalUrl || link.finalURL) urlsToCheck.push(link.finalUrl || link.finalURL)
+            if (link.url) urlsToCheck.push(link.url)
           }
-          const matches = domains.some((domain) => urlToCheck.toLowerCase().includes(domain))
+          
+          // Check if any of the URLs match the platform domains
+          const matches = urlsToCheck.some(url => 
+            domains.some((domain) => url.toLowerCase().includes(domain))
+          )
+          
           if (matches) {
-            console.log("[v0] Found matching link:", urlToCheck, "for platform:", donationPlatform)
+            console.log("[v0] Found matching link:", urlsToCheck, "for platform:", donationPlatform)
           }
           return matches
         })

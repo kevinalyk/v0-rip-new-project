@@ -1307,8 +1307,25 @@ export async function processCompetitiveInsights(
 
     let emailPreview = ""
     if (sanitizedEmailContent) {
-      let textContent = sanitizedEmailContent.replace(/<[^>]*>/g, " ")
+      // Remove <style> and <script> blocks entirely before stripping HTML tags
+      let textContent = sanitizedEmailContent
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
+        .replace(/<[^>]*>/g, " ")
+      
+      // Decode HTML entities
+      textContent = textContent
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+      
+      // Clean up whitespace
       textContent = textContent.replace(/\s+/g, " ").trim()
+      
+      // Take first 300 characters of actual content
       emailPreview = textContent.substring(0, 300)
       if (textContent.length > 300) {
         emailPreview += "..."

@@ -131,6 +131,24 @@ function cleanEmailPreview(preview: string): string {
   // Remove HTML tags
   let cleaned = preview.replace(/<[^>]*>/g, " ")
   
+  // Remove CSS blocks and media queries (greedy match for anything between { })
+  cleaned = cleaned.replace(/\{[^}]*\}/g, " ")
+  
+  // Remove CSS selectors and class names (starting with . or #)
+  cleaned = cleaned.replace(/[.#][a-zA-Z0-9_-]+/g, " ")
+  
+  // Remove @media queries and @import statements
+  cleaned = cleaned.replace(/@[a-z-]+[^;{]*[;{]/gi, " ")
+  
+  // Remove CSS property-like patterns (word: value;)
+  cleaned = cleaned.replace(/[a-z-]+:\s*[^;]+;/gi, " ")
+  
+  // Remove common CSS/HTML patterns
+  cleaned = cleaned.replace(/ReadMsgBody|ExternalClass|mso-|webkit-|interpolation-mode/gi, " ")
+  
+  // Remove CSS comments
+  cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, " ")
+  
   // Decode HTML entities
   cleaned = cleaned
     .replace(/&nbsp;/g, " ")
@@ -142,11 +160,13 @@ function cleanEmailPreview(preview: string): string {
     .replace(/&ldquo;/g, '"')
     .replace(/&rdquo;/g, '"')
   
-  // Remove CSS and style blocks
-  cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, " ")
+  // Remove extra whitespace and punctuation artifacts
+  cleaned = cleaned.replace(/\s+/g, " ").replace(/\s+([.,!?])/g, "$1").trim()
   
-  // Remove extra whitespace
-  cleaned = cleaned.replace(/\s+/g, " ").trim()
+  // If the result is too short or looks like code, return empty
+  if (cleaned.length < 10 || /^[^a-zA-Z]*$/.test(cleaned)) {
+    return ""
+  }
   
   // Limit to 100 characters
   if (cleaned.length > 100) {

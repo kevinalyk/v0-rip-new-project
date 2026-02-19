@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     }
 
     const search = searchParams.get("search") || undefined
-    const sender = searchParams.get("sender") || undefined
+    const senders = searchParams.getAll("sender").filter(s => s) || []
     const party = searchParams.get("party") || undefined
     const state = searchParams.get("state") || undefined
     const messageType = searchParams.get("messageType") || undefined
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 
     console.log("[v0] API params:", {
       search,
-      sender,
+      senders,
       party,
       state,
       messageType,
@@ -153,9 +153,12 @@ export async function GET(request: NextRequest) {
       ]
     }
 
-    if (sender && sender !== "all") {
-      emailWhere.OR = [{ entity: { name: sender } }, { senderName: sender }]
-    }
+  if (senders.length > 0) {
+    emailWhere.OR = senders.flatMap(sender => [
+      { entity: { name: sender } },
+      { senderName: sender }
+    ])
+  }
 
     if (party && party !== "all") {
       emailWhere.entity = {
@@ -192,9 +195,12 @@ export async function GET(request: NextRequest) {
       ]
     }
 
-    if (sender && sender !== "all") {
-      smsWhere.OR = [{ entity: { name: sender } }, { phoneNumber: sender }]
-    }
+  if (senders.length > 0) {
+    smsWhere.OR = senders.flatMap(sender => [
+      { entity: { name: sender } },
+      { phoneNumber: sender }
+    ])
+  }
 
     if (party && party !== "all") {
       smsWhere.entity = {

@@ -122,8 +122,40 @@ const US_STATES = [
   "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
   "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
   "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
-]
+  ]
 
+// Helper function to clean email preview text
+function cleanEmailPreview(preview: string): string {
+  if (!preview) return ""
+  
+  // Remove HTML tags
+  let cleaned = preview.replace(/<[^>]*>/g, " ")
+  
+  // Decode HTML entities
+  cleaned = cleaned
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&ldquo;/g, '"')
+    .replace(/&rdquo;/g, '"')
+  
+  // Remove CSS and style blocks
+  cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, " ")
+  
+  // Remove extra whitespace
+  cleaned = cleaned.replace(/\s+/g, " ").trim()
+  
+  // Limit to 100 characters
+  if (cleaned.length > 100) {
+    cleaned = cleaned.substring(0, 100) + "..."
+  }
+  
+  return cleaned
+}
+  
 export function CompetitiveInsights({
   clientSlug,
   defaultView = "emails",
@@ -1528,7 +1560,7 @@ export function CompetitiveInsights({
                       <div className="text-sm font-medium truncate max-w-md">{campaign.subject}</div>
                       {campaign.emailPreview && (
                         <div className="text-xs text-muted-foreground truncate max-w-md mt-1">
-                          {campaign.emailPreview}
+                          {cleanEmailPreview(campaign.emailPreview)}
                         </div>
                       )}
                     </div>

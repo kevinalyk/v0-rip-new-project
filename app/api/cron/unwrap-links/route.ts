@@ -87,8 +87,9 @@ async function resolveRedirects(url: string): Promise<string> {
           const nextUrl = new URL(location, currentUrl).toString()
           currentUrl = nextUrl
           redirectCount++
-        } else if (response.status === 200) {
+        } else if (response.status === 200 || response.status === 404 || (currentUrl.includes("klclick") || currentUrl.includes("ctrk."))) {
           // Fetch HTML body to check for JavaScript or meta redirects
+          // Also fetch for 404 or Klaviyo links since they may have redirects in HTML
           const getResponse = await customFetch(currentUrl, {
             method: "GET",
             timeout: 10000,
@@ -101,6 +102,33 @@ async function resolveRedirects(url: string): Promise<string> {
           })
 
           const html = getResponse.body || ""
+
+          // Special handling for Klaviyo tracking links (ctrk.klclick1.com, klclick.com, etc.)
+          if (currentUrl.includes("klclick") || currentUrl.includes("ctrk.")) {
+            // Klaviyo tracking links often have the destination URL encoded in query parameters
+            const klaviyoPatterns = [
+              /redirect_url=([^&"']+)/i,
+              /url=([^&"']+)/i,
+              /target=([^&"']+)/i,
+              /destination=([^&"']+)/i,
+              /href=["']([^"']+)["']/i,
+              /window\.location\s*=\s*["']([^"']+)["']/i,
+            ]
+
+            for (const pattern of klaviyoPatterns) {
+              const match = html.match(pattern)
+              if (match && match[1]) {
+                try {
+                  const decodedUrl = decodeURIComponent(match[1])
+                  if (decodedUrl.startsWith("http")) {
+                    currentUrl = decodedUrl
+                    redirectCount++
+                    continue
+                  }
+                } catch {}
+              }
+            }
+          }
 
           // Special handling for HubSpot links - look for their specific redirect pattern
           if (currentUrl.includes("hubspotlinks.com")) {

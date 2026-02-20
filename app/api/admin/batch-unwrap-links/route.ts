@@ -308,6 +308,33 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
 
           const html = usedCustomFetchForGet ? (getResponse.body || "") : await getResponse.text()
 
+          // Special handling for Klaviyo tracking links (ctrk.klclick1.com, klclick.com, etc.)
+          if (currentUrl.includes("klclick") || currentUrl.includes("ctrk.")) {
+            // Klaviyo tracking links often have the destination URL encoded in query parameters
+            const klaviyoPatterns = [
+              /redirect_url=([^&"']+)/i,
+              /url=([^&"']+)/i,
+              /target=([^&"']+)/i,
+              /destination=([^&"']+)/i,
+              /href=["']([^"']+)["']/i,
+              /window\.location\s*=\s*["']([^"']+)["']/i,
+            ]
+
+            for (const pattern of klaviyoPatterns) {
+              const match = html.match(pattern)
+              if (match && match[1]) {
+                try {
+                  const decodedUrl = decodeURIComponent(match[1])
+                  if (decodedUrl.startsWith("http")) {
+                    currentUrl = decodedUrl
+                    redirectCount++
+                    continue
+                  }
+                } catch {}
+              }
+            }
+          }
+
           // Check meta/JS redirects same as above
           const metaPatterns = [
             /<meta[^>]*http-equiv=["']?refresh["']?[^>]*content=["']?\d+(?:\.\d+)?;\s*url=([^"'>]+)["']?/i,

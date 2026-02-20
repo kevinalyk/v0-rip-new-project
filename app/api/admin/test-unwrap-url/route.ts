@@ -170,6 +170,46 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
           console.log("[v0] Checking HTML for redirects. HTML length:", html.length)
           console.log("[v0] HTML preview (first 1000 chars):", htmlSnippet)
           
+          // Special handling for Klaviyo tracking links (ctrk.klclick1.com, klclick.com, etc.)
+          if (currentUrl.includes("klclick") || currentUrl.includes("ctrk.")) {
+            console.log("[v0] Klaviyo tracking link detected - checking for Klaviyo-specific patterns")
+            
+            // Klaviyo tracking links often have the destination URL encoded in query parameters
+            const klaviyoPatterns = [
+              /redirect_url=([^&"']+)/i,
+              /url=([^&"']+)/i,
+              /target=([^&"']+)/i,
+              /destination=([^&"']+)/i,
+              /href=["']([^"']+)["']/i,
+              /window\.location\s*=\s*["']([^"']+)["']/i,
+            ]
+
+            for (const pattern of klaviyoPatterns) {
+              const match = html.match(pattern)
+              if (match && match[1]) {
+                try {
+                  const decodedUrl = decodeURIComponent(match[1])
+                  if (decodedUrl.startsWith("http")) {
+                    console.log("[v0] Klaviyo redirect found:", decodedUrl)
+                    steps.push({
+                      step: redirectCount + 1,
+                      url: currentUrl,
+                      status: response.status,
+                      redirectType: "Klaviyo tracking redirect",
+                      timing,
+                      htmlSnippet,
+                    })
+                    currentUrl = decodedUrl
+                    redirectCount++
+                    continue
+                  }
+                } catch {}
+              }
+            }
+            
+            console.log("[v0] No Klaviyo redirect pattern found")
+          }
+          
           // Special handling for HubSpot links - look for their specific redirect pattern
           if (currentUrl.includes('hubspotlinks.com')) {
             console.log("[v0] HubSpot link detected - checking for HubSpot-specific patterns")

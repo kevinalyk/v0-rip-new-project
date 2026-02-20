@@ -87,8 +87,9 @@ async function resolveRedirects(url: string): Promise<string> {
           const nextUrl = new URL(location, currentUrl).toString()
           currentUrl = nextUrl
           redirectCount++
-        } else if (response.status === 200) {
+        } else if (response.status === 200 || response.status === 404 || (currentUrl.includes("klclick") || currentUrl.includes("ctrk."))) {
           // Fetch HTML body to check for JavaScript or meta redirects
+          // Also fetch for 404 or Klaviyo links since they may have redirects in HTML
           const getResponse = await customFetch(currentUrl, {
             method: "GET",
             timeout: 10000,

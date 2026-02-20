@@ -238,8 +238,8 @@ async function resolveRedirectsWithSteps(url: string): Promise<{
 
           // No redirect found - final destination
           return { finalUrl: currentUrl }
-        } else if (response.status === 204 || response.status === 403 || response.status === 405) {
-          // 204 No Content, 403 Forbidden, or 405 HEAD not allowed - try GET
+        } else if (response.status === 204 || response.status === 403 || response.status === 405 || response.status === 404 || (currentUrl.includes("klclick") || currentUrl.includes("ctrk."))) {
+          // 204 No Content, 403 Forbidden, 405 HEAD not allowed, 404 Not Found, or Klaviyo links - try GET to check for HTML redirects
           let getResponse: any
           let usedCustomFetchForGet = useCustomFetch
           

@@ -1012,7 +1012,20 @@ export function CompetitiveInsights({
   const handleLoadView = (filterSettings: any) => {
   setActiveSearchQuery(filterSettings.activeSearchQuery || "")
   setSearchTerm(filterSettings.searchTerm || "")
-  setSelectedSender(filterSettings.selectedSender || [])
+  
+  // Handle backward compatibility: old views have selectedSender as string, new views as array
+  if (filterSettings.selectedSender) {
+    if (Array.isArray(filterSettings.selectedSender)) {
+      setSelectedSender(filterSettings.selectedSender)
+    } else if (typeof filterSettings.selectedSender === "string" && filterSettings.selectedSender !== "all") {
+      // Convert old string format to array format
+      setSelectedSender([filterSettings.selectedSender])
+    } else {
+      setSelectedSender([])
+    }
+  } else {
+    setSelectedSender([])
+  }
     setSelectedPartyFilter(filterSettings.selectedPartyFilter || "all")
     setSelectedMessageType(filterSettings.selectedMessageType || "all")
     setSelectedDonationPlatform(filterSettings.selectedDonationPlatform || "all")

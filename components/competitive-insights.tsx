@@ -35,6 +35,7 @@ import {
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -121,8 +122,96 @@ const US_STATES = [
   "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
   "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
   "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
-]
+  ]
 
+// Helper function to clean email preview text
+function cleanEmailPreview(preview: string): string {
+  if (!preview) return ""
+  
+  // Detect CSS selector patterns like ", p, span, font, td, div" (comma-separated element names)
+  // This is the most common bad pattern from style blocks
+  if (/^[\s,]*[a-z]+(\s*,\s*[a-z]+)+/i.test(preview)) {
+    return "" // This is CSS selector list, not content
+  }
+  
+  // Common HTML/CSS element and property keywords that indicate this is code, not content
+  const codeKeywords = [
+    'div', 'span', 'body', 'html', 'font', 'table', 'td', 'tr', 'tab',
+    'img', 'header', 'footer', 'nav', 'section', 'article', 'background-color',
+    'margin', 'padding', 'border', 'width', 'height', 'display', 'var',
+    'position', 'top', 'left', 'right', 'bottom', 'float',
+    'color', 'background', 'text-align', 'font-size', 'line-height'
+  ]
+  
+  // Check if preview is mostly code keywords (early detection)
+  const words = preview.toLowerCase().split(/[\s,;:()]+/).filter(w => w.length > 1)
+  const codeWordCount = words.filter(word => codeKeywords.includes(word)).length
+  if (words.length > 0 && codeWordCount / words.length > 0.35) {
+    // More than 35% of words are code keywords, this is likely CSS/HTML
+    return ""
+  }
+  
+  // Remove HTML tags
+  let cleaned = preview.replace(/<[^>]*>/g, " ")
+  
+  // Remove CSS blocks (anything between { })
+  cleaned = cleaned.replace(/\{[^}]*\}/g, " ")
+  
+  // Remove CSS pseudo-classes like :hover, :active
+  cleaned = cleaned.replace(/:[a-z-]+/g, " ")
+  
+  // Remove CSS selectors and class names
+  cleaned = cleaned.replace(/[.#][a-zA-Z0-9_-]+/g, " ")
+  
+  // Remove @media, @import, @font-face statements
+  cleaned = cleaned.replace(/@[a-z-]+[^;{]*[;{]/gi, " ")
+  
+  // Remove CSS property declarations (property: value;)
+  cleaned = cleaned.replace(/[a-z-]+\s*:\s*[^;]+;/gi, " ")
+  
+  // Remove common CSS patterns and keywords
+  cleaned = cleaned.replace(/ReadMsgBody|ExternalClass|mso-|webkit-|interpolation-mode|text-decoration|var\(--/gi, " ")
+  
+  // Remove curly braces, semicolons, parentheses and other CSS punctuation
+  cleaned = cleaned.replace(/[{};()]/g, " ")
+  
+  // Remove CSS comments
+  cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, " ")
+  
+  // Decode HTML entities
+  cleaned = cleaned
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&ldquo;/g, '"')
+    .replace(/&rdquo;/g, '"')
+  
+  // Clean up whitespace
+  cleaned = cleaned.replace(/\s+/g, " ").trim()
+  
+  // Final check: if result is too short, mostly punctuation, or still contains code keywords
+  if (cleaned.length < 15) {
+    return ""
+  }
+  
+  const finalWords = cleaned.toLowerCase().split(/\s+/)
+  const finalCodeCount = finalWords.filter(word => codeKeywords.includes(word)).length
+  if (finalWords.length > 0 && finalCodeCount / finalWords.length > 0.25) {
+    // Still too many code keywords after cleaning
+    return ""
+  }
+  
+  // Limit to 100 characters
+  if (cleaned.length > 100) {
+    cleaned = cleaned.substring(0, 100) + "..."
+  }
+  
+  return cleaned
+}
+  
 export function CompetitiveInsights({
   clientSlug,
   defaultView = "emails",
@@ -137,7 +226,7 @@ export function CompetitiveInsights({
   const [activeView, setActiveView] = useState<"emails" | "reporting">(defaultView)
   const [searchTerm, setSearchTerm] = useState("")
   const [activeSearchQuery, setActiveSearchQuery] = useState("")
-  const [selectedSender, setSelectedSender] = useState<string>("all")
+  const [selectedSender, setSelectedSender] = useState<string[]>([])
   const [selectedPartyFilter, setSelectedPartyFilter] = useState<string>("all") // Renamed to avoid conflict
   const [selectedStateFilter, setSelectedStateFilter] = useState<string>("all")
   const [selectedMessageType, setSelectedMessageType] = useState<string>("all")
@@ -191,7 +280,7 @@ export function CompetitiveInsights({
   const hasActiveFilters = useMemo(() => {
     return (
       activeSearchQuery !== "" ||
-      selectedSender !== "all" ||
+      selectedSender.length > 0 ||
       selectedPartyFilter !== "all" ||
       selectedMessageType !== "all" ||
       selectedDonationPlatform !== "all" ||
@@ -397,8 +486,8 @@ export function CompetitiveInsights({
       campaign.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (campaign.emailContent && campaign.emailContent.toLowerCase().includes(searchTerm.toLowerCase()))
 
-    const campaignName = campaign.entity?.name || campaign.senderName
-    const matchesSender = selectedSender === "all" || campaignName === selectedSender
+  const campaignName = campaign.entity?.name || campaign.senderName
+  const matchesSender = selectedSender.length === 0 || selectedSender.includes(campaignName)
 
     const campaignParty = campaign.entity?.party?.toLowerCase()
     const matchesParty = selectedPartyFilter === "all" || campaignParty === selectedPartyFilter.toLowerCase() // Use renamed state
@@ -468,8 +557,10 @@ export function CompetitiveInsights({
       // Build query parameters for server-side filtering
       const params = new URLSearchParams()
 
-      if (activeSearchQuery) params.append("search", activeSearchQuery)
-      if (selectedSender && selectedSender !== "all") params.append("sender", selectedSender)
+  if (activeSearchQuery) params.append("search", activeSearchQuery)
+  if (selectedSender.length > 0) {
+    selectedSender.forEach(sender => params.append("sender", sender))
+  }
       if (selectedPartyFilter && selectedPartyFilter !== "all") params.append("party", selectedPartyFilter)
       if (selectedStateFilter && selectedStateFilter !== "all") params.append("state", selectedStateFilter)
       if (selectedMessageType && selectedMessageType !== "all") params.append("messageType", selectedMessageType)
@@ -919,9 +1010,9 @@ export function CompetitiveInsights({
   }
 
   const handleLoadView = (filterSettings: any) => {
-    setActiveSearchQuery(filterSettings.activeSearchQuery || "")
-    setSearchTerm(filterSettings.searchTerm || "")
-    setSelectedSender(filterSettings.selectedSender || "all")
+  setActiveSearchQuery(filterSettings.activeSearchQuery || "")
+  setSearchTerm(filterSettings.searchTerm || "")
+  setSelectedSender(filterSettings.selectedSender || [])
     setSelectedPartyFilter(filterSettings.selectedPartyFilter || "all")
     setSelectedMessageType(filterSettings.selectedMessageType || "all")
     setSelectedDonationPlatform(filterSettings.selectedDonationPlatform || "all")
@@ -1048,25 +1139,20 @@ export function CompetitiveInsights({
               <div
                 className={`flex flex-col md:flex-row gap-4 ${subscriptionPlan === "free" && !hasAdminAccess ? "blur-sm pointer-events-none" : ""}`}
               >
-                <Select
-                  value={selectedSender}
-                  onValueChange={setSelectedSender}
-                  disabled={shouldShowPaywall || shouldShowPreview}
-                  onOpenChange={(open) => {
-                    if (open) {
-                      setSenderSearchTerm("")
-                      setTimeout(() => {
-                        senderSearchInputRef.current?.focus() // Use the declared ref
-                      }, 0)
-                    } else {
-                      setSenderSearchTerm("")
-                    }
-                  }}
-                >
-                  <SelectTrigger className="w-full md:w-[200px]">
-                    <SelectValue placeholder="Filter by entity" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[300px] overflow-hidden">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full md:w-[200px] justify-between"
+                      disabled={shouldShowPaywall || shouldShowPreview}
+                    >
+                      {selectedSender.length === 0
+                        ? "Filter by entity"
+                        : `${selectedSender.length} selected`}
+                      <ChevronRight className="ml-2 h-4 w-4 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0" align="start">
                     <div className="sticky top-0 z-50 bg-background p-2 border-b">
                       <Input
                         ref={senderSearchInputRef}
@@ -1074,39 +1160,54 @@ export function CompetitiveInsights({
                         value={senderSearchTerm}
                         onChange={(e) => setSenderSearchTerm(e.target.value)}
                         className="h-8"
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => {
-                          e.stopPropagation()
-                        }}
-                        autoFocus
                       />
                     </div>
-                    <div className="max-h-[240px] overflow-y-auto">
-                      <SelectItem value="all">All Entities</SelectItem>
+                    <div className="max-h-[240px] overflow-y-auto p-2">
+                      {selectedSender.length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full mb-2 text-xs"
+                          onClick={() => setSelectedSender([])}
+                        >
+                          Clear all ({selectedSender.length})
+                        </Button>
+                      )}
                       {filteredSenders
                         .filter((sender) => sender && sender.trim() !== "")
                         .map((sender) => (
-                          <SelectItem key={sender} value={sender}>
-                            <div className="flex items-center gap-2 w-full">
-                              <span className="flex-1 truncate">{sender}</span>
-                              {isEntityFollowed(sender) && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs bg-amber-100 dark:bg-amber-900 border-amber-300 dark:border-amber-700"
-                                >
-                                  <Star className="h-3 w-3 mr-1" />
-                                  Following
-                                </Badge>
-                              )}
-                            </div>
-                          </SelectItem>
+                          <div
+                            key={sender}
+                            className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer"
+                            onClick={() => {
+                              setSelectedSender(prev =>
+                                prev.includes(sender)
+                                  ? prev.filter(s => s !== sender)
+                                  : [...prev, sender]
+                              )
+                            }}
+                          >
+                            <Checkbox
+                              checked={selectedSender.includes(sender)}
+                              onCheckedChange={() => {}}
+                            />
+                            <span className="flex-1 truncate text-sm">{sender}</span>
+                            {isEntityFollowed(sender) && (
+                              <Badge
+                                variant="outline"
+                                className="text-xs bg-amber-100 dark:bg-amber-900 border-amber-300 dark:border-amber-700"
+                              >
+                                <Star className="h-3 w-3" />
+                              </Badge>
+                            )}
+                          </div>
                         ))}
                       {filteredSenders.length === 0 && (
                         <div className="p-4 text-center text-sm text-muted-foreground">No entities found</div>
                       )}
                     </div>
-                  </SelectContent>
-                </Select>
+                  </PopoverContent>
+                </Popover>
 
                 <Select
                   value={selectedPartyFilter} // Use renamed state
@@ -1270,10 +1371,10 @@ export function CompetitiveInsights({
                   disabled={
                     shouldShowPaywall ||
                     shouldShowPreview ||
-                    (!searchTerm && // Check searchTerm for visual state, not debouncedSearchTerm
-                      !dateRange.from &&
-                      !dateRange.to &&
-                      selectedSender === "all" &&
+  (!searchTerm && // Check searchTerm for visual state, not debouncedSearchTerm
+  !dateRange.from &&
+  !dateRange.to &&
+  selectedSender.length === 0 &&
                       selectedPartyFilter === "all" &&
                       selectedMessageType === "all" &&
                       selectedDonationPlatform === "all") // Added platform filter to reset condition
@@ -1283,6 +1384,27 @@ export function CompetitiveInsights({
                   Reset Filters
                 </Button>
               </div>
+
+              {/* Display selected entities as badges */}
+              {selectedSender.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-4">
+                  {selectedSender.map((sender) => (
+                    <Badge
+                      key={sender}
+                      variant="secondary"
+                      className="flex items-center gap-1 px-3 py-1"
+                    >
+                      {sender}
+                      <button
+                        onClick={() => setSelectedSender(prev => prev.filter(s => s !== sender))}
+                        className="ml-1 hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
 
               {subscriptionPlan === "free" && !hasAdminAccess && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
@@ -1488,11 +1610,18 @@ export function CompetitiveInsights({
                                     )}
                                   </div>
                                 </div>
-                              </td>
-                              <td className="p-4">
-                                <div className="text-sm truncate max-w-md">{campaign.subject}</div>
-                              </td>
-                              <td className="p-4">
+                  </td>
+                  <td className="p-4">
+                    <div>
+                      <div className="text-sm font-medium truncate max-w-md">{campaign.subject}</div>
+                      {campaign.emailPreview && (
+                        <div className="text-xs text-muted-foreground truncate max-w-md mt-1">
+                          {cleanEmailPreview(campaign.emailPreview)}
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                  <td className="p-4">
                                 <div className="flex flex-col gap-1">
                                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                     <Calendar className="h-4 w-4" />
@@ -1587,7 +1716,7 @@ export function CompetitiveInsights({
                 ]}
                 clientSlug={clientSlug}
               />
-            ) : selectedSender === "all" ? ( // Check selectedSender instead of selectedEntity to match the actual dropdown state
+            ) : selectedSender.length === 0 ? ( // Check if no entities selected
               <Card>
                 <CardContent className="py-16">
                   <div className="flex flex-col items-center justify-center text-center space-y-4">

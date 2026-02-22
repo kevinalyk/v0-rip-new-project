@@ -39,9 +39,10 @@ export async function GET(request: Request) {
         where: {
           entityId: null,
           // Don't re-process manually reviewed campaigns
-          assignmentMethod: {
-            not: "reviewed",
-          },
+          OR: [
+            { assignmentMethod: null },
+            { assignmentMethod: { not: "reviewed" } },
+          ],
         },
         take: 100,
         orderBy: {
@@ -119,9 +120,10 @@ export async function GET(request: Request) {
       unassignedSms = await prisma.smsQueue.findMany({
         where: {
           entityId: null,
-          assignmentMethod: {
-            not: "reviewed",
-          },
+          OR: [
+            { assignmentMethod: null },
+            { assignmentMethod: { not: "reviewed" } },
+          ],
         },
         take: 100,
         orderBy: {

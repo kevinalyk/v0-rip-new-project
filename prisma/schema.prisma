@@ -451,7 +451,7 @@ model EntityTag {
 model CronJobState {
   id                    Int       @id @default(autoincrement())
   jobName               String    @unique
-  lastProcessedEmailId  Int?
+  lastProcessedEmailId  String?
   lastProcessedSmsId    Int?
   lastRunAt             DateTime?
   createdAt             DateTime  @default(now())

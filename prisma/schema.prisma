@@ -383,7 +383,6 @@ model SmsQueue {
   isDeleted           Boolean  @default(false) // Soft delete flag
   deletedAt           DateTime? // When it was deleted
   deletedBy           String?  // Which admin deleted it
-  linksUnwrapped      Boolean  @default(false) // Whether CTA links have been processed by unwrap cron
   createdAt          DateTime  @default(now())
   processedAt        DateTime?
 
@@ -396,7 +395,6 @@ model SmsQueue {
   @@index([shareToken])
   @@index([assignedAt])
   @@index([isDeleted])
-  @@index([linksUnwrapped])
 }
 
 model CiEntitySubscription {

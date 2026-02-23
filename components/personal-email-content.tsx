@@ -48,7 +48,7 @@ export function PersonalEmailContent({ clientSlug }: PersonalEmailContentProps) 
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
+    <div className="p-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2">Personal Email</h1>
         <p className="text-muted-foreground">
@@ -56,7 +56,7 @@ export function PersonalEmailContent({ clientSlug }: PersonalEmailContentProps) 
         </p>
       </div>
 
-      <Card className="mb-6">
+      <Card className="mb-8">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5" />

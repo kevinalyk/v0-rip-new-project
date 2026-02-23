@@ -19,6 +19,8 @@ export async function updateClientUserSeats(clientId: string) {
         subscriptionPlan: true,
         stripeSubscriptionId: true,
         stripeUserSeatsItemId: true,
+        additionalUserSeats: true,
+        userSeatsIncluded: true,
       },
     })
 
@@ -35,6 +37,14 @@ export async function updateClientUserSeats(clientId: string) {
     if (!client.stripeSubscriptionId) {
       console.log("[v0] No active Stripe subscription found")
       return { success: true, message: "No active subscription" }
+    }
+
+    // If client has manually allocated seats (additionalUserSeats is set), don't auto-bill
+    if (client.additionalUserSeats && client.additionalUserSeats > 0) {
+      console.log("[v0] Client has manually allocated seats, skipping automatic billing", {
+        additionalUserSeats: client.additionalUserSeats,
+      })
+      return { success: true, message: "Manually allocated seats - no auto-billing" }
     }
 
     const currentUserCount = await prisma.user.count({

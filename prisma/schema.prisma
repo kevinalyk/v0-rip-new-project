@@ -452,7 +452,7 @@ model CronJobState {
   id                    Int       @id @default(autoincrement())
   jobName               String    @unique
   lastProcessedEmailId  String?
-  lastProcessedSmsId    Int?
+  lastProcessedSmsId    String?
   lastRunAt             DateTime?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt

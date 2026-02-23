@@ -348,21 +348,66 @@ export async function GET(request: Request) {
       },
     }
 
-    // Process Email Campaigns CTA Links (limit to 100 per run)
+    // Get or create cursor state for this cron job
+    let cronState = await prisma.cronJobState.findUnique({
+      where: { jobName: "unwrap-links" },
+    })
+
+    if (!cronState) {
+      console.log("[v0] Unwrap Links Cron: No state found, creating initial state")
+      cronState = await prisma.cronJobState.create({
+        data: {
+          jobName: "unwrap-links",
+          lastProcessedEmailId: null,
+          lastProcessedSmsId: null,
+        },
+      })
+    }
+
+    console.log("[v0] Unwrap Links Cron: Current cursor state:", {
+      lastProcessedEmailId: cronState.lastProcessedEmailId,
+      lastProcessedSmsId: cronState.lastProcessedSmsId,
+    })
+
+    // Process Email Campaigns CTA Links (limit to 100 per run, cursor-based)
     let emailCampaigns = []
     try {
       console.log("[v0] Unwrap Links Cron: Starting - fetching email campaigns...")
+      
+      // Use cursor-based pagination to get next batch
+      const whereClause: any = {
+        ctaLinks: { not: null },
+      }
+
+      // If we have a cursor, start from there
+      if (cronState.lastProcessedEmailId) {
+        whereClause.id = { gt: cronState.lastProcessedEmailId }
+      }
+
       emailCampaigns = await prisma.competitiveInsightCampaign.findMany({
-        where: {
-          ctaLinks: {
-            not: null,
-          },
-        },
+        where: whereClause,
         take: 100,
         orderBy: {
-          createdAt: "desc",
+          id: "asc", // Changed to ascending to go through database sequentially
         },
       })
+
+      // If no campaigns found and we had a cursor, reset and try from beginning
+      if (emailCampaigns.length === 0 && cronState.lastProcessedEmailId) {
+        console.log("[v0] Unwrap Links Cron: Reached end of campaigns, resetting cursor to start over")
+        await prisma.cronJobState.update({
+          where: { jobName: "unwrap-links" },
+          data: { lastProcessedEmailId: null },
+        })
+        
+        // Fetch from beginning
+        emailCampaigns = await prisma.competitiveInsightCampaign.findMany({
+          where: { ctaLinks: { not: null } },
+          take: 100,
+          orderBy: { id: "asc" },
+        })
+      }
+
       console.log(`[v0] Unwrap Links Cron: Found ${emailCampaigns.length} email campaigns to process`)
     } catch (error: any) {
       console.error("[v0] Unwrap Links Cron: Error fetching email campaigns:", error.message)
@@ -474,21 +519,62 @@ export async function GET(request: Request) {
       }
     }
 
-    // Process SMS Messages CTA Links (limit to 100 per run)
+    // Update cursor to last processed email campaign ID
+    if (emailCampaigns.length > 0) {
+      const lastProcessedId = emailCampaigns[emailCampaigns.length - 1].id
+      await prisma.cronJobState.update({
+        where: { jobName: "unwrap-links" },
+        data: {
+          lastProcessedEmailId: lastProcessedId,
+          lastRunAt: new Date(),
+        },
+      })
+      console.log(`[v0] Unwrap Links Cron: Updated email cursor to ${lastProcessedId}`)
+    }
+
+    // Process SMS Messages CTA Links (limit to 100 per run, cursor-based)
     let smsMessages = []
     try {
       console.log("[v0] Unwrap Links Cron: Fetching SMS messages...")
+      
+      // Refresh cronState to get latest cursor
+      const latestCronState = await prisma.cronJobState.findUnique({
+        where: { jobName: "unwrap-links" },
+      })
+
+      const smsWhereClause: any = {
+        ctaLinks: { not: null },
+      }
+
+      // If we have a cursor, start from there
+      if (latestCronState?.lastProcessedSmsId) {
+        smsWhereClause.id = { gt: latestCronState.lastProcessedSmsId }
+      }
+
       smsMessages = await prisma.smsQueue.findMany({
-        where: {
-          ctaLinks: {
-            not: null,
-          },
-        },
+        where: smsWhereClause,
         take: 100,
         orderBy: {
-          createdAt: "desc",
+          id: "asc", // Changed to ascending for sequential processing
         },
       })
+
+      // If no messages found and we had a cursor, reset and try from beginning
+      if (smsMessages.length === 0 && latestCronState?.lastProcessedSmsId) {
+        console.log("[v0] Unwrap Links Cron: Reached end of SMS messages, resetting cursor to start over")
+        await prisma.cronJobState.update({
+          where: { jobName: "unwrap-links" },
+          data: { lastProcessedSmsId: null },
+        })
+        
+        // Fetch from beginning
+        smsMessages = await prisma.smsQueue.findMany({
+          where: { ctaLinks: { not: null } },
+          take: 100,
+          orderBy: { id: "asc" },
+        })
+      }
+
       console.log(`[v0] Unwrap Links Cron: Found ${smsMessages.length} SMS messages to process`)
     } catch (error: any) {
       console.error("Error fetching SMS messages:", error.message)
@@ -594,10 +680,37 @@ export async function GET(request: Request) {
       }
     }
 
+    // Update cursor to last processed SMS message ID
+    if (smsMessages.length > 0) {
+      const lastProcessedSmsId = smsMessages[smsMessages.length - 1].id
+      await prisma.cronJobState.update({
+        where: { jobName: "unwrap-links" },
+        data: {
+          lastProcessedSmsId: lastProcessedSmsId,
+          lastRunAt: new Date(),
+        },
+      })
+      console.log(`[v0] Unwrap Links Cron: Updated SMS cursor to ${lastProcessedSmsId}`)
+    }
+
+    // Get final cursor state for logging
+    const finalCronState = await prisma.cronJobState.findUnique({
+      where: { jobName: "unwrap-links" },
+    })
+
     console.log("[v0] Unwrap Links Cron: Completed - Stats:", JSON.stringify(stats, null, 2))
+    console.log("[v0] Unwrap Links Cron: Final cursor state:", {
+      lastProcessedEmailId: finalCronState?.lastProcessedEmailId,
+      lastProcessedSmsId: finalCronState?.lastProcessedSmsId,
+    })
+
     return NextResponse.json({
       success: true,
       stats,
+      cursorState: {
+        lastProcessedEmailId: finalCronState?.lastProcessedEmailId,
+        lastProcessedSmsId: finalCronState?.lastProcessedSmsId,
+      },
     })
   } catch (error) {
     return NextResponse.json(

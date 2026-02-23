@@ -450,3 +450,15 @@ model EntityTag {
   @@index([entityId])
   @@index([clientId, tagName])
 }
+
+model CronJobState {
+  id                    Int       @id @default(autoincrement())
+  jobName               String    @unique
+  lastProcessedEmailId  Int?
+  lastProcessedSmsId    Int?
+  lastRunAt             DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([jobName])
+}

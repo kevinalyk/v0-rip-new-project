@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
         "subscriptionPlan",
         "userSeatsIncluded",
         "additionalUserSeats",
+        "paidUserSeats",
         (SELECT COUNT(*) FROM "User" WHERE "clientId" = ${targetClientId}) as "currentUserCount"
       FROM "Client"
       WHERE id = ${targetClientId}
@@ -68,11 +69,19 @@ export async function POST(request: NextRequest) {
       const client = clientInfo[0]
       const currentUserCount = parseInt(client.currentUserCount)
       
-      // Default seats by plan
-      const defaultSeats = client.subscriptionPlan === "all" ? 3 : client.subscriptionPlan === "enterprise" ? 999 : 1
-      const seatsIncluded = client.userSeatsIncluded || defaultSeats
-      const additionalSeats = client.additionalUserSeats || 0
-      const totalSeatsAllowed = seatsIncluded + additionalSeats
+      // Determine total seat limit
+      let totalSeatsAllowed: number
+      
+      if (client.paidUserSeats !== null && client.paidUserSeats > 0) {
+        // Custom subscription with paidUserSeats set - use that as the limit
+        totalSeatsAllowed = client.paidUserSeats
+      } else {
+        // Standard subscription: base seats + additional seats
+        const defaultSeats = client.subscriptionPlan === "all" ? 3 : client.subscriptionPlan === "enterprise" ? 999 : 1
+        const seatsIncluded = client.userSeatsIncluded || defaultSeats
+        const additionalSeats = client.additionalUserSeats || 0
+        totalSeatsAllowed = seatsIncluded + additionalSeats
+      }
 
       if (currentUserCount >= totalSeatsAllowed) {
         return NextResponse.json(

@@ -21,6 +21,7 @@ export async function updateClientUserSeats(clientId: string) {
         stripeUserSeatsItemId: true,
         additionalUserSeats: true,
         userSeatsIncluded: true,
+        paidUserSeats: true,
       },
     })
 
@@ -39,19 +40,29 @@ export async function updateClientUserSeats(clientId: string) {
       return { success: true, message: "No active subscription" }
     }
 
-    // If client has manually allocated seats (additionalUserSeats is set), don't auto-bill
-    if (client.additionalUserSeats && client.additionalUserSeats > 0) {
-      console.log("[v0] Client has manually allocated seats, skipping automatic billing", {
-        additionalUserSeats: client.additionalUserSeats,
-      })
-      return { success: true, message: "Manually allocated seats - no auto-billing" }
-    }
-
     const currentUserCount = await prisma.user.count({
       where: { clientId: client.id },
     })
 
-    const additionalSeatsNeeded = calculateAdditionalSeatsNeeded("all", currentUserCount)
+    // If paidUserSeats is set (manual/custom subscription), only charge for seats beyond that number
+    let additionalSeatsNeeded: number
+    
+    if (client.paidUserSeats !== null && client.paidUserSeats > 0) {
+      console.log("[v0] Client has paidUserSeats set (custom subscription):", {
+        paidUserSeats: client.paidUserSeats,
+        currentUserCount,
+      })
+      
+      // Only charge if current users exceed paid seats
+      if (currentUserCount > client.paidUserSeats) {
+        additionalSeatsNeeded = currentUserCount - client.paidUserSeats
+      } else {
+        additionalSeatsNeeded = 0
+      }
+    } else {
+      // Standard calculation: charge for seats beyond base plan (3 for Pro)
+      additionalSeatsNeeded = calculateAdditionalSeatsNeeded("all", currentUserCount)
+    }
 
     console.log("[v0] User seat calculation:", {
       currentUsers: currentUserCount,

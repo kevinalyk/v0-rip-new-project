@@ -19,6 +19,9 @@ export async function updateClientUserSeats(clientId: string) {
         subscriptionPlan: true,
         stripeSubscriptionId: true,
         stripeUserSeatsItemId: true,
+        additionalUserSeats: true,
+        userSeatsIncluded: true,
+        paidUserSeats: true,
       },
     })
 
@@ -41,7 +44,25 @@ export async function updateClientUserSeats(clientId: string) {
       where: { clientId: client.id },
     })
 
-    const additionalSeatsNeeded = calculateAdditionalSeatsNeeded("all", currentUserCount)
+    // If paidUserSeats is set (manual/custom subscription), only charge for seats beyond that number
+    let additionalSeatsNeeded: number
+    
+    if (client.paidUserSeats !== null && client.paidUserSeats > 0) {
+      console.log("[v0] Client has paidUserSeats set (custom subscription):", {
+        paidUserSeats: client.paidUserSeats,
+        currentUserCount,
+      })
+      
+      // Only charge if current users exceed paid seats
+      if (currentUserCount > client.paidUserSeats) {
+        additionalSeatsNeeded = currentUserCount - client.paidUserSeats
+      } else {
+        additionalSeatsNeeded = 0
+      }
+    } else {
+      // Standard calculation: charge for seats beyond base plan (3 for Pro)
+      additionalSeatsNeeded = calculateAdditionalSeatsNeeded("all", currentUserCount)
+    }
 
     console.log("[v0] User seat calculation:", {
       currentUsers: currentUserCount,

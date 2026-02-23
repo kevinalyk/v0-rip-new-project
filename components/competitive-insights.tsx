@@ -69,6 +69,7 @@ interface CompetitiveInsightsProps {
   showPersonalBadge?: boolean // Added showPersonalBadge prop
   currentUser?: any // Added currentUser prop
   subscriptionPlan?: SubscriptionPlan | "free" // Added subscriptionPlan prop
+  hideHeader?: boolean // Hide the "Competitive Insights" title and description
 }
 
 interface Campaign {
@@ -220,6 +221,7 @@ export function CompetitiveInsights({
   showPersonalBadge = false, // Accept showPersonalBadge prop
   currentUser, // Accept currentUser prop
   subscriptionPlan = "free", // Accept subscriptionPlan prop, default to "free"
+  hideHeader = false, // Hide header by default false
 }: CompetitiveInsightsProps) {
   const router = useRouter()
   const { toast } = useToast()
@@ -1062,12 +1064,14 @@ export function CompetitiveInsights({
         />
       )}
 
-      <div className="mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Competitive Insights</h1>
-          <p className="text-muted-foreground">Track and analyze political campaigns from across the spectrum</p>
-        </div>
+  {!hideHeader && (
+    <div className="mb-6">
+      <div>
+        <h1 className="text-3xl font-bold text-foreground mb-2">Competitive Insights</h1>
+        <p className="text-muted-foreground">Track and analyze political campaigns from across the spectrum</p>
       </div>
+    </div>
+  )}
 
       {(subscriptionPlan === "free" || subscriptionPlan === "preview") && !hasAdminAccess && (
         <div

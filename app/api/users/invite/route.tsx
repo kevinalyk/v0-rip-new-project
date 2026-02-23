@@ -53,6 +53,46 @@ export async function POST(request: NextRequest) {
       targetClientId = targetClient[0].id
     }
 
+    // Check seat limits before inviting
+    const clientInfo = await sql`
+      SELECT 
+        "subscriptionPlan",
+        "userSeatsIncluded",
+        "additionalUserSeats",
+        "paidUserSeats",
+        (SELECT COUNT(*) FROM "User" WHERE "clientId" = ${targetClientId}) as "currentUserCount"
+      FROM "Client"
+      WHERE id = ${targetClientId}
+    `
+
+    if (clientInfo && clientInfo.length > 0) {
+      const client = clientInfo[0]
+      const currentUserCount = parseInt(client.currentUserCount)
+      
+      // Determine total seat limit
+      let totalSeatsAllowed: number
+      
+      if (client.paidUserSeats !== null && client.paidUserSeats > 0) {
+        // Custom subscription with paidUserSeats set - use that as the limit
+        totalSeatsAllowed = client.paidUserSeats
+      } else {
+        // Standard subscription: base seats + additional seats
+        const defaultSeats = client.subscriptionPlan === "all" ? 3 : client.subscriptionPlan === "enterprise" ? 999 : 1
+        const seatsIncluded = client.userSeatsIncluded || defaultSeats
+        const additionalSeats = client.additionalUserSeats || 0
+        totalSeatsAllowed = seatsIncluded + additionalSeats
+      }
+
+      if (currentUserCount >= totalSeatsAllowed) {
+        return NextResponse.json(
+          {
+            error: `Seat limit reached. You have ${currentUserCount} users and ${totalSeatsAllowed} seats allocated. Please contact support to add more seats.`,
+          },
+          { status: 403 }
+        )
+      }
+    }
+
     // Check if user already exists
     const existingUser = await sql`
       SELECT id FROM "User" WHERE email = ${email}

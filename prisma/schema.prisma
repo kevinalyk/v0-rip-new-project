@@ -164,6 +164,7 @@ model Client {
   additionalUserSeats    Int       @default(0) // Extra user seats purchased
   stripeUserSeatPriceId  String?   // Stripe price ID for additional user seats
   totalUsers             Int       @default(0) // Auto-updated count of users
+  paidUserSeats          Int?      // Total seats already paid for (custom/manual subscriptions only). When set, only charge for seats beyond this number.
   
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
@@ -450,8 +451,8 @@ model EntityTag {
 model CronJobState {
   id                    Int       @id @default(autoincrement())
   jobName               String    @unique
-  lastProcessedEmailId  Int?
-  lastProcessedSmsId    Int?
+  lastProcessedEmailId  String?
+  lastProcessedSmsId    String?
   lastRunAt             DateTime?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt

@@ -137,7 +137,7 @@ export function PersonalEmailContent({ clientSlug }: PersonalEmailContentProps) 
         </CardContent>
       </Card>
 
-      <CompetitiveInsights clientSlug={clientSlug} apiEndpoint="/api/ci/personal" showPersonalBadge={true} />
+      <CompetitiveInsights clientSlug={clientSlug} apiEndpoint="/api/ci/personal" showPersonalBadge={true} hideHeader={true} />
     </div>
   )
 }

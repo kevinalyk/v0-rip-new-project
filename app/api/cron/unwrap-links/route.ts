@@ -472,8 +472,8 @@ export async function GET(request: Request) {
         const updatedCtaLinks = []
 
         for (const link of ctaLinks) {
-          if (link.finalUrl || link.finalURL) {
-            // Already has finalUrl/finalURL, skip silently
+          if (link.finalUrl || link.finalURL || link.strippedFinalURL || link.strippedFinalUrl) {
+            // Already unwrapped (at ingestion or by a previous cron run), skip
             updatedCtaLinks.push(link)
             continue
           }
@@ -642,8 +642,8 @@ export async function GET(request: Request) {
         const updatedCtaLinks = []
 
         for (const link of ctaLinks) {
-          if (link.finalUrl || link.finalURL) {
-            // Already has finalUrl/finalURL, skip silently
+          if (link.finalUrl || link.finalURL || link.strippedFinalURL || link.strippedFinalUrl) {
+            // Already unwrapped (at ingestion or by a previous cron run), skip
             updatedCtaLinks.push(link)
             continue
           }

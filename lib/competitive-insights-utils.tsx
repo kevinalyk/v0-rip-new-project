@@ -886,30 +886,45 @@ export async function extractCTALinks(
   const subjectPrefix = emailSubject ? `"${emailSubject}" - ` : ""
   console.log(`[v0] ${subjectPrefix}Processing ${topLinks.length} links (${trackingLinkCount} tracking): ${linkDomains}`)
 
-  // Skip unwrapping during campaign creation to avoid timeouts
-  // The unwrap-links cron job will handle all unwrapping with proper retry logic
-  // IMPORTANT: Do NOT strip query params here - tracker URLs like rnchq.com encode
-  // the redirect destination in their path/query. Stripping them before unwrapping
-  // destroys the link. The unwrap cron will store strippedFinalURL after resolving.
-  const linksWithFinalUrls = topLinks.map((link) => {
-    // Check if this URL has already been seen (use full URL for dedup)
-    if (seenUrls.get(link.url)) {
-      return {
-        url: link.url,
-        finalUrl: undefined,
-        text: link.text,
+  // Attempt to unwrap links at ingestion time with a short timeout.
+  // If successful: store finalUrl as the unwrapped + stripped URL (ready to display).
+  // If it fails or times out: store finalUrl as undefined so the unwrap-links cron
+  // picks it up as a fallback and saves the result as strippedFinalURL.
+  // IMPORTANT: Do NOT strip the original link.url - tracker URLs encode their
+  // redirect destination in the path/query params.
+  const linksWithFinalUrls = await Promise.all(
+    topLinks.map(async (link) => {
+      // Check if URL has already been seen (use full URL for dedup)
+      if (seenUrls.get(link.url)) {
+        return { url: link.url, finalUrl: undefined, text: link.text }
       }
-    }
-    seenUrls.set(link.url, true)
+      seenUrls.set(link.url, true)
 
-    return {
-      url: link.url,
-      finalUrl: undefined, // Will be populated by unwrap-links cron job
-      text: link.text,
-    }
-  })
-  
-  console.log(`[v0] ✓ Extracted ${linksWithFinalUrls.length} links (unwrapping deferred to cron job)`)
+      try {
+        const resolved = await Promise.race([
+          resolveRedirects(link.url),
+          new Promise<string>((_, reject) =>
+            setTimeout(() => reject(new Error("timeout")), 5000)
+          ),
+        ])
+
+        // Only strip query params if the link actually resolved to a different domain
+        const originalDomain = new URL(link.url).hostname
+        const resolvedDomain = new URL(resolved).hostname
+        const didResolve = resolvedDomain !== originalDomain
+
+        const finalUrl = didResolve ? stripQueryParams(resolved) : undefined
+
+        return { url: link.url, finalUrl, text: link.text }
+      } catch {
+        // Timed out or failed — cron will handle it
+        return { url: link.url, finalUrl: undefined, text: link.text }
+      }
+    })
+  )
+
+  const resolved = linksWithFinalUrls.filter((l) => l.finalUrl).length
+  console.log(`[v0] Extracted ${linksWithFinalUrls.length} links, resolved ${resolved} at ingestion (${linksWithFinalUrls.length - resolved} deferred to cron)`)
 
   const categorizedLinks = await categorizeCtasWithAI(linksWithFinalUrls)
 

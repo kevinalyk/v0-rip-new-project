@@ -496,7 +496,6 @@ export async function GET(request: Request) {
 
             updatedCtaLinks.push({
               ...link,
-              originalUrl: originalUrl,
               finalURL: finalURL,
               strippedFinalURL: strippedFinalURL,
             })
@@ -664,7 +663,6 @@ export async function GET(request: Request) {
 
             updatedCtaLinks.push({
               ...link,
-              originalUrl: originalUrl,
               finalURL: finalURL,
               strippedFinalURL: strippedFinalURL,
             })

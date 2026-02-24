@@ -161,8 +161,9 @@ export async function findEntityForSender(
 
           const donationMatch = await findEntityByDonationIdentifier(ctaLinks, true)
           if (donationMatch) {
-            console.log(`[Data Broker] ✓ Assigned via donation identifier: ${donationMatch.assignmentMethod}`)
-            return { entityId: donationMatch.entity.id, assignmentMethod: donationMatch.assignmentMethod }
+            const method = `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot"
+            console.log(`[Data Broker] ✓ Assigned via donation identifier: ${method} (${donationMatch.matchedIdentifier})`)
+            return { entityId: donationMatch.entity.id, assignmentMethod: method }
           }
 
           console.log("[Data Broker] ✗ Sponsored - no donation identifier match, leaving for manual review")
@@ -177,7 +178,7 @@ export async function findEntityForSender(
     if (ctaLinks) {
       const donationMatch = await findEntityByDonationIdentifier(ctaLinks)
       if (donationMatch) {
-        return { entityId: donationMatch.entity.id, assignmentMethod: donationMatch.assignmentMethod }
+        return { entityId: donationMatch.entity.id, assignmentMethod: `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" }
       }
     }
 
@@ -207,7 +208,7 @@ export async function findEntityForPhone(phoneNumber: string, ctaLinks?: any): P
     if (ctaLinks) {
       const donationMatch = await findEntityByDonationIdentifier(ctaLinks)
       if (donationMatch) {
-        return { entityId: donationMatch.entity.id, assignmentMethod: donationMatch.assignmentMethod }
+        return { entityId: donationMatch.entity.id, assignmentMethod: `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" }
       }
     }
 

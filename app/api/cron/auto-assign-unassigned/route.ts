@@ -62,7 +62,6 @@ export async function GET(request: Request) {
       try {
         // Skip if no email content (can't do AI analysis)
         if (!campaign.emailContent && !campaign.emailPreview) {
-          console.log(`[v0] Auto-Assign Cron: Email Campaign ID ${campaign.id} - Skipped (no email content for AI analysis)`)
           stats.emailCampaigns.skipped++
           continue
         }
@@ -102,10 +101,6 @@ export async function GET(request: Request) {
             `[v0] Auto-Assign Cron: Email Campaign ID ${campaign.id} - ASSIGNED to Entity ${entityResult.entityId} via ${entityResult.method}`
           )
         } else {
-          // No match found - this is expected for sponsored campaigns without donation identifiers
-          console.log(
-            `[v0] Auto-Assign Cron: Email Campaign ID ${campaign.id} - No match found (${entityResult?.reason || "no donation identifiers matched"})`
-          )
           stats.emailCampaigns.skipped++
         }
       } catch (error: any) {
@@ -174,8 +169,6 @@ export async function GET(request: Request) {
             `[v0] Auto-Assign Cron: SMS ID ${sms.id} - ASSIGNED to Entity ${entityResult.entityId} via ${entityResult.assignmentMethod || "auto_phone"}`
           )
         } else {
-          // No match found
-          console.log(`[v0] Auto-Assign Cron: SMS ID ${sms.id} - No match found`)
           stats.smsMessages.skipped++
         }
       } catch (error: any) {

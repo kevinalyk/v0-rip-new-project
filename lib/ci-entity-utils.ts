@@ -148,66 +148,28 @@ export async function findEntityForSender(
     const entity = mapping?.entity
 
     if (entity && entity.type === "data_broker" && emailSubject && emailBody) {
-      console.log("[Data Broker] Detected data broker email:", {
-        sender: senderEmail,
-        senderName,
-        domain,
-        databrokerEntity: entity.name,
-        entityId: entity.id,
-        subject: emailSubject,
-        mappingType: emailMapping ? "email" : "domain",
-      })
+      console.log(`[Data Broker] ${entity.name} (${senderEmail}) - running AI analysis`)
 
       const aiAnalysis = await analyzeEmailWithAI(emailSubject, emailBody)
 
       if (aiAnalysis && aiAnalysis.confidence >= 0.7) {
         if (aiAnalysis.type === "newsletter") {
-          console.log("[Data Broker] ✓ Assigning to data broker entity (newsletter):", {
-            entityName: entity.name,
-            entityId: entity.id,
-            confidence: aiAnalysis.confidence,
-            reasoning: aiAnalysis.reasoning,
-          })
+          console.log(`[Data Broker] Newsletter -> assigned to ${entity.name} (confidence: ${aiAnalysis.confidence})`)
           return { entityId: entity.id, assignmentMethod: "auto_domain" }
         } else {
-          console.log("[Data Broker] Sponsored campaign detected, checking donation identifiers:", {
-            confidence: aiAnalysis.confidence,
-            reasoning: aiAnalysis.reasoning,
-          })
+          console.log(`[Data Broker] Sponsored (confidence: ${aiAnalysis.confidence}) -> checking ${ctaLinks?.length ?? 0} CTAs`)
 
-          if (ctaLinks) {
-            console.log("[Data Broker] CTAs passed to donation matcher:", {
-              ctaCount: ctaLinks.length,
-              urls: ctaLinks.map((link: any) => ({
-                url: link.url,
-                finalUrl: link.finalUrl,
-                originalUrl: link.originalUrl,
-                type: link.type,
-              })),
-            })
-
-            const donationMatch = await findEntityByDonationIdentifier(ctaLinks, true)
-            if (donationMatch) {
-              console.log("[Data Broker] ✓ Sponsored campaign assigned via donation identifier:", {
-                entityId: donationMatch.entity.id,
-                method: donationMatch.assignmentMethod,
-              })
-              return { entityId: donationMatch.entity.id, assignmentMethod: donationMatch.assignmentMethod }
-            }
-          } else {
-            console.log("[Data Broker] No CTAs provided for donation identifier matching")
+          const donationMatch = await findEntityByDonationIdentifier(ctaLinks, true)
+          if (donationMatch) {
+            console.log(`[Data Broker] ✓ Assigned via donation identifier: ${donationMatch.assignmentMethod}`)
+            return { entityId: donationMatch.entity.id, assignmentMethod: donationMatch.assignmentMethod }
           }
 
-          console.log(
-            "[Data Broker] ✗ Sponsored campaign but no donation identifier match - leaving unassigned for manual review",
-          )
+          console.log("[Data Broker] ✗ Sponsored - no donation identifier match, leaving for manual review")
           return null
         }
       } else {
-        console.log("[Data Broker] ✗ AI analysis uncertain - leaving unassigned for manual review:", {
-          confidence: aiAnalysis?.confidence ?? "null",
-          reasoning: aiAnalysis?.reasoning ?? "AI analysis failed",
-        })
+        console.log(`[Data Broker] ✗ AI uncertain (confidence: ${aiAnalysis?.confidence ?? "null"}) - leaving for manual review`)
         return null
       }
     }

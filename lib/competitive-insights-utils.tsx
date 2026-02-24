@@ -5,6 +5,7 @@ import { sanitizeSubject } from "@/lib/campaign-detector"
 import https from "https"
 import http from "http"
 import { URL } from "url"
+import { getRedactedNames, applyRedaction } from "@/lib/redaction-utils"
 
 // Custom fetch using Node's http/https modules to properly handle SSL
 async function customFetch(
@@ -1347,10 +1348,19 @@ export async function processCompetitiveInsights(
       }
     }
 
+    // Apply name redaction to protect seed identities
+    const redactedNames = await getRedactedNames()
+    const redactedSubject = (applyRedaction(sanitizedSubject, redactedNames) as string) || sanitizedSubject
+    const redactedSenderName = (applyRedaction(senderName, redactedNames) as string) || senderName
+    const redactedEmailPreview = (applyRedaction(emailPreview, redactedNames) as string) || emailPreview
+    const redactedEmailContent = sanitizedEmailContent
+      ? (applyRedaction(sanitizedEmailContent, redactedNames) as string)
+      : sanitizedEmailContent
+
     const existing = await prisma.competitiveInsightCampaign.findFirst({
       where: {
         senderEmail: senderEmail,
-        subject: sanitizedSubject,
+        subject: redactedSubject,
       },
     })
 
@@ -1367,16 +1377,16 @@ export async function processCompetitiveInsights(
             100,
           ctaLinks: ctaLinks.length > 0 ? JSON.stringify(ctaLinks) : existing.ctaLinks,
           tags: JSON.stringify(tags),
-          emailPreview: emailPreview || existing.emailPreview,
-          emailContent: sanitizedEmailContent || existing.emailContent,
+          emailPreview: redactedEmailPreview || existing.emailPreview,
+          emailContent: redactedEmailContent || existing.emailContent,
         },
       })
     } else {
       await prisma.competitiveInsightCampaign.create({
         data: {
           senderEmail,
-          senderName,
-          subject: sanitizedSubject,
+          senderName: redactedSenderName,
+          subject: redactedSubject,
           dateReceived,
           inboxCount,
           spamCount,
@@ -1384,8 +1394,8 @@ export async function processCompetitiveInsights(
           inboxRate,
           ctaLinks: ctaLinks.length > 0 ? JSON.stringify(ctaLinks) : null,
           tags: JSON.stringify(tags),
-          emailPreview,
-          emailContent: sanitizedEmailContent,
+          emailPreview: redactedEmailPreview,
+          emailContent: redactedEmailContent,
           entityId,
           assignmentMethod,
           assignedAt: entityId ? new Date() : null,

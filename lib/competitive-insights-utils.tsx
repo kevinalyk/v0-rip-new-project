@@ -888,22 +888,22 @@ export async function extractCTALinks(
 
   // Skip unwrapping during campaign creation to avoid timeouts
   // The unwrap-links cron job will handle all unwrapping with proper retry logic
+  // IMPORTANT: Do NOT strip query params here - tracker URLs like rnchq.com encode
+  // the redirect destination in their path/query. Stripping them before unwrapping
+  // destroys the link. The unwrap cron will store strippedFinalURL after resolving.
   const linksWithFinalUrls = topLinks.map((link) => {
-    // Strip query params to protect privacy
-    const cleanedUrl = stripQueryParams(link.url)
-    
-    // Check if this URL has already been seen
-    if (seenUrls.get(cleanedUrl)) {
+    // Check if this URL has already been seen (use full URL for dedup)
+    if (seenUrls.get(link.url)) {
       return {
-        url: cleanedUrl,
+        url: link.url,
         finalUrl: undefined,
         text: link.text,
       }
     }
-    seenUrls.set(cleanedUrl, true)
+    seenUrls.set(link.url, true)
 
     return {
-      url: cleanedUrl,
+      url: link.url,
       finalUrl: undefined, // Will be populated by unwrap-links cron job
       text: link.text,
     }
@@ -1782,18 +1782,8 @@ async function isDomainBlocked(emailDomain: string): Promise<boolean> {
 }
 
 export function sanitizeEmailLinks(html: string): string {
-  if (!html) return html
-
-  // Replace all href attributes with sanitized versions
-  return html.replace(/href=["']([^"']+)["']/gi, (match, url) => {
-    try {
-      const sanitizedUrl = stripQueryParams(url)
-      // Preserve the original quote style
-      const quote = match.includes('href="') ? '"' : "'"
-      return `href=${quote}${sanitizedUrl}${quote}`
-    } catch (error) {
-      // If sanitization fails, return original
-      return match
-    }
-  })
+  // Links must be preserved in full - tracker URLs encode the redirect destination
+  // in their path/query params. Stripping them breaks both the unwrap pipeline
+  // and the clickable links in the email preview.
+  return html
 }

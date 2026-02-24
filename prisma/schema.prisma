@@ -459,3 +459,13 @@ model CronJobState {
 
   @@index([jobName])
 }
+
+model RedactedName {
+  id        String   @id @default(cuid())
+  name      String   @unique // The exact name/term to redact (case-sensitive)
+  addedBy   String?  // Who added this name
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}

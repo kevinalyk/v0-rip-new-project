@@ -472,8 +472,8 @@ export async function GET(request: Request) {
         const updatedCtaLinks = []
 
         for (const link of ctaLinks) {
-          if (link.finalUrl || link.finalURL) {
-            // Already has finalUrl/finalURL, skip silently
+          if (link.finalUrl || link.finalURL || link.strippedFinalURL || link.strippedFinalUrl) {
+            // Already unwrapped (at ingestion or by a previous cron run), skip
             updatedCtaLinks.push(link)
             continue
           }
@@ -482,8 +482,17 @@ export async function GET(request: Request) {
           stats.emailCampaigns.processed++
 
           try {
-            const finalURL = await resolveRedirects(link.url)
-            const strippedFinalURL = stripQueryParams(finalURL)
+            const originalUrl = link.url
+            const finalURL = await resolveRedirects(originalUrl)
+
+            // Only strip query params from the final URL if it actually resolved
+            // to a different domain (meaning we successfully unwrapped a tracker).
+            // If the domain is the same as the original, the tracker didn't resolve -
+            // preserve the full original URL to avoid stripping meaningful path/query params.
+            const originalDomain = new URL(originalUrl).hostname
+            const finalDomain = new URL(finalURL).hostname
+            const didResolve = finalDomain !== originalDomain
+            const strippedFinalURL = didResolve ? stripQueryParams(finalURL) : finalURL
 
             updatedCtaLinks.push({
               ...link,
@@ -493,7 +502,7 @@ export async function GET(request: Request) {
 
             updated = true
             stats.emailCampaigns.succeeded++
-            console.log(`[v0] Unwrap Links Cron: Email Campaign ID ${campaign.id} - SUCCESS - ${link.url} → ${finalURL}`)
+            console.log(`[v0] Unwrap Links Cron: Email Campaign ID ${campaign.id} - ${didResolve ? "RESOLVED" : "UNRESOLVED"} - ${originalUrl} → ${finalURL}`)
 
             // Small delay to avoid rate limiting
             await sleep(100)
@@ -633,8 +642,8 @@ export async function GET(request: Request) {
         const updatedCtaLinks = []
 
         for (const link of ctaLinks) {
-          if (link.finalUrl || link.finalURL) {
-            // Already has finalUrl/finalURL, skip silently
+          if (link.finalUrl || link.finalURL || link.strippedFinalURL || link.strippedFinalUrl) {
+            // Already unwrapped (at ingestion or by a previous cron run), skip
             updatedCtaLinks.push(link)
             continue
           }
@@ -643,8 +652,14 @@ export async function GET(request: Request) {
           stats.smsMessages.processed++
 
           try {
-            const finalURL = await resolveRedirects(link.url)
-            const strippedFinalURL = stripQueryParams(finalURL)
+            const originalUrl = link.url
+            const finalURL = await resolveRedirects(originalUrl)
+
+            // Only strip query params if the link actually resolved to a different domain
+            const originalDomain = new URL(originalUrl).hostname
+            const finalDomain = new URL(finalURL).hostname
+            const didResolve = finalDomain !== originalDomain
+            const strippedFinalURL = didResolve ? stripQueryParams(finalURL) : finalURL
 
             updatedCtaLinks.push({
               ...link,
@@ -654,7 +669,7 @@ export async function GET(request: Request) {
 
             updated = true
             stats.smsMessages.succeeded++
-            console.log(`[v0] Unwrap Links Cron: SMS ID ${sms.id} - SUCCESS - ${link.url} → ${finalURL}`)
+            console.log(`[v0] Unwrap Links Cron: SMS ID ${sms.id} - ${didResolve ? "RESOLVED" : "UNRESOLVED"} - ${originalUrl} → ${finalURL}`)
 
             // Small delay to avoid rate limiting
             await sleep(100)

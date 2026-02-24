@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid"
 import crypto from "crypto"
 import { findEntityForPhone } from "@/lib/ci-entity-utils"
 import { extractSmsCtaLinks } from "@/lib/sms-link-extractor"
+import { getRedactedNames, applyRedaction } from "@/lib/redaction-utils"
 
 // Verify FullStack webhook signature (if they provide one)
 // You'll need to ask FullStack if they send a signature header and what the signing method is
@@ -133,6 +134,10 @@ export async function POST(request: Request) {
       )
     }
 
+    // Apply name redaction to protect seed identities
+    const redactedNames = await getRedactedNames()
+    const redactedMessage = (applyRedaction(cleanedMessage, redactedNames) as string) || cleanedMessage
+
     // Store the raw SMS data in the queue for processing
     const smsData = {
       id: uuidv4(),
@@ -141,7 +146,7 @@ export async function POST(request: Request) {
       processingAttempts: 0,
       phoneNumber: actualSender, // Store the actual sender, not the gateway
       toNumber: data.to,
-      message: cleanedMessage, // Store cleaned message without the sender prefix
+      message: redactedMessage, // Store redacted message without the sender prefix
       campaignId: data.campaign_id,
       companyId: data.company_id,
       entityId: entityAssignment?.entityId || null,

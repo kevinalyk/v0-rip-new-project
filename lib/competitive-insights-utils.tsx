@@ -5,6 +5,7 @@ import { sanitizeSubject } from "@/lib/campaign-detector"
 import https from "https"
 import http from "http"
 import { URL } from "url"
+import { getRedactedNames, applyRedaction } from "@/lib/redaction-utils"
 
 // Custom fetch using Node's http/https modules to properly handle SSL
 async function customFetch(
@@ -885,30 +886,45 @@ export async function extractCTALinks(
   const subjectPrefix = emailSubject ? `"${emailSubject}" - ` : ""
   console.log(`[v0] ${subjectPrefix}Processing ${topLinks.length} links (${trackingLinkCount} tracking): ${linkDomains}`)
 
-  // Skip unwrapping during campaign creation to avoid timeouts
-  // The unwrap-links cron job will handle all unwrapping with proper retry logic
-  const linksWithFinalUrls = topLinks.map((link) => {
-    // Strip query params to protect privacy
-    const cleanedUrl = stripQueryParams(link.url)
-    
-    // Check if this URL has already been seen
-    if (seenUrls.get(cleanedUrl)) {
-      return {
-        url: cleanedUrl,
-        finalUrl: undefined,
-        text: link.text,
+  // Attempt to unwrap links at ingestion time with a short timeout.
+  // If successful: store finalUrl as the unwrapped + stripped URL (ready to display).
+  // If it fails or times out: store finalUrl as undefined so the unwrap-links cron
+  // picks it up as a fallback and saves the result as strippedFinalURL.
+  // IMPORTANT: Do NOT strip the original link.url - tracker URLs encode their
+  // redirect destination in the path/query params.
+  const linksWithFinalUrls = await Promise.all(
+    topLinks.map(async (link) => {
+      // Check if URL has already been seen (use full URL for dedup)
+      if (seenUrls.get(link.url)) {
+        return { url: link.url, finalUrl: undefined, text: link.text }
       }
-    }
-    seenUrls.set(cleanedUrl, true)
+      seenUrls.set(link.url, true)
 
-    return {
-      url: cleanedUrl,
-      finalUrl: undefined, // Will be populated by unwrap-links cron job
-      text: link.text,
-    }
-  })
-  
-  console.log(`[v0] ✓ Extracted ${linksWithFinalUrls.length} links (unwrapping deferred to cron job)`)
+      try {
+        const resolved = await Promise.race([
+          resolveRedirects(link.url),
+          new Promise<string>((_, reject) =>
+            setTimeout(() => reject(new Error("timeout")), 5000)
+          ),
+        ])
+
+        // Only strip query params if the link actually resolved to a different domain
+        const originalDomain = new URL(link.url).hostname
+        const resolvedDomain = new URL(resolved).hostname
+        const didResolve = resolvedDomain !== originalDomain
+
+        const finalUrl = didResolve ? stripQueryParams(resolved) : undefined
+
+        return { url: link.url, finalUrl, text: link.text }
+      } catch {
+        // Timed out or failed — cron will handle it
+        return { url: link.url, finalUrl: undefined, text: link.text }
+      }
+    })
+  )
+
+  const resolved = linksWithFinalUrls.filter((l) => l.finalUrl).length
+  console.log(`[v0] Extracted ${linksWithFinalUrls.length} links, resolved ${resolved} at ingestion (${linksWithFinalUrls.length - resolved} deferred to cron)`)
 
   const categorizedLinks = await categorizeCtasWithAI(linksWithFinalUrls)
 
@@ -1347,10 +1363,19 @@ export async function processCompetitiveInsights(
       }
     }
 
+    // Apply name redaction to protect seed identities
+    const redactedNames = await getRedactedNames()
+    const redactedSubject = (applyRedaction(sanitizedSubject, redactedNames) as string) || sanitizedSubject
+    const redactedSenderName = (applyRedaction(senderName, redactedNames) as string) || senderName
+    const redactedEmailPreview = (applyRedaction(emailPreview, redactedNames) as string) || emailPreview
+    const redactedEmailContent = sanitizedEmailContent
+      ? (applyRedaction(sanitizedEmailContent, redactedNames) as string)
+      : sanitizedEmailContent
+
     const existing = await prisma.competitiveInsightCampaign.findFirst({
       where: {
         senderEmail: senderEmail,
-        subject: sanitizedSubject,
+        subject: redactedSubject,
       },
     })
 
@@ -1367,16 +1392,16 @@ export async function processCompetitiveInsights(
             100,
           ctaLinks: ctaLinks.length > 0 ? JSON.stringify(ctaLinks) : existing.ctaLinks,
           tags: JSON.stringify(tags),
-          emailPreview: emailPreview || existing.emailPreview,
-          emailContent: sanitizedEmailContent || existing.emailContent,
+          emailPreview: redactedEmailPreview || existing.emailPreview,
+          emailContent: redactedEmailContent || existing.emailContent,
         },
       })
     } else {
       await prisma.competitiveInsightCampaign.create({
         data: {
           senderEmail,
-          senderName,
-          subject: sanitizedSubject,
+          senderName: redactedSenderName,
+          subject: redactedSubject,
           dateReceived,
           inboxCount,
           spamCount,
@@ -1384,8 +1409,8 @@ export async function processCompetitiveInsights(
           inboxRate,
           ctaLinks: ctaLinks.length > 0 ? JSON.stringify(ctaLinks) : null,
           tags: JSON.stringify(tags),
-          emailPreview,
-          emailContent: sanitizedEmailContent,
+          emailPreview: redactedEmailPreview,
+          emailContent: redactedEmailContent,
           entityId,
           assignmentMethod,
           assignedAt: entityId ? new Date() : null,
@@ -1772,18 +1797,8 @@ async function isDomainBlocked(emailDomain: string): Promise<boolean> {
 }
 
 export function sanitizeEmailLinks(html: string): string {
-  if (!html) return html
-
-  // Replace all href attributes with sanitized versions
-  return html.replace(/href=["']([^"']+)["']/gi, (match, url) => {
-    try {
-      const sanitizedUrl = stripQueryParams(url)
-      // Preserve the original quote style
-      const quote = match.includes('href="') ? '"' : "'"
-      return `href=${quote}${sanitizedUrl}${quote}`
-    } catch (error) {
-      // If sanitization fails, return original
-      return match
-    }
-  })
+  // Links must be preserved in full - tracker URLs encode the redirect destination
+  // in their path/query params. Stripping them breaks both the unwrap pipeline
+  // and the clickable links in the email preview.
+  return html
 }

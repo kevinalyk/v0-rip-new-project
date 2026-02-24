@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { findEntityForSender } from "@/lib/ci-entity-utils"
+import { findEntityForSender, findEntityForPhone } from "@/lib/ci-entity-utils"
 
 /**
  * Auto-assign unassigned campaigns using AI and donation identifier matching
@@ -82,17 +82,18 @@ export async function GET(request: Request) {
           campaign.senderEmail || "",
           campaign.senderName || "",
           ctaLinks,
-          campaign.emailContent || campaign.emailPreview || "",
-          true // Log detailed info
+          campaign.subject || "",                              // arg 4: emailSubject
+          campaign.emailContent || campaign.emailPreview || "" // arg 5: emailBody
         )
 
-        if (entityResult.entityId) {
+        if (entityResult && entityResult.entityId) {
           // Found a match! Assign it
           await prisma.competitiveInsightCampaign.update({
             where: { id: campaign.id },
             data: {
               entityId: entityResult.entityId,
               assignmentMethod: entityResult.method,
+              assignedAt: new Date(),
             },
           })
 
@@ -103,7 +104,7 @@ export async function GET(request: Request) {
         } else {
           // No match found - this is expected for sponsored campaigns without donation identifiers
           console.log(
-            `[v0] Auto-Assign Cron: Email Campaign ID ${campaign.id} - No match found (${entityResult.reason || "no donation identifiers matched"})`
+            `[v0] Auto-Assign Cron: Email Campaign ID ${campaign.id} - No match found (${entityResult?.reason || "no donation identifiers matched"})`
           )
           stats.emailCampaigns.skipped++
         }
@@ -141,13 +142,6 @@ export async function GET(request: Request) {
       stats.smsMessages.processed++
 
       try {
-        // Skip if no message body
-        if (!sms.body) {
-          console.log(`[v0] Auto-Assign Cron: SMS ID ${sms.id} - Skipped (no message body)`)
-          stats.smsMessages.skipped++
-          continue
-        }
-
         // Parse ctaLinks
         let ctaLinks: any[] = []
         if (Array.isArray(sms.ctaLinks)) {
@@ -158,32 +152,30 @@ export async function GET(request: Request) {
           ctaLinks = sms.ctaLinks as any[]
         }
 
-        // Use the existing AI + donation identifier matching logic
-        const entityResult = await findEntityForSender(
-          sms.from || "",
-          "", // SMS doesn't have sender name
-          ctaLinks,
-          sms.body || "",
-          true // Log detailed info
+        // Use findEntityForPhone for SMS (checks donation identifiers + phone number mappings)
+        const entityResult = await findEntityForPhone(
+          sms.phoneNumber || "", // Correct field name for sender phone
+          ctaLinks
         )
 
-        if (entityResult.entityId) {
+        if (entityResult && entityResult.entityId) {
           // Found a match! Assign it
           await prisma.smsQueue.update({
             where: { id: sms.id },
             data: {
               entityId: entityResult.entityId,
-              assignmentMethod: entityResult.method,
+              assignmentMethod: entityResult.assignmentMethod || "auto_phone",
+              assignedAt: new Date(),
             },
           })
 
           stats.smsMessages.assigned++
           console.log(
-            `[v0] Auto-Assign Cron: SMS ID ${sms.id} - ASSIGNED to Entity ${entityResult.entityId} via ${entityResult.method}`
+            `[v0] Auto-Assign Cron: SMS ID ${sms.id} - ASSIGNED to Entity ${entityResult.entityId} via ${entityResult.assignmentMethod || "auto_phone"}`
           )
         } else {
           // No match found
-          console.log(`[v0] Auto-Assign Cron: SMS ID ${sms.id} - No match found (${entityResult.reason || "no donation identifiers matched"})`)
+          console.log(`[v0] Auto-Assign Cron: SMS ID ${sms.id} - No match found`)
           stats.smsMessages.skipped++
         }
       } catch (error: any) {

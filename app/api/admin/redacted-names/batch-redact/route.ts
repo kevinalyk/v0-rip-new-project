@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { cookies } from "next/headers"
 import { jwtVerify } from "jose"
+import { applyRedaction } from "@/lib/redaction-utils"
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "your-secret-key")
 
@@ -19,24 +20,17 @@ async function verifyAdmin() {
   }
 }
 
-// Replace all occurrences of names in a string (case-sensitive, whole word)
+// Context-aware redaction that counts replacements
 function redactNames(text: string, names: string[]): { result: string; count: number } {
-  let result = text
-  let totalCount = 0
+  const original = text
+  const result = applyRedaction(text, names) as string
 
-  for (const name of names) {
-    // Escape special regex characters in the name
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    // Use word boundary matching for whole-word, case-sensitive
-    const regex = new RegExp(`\\b${escaped}\\b`, "g")
-    const matches = result.match(regex)
-    if (matches) {
-      totalCount += matches.length
-      result = result.replace(regex, "[Omitted]")
-    }
-  }
+  // Count how many [Omitted] were added
+  const originalOmitted = (original.match(/\[Omitted\]/g) || []).length
+  const newOmitted = (result.match(/\[Omitted\]/g) || []).length
+  const count = newOmitted - originalOmitted
 
-  return { result, count: totalCount }
+  return { result, count }
 }
 
 // POST - Preview how many instances would be affected (dry run)

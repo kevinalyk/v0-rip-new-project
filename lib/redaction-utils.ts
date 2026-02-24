@@ -37,8 +37,18 @@ export function clearRedactionCache() {
 }
 
 /**
- * Apply redaction to a string, replacing all redacted names with [Omitted]
- * Case-sensitive, whole-word matching
+ * Apply context-aware redaction to a string, replacing names ONLY when they appear
+ * in personalization/greeting patterns (not in general political content).
+ * 
+ * This prevents accidentally redacting politician names that match seed names.
+ * 
+ * Patterns matched (case-sensitive for the name, case-insensitive for the greeting):
+ * - Greetings: "Dear Isaac,", "Hi Isaac,", "Hey Isaac!", "Hello Isaac,"
+ * - Standalone salutations: "Isaac," at start of line or after line break
+ * - Direct address: "Isaac --", "Isaac -", "Isaac:"
+ * - Sentence-start direct address: "Isaac, I'm not some..."
+ * - Exclamatory: "WOAH! Red,", patterns with name followed by comma
+ * - HTML greetings: same patterns but within HTML tags
  */
 export function applyRedaction(text: string | null | undefined, names: string[]): string | null | undefined {
   if (!text || names.length === 0) return text
@@ -48,9 +58,38 @@ export function applyRedaction(text: string | null | undefined, names: string[])
   for (const name of names) {
     // Escape special regex characters in the name
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    // Use word boundary matching for whole-word, case-sensitive
-    const regex = new RegExp(`\\b${escaped}\\b`, "g")
-    result = result.replace(regex, "[Omitted]")
+
+    // Pattern 1: Greeting prefixes (Dear, Hi, Hey, Hello, Greetings) followed by the name
+    // Matches: "Dear Isaac,", "Hi Red!", "Hey Sal,", "Hello Wolfgang"
+    const greetingRegex = new RegExp(
+      `((?:Dear|Hi|Hey|Hello|Greetings|Welcome|Thanks|Thank you|Hiya)\\s+)${escaped}\\b`,
+      "gi"
+    )
+    result = result.replace(greetingRegex, "$1[Omitted]")
+
+    // Pattern 2: Name at the very start of the text or after a newline/break, followed by comma or dash
+    // Matches: "Isaac," at start, or after <br>, \n, <p>, <td>, etc.
+    const lineStartRegex = new RegExp(
+      `(^|\\n|<br\\s*\\/?>|<p[^>]*>|<td[^>]*>|<div[^>]*>)\\s*${escaped}\\s*([,!;:\\-—])`,
+      "gm"
+    )
+    result = result.replace(lineStartRegex, `$1[Omitted]$2`)
+
+    // Pattern 3: After punctuation + space, name followed by comma (mid-sentence direct address)
+    // Matches: "WOAH! Red,", "Listen up, Isaac,", "OK Red,"
+    const midSentenceRegex = new RegExp(
+      `([!?.;]\\s+)${escaped}\\s*([,!;:\\-—])`,
+      "g"
+    )
+    result = result.replace(midSentenceRegex, "$1[Omitted]$2")
+
+    // Pattern 4: Name followed by dash/emdash (common in email personalization)
+    // Matches: "Isaac --", "Red -", "Sal —"
+    const dashRegex = new RegExp(
+      `\\b${escaped}\\s+[-—]{1,2}\\s`,
+      "g"
+    )
+    result = result.replace(dashRegex, "[Omitted] -- ")
   }
 
   return result

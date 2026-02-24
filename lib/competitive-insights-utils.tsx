@@ -925,6 +925,7 @@ export async function extractCTALinks(
 
   const resolved = linksWithFinalUrls.filter((l) => l.finalUrl).length
   console.log(`[v0] Extracted ${linksWithFinalUrls.length} links, resolved ${resolved} at ingestion (${linksWithFinalUrls.length - resolved} deferred to cron)`)
+  console.log(`[v0] CTA links: ${linksWithFinalUrls.map((l) => `${l.url} → ${l.finalUrl ?? "(pending cron)"}`).join(" | ")}`)
 
   const categorizedLinks = await categorizeCtasWithAI(linksWithFinalUrls)
 

@@ -386,7 +386,7 @@ export async function GET(request: Request) {
 
       emailCampaigns = await prisma.competitiveInsightCampaign.findMany({
         where: whereClause,
-        take: 100,
+        take: 250,
         orderBy: {
           id: "asc", // Changed to ascending to go through database sequentially
         },
@@ -403,7 +403,7 @@ export async function GET(request: Request) {
         // Fetch from beginning
         emailCampaigns = await prisma.competitiveInsightCampaign.findMany({
           where: { ctaLinks: { not: null } },
-          take: 100,
+          take: 250,
           orderBy: { id: "asc" },
         })
       }
@@ -422,7 +422,7 @@ export async function GET(request: Request) {
                 not: null,
               },
             },
-            take: 100,
+            take: 250,
             orderBy: {
               createdAt: "desc",
             },

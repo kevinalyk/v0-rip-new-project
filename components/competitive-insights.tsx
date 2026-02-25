@@ -751,9 +751,9 @@ export function CompetitiveInsights({
   const resetFilters = () => {
     setSearchTerm("")
     setActiveSearchQuery("") // Reset active search query as well
-    setDateRange({ from: undefined, to: undefined })
-    setSelectedSender("all")
-    setSelectedPartyFilter("all") // Use renamed state
+  setDateRange({ from: undefined, to: undefined })
+  setSelectedSender([])
+  setSelectedPartyFilter("all")
     setSenderSearchTerm("") // Corrected variable name
     setSelectedMessageType("all")
     setSelectedDonationPlatform("all")

@@ -941,16 +941,18 @@ export function sanitizeEmailContent(htmlContent: string, seedEmails: string[] =
 
   const $ = cheerio.load(htmlContent)
 
-  // Unsubscribe patterns for text detection
-  const unsubscribePatterns = [
+  // Patterns that match links we want to redact (replace with [Omitted])
+  const redactPatterns = [
     /unsubscribe/i,
     /un-subscribe/i,
     /opt.*out/i,
     /opt-out/i,
     /optout/i,
+    /opt.*in/i,
     /preferences/i,
     /manage.*subscription/i,
     /subscription.*manage/i,
+    /subscription.?center/i,
     /remove.*list/i,
     /remove.*email/i,
     /stop.*email/i,
@@ -960,9 +962,15 @@ export function sanitizeEmailContent(htmlContent: string, seedEmails: string[] =
     /update.*preferences/i,
     /list.*unsubscribe/i,
     /list-unsubscribe/i,
+    /privacy.*policy/i,
+    /privacy.?statement/i,
+    /terms.*of.*service/i,
+    /terms.*conditions/i,
+    /terms.*use/i,
+    /important.*updates/i,
   ]
 
-  const unsubscribeServiceDomains = [
+  const redactServiceDomains = [
     "nucleusemail.com",
     "unsubscribe",
     "optout",
@@ -971,6 +979,7 @@ export function sanitizeEmailContent(htmlContent: string, seedEmails: string[] =
     "email-preferences",
     "manage-subscription",
     "list-manage",
+    "subscription_center",
     "mailchimp.com/unsubscribe",
     "constantcontact.com/unsubscribe",
     "sendgrid.net/unsubscribe",
@@ -989,9 +998,11 @@ export function sanitizeEmailContent(htmlContent: string, seedEmails: string[] =
     /remove.*from.*list/i,
     /to unsubscribe/i,
     /unsubscribe from/i,
+    /opt.out of/i,
+    /privacy policy/i,
   ]
 
-  const unsubscribeElements: cheerio.Cheerio<cheerio.Element>[] = []
+  const linksToRedact: cheerio.Cheerio<cheerio.Element>[] = []
 
   $("a").each((_, element) => {
     const $link = $(element)
@@ -1001,39 +1012,37 @@ export function sanitizeEmailContent(htmlContent: string, seedEmails: string[] =
 
     // Check if URL contains seed email
     if (containsEmailAddress(href, seedEmails)) {
-      unsubscribeElements.push($link)
+      linksToRedact.push($link)
       return
     }
 
-    const containsUnsubscribeDomain = unsubscribeServiceDomains.some((domain) => lowerUrl.includes(domain))
+    const containsRedactDomain = redactServiceDomains.some((domain) => lowerUrl.includes(domain))
+    const isRedactLink = redactPatterns.some((pattern) => pattern.test(href))
+    const hasRedactText = redactPatterns.some((pattern) => pattern.test(linkText))
 
-    // Check if URL matches any unsubscribe pattern
-    const isUnsubscribeLink = unsubscribePatterns.some((pattern) => pattern.test(href))
-
-    // Check link text for unsubscribe keywords
-    const hasUnsubscribeText = unsubscribePatterns.some((pattern) => pattern.test(linkText))
-
-    // Get surrounding context (parent and previous siblings)
+    // Get surrounding context
     let contextText = ""
     const $parent = $link.parent()
     if ($parent.length) {
       contextText = $parent.text().toLowerCase()
     }
 
-    const hasSubscriptionContext = subscriptionContextPatterns.some((pattern) => pattern.test(contextText))
+  const hasSubscriptionContext = subscriptionContextPatterns.some((pattern) => pattern.test(contextText))
+  // Strip trailing punctuation before matching so "click here." still matches
+  const normalizedLinkText = linkText.replace(/[.,!?;:]+$/, "").trim()
+  const hasGenericLinkText = /^(this link|here|click here|link|update|clicking here)$/i.test(normalizedLinkText)
 
-    const hasGenericLinkText = /^(this link|here|click here|link|update)$/i.test(linkText)
+  const isContextualRedact = hasGenericLinkText && hasSubscriptionContext
 
-    const isContextualUnsubscribe = hasGenericLinkText && hasSubscriptionContext
-
-    // Mark for removal if it matches any unsubscribe criteria
-    if (isUnsubscribeLink || hasUnsubscribeText || containsUnsubscribeDomain || isContextualUnsubscribe) {
-      unsubscribeElements.push($link)
+    if (isRedactLink || hasRedactText || containsRedactDomain || isContextualRedact) {
+      linksToRedact.push($link)
     }
   })
 
-  unsubscribeElements.forEach(($link) => {
-    $link.remove()
+  // Replace matching links with [Omitted] instead of removing them entirely,
+  // so the surrounding sentence still reads naturally
+  linksToRedact.forEach(($link) => {
+    $link.replaceWith("[Omitted]")
   })
 
   // Remove email addresses from text nodes
@@ -1065,6 +1074,9 @@ export function sanitizeEmailContent(htmlContent: string, seedEmails: string[] =
     /To change your subscription[^.]*\./gi,
     /Manage your subscription[^.]*\./gi,
     /To unsubscribe from[^.]*\./gi,
+    /If you(?:'d| would) like to opt.out[^<]*/gi,
+    /If you(?:'d| would) like to unsubscribe[^<]*/gi,
+    /To opt.out[^<]*/gi,
   ]
 
   footerTextPatterns.forEach((pattern) => {
@@ -1795,10 +1807,15 @@ export function autoGenerateTags(
 async function isDomainBlocked(emailDomain: string): Promise<boolean> {
   const normalizedDomain = emailDomain.toLowerCase()
 
+  // Build a list of domains to check: the full domain plus each parent domain.
+  // e.g. "e.democrats.org" → ["e.democrats.org", "democrats.org", "org"]
+  const parts = normalizedDomain.split(".")
+  const domainsToCheck = parts.map((_, i) => parts.slice(i).join(".")).filter((d) => d.includes("."))
+
   const blockedDomain = await prisma.blockedDomain.findFirst({
     where: {
       domain: {
-        equals: normalizedDomain,
+        in: domainsToCheck,
         mode: "insensitive",
       },
     },

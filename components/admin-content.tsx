@@ -40,6 +40,8 @@ export function AdminContent({ user }: AdminContentProps) {
   const [isSanitizingSubjects, setIsSanitizingSubjects] = useState(false)
   const [isUnwrappingLinks, setIsUnwrappingLinks] = useState(false)
   const [isSanitizingEmailLinks, setIsSanitizingEmailLinks] = useState(false)
+  const [isRedactingEmailLinks, setIsRedactingEmailLinks] = useState(false)
+  const [redactCampaignId, setRedactCampaignId] = useState("")
   const [isAutoPopulatingWinRed, setIsAutoPopulatingWinRed] = useState(false)
   const [isAutoPopulatingAnedot, setIsAutoPopulatingAnedot] = useState(false)
   const [isAnalyzingActBlue, setIsAnalyzingActBlue] = useState(false)
@@ -433,6 +435,30 @@ export function AdminContent({ user }: AdminContentProps) {
       toast.error("Failed to sanitize email links")
     } finally {
       setIsSanitizingEmailLinks(false)
+    }
+  }
+
+  const handleRedactEmailLinks = async () => {
+    setIsRedactingEmailLinks(true)
+    try {
+      const response = await fetch("/api/admin/redact-email-links", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(redactCampaignId.trim() ? { campaignId: redactCampaignId.trim() } : {}),
+      })
+      const data = await response.json()
+      if (response.ok) {
+        toast.success(
+          `Redacted links: ${data.summary.updated} updated, ${data.summary.skipped} skipped, ${data.summary.errors} errors`,
+        )
+      } else {
+        toast.error(data.error || "Failed to redact email links")
+      }
+    } catch (error) {
+      toast.error("Failed to redact email links")
+    } finally {
+      setIsRedactingEmailLinks(false)
     }
   }
 
@@ -1536,6 +1562,39 @@ export function AdminContent({ user }: AdminContentProps) {
               <>
                 <Play size={16} />
                 Sanitize Email Links
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Redact Compliance Links</CardTitle>
+          <CardDescription>
+            Replace unsubscribe, opt-out, opt-in, privacy policy, and subscription links in stored email HTML with
+            [Omitted]. Enter a specific campaign ID to test on a single campaign, or leave blank to run on all campaigns.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Campaign ID (optional — leave blank for all)"
+              value={redactCampaignId}
+              onChange={(e) => setRedactCampaignId(e.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+          </div>
+          <Button onClick={handleRedactEmailLinks} disabled={isRedactingEmailLinks} className="gap-2 w-fit">
+            {isRedactingEmailLinks ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Redacting...
+              </>
+            ) : (
+              <>
+                <Play size={16} />
+                {redactCampaignId.trim() ? "Redact Campaign" : "Redact All Campaigns"}
               </>
             )}
           </Button>

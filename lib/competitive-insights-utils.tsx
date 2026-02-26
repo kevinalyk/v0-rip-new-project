@@ -1795,10 +1795,15 @@ export function autoGenerateTags(
 async function isDomainBlocked(emailDomain: string): Promise<boolean> {
   const normalizedDomain = emailDomain.toLowerCase()
 
+  // Build a list of domains to check: the full domain plus each parent domain.
+  // e.g. "e.democrats.org" → ["e.democrats.org", "democrats.org", "org"]
+  const parts = normalizedDomain.split(".")
+  const domainsToCheck = parts.map((_, i) => parts.slice(i).join(".")).filter((d) => d.includes("."))
+
   const blockedDomain = await prisma.blockedDomain.findFirst({
     where: {
       domain: {
-        equals: normalizedDomain,
+        in: domainsToCheck,
         mode: "insensitive",
       },
     },

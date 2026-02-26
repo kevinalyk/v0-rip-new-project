@@ -1292,11 +1292,16 @@ export async function processCompetitiveInsights(
       return
     }
 
+    // assignedToClient stores the slug string "RIP" (not the cuid), so we query both
     const ripSeedEmails = await prisma.seedEmail.findMany({
       where: {
         locked: true,
         active: true,
-        assignedToClient: ripClient.id,
+        OR: [
+          { assignedToClient: ripClient.id },
+          { assignedToClient: "RIP" },
+          { assignedToClient: "rip" },
+        ],
       },
       select: { email: true },
     })

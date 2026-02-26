@@ -1027,9 +1027,12 @@ export function sanitizeEmailContent(htmlContent: string, seedEmails: string[] =
       contextText = $parent.text().toLowerCase()
     }
 
-    const hasSubscriptionContext = subscriptionContextPatterns.some((pattern) => pattern.test(contextText))
-    const hasGenericLinkText = /^(this link|here|click here|link|update)$/i.test(linkText)
-    const isContextualRedact = hasGenericLinkText && hasSubscriptionContext
+  const hasSubscriptionContext = subscriptionContextPatterns.some((pattern) => pattern.test(contextText))
+  // Strip trailing punctuation before matching so "click here." still matches
+  const normalizedLinkText = linkText.replace(/[.,!?;:]+$/, "").trim()
+  const hasGenericLinkText = /^(this link|here|click here|link|update|clicking here)$/i.test(normalizedLinkText)
+
+  const isContextualRedact = hasGenericLinkText && hasSubscriptionContext
 
     if (isRedactLink || hasRedactText || containsRedactDomain || isContextualRedact) {
       linksToRedact.push($link)
@@ -1071,6 +1074,9 @@ export function sanitizeEmailContent(htmlContent: string, seedEmails: string[] =
     /To change your subscription[^.]*\./gi,
     /Manage your subscription[^.]*\./gi,
     /To unsubscribe from[^.]*\./gi,
+    /If you(?:'d| would) like to opt.out[^<]*/gi,
+    /If you(?:'d| would) like to unsubscribe[^<]*/gi,
+    /To opt.out[^<]*/gi,
   ]
 
   footerTextPatterns.forEach((pattern) => {

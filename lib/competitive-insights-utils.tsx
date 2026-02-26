@@ -1310,6 +1310,8 @@ export async function processCompetitiveInsights(
 
     const ripResults = results.filter((r) => ripEmailAddresses.has(r.seedEmail))
 
+    console.log(`[v0] processCompetitiveInsights "${subject}" - ripSeeds: ${ripSeedEmails.length}, results: ${results.length}, ripResults: ${ripResults.length}, seedAddresses: [${Array.from(ripEmailAddresses).join(",")}], resultSeeds: [${results.map(r => r.seedEmail).join(",")}]`)
+
     if (ripResults.length === 0) {
       return
     }

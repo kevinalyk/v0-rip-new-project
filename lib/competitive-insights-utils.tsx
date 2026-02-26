@@ -1273,11 +1273,13 @@ export async function processCompetitiveInsights(
 
     const senderDomain = senderEmail.split("@")[1]?.toLowerCase()
     if (!senderDomain) {
+      console.log(`[v0] processCompetitiveInsights "${subject}" - EARLY RETURN: no senderDomain`)
       return
     }
 
     const isBlocked = await isDomainBlocked(senderDomain)
     if (isBlocked) {
+      console.log(`[v0] processCompetitiveInsights "${subject}" - EARLY RETURN: domain blocked (${senderDomain})`)
       return
     }
 
@@ -1289,6 +1291,7 @@ export async function processCompetitiveInsights(
     })
 
     if (!ripClient) {
+      console.log(`[v0] processCompetitiveInsights "${subject}" - EARLY RETURN: no RIP client found`)
       return
     }
 

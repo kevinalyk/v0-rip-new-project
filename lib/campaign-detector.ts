@@ -691,11 +691,16 @@ export async function scanForCompetitiveInsights(options: {
     }
 
     // Get ONLY RIP-locked seed emails
+    // assignedToClient stores the slug string "RIP" (not the cuid), so query both
     const ripSeedEmails = await prisma.seedEmail.findMany({
       where: {
         active: true,
         locked: true,
-        assignedToClient: ripClient.id,
+        OR: [
+          { assignedToClient: ripClient.id },
+          { assignedToClient: "RIP" },
+          { assignedToClient: "rip" },
+        ],
       },
     })
 

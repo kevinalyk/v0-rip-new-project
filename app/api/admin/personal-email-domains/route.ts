@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireAdminFromRequest } from "@/lib/auth-utils"
+import { verifyAuth } from "@/lib/auth"
 
 export async function GET(request: Request) {
-  const adminCheck = await requireAdminFromRequest(request)
-  if (!adminCheck.success) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const authResult = await verifyAuth(request)
+  if (!authResult.success || authResult.user?.role !== "super_admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
   const domains = await prisma.personalEmailDomain.findMany({
     orderBy: { createdAt: "asc" },
@@ -17,8 +19,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const adminCheck = await requireAdminFromRequest(request)
-  if (!adminCheck.success) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const authResult = await verifyAuth(request)
+  if (!authResult.success || authResult.user?.role !== "super_admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
   const { domain, clientId, useSlug } = await request.json()
 
@@ -38,7 +42,7 @@ export async function POST(request: Request) {
       domain: normalized,
       clientId,
       useSlug: useSlug ?? true,
-      addedBy: adminCheck.user?.email ?? "admin",
+      addedBy: authResult.user?.email ?? "admin",
     },
     include: { client: { select: { id: true, name: true, slug: true } } },
   })
@@ -47,8 +51,10 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const adminCheck = await requireAdminFromRequest(request)
-  if (!adminCheck.success) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const authResult = await verifyAuth(request)
+  if (!authResult.success || authResult.user?.role !== "super_admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
   const { searchParams } = new URL(request.url)
   const id = searchParams.get("id")

@@ -822,24 +822,7 @@ export async function scanForCompetitiveInsights(options: {
         const totalCount = emails.length
 
         // Check if this duplicate came via a personal email — if so, attach clientId
-        let existingPersonalClientId: string | null = null
-        const PERSONAL_EMAIL_DOMAIN_DUP = "realdailyreview.com"
-        for (const email of emails) {
-          if (email.to) {
-            const toAddresses = email.to.split(",").map((a) => a.trim().toLowerCase())
-            for (const addr of toAddresses) {
-              const match = addr.match(/^([^@]+)@(.+)$/)
-              if (match && match[2] === PERSONAL_EMAIL_DOMAIN_DUP) {
-                const client = await prisma.client.findFirst({
-                  where: { slug: { equals: match[1], mode: "insensitive" } },
-                  select: { id: true },
-                })
-                if (client) { existingPersonalClientId = client.id; break }
-              }
-            }
-          }
-          if (existingPersonalClientId) break
-        }
+        const existingPersonalClientId = await resolvePersonalClientId(emails)
 
         await prisma.competitiveInsightCampaign.update({
           where: { id: existing.id },
@@ -880,29 +863,8 @@ export async function scanForCompetitiveInsights(options: {
         firstEmail.emailContent,
       )
 
-      // Resolve clientId from personal email TO address (e.g. rip@realdailyreview.com → client slug "rip")
-      let personalClientId: string | null = null
-      const PERSONAL_EMAIL_DOMAIN = "realdailyreview.com"
-      for (const email of emails) {
-        if (email.to) {
-          const toAddresses = email.to.split(",").map((a) => a.trim().toLowerCase())
-          for (const addr of toAddresses) {
-            const match = addr.match(/^([^@]+)@(.+)$/)
-            if (match && match[2] === PERSONAL_EMAIL_DOMAIN) {
-              const slug = match[1]
-              const client = await prisma.client.findFirst({
-                where: { slug: { equals: slug, mode: "insensitive" } },
-                select: { id: true },
-              })
-              if (client) {
-                personalClientId = client.id
-                break
-              }
-            }
-          }
-        }
-        if (personalClientId) break
-      }
+      // Resolve clientId from personal email TO address via PersonalEmailDomain table
+      const personalClientId = await resolvePersonalClientId(emails)
 
       try {
         await processCompetitiveInsights(
@@ -1043,9 +1005,54 @@ async function createCampaignsFromDetected(detectedCampaigns: DetectedCampaign[]
 }
 
 function extractClientSlugFromRecipient(recipient: string): string | null {
-  // Check if recipient is a @realdailyreview.com email
+  // Legacy helper — kept for createCampaignsFromDetected path
   const match = recipient.match(/^([a-zA-Z0-9\-_]+)@realdailyreview\.com$/i)
   return match ? match[1] : null
+}
+
+/**
+ * Given a list of email TO addresses from an email, resolve which client
+ * it belongs to by looking up PersonalEmailDomain records in the DB.
+ * If the domain has useSlug=true, the local part (before @) is matched
+ * against client slugs. Otherwise the clientId on the domain record is used.
+ */
+async function resolvePersonalClientId(emails: Array<{ to?: string }>): Promise<string | null> {
+  // Collect all unique domains from the TO fields
+  const addressMap = new Map<string, string>() // domain → localPart
+
+  for (const email of emails) {
+    if (!email.to) continue
+    for (const addr of email.to.split(",").map((a) => a.trim().toLowerCase())) {
+      const match = addr.match(/^([^@]+)@(.+)$/)
+      if (match) addressMap.set(match[2], match[1])
+    }
+  }
+
+  if (addressMap.size === 0) return null
+
+  // Look up all matching PersonalEmailDomain records in one query
+  const domainRecords = await prisma.personalEmailDomain.findMany({
+    where: { domain: { in: Array.from(addressMap.keys()) } },
+    select: { domain: true, clientId: true, useSlug: true },
+  })
+
+  for (const record of domainRecords) {
+    if (record.useSlug) {
+      // Local part is the client slug — look up by slug
+      const slug = addressMap.get(record.domain)
+      if (!slug) continue
+      const client = await prisma.client.findFirst({
+        where: { slug: { equals: slug, mode: "insensitive" } },
+        select: { id: true },
+      })
+      if (client) return client.id
+    } else {
+      // Entire domain maps to a single client
+      return record.clientId
+    }
+  }
+
+  return null
 }
 
 /**

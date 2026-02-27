@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Loader2, Play, X, Mail, MessageSquare, TrendingUp, CalendarIcon } from "lucide-react"
+import { Loader2, Play, X, Mail, MessageSquare, TrendingUp, CalendarIcon, Plus, Trash2, Globe } from "lucide-react"
 import { toast } from "sonner"
 import { CampaignDetectionDialog } from "@/components/campaign-detection-dialog"
 import { CompetitiveInsightsDetectionDialog } from "@/components/competitive-insights-detection-dialog"
@@ -42,6 +42,14 @@ export function AdminContent({ user }: AdminContentProps) {
   const [isSanitizingEmailLinks, setIsSanitizingEmailLinks] = useState(false)
   const [isRedactingEmailLinks, setIsRedactingEmailLinks] = useState(false)
   const [redactCampaignId, setRedactCampaignId] = useState("")
+
+  // Personal email domains state
+  const [personalDomains, setPersonalDomains] = useState<Array<{ id: string; domain: string; useSlug: boolean; client: { id: string; name: string; slug: string } }>>([])
+  const [clients, setClients] = useState<Array<{ id: string; name: string; slug: string }>>([])
+  const [newDomain, setNewDomain] = useState("")
+  const [newDomainClientId, setNewDomainClientId] = useState("")
+  const [newDomainUseSlug, setNewDomainUseSlug] = useState(true)
+  const [isAddingDomain, setIsAddingDomain] = useState(false)
   const [isAutoPopulatingWinRed, setIsAutoPopulatingWinRed] = useState(false)
   const [isAutoPopulatingAnedot, setIsAutoPopulatingAnedot] = useState(false)
   const [isAnalyzingActBlue, setIsAnalyzingActBlue] = useState(false)
@@ -214,6 +222,27 @@ export function AdminContent({ user }: AdminContentProps) {
     message: string
   } | null>(null)
   const [totalBatchesRun, setTotalBatchesRun] = useState(0)
+
+  // Fetch personal email domains and clients on mount
+  useEffect(() => {
+    const fetchDomains = async () => {
+      try {
+        const [domainsRes, clientsRes] = await Promise.all([
+          fetch("/api/admin/personal-email-domains", { credentials: "include" }),
+          fetch("/api/clients", { credentials: "include" }),
+        ])
+        if (domainsRes.ok) {
+          const data = await domainsRes.json()
+          setPersonalDomains(data.domains)
+        }
+        if (clientsRes.ok) {
+          const data = await clientsRes.json()
+          setClients(data.clients ?? data)
+        }
+      } catch {}
+    }
+    fetchDomains()
+  }, [])
 
   // Fetch message stats on component mount and when date range changes
   useEffect(() => {
@@ -435,6 +464,53 @@ export function AdminContent({ user }: AdminContentProps) {
       toast.error("Failed to sanitize email links")
     } finally {
       setIsSanitizingEmailLinks(false)
+    }
+  }
+
+  const handleAddDomain = async () => {
+    if (!newDomain.trim() || !newDomainClientId) {
+      toast.error("Please enter a domain and select a client")
+      return
+    }
+    setIsAddingDomain(true)
+    try {
+      const res = await fetch("/api/admin/personal-email-domains", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain: newDomain.trim(), clientId: newDomainClientId, useSlug: newDomainUseSlug }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setPersonalDomains((prev) => [...prev, data.domain])
+        setNewDomain("")
+        setNewDomainClientId("")
+        setNewDomainUseSlug(true)
+        toast.success(`Domain "${data.domain.domain}" added`)
+      } else {
+        toast.error(data.error || "Failed to add domain")
+      }
+    } catch {
+      toast.error("Failed to add domain")
+    } finally {
+      setIsAddingDomain(false)
+    }
+  }
+
+  const handleDeleteDomain = async (id: string, domain: string) => {
+    try {
+      const res = await fetch(`/api/admin/personal-email-domains?id=${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      })
+      if (res.ok) {
+        setPersonalDomains((prev) => prev.filter((d) => d.id !== id))
+        toast.success(`Domain "${domain}" removed`)
+      } else {
+        toast.error("Failed to remove domain")
+      }
+    } catch {
+      toast.error("Failed to remove domain")
     }
   }
 
@@ -1374,6 +1450,86 @@ export function AdminContent({ user }: AdminContentProps) {
           />
         </CardContent>
       </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Globe size={18} />
+            Personal Email Domains
+          </CardTitle>
+          <CardDescription>
+            Manage domains used for personal CI email addresses. Emails sent to{" "}
+            <code className="text-xs bg-muted px-1 py-0.5 rounded">slug@domain.com</code> will be attributed to the
+            matching client. Enable "Use slug" to match the local part (before @) to a client slug — disable to assign
+            all emails on that domain to one client.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {/* Existing domains */}
+          {personalDomains.length > 0 && (
+            <div className="rounded-md border divide-y">
+              {personalDomains.map((d) => (
+                <div key={d.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-mono font-medium">{d.domain}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {d.client.name} ({d.client.slug}) · {d.useSlug ? "Match by slug" : "All emails → this client"}
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive hover:text-destructive"
+                    onClick={() => handleDeleteDomain(d.id, d.domain)}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add new domain */}
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <Input
+                placeholder="e.g. realdailyreview.com"
+                value={newDomain}
+                onChange={(e) => setNewDomain(e.target.value)}
+                className="flex-1"
+              />
+              <select
+                value={newDomainClientId}
+                onChange={(e) => setNewDomainClientId(e.target.value)}
+                className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">Select client...</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.slug})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                id="useSlug"
+                checked={newDomainUseSlug}
+                onChange={(e) => setNewDomainUseSlug(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <label htmlFor="useSlug" className="text-muted-foreground cursor-pointer">
+                Use slug — match local part of email to client slug (e.g. <code className="text-xs bg-muted px-1 rounded">rip@domain.com</code> → client with slug "rip")
+              </label>
+            </div>
+            <Button onClick={handleAddDomain} disabled={isAddingDomain} className="gap-2 w-fit">
+              {isAddingDomain ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+              Add Domain
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Engagement Simulator</CardTitle>

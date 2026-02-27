@@ -29,6 +29,7 @@ import {
   Inbox,
   Building,
   Star,
+  Globe,
 } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { useTheme } from "next-themes"
@@ -366,6 +367,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                       active={pathname === "/rip/admin/name-redaction"}
                       collapsed={false}
                       onClick={() => navigate("/rip/admin/name-redaction")}
+                    />
+                    <NavItem
+                      icon={<Globe size={18} />}
+                      label="Personal Domains"
+                      active={pathname === "/rip/admin/personal-email-domains"}
+                      collapsed={false}
+                      onClick={() => navigate("/rip/admin/personal-email-domains")}
                     />
                   </div>
                 )}

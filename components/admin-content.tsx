@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Loader2, Play, X, Mail, MessageSquare, TrendingUp, CalendarIcon, Plus, Trash2, Globe } from "lucide-react"
+import { Loader2, Play, X, Mail, MessageSquare, TrendingUp, CalendarIcon } from "lucide-react"
 import { toast } from "sonner"
 import { CampaignDetectionDialog } from "@/components/campaign-detection-dialog"
 import { CompetitiveInsightsDetectionDialog } from "@/components/competitive-insights-detection-dialog"
@@ -43,13 +43,6 @@ export function AdminContent({ user }: AdminContentProps) {
   const [isRedactingEmailLinks, setIsRedactingEmailLinks] = useState(false)
   const [redactCampaignId, setRedactCampaignId] = useState("")
 
-  // Personal email domains state
-  const [personalDomains, setPersonalDomains] = useState<Array<{ id: string; domain: string; useSlug: boolean; client: { id: string; name: string; slug: string } }>>([])
-  const [clients, setClients] = useState<Array<{ id: string; name: string; slug: string }>>([])
-  const [newDomain, setNewDomain] = useState("")
-  const [newDomainClientId, setNewDomainClientId] = useState("")
-  const [newDomainUseSlug, setNewDomainUseSlug] = useState(true)
-  const [isAddingDomain, setIsAddingDomain] = useState(false)
   const [isAutoPopulatingWinRed, setIsAutoPopulatingWinRed] = useState(false)
   const [isAutoPopulatingAnedot, setIsAutoPopulatingAnedot] = useState(false)
   const [isAnalyzingActBlue, setIsAnalyzingActBlue] = useState(false)
@@ -222,27 +215,6 @@ export function AdminContent({ user }: AdminContentProps) {
     message: string
   } | null>(null)
   const [totalBatchesRun, setTotalBatchesRun] = useState(0)
-
-  // Fetch personal email domains and clients on mount
-  useEffect(() => {
-    const fetchDomains = async () => {
-      try {
-        const [domainsRes, clientsRes] = await Promise.all([
-          fetch("/api/admin/personal-email-domains", { credentials: "include" }),
-          fetch("/api/clients", { credentials: "include" }),
-        ])
-        if (domainsRes.ok) {
-          const data = await domainsRes.json()
-          setPersonalDomains(data.domains)
-        }
-        if (clientsRes.ok) {
-          const data = await clientsRes.json()
-          setClients(data.clients ?? data)
-        }
-      } catch {}
-    }
-    fetchDomains()
-  }, [])
 
   // Fetch message stats on component mount and when date range changes
   useEffect(() => {
@@ -464,53 +436,6 @@ export function AdminContent({ user }: AdminContentProps) {
       toast.error("Failed to sanitize email links")
     } finally {
       setIsSanitizingEmailLinks(false)
-    }
-  }
-
-  const handleAddDomain = async () => {
-    if (!newDomain.trim() || !newDomainClientId) {
-      toast.error("Please enter a domain and select a client")
-      return
-    }
-    setIsAddingDomain(true)
-    try {
-      const res = await fetch("/api/admin/personal-email-domains", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: newDomain.trim(), clientId: newDomainClientId, useSlug: newDomainUseSlug }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setPersonalDomains((prev) => [...prev, data.domain])
-        setNewDomain("")
-        setNewDomainClientId("")
-        setNewDomainUseSlug(true)
-        toast.success(`Domain "${data.domain.domain}" added`)
-      } else {
-        toast.error(data.error || "Failed to add domain")
-      }
-    } catch {
-      toast.error("Failed to add domain")
-    } finally {
-      setIsAddingDomain(false)
-    }
-  }
-
-  const handleDeleteDomain = async (id: string, domain: string) => {
-    try {
-      const res = await fetch(`/api/admin/personal-email-domains?id=${id}`, {
-        method: "DELETE",
-        credentials: "include",
-      })
-      if (res.ok) {
-        setPersonalDomains((prev) => prev.filter((d) => d.id !== id))
-        toast.success(`Domain "${domain}" removed`)
-      } else {
-        toast.error("Failed to remove domain")
-      }
-    } catch {
-      toast.error("Failed to remove domain")
     }
   }
 

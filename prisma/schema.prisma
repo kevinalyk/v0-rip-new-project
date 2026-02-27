@@ -175,6 +175,7 @@ model Client {
   ciEntitySubscriptions CiEntitySubscription[]
   ciViews           CiView[] // Added relation to CI Views owned by this client
   entityTags        EntityTag[] // Added relation to entity tags
+  personalEmailDomains PersonalEmailDomain[] // Personal email domains for CI
   
   @@index([totalUsers])
 }
@@ -468,4 +469,22 @@ model RedactedName {
   updatedAt DateTime @updatedAt
 
   @@index([name])
+}
+
+model PersonalEmailDomain {
+  id        String   @id @default(cuid())
+  domain    String   @unique // e.g., "realdailyreview.com"
+  clientId  String   // Client this domain belongs to
+  // When useSlug is true, the local part of the email (before @) is matched to client slug
+  // e.g. rip@realdailyreview.com → slug "rip" → look up client by slug
+  // When false, the entire domain maps to one specific clientId above
+  useSlug   Boolean  @default(true)
+  addedBy   String?  // Admin who added this domain
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([domain])
+  @@index([clientId])
 }

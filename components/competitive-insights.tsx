@@ -1154,7 +1154,7 @@ export function CompetitiveInsights({
 
               {/* Second row - Filters */}
               <div
-                className={`flex flex-col md:flex-row gap-4 ${subscriptionPlan === "free" && !hasAdminAccess ? "blur-sm pointer-events-none" : ""}`}
+                className={`flex flex-wrap gap-2 items-center ${subscriptionPlan === "free" && !hasAdminAccess ? "blur-sm pointer-events-none" : ""}`}
               >
                 <Popover>
                   <PopoverTrigger asChild>

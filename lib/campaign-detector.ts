@@ -732,6 +732,7 @@ export async function scanForCompetitiveInsights(options: {
         date: Date
         messageId?: string
         emailContent?: string
+        to?: string
       }>
     >()
 
@@ -791,6 +792,7 @@ export async function scanForCompetitiveInsights(options: {
           date: email.date,
           messageId: email.messageId,
           emailContent: email.emailContent,
+          to: email.to,
         })
       }
     }
@@ -819,6 +821,26 @@ export async function scanForCompetitiveInsights(options: {
         const notDeliveredCount = emails.filter((e) => e.placement === "not_found").length
         const totalCount = emails.length
 
+        // Check if this duplicate came via a personal email — if so, attach clientId
+        let existingPersonalClientId: string | null = null
+        const PERSONAL_EMAIL_DOMAIN_DUP = "realdailyreview.com"
+        for (const email of emails) {
+          if (email.to) {
+            const toAddresses = email.to.split(",").map((a) => a.trim().toLowerCase())
+            for (const addr of toAddresses) {
+              const match = addr.match(/^([^@]+)@(.+)$/)
+              if (match && match[2] === PERSONAL_EMAIL_DOMAIN_DUP) {
+                const client = await prisma.client.findFirst({
+                  where: { slug: { equals: match[1], mode: "insensitive" } },
+                  select: { id: true },
+                })
+                if (client) { existingPersonalClientId = client.id; break }
+              }
+            }
+          }
+          if (existingPersonalClientId) break
+        }
+
         await prisma.competitiveInsightCampaign.update({
           where: { id: existing.id },
           data: {
@@ -829,6 +851,10 @@ export async function scanForCompetitiveInsights(options: {
               ((existing.inboxCount + inboxCount) /
                 (existing.inboxCount + existing.spamCount + existing.notDeliveredCount + totalCount)) *
               100,
+            // Only set clientId/source if not already set and we have a personal match
+            ...(existingPersonalClientId && !existing.clientId
+              ? { clientId: existingPersonalClientId, source: "personal" }
+              : {}),
             updatedAt: new Date(),
           },
         })
@@ -854,6 +880,30 @@ export async function scanForCompetitiveInsights(options: {
         firstEmail.emailContent,
       )
 
+      // Resolve clientId from personal email TO address (e.g. rip@realdailyreview.com → client slug "rip")
+      let personalClientId: string | null = null
+      const PERSONAL_EMAIL_DOMAIN = "realdailyreview.com"
+      for (const email of emails) {
+        if (email.to) {
+          const toAddresses = email.to.split(",").map((a) => a.trim().toLowerCase())
+          for (const addr of toAddresses) {
+            const match = addr.match(/^([^@]+)@(.+)$/)
+            if (match && match[2] === PERSONAL_EMAIL_DOMAIN) {
+              const slug = match[1]
+              const client = await prisma.client.findFirst({
+                where: { slug: { equals: slug, mode: "insensitive" } },
+                select: { id: true },
+              })
+              if (client) {
+                personalClientId = client.id
+                break
+              }
+            }
+          }
+        }
+        if (personalClientId) break
+      }
+
       try {
         await processCompetitiveInsights(
           firstEmail.senderEmail,
@@ -862,10 +912,11 @@ export async function scanForCompetitiveInsights(options: {
           firstEmail.date,
           resultsForInsights,
           firstEmail.emailContent,
-          entityAssignment, // Pass entity assignment with method
+          entityAssignment,
+          personalClientId,
         )
         newInsightsCount++
-        console.log(`✅ Processed NEW campaign with AI: "${firstEmail.subject}"`)
+        console.log(`✅ Processed NEW campaign with AI: "${firstEmail.subject}"${personalClientId ? ` [personal: ${personalClientId}]` : ""}`)
       } catch (error) {
         console.error(`❌ Error processing competitive insight for "${firstEmail.subject}":`, error)
       }

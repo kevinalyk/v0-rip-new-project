@@ -726,10 +726,6 @@ export async function extractCTALinks(
     "constantcontact.com/unsubscribe",
     "sendgrid.net/unsubscribe",
     "mailgun.com/unsubscribe",
-    // Substack footer/unsubscribe links
-    "substack.com/signup",
-    "substack.com/redirect",
-    "utm_campaign=autofilled-footer",
   ]
 
   const subscriptionContextPatterns = [
@@ -988,10 +984,6 @@ export function sanitizeEmailContent(htmlContent: string, seedEmails: string[] =
     "constantcontact.com/unsubscribe",
     "sendgrid.net/unsubscribe",
     "mailgun.com/unsubscribe",
-    // Substack footer/unsubscribe links — both the unwrapped signup footer URL and the encoded redirect
-    "substack.com/signup",
-    "substack.com/redirect",
-    "utm_campaign=autofilled-footer",
   ]
 
   const subscriptionContextPatterns = [

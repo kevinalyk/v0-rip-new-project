@@ -147,6 +147,39 @@ export async function findEntityForSender(
     const mapping = emailMapping || domainMapping
     const entity = mapping?.entity
 
+    // Substack detection — try to match local part of email to an entity name
+    // e.g. kirstengillibrand@substack.com → search entities for "Kirsten Gillibrand"
+    if (!mapping && domain === "substack.com") {
+      const localPart = senderEmail.split("@")[0].toLowerCase()
+      // Normalize: remove hyphens/underscores, treat as word sequence
+      const normalized = localPart.replace(/[-_]/g, " ")
+      const entities = await prisma.ciEntity.findMany({
+        where: {
+          OR: [
+            { name: { contains: normalized, mode: "insensitive" } },
+            { name: { contains: localPart, mode: "insensitive" } },
+          ],
+        },
+        select: { id: true, name: true },
+        take: 1,
+      })
+      if (entities.length > 0) {
+        console.log(`[Substack] Matched ${senderEmail} → entity "${entities[0].name}" via local part`)
+        return { entityId: entities[0].id, assignmentMethod: "auto_domain" }
+      }
+      // Also try senderName match if provided
+      if (senderName) {
+        const nameMatch = await prisma.ciEntity.findFirst({
+          where: { name: { contains: senderName.trim(), mode: "insensitive" } },
+          select: { id: true, name: true },
+        })
+        if (nameMatch) {
+          console.log(`[Substack] Matched ${senderEmail} → entity "${nameMatch.name}" via sender name`)
+          return { entityId: nameMatch.id, assignmentMethod: "auto_domain" }
+        }
+      }
+    }
+
     if (entity && entity.type === "data_broker" && emailSubject && emailBody) {
       console.log(`[Data Broker] ${entity.name} (${senderEmail}) - running AI analysis`)
 

@@ -396,54 +396,38 @@ export async function GET(request: NextRequest) {
     console.log("[v0] Combined insights before platform filter:", allInsights.length)
 
     if (donationPlatform && donationPlatform !== "all") {
-      const platformDomains: Record<string, string[]> = {
-        winred: ["winred.com", "secure.winred.com"],
-        actblue: ["actblue.com", "secure.actblue.com"],
-        anedot: ["anedot.com"],
-        psq: ["psqimpact.com", "secure.psqimpact.com"],
-        ngpvan: ["ngpvan.com", "click.ngpvan.com", "secure.ngpvan.com"],
-      }
-      const domains = platformDomains[donationPlatform] || []
-      console.log("[v0] Filtering for platform:", donationPlatform, "domains:", domains)
+      // Substack is a sender-domain filter, not a CTA link filter
+      if (donationPlatform === "substack") {
+        allInsights = allInsights.filter((insight) =>
+          insight.senderEmail?.toLowerCase().endsWith("@substack.com")
+        )
+      } else {
+        const platformDomains: Record<string, string[]> = {
+          winred: ["winred.com", "secure.winred.com"],
+          actblue: ["actblue.com", "secure.actblue.com"],
+          anedot: ["anedot.com"],
+          psq: ["psqimpact.com", "secure.psqimpact.com"],
+          ngpvan: ["ngpvan.com", "click.ngpvan.com", "secure.ngpvan.com"],
+        }
+        const domains = platformDomains[donationPlatform] || []
 
-      console.log(
-        "[v0] Sample insight ctaLinks:",
-        allInsights.slice(0, 3).map((i) => ({
-          id: i.id,
-          sender: i.senderName,
-          ctaLinks: i.ctaLinks,
-        })),
-      )
-
-      allInsights = allInsights.filter((insight) => {
-        const ctaLinks = insight.ctaLinks || []
-        const hasMatchingLink = ctaLinks.some((link: any) => {
-          let urlsToCheck: string[] = []
-          
-          if (typeof link === "string") {
-            urlsToCheck = [link]
-          } else {
-            // Check all available URL fields
-            if (link.strippedFinalURL) urlsToCheck.push(link.strippedFinalURL)
-            if (link.finalUrl || link.finalURL) urlsToCheck.push(link.finalUrl || link.finalURL)
-            if (link.url) urlsToCheck.push(link.url)
-          }
-          
-          // Check if any of the URLs match the platform domains
-          const matches = urlsToCheck.some(url => 
-            domains.some((domain) => url.toLowerCase().includes(domain))
-          )
-          
-          if (matches) {
-            console.log("[v0] Found matching link:", urlsToCheck, "for platform:", donationPlatform)
-          }
-          return matches
+        allInsights = allInsights.filter((insight) => {
+          const ctaLinks = insight.ctaLinks || []
+          return ctaLinks.some((link: any) => {
+            let urlsToCheck: string[] = []
+            if (typeof link === "string") {
+              urlsToCheck = [link]
+            } else {
+              if (link.strippedFinalURL) urlsToCheck.push(link.strippedFinalURL)
+              if (link.finalUrl || link.finalURL) urlsToCheck.push(link.finalUrl || link.finalURL)
+              if (link.url) urlsToCheck.push(link.url)
+            }
+            return urlsToCheck.some((url) =>
+              domains.some((domain) => url.toLowerCase().includes(domain))
+            )
+          })
         })
-
-        return hasMatchingLink
-      })
-
-      console.log("[v0] Insights after platform filter:", allInsights.length)
+      }
     }
 
     const totalCount = allInsights.length

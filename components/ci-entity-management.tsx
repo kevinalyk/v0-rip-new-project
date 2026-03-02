@@ -146,9 +146,11 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
   const [donationIdentifierInputs, setDonationIdentifierInputs] = useState<{
     winred: string
     anedot: string
+    substack: string
   }>({
     winred: "",
     anedot: "",
+    substack: "",
   })
 
   const [entityMappings, setEntityMappings] = useState<EntityMapping[]>([])
@@ -449,9 +451,9 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setNewEntityState("")
           setNewEntityNationwide(false)
           setNewEntityDonationIdentifiers({})
-          setDonationIdentifierInputs({ winred: "", anedot: "" }) // Reset raw inputs too
-          fetchData()
-          toast.success("Entity updated successfully!")
+    setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" }) // Reset raw inputs too
+    fetchData()
+    toast.success("Entity updated successfully!")
         } else {
           const data = await response.json()
           toast.error(data.error || "Failed to update entity")
@@ -482,9 +484,9 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setNewEntityState("")
           setNewEntityNationwide(false)
           setNewEntityDonationIdentifiers({})
-          setDonationIdentifierInputs({ winred: "", anedot: "" }) // Reset raw inputs too
-          fetchData()
-          toast.success("Entity created successfully!")
+    setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" }) // Reset raw inputs too
+    fetchData()
+    toast.success("Entity created successfully!")
         } else {
           const data = await response.json()
           toast.error(data.error || "Failed to create entity")
@@ -560,7 +562,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setAssignEntityState("")
           setAssignEntityNationwide(false)
           setAssignEntityDonationIdentifiers({}) // Clear donation identifiers
-          setDonationIdentifierInputs({ winred: "", anedot: "" }) // Clear raw inputs
+          setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" }) // Clear raw inputs
           setCreateMapping(true)
           fetchData()
           toast.success("Campaigns assigned to new entity!")
@@ -649,6 +651,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
     setDonationIdentifierInputs({
       winred: entity.donationIdentifiers?.winred?.join(", ") || "",
       anedot: entity.donationIdentifiers?.anedot?.join(", ") || "",
+      substack: entity.donationIdentifiers?.substack || "",
     })
 
     // position is removed
@@ -739,9 +742,9 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
       // Reset donation identifiers on close
       setNewEntityDonationIdentifiers({})
       // Reset raw inputs when closing the dialog
-      setDonationIdentifierInputs({ winred: "", anedot: "" })
-    }
+    setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" })
   }
+}
 
   const getPartyColor = (party: string | null) => {
     if (!party) return "secondary"
@@ -1186,26 +1189,30 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                               {assignment.assignmentMethod && (
                                 <Badge
                                   className={
-                                    assignment.assignmentMethod === "manual"
-                                      ? "bg-gray-500"
-                                      : assignment.assignmentMethod === "auto_winred"
-                                        ? "bg-red-600"
-                                        : assignment.assignmentMethod === "auto_anedot"
-                                          ? "bg-green-600"
-                                          : assignment.assignmentMethod === "auto_domain"
-                                            ? "bg-blue-600"
-                                            : "bg-purple-600"
+                          assignment.assignmentMethod === "manual"
+                            ? "bg-gray-500"
+                            : assignment.assignmentMethod === "auto_winred"
+                              ? "bg-red-600"
+                              : assignment.assignmentMethod === "auto_anedot"
+                                ? "bg-green-600"
+                                : assignment.assignmentMethod === "auto_substack"
+                                  ? "bg-orange-500"
+                                  : assignment.assignmentMethod === "auto_domain"
+                                    ? "bg-blue-600"
+                                    : "bg-purple-600"
                                   }
                                 >
-                                  {assignment.assignmentMethod === "manual"
-                                    ? "Manual"
-                                    : assignment.assignmentMethod === "auto_winred"
-                                      ? "Auto: WinRed"
-                                      : assignment.assignmentMethod === "auto_anedot"
-                                        ? "Auto: Anedot"
-                                        : assignment.assignmentMethod === "auto_domain"
-                                          ? "Auto: Domain"
-                                          : "Auto: Phone"}
+                          {assignment.assignmentMethod === "manual"
+                            ? "Manual"
+                            : assignment.assignmentMethod === "auto_winred"
+                              ? "Auto: WinRed"
+                              : assignment.assignmentMethod === "auto_anedot"
+                                ? "Auto: Anedot"
+                                : assignment.assignmentMethod === "auto_substack"
+                                  ? "Auto: Substack"
+                                  : assignment.assignmentMethod === "auto_domain"
+                                    ? "Auto: Domain"
+                                    : "Auto: Phone"}
                                 </Badge>
                               )}
                             </div>
@@ -1682,37 +1689,59 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                     </p>
                   </div>
 
-                  <div>
-                    <Label htmlFor="entity-anedot-identifiers" className="text-sm font-normal">
-                      Anedot
-                    </Label>
-                    <Input
-                      id="entity-anedot-identifiers"
-                      placeholder="e.g., jeff-hurd-for-congress (comma-separated)"
-                      value={donationIdentifierInputs.anedot}
-                      onChange={(e) => {
-                        setDonationIdentifierInputs((prev) => ({
-                          ...prev,
-                          anedot: e.target.value,
-                        }))
-                      }}
-                      onBlur={(e) => {
-                        const value = e.target.value
-                        setNewEntityDonationIdentifiers((prev) => ({
-                          ...prev,
-                          anedot: value
-                            .split(",")
-                            .map((id) => id.trim())
-                            .filter((id) => id.length > 0),
-                        }))
-                      }}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      From URLs like: anedot.com/<span className="font-mono">jeff-hurd-for-congress</span>/donate
-                    </p>
+                    <div>
+                      <Label htmlFor="entity-anedot-identifiers" className="text-sm font-normal">
+                        Anedot
+                      </Label>
+                      <Input
+                        id="entity-anedot-identifiers"
+                        placeholder="e.g., jeff-hurd-for-congress (comma-separated)"
+                        value={donationIdentifierInputs.anedot}
+                        onChange={(e) => {
+                          setDonationIdentifierInputs((prev) => ({
+                            ...prev,
+                            anedot: e.target.value,
+                          }))
+                        }}
+                        onBlur={(e) => {
+                          const value = e.target.value
+                          setNewEntityDonationIdentifiers((prev) => ({
+                            ...prev,
+                            anedot: value
+                              .split(",")
+                              .map((id) => id.trim())
+                              .filter((id) => id.length > 0),
+                          }))
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        From URLs like: anedot.com/<span className="font-mono">jeff-hurd-for-congress</span>/donate
+                      </p>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="entity-substack-identifier" className="text-sm font-normal">
+                        Substack
+                      </Label>
+                      <Input
+                        id="entity-substack-identifier"
+                        placeholder="e.g., kirstengillibrand"
+                        value={donationIdentifierInputs.substack}
+                        onChange={(e) => {
+                          const value = e.target.value.trim().toLowerCase()
+                          setDonationIdentifierInputs((prev) => ({ ...prev, substack: e.target.value }))
+                          setNewEntityDonationIdentifiers((prev) => ({
+                            ...prev,
+                            substack: value || undefined,
+                          }))
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Local part of their Substack email: <span className="font-mono">kirstengillibrand</span>@substack.com
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
               {editingEntityId && (
                 <div className="border-t pt-4 space-y-3">
@@ -2011,30 +2040,51 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                         <Label htmlFor="assign-entity-anedot-identifiers" className="text-sm font-normal">
                           Anedot
                         </Label>
-                        <Input
-                          id="assign-entity-anedot-identifiers"
-                          placeholder="e.g., jeff-hurd-for-congress (comma-separated)"
-                          value={assignEntityDonationIdentifiers.anedot?.join(", ") || ""}
-                          onChange={(e) => {
-                            const value = e.target.value
-                            setAssignEntityDonationIdentifiers((prev) => ({
-                              ...prev,
-                              anedot: value
-                                .split(",")
-                                .map((id) => id.trim())
-                                .filter((id) => id.length > 0),
-                            }))
-                          }}
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          From URLs like: anedot.com/<span className="font-mono">jeff-hurd-for-congress</span>/donate
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  <Input
+                    id="assign-entity-anedot-identifiers"
+                    placeholder="e.g., jeff-hurd-for-congress (comma-separated)"
+                    value={assignEntityDonationIdentifiers.anedot?.join(", ") || ""}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setAssignEntityDonationIdentifiers((prev) => ({
+                        ...prev,
+                        anedot: value
+                          .split(",")
+                          .map((id) => id.trim())
+                          .filter((id) => id.length > 0),
+                      }))
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    From URLs like: anedot.com/<span className="font-mono">jeff-hurd-for-congress</span>/donate
+                  </p>
+                </div>
 
-                  <Button variant="outline" size="sm" onClick={() => setIsCreatingNewEntity(false)} className="w-full">
-                    Back to Select Existing Entity
+                <div>
+                  <Label htmlFor="assign-entity-substack-identifier" className="text-sm font-normal">
+                    Substack
+                  </Label>
+                  <Input
+                    id="assign-entity-substack-identifier"
+                    placeholder="e.g., kirstengillibrand"
+                    value={assignEntityDonationIdentifiers.substack || ""}
+                    onChange={(e) => {
+                      const value = e.target.value.trim().toLowerCase()
+                      setAssignEntityDonationIdentifiers((prev) => ({
+                        ...prev,
+                        substack: value || undefined,
+                      }))
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Local part of their Substack email: <span className="font-mono">kirstengillibrand</span>@substack.com
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <Button variant="outline" size="sm" onClick={() => setIsCreatingNewEntity(false)} className="w-full">
+              Back to Select Existing Entity
                   </Button>
                 </>
               )}

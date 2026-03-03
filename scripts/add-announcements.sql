@@ -1,12 +1,17 @@
 -- Migration: Add slug column to existing Announcement table
 -- Run this on your Neon database before deploying.
 
--- Add slug column if it doesn't already exist, defaulting to id so existing rows aren't null
+-- Add slug column if it doesn't already exist
 ALTER TABLE "Announcement"
   ADD COLUMN IF NOT EXISTS "slug" TEXT NOT NULL DEFAULT '';
 
--- Backfill any existing rows: set slug = id as a safe unique placeholder
-UPDATE "Announcement" SET "slug" = "id" WHERE "slug" = '';
+-- Backfill existing rows: generate slug from title (lowercase, spaces to hyphens, strip non-alphanumeric)
+UPDATE "Announcement"
+SET "slug" = regexp_replace(
+  regexp_replace(lower(trim("title")), '[^a-z0-9\s-]', '', 'g'),
+  '\s+', '-', 'g'
+)
+WHERE "slug" = '';
 
 -- Remove the default now that rows are populated
 ALTER TABLE "Announcement" ALTER COLUMN "slug" DROP DEFAULT;

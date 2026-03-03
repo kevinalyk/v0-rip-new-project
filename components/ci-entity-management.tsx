@@ -876,18 +876,13 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
   }
 
   const prepareEmailHtml = (html: string, senderEmail?: string) => {
-    const isSubstack = senderEmail?.toLowerCase().endsWith("@substack.com") ?? false
-    const substackStyle = isSubstack
-      ? `<style>
-          a { pointer-events: none !important; cursor: default !important; text-decoration: none !important; color: inherit !important; }
-        </style>`
-      : ""
+    const noLinkStyle = `<style>a { pointer-events: none !important; cursor: default !important; text-decoration: none !important; color: inherit !important; }</style>`
     if (html.includes("<head>")) {
-      return html.replace("<head>", `<head><base target="_blank">${substackStyle}`)
+      return html.replace("<head>", `<head><base target="_blank">${noLinkStyle}`)
     } else if (html.includes("<html>")) {
-      return html.replace("<html>", `<html><head><base target="_blank">${substackStyle}</head>`)
+      return html.replace("<html>", `<html><head><base target="_blank">${noLinkStyle}</head>`)
     } else {
-      return `<head><base target="_blank">${substackStyle}</head>${html}`
+      return `<head><base target="_blank">${noLinkStyle}</head>${html}`
     }
   }
 

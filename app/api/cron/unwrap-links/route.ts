@@ -503,16 +503,17 @@ export async function GET(request: Request) {
         const updatedCtaLinks = []
 
         for (const link of ctaLinks) {
-          const existingFinal = link.finalURL || link.finalUrl || link.strippedFinalURL || link.strippedFinalUrl
+          const existingFinal = link.finalUrl || link.strippedFinalUrl
           const linkUrl = link.url || ""
-          // Re-process if the original URL or stored finalURL is still an unresolved Substack JWT redirect
+          // Re-process if the original URL or stored finalUrl is still an unresolved Substack JWT redirect
           const isUnresolvedSubstackJwt =
             linkUrl.match(/substack\.com\/redirect\/\d+\//) ||
             (existingFinal && String(existingFinal).match(/substack\.com\/redirect\/\d+\//))
 
           if (existingFinal && !isUnresolvedSubstackJwt) {
-            // Already properly unwrapped, skip
-            updatedCtaLinks.push(link)
+            // Already properly unwrapped, skip — but clean up any legacy uppercase fields
+            const { finalURL: _a, strippedFinalURL: _b, ...rest } = link as any
+            updatedCtaLinks.push(rest)
             continue
           }
 
@@ -521,27 +522,24 @@ export async function GET(request: Request) {
 
           try {
             const originalUrl = link.url
-            const finalURL = await resolveRedirects(originalUrl)
+            const resolvedUrl = await resolveRedirects(originalUrl)
 
-            // Only strip query params from the final URL if it actually resolved
-            // to a different domain (meaning we successfully unwrapped a tracker).
-            // If the domain is the same as the original, the tracker didn't resolve -
-            // preserve the full original URL to avoid stripping meaningful path/query params.
             const originalDomain = new URL(originalUrl).hostname
-            const finalDomain = new URL(finalURL).hostname
+            const finalDomain = new URL(resolvedUrl).hostname
             const wasSubstackJwt = !!originalUrl.match(/substack\.com\/redirect\/\d+\//)
             const didResolve = finalDomain !== originalDomain || wasSubstackJwt
-            const strippedFinalURL = didResolve ? stripQueryParams(finalURL) : finalURL
+            const strippedFinalUrl = didResolve ? stripQueryParams(resolvedUrl) : resolvedUrl
 
+            const { finalURL: _a, strippedFinalURL: _b, ...rest } = link as any
             updatedCtaLinks.push({
-              ...link,
-              finalURL: finalURL,
-              strippedFinalURL: strippedFinalURL,
+              ...rest,
+              finalUrl: resolvedUrl,
+              strippedFinalUrl,
             })
 
             updated = true
             stats.emailCampaigns.succeeded++
-            console.log(`[v0] Unwrap Links Cron: Email Campaign ID ${campaign.id} - ${didResolve ? "RESOLVED" : "UNRESOLVED"} - ${originalUrl} → ${finalURL}`)
+            console.log(`[v0] Unwrap Links Cron: Email Campaign ID ${campaign.id} - ${didResolve ? "RESOLVED" : "UNRESOLVED"} - ${originalUrl} → ${resolvedUrl}`)
 
             // Small delay to avoid rate limiting
             await sleep(100)
@@ -681,15 +679,16 @@ export async function GET(request: Request) {
         const updatedCtaLinks = []
 
         for (const link of ctaLinks) {
-          const existingFinal = link.finalURL || link.finalUrl || link.strippedFinalURL || link.strippedFinalUrl
+          const existingFinal = link.finalUrl || link.strippedFinalUrl
           const linkUrl = link.url || ""
           const isUnresolvedSubstackJwt =
             linkUrl.match(/substack\.com\/redirect\/\d+\//) ||
             (existingFinal && String(existingFinal).match(/substack\.com\/redirect\/\d+\//))
 
           if (existingFinal && !isUnresolvedSubstackJwt) {
-            // Already properly unwrapped, skip
-            updatedCtaLinks.push(link)
+            // Already properly unwrapped, skip — clean up any legacy uppercase fields
+            const { finalURL: _a, strippedFinalURL: _b, ...rest } = link as any
+            updatedCtaLinks.push(rest)
             continue
           }
 
@@ -698,24 +697,24 @@ export async function GET(request: Request) {
 
           try {
             const originalUrl = link.url
-            const finalURL = await resolveRedirects(originalUrl)
+            const resolvedUrl = await resolveRedirects(originalUrl)
 
-            // Only strip query params if the link actually resolved to a different domain
             const originalDomain = new URL(originalUrl).hostname
-            const finalDomain = new URL(finalURL).hostname
+            const finalDomain = new URL(resolvedUrl).hostname
             const wasSubstackJwt = !!originalUrl.match(/substack\.com\/redirect\/\d+\//)
             const didResolve = finalDomain !== originalDomain || wasSubstackJwt
-            const strippedFinalURL = didResolve ? stripQueryParams(finalURL) : finalURL
+            const strippedFinalUrl = didResolve ? stripQueryParams(resolvedUrl) : resolvedUrl
 
+            const { finalURL: _a, strippedFinalURL: _b, ...rest } = link as any
             updatedCtaLinks.push({
-              ...link,
-              finalURL: finalURL,
-              strippedFinalURL: strippedFinalURL,
+              ...rest,
+              finalUrl: resolvedUrl,
+              strippedFinalUrl,
             })
 
             updated = true
             stats.smsMessages.succeeded++
-            console.log(`[v0] Unwrap Links Cron: SMS ID ${sms.id} - ${didResolve ? "RESOLVED" : "UNRESOLVED"} - ${originalUrl} → ${finalURL}`)
+            console.log(`[v0] Unwrap Links Cron: SMS ID ${sms.id} - ${didResolve ? "RESOLVED" : "UNRESOLVED"} - ${originalUrl} → ${resolvedUrl}`)
 
             // Small delay to avoid rate limiting
             await sleep(100)

@@ -1,8 +1,9 @@
--- Migration: Add Announcements table for What's New feature
--- Run this on your Neon database before deploying the What's New feature.
+-- Migration: Add Announcements table for What's New / News feature
+-- Run this on your Neon database before deploying.
 
 CREATE TABLE IF NOT EXISTS "Announcement" (
   "id"          TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+  "slug"        TEXT NOT NULL,
   "title"       TEXT NOT NULL,
   "body"        TEXT NOT NULL,
   "imageUrl"    TEXT,
@@ -10,10 +11,12 @@ CREATE TABLE IF NOT EXISTS "Announcement" (
   "createdBy"   TEXT NOT NULL,
   "updatedAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-  CONSTRAINT "Announcement_pkey" PRIMARY KEY ("id")
+  CONSTRAINT "Announcement_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "Announcement_slug_key" UNIQUE ("slug")
 );
 
 CREATE INDEX IF NOT EXISTS "Announcement_publishedAt_idx" ON "Announcement"("publishedAt" DESC);
+CREATE INDEX IF NOT EXISTS "Announcement_slug_idx" ON "Announcement"("slug");
 
 -- Auto-update updatedAt on row modification
 CREATE OR REPLACE FUNCTION update_announcement_updated_at()

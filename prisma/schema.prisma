@@ -463,14 +463,16 @@ model CronJobState {
 
 model Announcement {
   id          String   @id @default(cuid())
+  slug        String   @unique
   title       String
   body        String   @db.Text
-  imageUrl    String?  // Optional Vercel Blob URL
+  imageUrl    String?
   publishedAt DateTime @default(now())
-  createdBy   String   // userId of the super_admin who created it
+  createdBy   String
   updatedAt   DateTime @updatedAt
 
   @@index([publishedAt(sort: Desc)])
+  @@index([slug])
 }
 
 model RedactedName {

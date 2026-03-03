@@ -2,7 +2,19 @@ import { type NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
 
-// GET — available to all authenticated users
+function generateSlug(title: string): string {
+  const base = title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 60)
+  const suffix = Math.random().toString(36).slice(2, 6)
+  return `${base}-${suffix}`
+}
+
+// GET — all authenticated users
 export async function GET(request: NextRequest) {
   try {
     const authResult = await verifyAuth(request)
@@ -31,15 +43,14 @@ export async function POST(request: NextRequest) {
 
     const { title, body, imageUrl } = await request.json()
 
-    if (!title?.trim()) {
-      return NextResponse.json({ error: "Title is required" }, { status: 400 })
-    }
-    if (!body?.trim()) {
-      return NextResponse.json({ error: "Body is required" }, { status: 400 })
-    }
+    if (!title?.trim()) return NextResponse.json({ error: "Title is required" }, { status: 400 })
+    if (!body?.trim()) return NextResponse.json({ error: "Body is required" }, { status: 400 })
+
+    const slug = generateSlug(title.trim())
 
     const announcement = await prisma.announcement.create({
       data: {
+        slug,
         title: title.trim(),
         body: body.trim(),
         imageUrl: imageUrl || null,

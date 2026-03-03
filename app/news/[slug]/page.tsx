@@ -142,11 +142,11 @@ export default function NewsPostPage() {
     <AppLayout clientSlug={clientSlug}>
       {/* Full-width image banner */}
       {post.imageUrl && (
-        <div className="w-full max-h-[420px] overflow-hidden">
+        <div className="w-full h-[260px] overflow-hidden">
           <img
             src={post.imageUrl}
             alt={post.title}
-            className="w-full object-cover"
+            className="w-full h-full object-cover"
           />
         </div>
       )}

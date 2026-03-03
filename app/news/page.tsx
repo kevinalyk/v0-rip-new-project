@@ -253,7 +253,7 @@ export default function NewsPage() {
 
                 {/* Image banner */}
                 {a.imageUrl ? (
-                  <div className="relative w-full aspect-[16/7] overflow-hidden bg-muted">
+                  <div className="relative w-full aspect-[16/6] overflow-hidden bg-muted">
                     <img
                       src={a.imageUrl}
                       alt={a.title}
@@ -309,14 +309,14 @@ export default function NewsPage() {
                 )}
 
                 {/* Card body */}
-                <div className="px-6 py-5">
-                  <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide">
+                <div className="px-5 py-4">
+                  <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wide">
                     {format(new Date(a.publishedAt), "MMMM d, yyyy")}
                   </p>
-                  <h2 className="text-xl font-bold leading-snug mb-3 group-hover:text-[#dc2a28] transition-colors text-balance">
+                  <h2 className="text-lg font-bold leading-snug mb-2 group-hover:text-[#dc2a28] transition-colors text-balance">
                     {a.title}
                   </h2>
-                  <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3 mb-5">
+                  <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2 mb-4">
                     {a.body}
                   </p>
                   <Link href={`/news/${a.slug}`}>

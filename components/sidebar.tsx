@@ -111,12 +111,17 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
     fetchClients()
   }, [userRole])
 
+  // Paths that are not client-scoped — don't overwrite the selected client slug
+  const NON_CLIENT_PATHS = ["news", "login", "share"]
+
   useEffect(() => {
     const pathParts = pathname.split("/").filter(Boolean)
-    if (pathParts.length > 0 && pathParts[0] !== "admin") {
-      setSelectedClientSlug(pathParts[0])
-    } else if (pathParts[0] === "admin") {
+    if (pathParts.length === 0) return
+    if (NON_CLIENT_PATHS.includes(pathParts[0])) return // preserve existing selection
+    if (pathParts[0] === "admin") {
       setSelectedClientSlug("admin")
+    } else {
+      setSelectedClientSlug(pathParts[0])
     }
   }, [pathname])
 

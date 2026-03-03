@@ -24,20 +24,23 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/api/auth/forgot-password") ||
     request.nextUrl.pathname.startsWith("/api/auth/validate-invitation") ||
     request.nextUrl.pathname.startsWith("/api/auth/set-password") ||
-    request.nextUrl.pathname.startsWith("/api/share/")
+    request.nextUrl.pathname.startsWith("/api/share/") ||
+    request.nextUrl.pathname.startsWith("/api/announcements")
   ) {
     console.log("[v0] Middleware: Path is in skip list, allowing through")
     return NextResponse.next()
   }
 
-  // Skip auth check for login, signup, reset-password, set-password, and share pages
+  // Skip auth check for login, signup, reset-password, set-password, share pages, and public news
   if (
     request.nextUrl.pathname === "/login" ||
     request.nextUrl.pathname === "/signup" ||
     request.nextUrl.pathname === "/reset-password" ||
     request.nextUrl.pathname === "/set-password" ||
     request.nextUrl.pathname === "/testpage" ||
-    request.nextUrl.pathname.startsWith("/share/")
+    request.nextUrl.pathname.startsWith("/share/") ||
+    request.nextUrl.pathname === "/news" ||
+    request.nextUrl.pathname.startsWith("/news/")
   ) {
     return NextResponse.next()
   }
@@ -87,6 +90,7 @@ export async function middleware(request: NextRequest) {
             !currentPath.startsWith("/signup") &&
             !currentPath.startsWith("/set-password") &&
             !currentPath.startsWith("/share/") &&
+            !currentPath.startsWith("/news") &&
             !currentPath.startsWith(`/${clientSlug}`)
 
           // Redirect to their client's page if accessing unauthorized routes

@@ -250,11 +250,20 @@ export async function PUT(request: Request) {
         }
 
         if (modified) {
-          await prisma.competitiveInsightCampaign.update({
-            where: { id: email.id },
-            data: updateData,
-          })
-          emailModified++
+          try {
+            await prisma.competitiveInsightCampaign.update({
+              where: { id: email.id },
+              data: updateData,
+            })
+            emailModified++
+          } catch (updateError: any) {
+            // Skip records where redacted subject would collide with an existing unique (senderEmail, subject) pair
+            if (updateError?.code === "P2002") {
+              console.log(`[v0] Batch redaction: skipping email ${email.id} - unique constraint conflict after redaction`)
+            } else {
+              throw updateError
+            }
+          }
         }
       }
 

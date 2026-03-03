@@ -57,6 +57,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
   const [mounted, setMounted] = useState(false)
   const { domains, selectedDomain, setSelectedDomain, loading: domainsLoading } = useDomain()
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [authLoaded, setAuthLoaded] = useState(false)
   const [clients, setClients] = useState<Client[]>([])
   const [loadingClients, setLoadingClients] = useState(false)
   const [selectedClientSlug, setSelectedClientSlug] = useState<string>("")
@@ -84,6 +85,8 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
         }
       } catch (error) {
         console.error("Error fetching user role:", error)
+      } finally {
+        setAuthLoaded(true)
       }
     }
     fetchUserRole()
@@ -205,6 +208,72 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
     } else {
       router.push(`/${newClientSlug}/ci/campaigns`)
     }
+  }
+
+  const isPublicPath = pathname === "/news" || pathname.startsWith("/news/")
+  const isUnauthenticated = authLoaded && !userRole
+
+  // Minimal sidebar for unauthenticated visitors on public pages
+  if (isPublicPath && isUnauthenticated) {
+    return (
+      <div
+        className={cn(
+          "fixed left-0 top-0 h-full bg-background border-r border-border transition-all duration-300 ease-in-out flex flex-col z-50",
+          collapsed ? "w-16" : "w-64",
+        )}
+      >
+        <div className="p-4 flex justify-between items-center">
+          <div className="flex-1 flex justify-center">
+            <Logo collapsed={collapsed} variant="icon" />
+          </div>
+          <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className="h-8 w-8">
+            {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          </Button>
+        </div>
+
+        <div className="p-4 mt-auto">
+          <Separator className="mb-4" />
+          <div className="space-y-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "w-full justify-start gap-3 px-3",
+                pathname.startsWith("/news") && "bg-[#dc2a28]/10 text-[#dc2a28] hover:bg-[#dc2a28]/20",
+                collapsed && "justify-center",
+              )}
+              onClick={() => navigate("/news")}
+            >
+              <Megaphone size={20} />
+              {!collapsed && <span>{"What's New"}</span>}
+            </Button>
+            {mounted && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn("w-full justify-start gap-3 px-3", collapsed && "justify-center")}
+                onClick={toggleTheme}
+              >
+                {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
+                {!collapsed && <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>}
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "w-full justify-start gap-3 px-3 text-[#dc2a28] hover:text-[#dc2a28]/90 hover:bg-[#dc2a28]/10",
+                collapsed && "justify-center",
+              )}
+              onClick={() => navigate("/login")}
+            >
+              <LogOut size={20} className="rotate-180" />
+              {!collapsed && <span>Log In</span>}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

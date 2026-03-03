@@ -92,12 +92,13 @@ export default function SharePageClient() {
   }
 
   const prepareEmailHtml = (html: string) => {
+    const noLinkStyle = `<style>a { pointer-events: none !important; cursor: default !important; text-decoration: none !important; color: inherit !important; }</style>`
     if (html.includes("<head>")) {
-      return html.replace("<head>", '<head><base target="_blank">')
+      return html.replace("<head>", `<head><base target="_blank">${noLinkStyle}`)
     } else if (html.includes("<html>")) {
-      return html.replace("<html>", '<html><head><base target="_blank"></head>')
+      return html.replace("<html>", `<html><head><base target="_blank">${noLinkStyle}</head>`)
     } else {
-      return `<head><base target="_blank"></head>${html}`
+      return `<head><base target="_blank">${noLinkStyle}</head>${html}`
     }
   }
 

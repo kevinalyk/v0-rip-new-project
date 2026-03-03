@@ -529,7 +529,8 @@ export async function GET(request: Request) {
             // preserve the full original URL to avoid stripping meaningful path/query params.
             const originalDomain = new URL(originalUrl).hostname
             const finalDomain = new URL(finalURL).hostname
-            const didResolve = finalDomain !== originalDomain
+            const wasSubstackJwt = !!originalUrl.match(/substack\.com\/redirect\/\d+\//)
+            const didResolve = finalDomain !== originalDomain || wasSubstackJwt
             const strippedFinalURL = didResolve ? stripQueryParams(finalURL) : finalURL
 
             updatedCtaLinks.push({
@@ -702,7 +703,8 @@ export async function GET(request: Request) {
             // Only strip query params if the link actually resolved to a different domain
             const originalDomain = new URL(originalUrl).hostname
             const finalDomain = new URL(finalURL).hostname
-            const didResolve = finalDomain !== originalDomain
+            const wasSubstackJwt = !!originalUrl.match(/substack\.com\/redirect\/\d+\//)
+            const didResolve = finalDomain !== originalDomain || wasSubstackJwt
             const strippedFinalURL = didResolve ? stripQueryParams(finalURL) : finalURL
 
             updatedCtaLinks.push({

@@ -1,30 +1,30 @@
--- Migration: Add Announcements table for What's New feature
--- Run this on your Neon database before deploying the What's New feature.
+-- Migration: Add slug column to existing Announcement table
+-- Run this on your Neon database before deploying.
 
-CREATE TABLE IF NOT EXISTS "Announcement" (
-  "id"          TEXT NOT NULL DEFAULT gen_random_uuid()::text,
-  "title"       TEXT NOT NULL,
-  "body"        TEXT NOT NULL,
-  "imageUrl"    TEXT,
-  "publishedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "createdBy"   TEXT NOT NULL,
-  "updatedAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+-- Add slug column if it doesn't already exist
+ALTER TABLE "Announcement"
+  ADD COLUMN IF NOT EXISTS "slug" TEXT NOT NULL DEFAULT '';
 
-  CONSTRAINT "Announcement_pkey" PRIMARY KEY ("id")
-);
+-- Backfill existing rows: generate slug from title (lowercase, spaces to hyphens, strip non-alphanumeric)
+UPDATE "Announcement"
+SET "slug" = regexp_replace(
+  regexp_replace(lower(trim("title")), '[^a-z0-9\s-]', '', 'g'),
+  '\s+', '-', 'g'
+)
+WHERE "slug" = '';
 
-CREATE INDEX IF NOT EXISTS "Announcement_publishedAt_idx" ON "Announcement"("publishedAt" DESC);
+-- Remove the default now that rows are populated
+ALTER TABLE "Announcement" ALTER COLUMN "slug" DROP DEFAULT;
 
--- Auto-update updatedAt on row modification
-CREATE OR REPLACE FUNCTION update_announcement_updated_at()
-RETURNS TRIGGER AS $$
+-- Add unique constraint if not already present
+DO $$
 BEGIN
-  NEW."updatedAt" = CURRENT_TIMESTAMP;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'Announcement_slug_key'
+  ) THEN
+    ALTER TABLE "Announcement" ADD CONSTRAINT "Announcement_slug_key" UNIQUE ("slug");
+  END IF;
+END $$;
 
-DROP TRIGGER IF EXISTS set_announcement_updated_at ON "Announcement";
-CREATE TRIGGER set_announcement_updated_at
-  BEFORE UPDATE ON "Announcement"
-  FOR EACH ROW EXECUTE FUNCTION update_announcement_updated_at();
+CREATE INDEX IF NOT EXISTS "Announcement_slug_idx" ON "Announcement"("slug");

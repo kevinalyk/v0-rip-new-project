@@ -425,10 +425,10 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
             size="sm"
             className={cn(
               "w-full justify-start gap-3 px-3",
-              pathname.includes("/whats-new") && "bg-[#dc2a28]/10 text-[#dc2a28] hover:bg-[#dc2a28]/20",
+              pathname.startsWith("/news") && "bg-[#dc2a28]/10 text-[#dc2a28] hover:bg-[#dc2a28]/20",
               collapsed && "justify-center",
             )}
-            onClick={() => navigate(`/${getClientSlug()}/whats-new`)}
+            onClick={() => navigate("/news")}
           >
             <Megaphone size={20} />
             {!collapsed && <span>{"What's New"}</span>}

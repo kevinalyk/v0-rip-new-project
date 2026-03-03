@@ -461,6 +461,18 @@ model CronJobState {
   @@index([jobName])
 }
 
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  body        String   @db.Text
+  imageUrl    String?  // Optional Vercel Blob URL
+  publishedAt DateTime @default(now())
+  createdBy   String   // userId of the super_admin who created it
+  updatedAt   DateTime @updatedAt
+
+  @@index([publishedAt(sort: Desc)])
+}
+
 model RedactedName {
   id        String   @id @default(cuid())
   name      String   @unique // The exact name/term to redact (case-sensitive)

@@ -30,6 +30,7 @@ import {
   Building,
   Star,
   Globe,
+  Megaphone,
 } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { useTheme } from "next-themes"
@@ -419,6 +420,19 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
       <div className="p-4 mt-auto">
         <Separator className="mb-4" />
         <div className="space-y-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "w-full justify-start gap-3 px-3",
+              pathname.includes("/whats-new") && "bg-[#dc2a28]/10 text-[#dc2a28] hover:bg-[#dc2a28]/20",
+              collapsed && "justify-center",
+            )}
+            onClick={() => navigate(`/${getClientSlug()}/whats-new`)}
+          >
+            <Megaphone size={20} />
+            {!collapsed && <span>{"What's New"}</span>}
+          </Button>
           {mounted && (
             <Button
               variant="ghost"

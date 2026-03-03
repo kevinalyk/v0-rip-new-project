@@ -400,8 +400,8 @@ export default function WhatsNewPage() {
                 value={formBody}
                 onChange={(e) => setFormBody(e.target.value)}
                 disabled={saving}
-                rows={7}
-                className="resize-none"
+                rows={16}
+                className="resize-y min-h-[240px]"
               />
             </div>
 

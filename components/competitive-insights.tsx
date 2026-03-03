@@ -733,13 +733,19 @@ export function CompetitiveInsights({
     })
   }
 
-  const prepareEmailHtml = (html: string) => {
+  const prepareEmailHtml = (html: string, senderEmail?: string) => {
+    const isSubstack = senderEmail?.toLowerCase().endsWith("@substack.com") ?? false
+    const substackStyle = isSubstack
+      ? `<style>
+          a { pointer-events: none !important; cursor: default !important; text-decoration: none !important; color: inherit !important; }
+        </style>`
+      : ""
     if (html.includes("<head>")) {
-      return html.replace("<head>", '<head><base target="_blank">')
+      return html.replace("<head>", `<head><base target="_blank">${substackStyle}`)
     } else if (html.includes("<html>")) {
-      return html.replace("<html>", '<html><head><base target="_blank"></head>')
+      return html.replace("<html>", `<html><head><base target="_blank">${substackStyle}</head>`)
     } else {
-      return `<head><base target="_blank"></head>${html}`
+      return `<head><base target="_blank">${substackStyle}</head>${html}`
     }
   }
 
@@ -2143,7 +2149,7 @@ export function CompetitiveInsights({
                             }}
                           >
                             <iframe
-                              srcDoc={prepareEmailHtml(selectedCampaign.emailContent)}
+                              srcDoc={prepareEmailHtml(selectedCampaign.emailContent, selectedCampaign.senderEmail)}
                               sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation"
                               className="w-full h-[600px] border-0"
                               title="Email Preview"

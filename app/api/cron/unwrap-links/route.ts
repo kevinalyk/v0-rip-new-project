@@ -57,10 +57,41 @@ async function customFetch(
   })
 }
 
+// Substack JWT redirect links encode the destination URL in the JWT payload's "e" field.
+// e.g. substack.com/redirect/2/eyJlIjoiaHR0cHM6Ly8...
+// We can decode without verifying the signature since we only need the URL.
+function decodeSubstackJwtRedirect(url: string): string | null {
+  try {
+    const match = url.match(/substack\.com\/redirect\/\d+\/([A-Za-z0-9\-_]+)/)
+    if (!match) return null
+    const token = match[1]
+    const parts = token.split(".")
+    if (parts.length < 2) return null
+    // Base64url decode the payload
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/")
+    const decoded = Buffer.from(payload, "base64").toString("utf-8")
+    const parsed = JSON.parse(decoded)
+    if (parsed.e && typeof parsed.e === "string" && parsed.e.startsWith("http")) {
+      return parsed.e
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
 async function resolveRedirects(url: string): Promise<string> {
   const maxRedirects = 10
   let currentUrl = url
   let redirectCount = 0
+
+  // Fast path: decode Substack JWT redirect links without HTTP request
+  if (currentUrl.match(/substack\.com\/redirect\/\d+\//)) {
+    const decoded = decodeSubstackJwtRedirect(currentUrl)
+    if (decoded) {
+      return decoded
+    }
+  }
 
   try {
     while (redirectCount < maxRedirects) {
@@ -472,8 +503,15 @@ export async function GET(request: Request) {
         const updatedCtaLinks = []
 
         for (const link of ctaLinks) {
-          if (link.finalUrl || link.finalURL || link.strippedFinalURL || link.strippedFinalUrl) {
-            // Already unwrapped (at ingestion or by a previous cron run), skip
+          const existingFinal = link.finalURL || link.finalUrl || link.strippedFinalURL || link.strippedFinalUrl
+          const linkUrl = link.url || ""
+          // Re-process if the original URL or stored finalURL is still an unresolved Substack JWT redirect
+          const isUnresolvedSubstackJwt =
+            linkUrl.match(/substack\.com\/redirect\/\d+\//) ||
+            (existingFinal && String(existingFinal).match(/substack\.com\/redirect\/\d+\//))
+
+          if (existingFinal && !isUnresolvedSubstackJwt) {
+            // Already properly unwrapped, skip
             updatedCtaLinks.push(link)
             continue
           }
@@ -642,8 +680,14 @@ export async function GET(request: Request) {
         const updatedCtaLinks = []
 
         for (const link of ctaLinks) {
-          if (link.finalUrl || link.finalURL || link.strippedFinalURL || link.strippedFinalUrl) {
-            // Already unwrapped (at ingestion or by a previous cron run), skip
+          const existingFinal = link.finalURL || link.finalUrl || link.strippedFinalURL || link.strippedFinalUrl
+          const linkUrl = link.url || ""
+          const isUnresolvedSubstackJwt =
+            linkUrl.match(/substack\.com\/redirect\/\d+\//) ||
+            (existingFinal && String(existingFinal).match(/substack\.com\/redirect\/\d+\//))
+
+          if (existingFinal && !isUnresolvedSubstackJwt) {
+            // Already properly unwrapped, skip
             updatedCtaLinks.push(link)
             continue
           }

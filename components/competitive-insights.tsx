@@ -498,30 +498,31 @@ export function CompetitiveInsights({
 
     let matchesDonationPlatform = true
     if (selectedDonationPlatform !== "all") {
-      const ctaLinks = campaign.ctaLinks || []
-      const platformDomains: Record<string, string[]> = {
-        winred: ["winred.com"],
-        actblue: ["actblue.com"],
-        anedot: ["anedot.com"],
-        psq: ["psqimpact.com"],
-        ngpvan: ["ngpvan.com"],
-      }
-
-      const domains = platformDomains[selectedDonationPlatform] || []
-      matchesDonationPlatform = ctaLinks.some((link: any) => {
-        // Handle both string URLs and object formats
-        let urlToCheck = ""
-        if (typeof link === "string") {
-          urlToCheck = link
-        } else if (link.finalUrl) {
-          // Check finalUrl first as it contains the resolved donation URL
-          urlToCheck = link.finalUrl
-        } else if (link.url) {
-          urlToCheck = link.url
+      if (selectedDonationPlatform === "substack") {
+        matchesDonationPlatform = campaign.senderEmail?.toLowerCase().endsWith("@substack.com") ?? false
+      } else {
+        const ctaLinks = campaign.ctaLinks || []
+        const platformDomains: Record<string, string[]> = {
+          winred: ["winred.com"],
+          actblue: ["actblue.com"],
+          anedot: ["anedot.com"],
+          psq: ["psqimpact.com"],
+          ngpvan: ["ngpvan.com"],
         }
 
-        return domains.some((domain) => urlToCheck.toLowerCase().includes(domain))
-      })
+        const domains = platformDomains[selectedDonationPlatform] || []
+        matchesDonationPlatform = ctaLinks.some((link: any) => {
+          let urlToCheck = ""
+          if (typeof link === "string") {
+            urlToCheck = link
+          } else if (link.finalUrl) {
+            urlToCheck = link.finalUrl
+          } else if (link.url) {
+            urlToCheck = link.url
+          }
+          return domains.some((domain) => urlToCheck.toLowerCase().includes(domain))
+        })
+      }
     }
 
     const campaignDate = new Date(campaign.dateReceived)
@@ -732,13 +733,19 @@ export function CompetitiveInsights({
     })
   }
 
-  const prepareEmailHtml = (html: string) => {
+  const prepareEmailHtml = (html: string, senderEmail?: string) => {
+    const isSubstack = senderEmail?.toLowerCase().endsWith("@substack.com") ?? false
+    const substackStyle = isSubstack
+      ? `<style>
+          a { pointer-events: none !important; cursor: default !important; text-decoration: none !important; color: inherit !important; }
+        </style>`
+      : ""
     if (html.includes("<head>")) {
-      return html.replace("<head>", '<head><base target="_blank">')
+      return html.replace("<head>", `<head><base target="_blank">${substackStyle}`)
     } else if (html.includes("<html>")) {
-      return html.replace("<html>", '<html><head><base target="_blank"></head>')
+      return html.replace("<html>", `<html><head><base target="_blank">${substackStyle}</head>`)
     } else {
-      return `<head><base target="_blank"></head>${html}`
+      return `<head><base target="_blank">${substackStyle}</head>${html}`
     }
   }
 
@@ -1282,12 +1289,13 @@ export function CompetitiveInsights({
                       <SelectValue placeholder="All Platforms" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Platforms</SelectItem>
-                      <SelectItem value="winred">WinRed</SelectItem>
-                      <SelectItem value="actblue">ActBlue</SelectItem>
-                      <SelectItem value="anedot">Anedot</SelectItem>
-                      <SelectItem value="psq">PSQ</SelectItem>
-                      <SelectItem value="ngpvan">NGPVAN</SelectItem>
+                    <SelectItem value="all">All Platforms</SelectItem>
+                    <SelectItem value="winred">WinRed</SelectItem>
+                    <SelectItem value="actblue">ActBlue</SelectItem>
+                    <SelectItem value="anedot">Anedot</SelectItem>
+                    <SelectItem value="psq">PSQ</SelectItem>
+                    <SelectItem value="ngpvan">NGPVAN</SelectItem>
+                    <SelectItem value="substack">Substack</SelectItem>
                     </SelectContent>
                   </Select>
                 )}
@@ -2141,7 +2149,7 @@ export function CompetitiveInsights({
                             }}
                           >
                             <iframe
-                              srcDoc={prepareEmailHtml(selectedCampaign.emailContent)}
+                              srcDoc={prepareEmailHtml(selectedCampaign.emailContent, selectedCampaign.senderEmail)}
                               sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation"
                               className="w-full h-[600px] border-0"
                               title="Email Preview"

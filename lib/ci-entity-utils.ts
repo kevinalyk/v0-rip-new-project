@@ -10,13 +10,14 @@ export type DonationIdentifiers = {
   anedot?: string[]
   actblue?: string[]
   psqimpact?: string[]
-  ngpvan?: string[] // Added NGPVAN to donation identifiers type
+  ngpvan?: string[]
+  substack?: string // Substack handle e.g. "kirstengillibrand"
 }
 
 // Type for entity assignment
 type EntityAssignment = {
   entityId: string
-  assignmentMethod: "auto_domain" | "auto_winred" | "auto_anedot" | "auto_phone"
+  assignmentMethod: "auto_domain" | "auto_winred" | "auto_anedot" | "auto_phone" | "auto_substack"
 } | null
 
 function stripHtmlAndExtract(html: string): string {
@@ -146,6 +147,52 @@ export async function findEntityForSender(
 
     const mapping = emailMapping || domainMapping
     const entity = mapping?.entity
+
+    // Substack detection — match via donationIdentifiers.substack first, then fuzzy name match
+    if (!mapping && domain === "substack.com") {
+      const localPart = senderEmail.split("@")[0].toLowerCase()
+
+      // 1. Check entities that have a matching donationIdentifiers.substack handle
+      const allEntities = await prisma.ciEntity.findMany({
+        where: { donationIdentifiers: { not: null } },
+        select: { id: true, name: true, donationIdentifiers: true },
+      })
+      for (const entity of allEntities) {
+        const identifiers = entity.donationIdentifiers as DonationIdentifiers | null
+        if (identifiers?.substack?.toLowerCase() === localPart) {
+          console.log(`[Substack] Matched ${senderEmail} → entity "${entity.name}" via donationIdentifiers.substack`)
+          return { entityId: entity.id, assignmentMethod: "auto_substack" }
+        }
+      }
+
+      // 2. Fuzzy fallback — match local part or sender name against entity names
+      const normalized = localPart.replace(/[-_]/g, " ")
+      const nameEntities = await prisma.ciEntity.findMany({
+        where: {
+          OR: [
+            { name: { contains: normalized, mode: "insensitive" } },
+            { name: { contains: localPart, mode: "insensitive" } },
+          ],
+        },
+        select: { id: true, name: true },
+        take: 1,
+      })
+      if (nameEntities.length > 0) {
+        console.log(`[Substack] Matched ${senderEmail} → entity "${nameEntities[0].name}" via name fuzzy match`)
+        return { entityId: nameEntities[0].id, assignmentMethod: "auto_substack" }
+      }
+
+      if (senderName) {
+        const nameMatch = await prisma.ciEntity.findFirst({
+          where: { name: { contains: senderName.trim(), mode: "insensitive" } },
+          select: { id: true, name: true },
+        })
+        if (nameMatch) {
+          console.log(`[Substack] Matched ${senderEmail} → entity "${nameMatch.name}" via sender name`)
+          return { entityId: nameMatch.id, assignmentMethod: "auto_substack" }
+        }
+      }
+    }
 
     if (entity && entity.type === "data_broker" && emailSubject && emailBody) {
       console.log(`[Data Broker] ${entity.name} (${senderEmail}) - running AI analysis`)

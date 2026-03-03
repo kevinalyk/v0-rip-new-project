@@ -418,8 +418,8 @@ export async function GET(request: NextRequest) {
             if (typeof link === "string") {
               urlsToCheck = [link]
             } else {
-              if (link.strippedFinalURL) urlsToCheck.push(link.strippedFinalURL)
-              if (link.finalUrl || link.finalURL) urlsToCheck.push(link.finalUrl || link.finalURL)
+              if (link.strippedFinalUrl) urlsToCheck.push(link.strippedFinalUrl)
+              if (link.finalUrl) urlsToCheck.push(link.finalUrl)
               if (link.url) urlsToCheck.push(link.url)
             }
             return urlsToCheck.some((url) =>

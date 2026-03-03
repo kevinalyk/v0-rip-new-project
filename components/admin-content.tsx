@@ -104,6 +104,16 @@ export function AdminContent({ user }: AdminContentProps) {
 
   const [unwrapCampaignId, setUnwrapCampaignId] = useState("")
   const [isUnwrappingSingle, setIsUnwrappingSingle] = useState(false)
+  const [isRemovingFinalURL, setIsRemovingFinalURL] = useState(false)
+  const [removeFinalURLResults, setRemoveFinalURLResults] = useState<{
+    emailCampaignsUpdated: number
+    emailCampaignsSkipped: number
+    emailLinksRemoved: number
+    smsMessagesUpdated: number
+    smsMessagesSkipped: number
+    smsLinksRemoved: number
+    totalLinksRemoved: number
+  } | null>(null)
   const [unwrapResults, setUnwrapResults] = useState<{
     type: "email" | "sms"
     displayName: string
@@ -1152,6 +1162,29 @@ export function AdminContent({ user }: AdminContentProps) {
     URL.revokeObjectURL(url)
   }
 
+  const handleRemoveFinalURL = async () => {
+    setIsRemovingFinalURL(true)
+    setRemoveFinalURLResults(null)
+    try {
+      const response = await fetch("/api/admin/remove-final-url-uppercase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      })
+      const data = await response.json()
+      if (response.ok && data.success) {
+        setRemoveFinalURLResults(data.summary)
+        toast.success(`Removed ${data.summary.totalLinksRemoved} "finalURL" keys across ${data.summary.emailCampaignsUpdated + data.summary.smsMessagesUpdated} records`)
+      } else {
+        toast.error(data.error || "Failed to remove finalURL keys")
+      }
+    } catch {
+      toast.error("Failed to remove finalURL keys")
+    } finally {
+      setIsRemovingFinalURL(false)
+    }
+  }
+
   const handleUnwrapSingleCampaign = async () => {
     if (!unwrapCampaignId.trim()) {
       toast.error("Please enter a campaign ID or share link")
@@ -2020,6 +2053,59 @@ export function AdminContent({ user }: AdminContentProps) {
           )}
         </CardContent>
       </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Remove Legacy "finalURL" Keys</CardTitle>
+          <CardDescription>
+            Scans all CTA links in CompetitiveInsightCampaign and SmsQueue and removes any{" "}
+            <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">finalURL</code> (uppercase) keys. The
+            canonical field is{" "}
+            <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">finalUrl</code> (camelCase) and will not
+            be touched. Once removed, the unwrap CRON will re-process those links cleanly on its next pass.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button
+            onClick={handleRemoveFinalURL}
+            disabled={isRemovingFinalURL}
+            variant="destructive"
+            className="gap-2"
+          >
+            {isRemovingFinalURL ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Scanning & removing...
+              </>
+            ) : (
+              'Remove "finalURL" Keys'
+            )}
+          </Button>
+          {removeFinalURLResults && (
+            <div className="rounded-md border p-4 space-y-3 text-sm">
+              <p className="font-medium">Results</p>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-muted-foreground">
+                <span>Email campaigns updated</span>
+                <span className="font-mono text-foreground">{removeFinalURLResults.emailCampaignsUpdated}</span>
+                <span>Email campaigns skipped</span>
+                <span className="font-mono text-foreground">{removeFinalURLResults.emailCampaignsSkipped}</span>
+                <span>Email "finalURL" keys removed</span>
+                <span className="font-mono text-foreground">{removeFinalURLResults.emailLinksRemoved}</span>
+                <span>SMS messages updated</span>
+                <span className="font-mono text-foreground">{removeFinalURLResults.smsMessagesUpdated}</span>
+                <span>SMS messages skipped</span>
+                <span className="font-mono text-foreground">{removeFinalURLResults.smsMessagesSkipped}</span>
+                <span>SMS "finalURL" keys removed</span>
+                <span className="font-mono text-foreground">{removeFinalURLResults.smsLinksRemoved}</span>
+              </div>
+              <p className="font-medium pt-1">
+                Total "finalURL" keys removed:{" "}
+                <span className="text-destructive">{removeFinalURLResults.totalLinksRemoved}</span>
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Test URL Unwrapping</CardTitle>

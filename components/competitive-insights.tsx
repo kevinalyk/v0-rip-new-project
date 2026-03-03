@@ -83,7 +83,7 @@ interface Campaign {
   inboxCount: number
   spamCount: number
   notDeliveredCount: number
-  ctaLinks: string[] | Array<{ url: string; finalUrl?: string; type: string }> // Support both old and new formats, Added finalUrl support
+  ctaLinks: string[] | Array<{ url: string; finalUrl?: string; strippedFinalUrl?: string; type: string }>
   tags: string[]
   emailPreview: string
   emailContent: string | null
@@ -2168,10 +2168,10 @@ export function CompetitiveInsights({
                         <div className="space-y-3">
                           {selectedCampaign.ctaLinks.map((link, idx) => {
                             const url = typeof link === "string" ? link : link.url
-                            const finalUrl = typeof link === "string" ? null : link.finalUrl
-                            const strippedFinalURL = typeof link === "string" ? null : link.strippedFinalURL
-                            const type = typeof link === "string" ? null : link.type
-                            const displayUrl = strippedFinalURL || finalUrl || url // Show stripped URL first, then final URL, then original
+          const finalUrl = typeof link === "string" ? null : link.finalUrl
+          const strippedFinalUrl = typeof link === "string" ? null : (link.strippedFinalUrl || (link as any).strippedFinalURL)
+
+          const displayUrl = strippedFinalUrl || finalUrl || url // Show stripped URL first, then final URL, then original
 
                             return (
                               <div key={idx} className="rounded-lg border bg-muted/20 p-3">

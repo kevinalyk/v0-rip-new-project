@@ -2319,12 +2319,12 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                             <div key={index} className="rounded-lg border p-4 space-y-2">
                               <div className="flex items-start justify-between">
                                 <a
-                                  href={link.finalUrl || link.url}
+                                  href={link.strippedFinalUrl || (link as any).strippedFinalURL || link.finalUrl || link.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-blue-600 hover:underline break-all flex-1"
                                 >
-                                  {link.finalUrl || link.url}
+                                  {link.strippedFinalUrl || (link as any).strippedFinalURL || link.finalUrl || link.url}
                                 </a>
                                 <Badge className="ml-2 flex-shrink-0">{link.type || "Other"}</Badge>
                               </div>

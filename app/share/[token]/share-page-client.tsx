@@ -295,7 +295,7 @@ export default function SharePageClient() {
               {campaign.ctaLinks.length > 0 ? (
                 <div className="space-y-3">
                   {campaign.ctaLinks.map((link, idx) => {
-                    const displayUrl = link.finalUrl || link.url
+                    const displayUrl = link.strippedFinalUrl || (link as any).strippedFinalURL || link.finalUrl || link.url
 
                     return (
                       <div key={idx} className="rounded-lg border bg-muted/20 p-3">

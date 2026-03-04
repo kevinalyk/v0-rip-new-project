@@ -31,9 +31,8 @@ export default function InboxSeedListPage({ params }: { params: { clientSlug: st
         const userData = await authResponse.json()
         setCurrentUser(userData)
 
-        // Check if this is the admin route
-        if (clientSlug === "admin") {
-          // Only super_admins can access /admin
+        // Check if this is the admin route OR rip super_admin — both get full admin view
+        if (clientSlug === "admin" || (clientSlug === "rip" && userData.role === "super_admin")) {
           if (userData.role !== "super_admin") {
             router.push(`/${userData.clientSlug || "login"}`)
             return
@@ -49,7 +48,6 @@ export default function InboxSeedListPage({ params }: { params: { clientSlug: st
         })
 
         if (!verifyResponse.ok) {
-          // User doesn't have access to this client
           if (userData.role === "super_admin") {
             router.push("/rip/ci/campaigns")
           } else {
@@ -68,7 +66,7 @@ export default function InboxSeedListPage({ params }: { params: { clientSlug: st
     checkAuth()
   }, [clientSlug, router])
 
-  if (loading || !selectedDomain) {
+  if (loading || (!isAdminView && !selectedDomain)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-rip-red" />

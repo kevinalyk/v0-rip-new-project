@@ -176,7 +176,7 @@ export default function SeedListContent({
       if (selectedDomain.id !== "all") {
         params.append("domainId", selectedDomain.id)
       }
-      if (clientSlug && clientSlug !== "admin") {
+      if (clientSlug && clientSlug !== "admin" && clientSlug !== "rip") {
         params.append("clientSlug", clientSlug)
       }
 
@@ -256,7 +256,7 @@ export default function SeedListContent({
       setLoading(true)
 
       const params = new URLSearchParams()
-      if (clientSlug && clientSlug !== "admin") {
+      if (clientSlug && clientSlug !== "admin" && clientSlug !== "rip") {
         params.append("clientSlug", clientSlug)
       }
 

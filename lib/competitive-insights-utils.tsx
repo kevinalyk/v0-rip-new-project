@@ -5,7 +5,7 @@ import { sanitizeSubject } from "@/lib/campaign-detector"
 import https from "https"
 import http from "http"
 import { URL } from "url"
-import { getRedactedNames, applyRedaction } from "@/lib/redaction-utils"
+import { getRedactedNames, applyRedaction, autoDetectAndSaveNames, clearRedactionCache } from "@/lib/redaction-utils"
 
 // Custom fetch using Node's http/https modules to properly handle SSL
 async function customFetch(
@@ -1386,7 +1386,16 @@ export async function processCompetitiveInsights(
       }
     }
 
-    // Apply name redaction to protect seed identities
+    // Auto-detect and save any personalized names found in the email HTML
+    // (e.g. "Hey Wolfgang," or HubSpot's <span style="text-transform:capitalize">Wolfgang</span>)
+    // autoDetectAndSaveNames already calls clearRedactionCache() when it adds new names,
+    // but we force-clear here too to guarantee getRedactedNames() below is never stale.
+    if (sanitizedEmailContent) {
+      await autoDetectAndSaveNames(sanitizedEmailContent, prisma)
+      clearRedactionCache()
+    }
+
+    // Apply name redaction to protect seed identities — always fetches fresh from DB
     const redactedNames = await getRedactedNames()
     const redactedSubject = (applyRedaction(sanitizedSubject, redactedNames) as string) || sanitizedSubject
     const redactedSenderName = (applyRedaction(senderName, redactedNames) as string) || senderName

@@ -36,6 +36,14 @@ export function AdminContent({ user }: AdminContentProps) {
   const [isMigratingSMS, setIsMigratingSMS] = useState(false)
   const [isSanitizingEmails, setIsSanitizingEmails] = useState(false)
   const [isBackfillingSMSLinks, setIsBackfillingSMSLinks] = useState(false)
+  const [isRedactingSMSLinks, setIsRedactingSMSLinks] = useState(false)
+  const [redactSMSLinksResults, setRedactSMSLinksResults] = useState<{
+    dryRun: boolean
+    total: number
+    updated: number
+    skipped: number
+    samples: Array<{ id: string; before: string; after: string }>
+  } | null>(null)
   const [isCleaningCTAParams, setIsCleaningCTAParams] = useState(false)
   const [isSanitizingSubjects, setIsSanitizingSubjects] = useState(false)
   const [isUnwrappingLinks, setIsUnwrappingLinks] = useState(false)
@@ -350,6 +358,34 @@ export function AdminContent({ user }: AdminContentProps) {
       toast.error("Failed to backfill SMS links")
     } finally {
       setIsBackfillingSMSLinks(false)
+    }
+  }
+
+  const handleRedactSMSLinks = async (dryRun = false) => {
+    setIsRedactingSMSLinks(true)
+    setRedactSMSLinksResults(null)
+    try {
+      const response = await fetch("/api/admin/redact-sms-links", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dryRun }),
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setRedactSMSLinksResults(data)
+        toast.success(
+          dryRun
+            ? `Dry run: ${data.updated} messages would be updated`
+            : `Done: ${data.updated} messages updated, ${data.skipped} already clean`
+        )
+      } else {
+        toast.error(data.error || "Failed to redact SMS links")
+      }
+    } catch (error) {
+      toast.error("Failed to redact SMS links")
+    } finally {
+      setIsRedactingSMSLinks(false)
     }
   }
 
@@ -1502,6 +1538,56 @@ export function AdminContent({ user }: AdminContentProps) {
               </>
             )}
           </Button>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Redact SMS Links</CardTitle>
+          <CardDescription>
+            Retroactively replace all URLs in existing SMS message bodies with "[Omitted Link]". Catches both
+            https:// links and bare domain URLs like 76pac.com/9k7Tfrh. Links are preserved in the CTA Links
+            section. Run a dry run first to preview changes before applying.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => handleRedactSMSLinks(true)}
+              disabled={isRedactingSMSLinks}
+              className="gap-2"
+            >
+              {isRedactingSMSLinks ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
+              Dry Run (Preview)
+            </Button>
+            <Button
+              onClick={() => handleRedactSMSLinks(false)}
+              disabled={isRedactingSMSLinks}
+              className="gap-2"
+            >
+              {isRedactingSMSLinks ? <Loader2 size={16} className="animate-spin" /> : <MessageSquare size={16} />}
+              Redact All SMS Links
+            </Button>
+          </div>
+          {redactSMSLinksResults && (
+            <div className="text-sm space-y-2">
+              <p className="font-medium">
+                {redactSMSLinksResults.dryRun ? "Dry run results:" : "Results:"} {redactSMSLinksResults.updated} updated,{" "}
+                {redactSMSLinksResults.skipped} already clean (of {redactSMSLinksResults.total} total)
+              </p>
+              {redactSMSLinksResults.samples.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-muted-foreground font-medium">Sample changes:</p>
+                  {redactSMSLinksResults.samples.map((s) => (
+                    <div key={s.id} className="rounded border p-2 text-xs space-y-1">
+                      <p className="text-muted-foreground">Before: {s.before}</p>
+                      <p>After: {s.after}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
       <Card>

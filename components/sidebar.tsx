@@ -134,9 +134,10 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
       const ripClient = clients.find((client) => client.slug === "rip")
       if (ripClient) {
         setSelectedClientSlug("rip")
-        // If we're not already on a client path, navigate to RIP's CI campaigns
+        // Only navigate away if on a truly rootless path (not a public path like /news)
         const pathParts = pathname.split("/").filter(Boolean)
-        if (pathParts.length === 0 || pathParts[0] === "admin") {
+        const isOnPublicPath = NON_CLIENT_PATHS.includes(pathParts[0])
+        if (!isOnPublicPath && (pathParts.length === 0 || pathParts[0] === "admin")) {
           router.push("/rip/ci/campaigns")
         }
       }

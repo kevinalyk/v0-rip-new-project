@@ -719,19 +719,7 @@ export function CompetitiveInsights({
     const parts = message.split(urlRegex)
 
     return parts.map((part, index) => {
-      if (part.match(urlRegex)) {
-        return (
-          <a
-            key={index}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-red-600 hover:text-red-700 underline break-all"
-          >
-            {part}
-          </a>
-        )
-      }
+      // Render URLs as plain text — links are shown in the CTA Links section below
       return <span key={index}>{part}</span>
     })
   }

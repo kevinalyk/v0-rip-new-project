@@ -136,7 +136,12 @@ export async function POST(request: Request) {
 
     // Apply name redaction to protect seed identities
     const redactedNames = await getRedactedNames()
-    const redactedMessage = (applyRedaction(cleanedMessage, redactedNames) as string) || cleanedMessage
+    const nameRedactedMessage = (applyRedaction(cleanedMessage, redactedNames) as string) || cleanedMessage
+
+    // Omit URLs from the message body — links are preserved in ctaLinks for the CTA section
+    // Matches both https://example.com/path and bare domains like example.com/path
+    const urlRegex = /https?:\/\/[^\s]+|(?<![a-zA-Z0-9@])(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:\/[^\s]*)?/g
+    const redactedMessage = nameRedactedMessage.replace(urlRegex, "[Omitted Link]")
 
     // Store the raw SMS data in the queue for processing
     const smsData = {

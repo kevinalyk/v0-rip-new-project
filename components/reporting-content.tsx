@@ -142,10 +142,8 @@ export function ReportingContent({ isAdminView, clientSlug }: ReportingContentPr
 
   const fetchSubscriptionInfo = async () => {
     try {
-      console.log("[v0] Reporting: Fetching subscription info for clientSlug:", clientSlug)
-
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 10000)
 
       const url = clientSlug ? `/api/billing?clientSlug=${clientSlug}` : "/api/billing"
 
@@ -158,19 +156,14 @@ export function ReportingContent({ isAdminView, clientSlug }: ReportingContentPr
 
       if (response.ok) {
         const data = await response.json()
-        console.log("[v0] Reporting: Subscription data received:", data)
         const plan = data.client?.subscriptionPlan || (isAdminView ? "professional" : null)
         setSubscriptionPlan(plan)
-        console.log("[v0] Reporting: Set subscriptionPlan to:", plan)
       } else {
-        console.error("[v0] Reporting: Failed to fetch subscription info:", response.status)
         setSubscriptionPlan(isAdminView ? "professional" : "starter")
       }
     } catch (error) {
-      console.error("[v0] Reporting: Error fetching subscription info:", error)
       setSubscriptionPlan(isAdminView ? "professional" : "starter")
     } finally {
-      console.log("[v0] Reporting: Setting loadingSubscription to false")
       setLoadingSubscription(false)
     }
   }
@@ -212,10 +205,6 @@ export function ReportingContent({ isAdminView, clientSlug }: ReportingContentPr
   }
 
   const hasReportingAccess = subscriptionPlan !== "starter"
-
-  console.log("[v0] Reporting: Paywall check - subscriptionPlan:", subscriptionPlan)
-  console.log("[v0] Reporting: Paywall check - hasReportingAccess:", hasReportingAccess)
-  console.log("[v0] Reporting: loading:", loading, "loadingSubscription:", loadingSubscription)
 
   if (loading || loadingSubscription) {
     return (

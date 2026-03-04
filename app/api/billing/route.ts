@@ -14,11 +14,37 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log("[v0] Billing API: Fetching client with ID:", user.clientId)
+    // Resolve which client to return billing info for.
+    // Super admins can view any client's billing by passing ?clientSlug=xxx.
+    // Regular users always see their own client.
+    const clientSlugParam = request.nextUrl.searchParams.get("clientSlug")
+    let targetClientId = user.clientId
+
+    if (clientSlugParam && clientSlugParam !== "admin" && clientSlugParam !== "rip") {
+      if (user.role === "super_admin") {
+        // Super admins can look up any client
+        const targetClient = await prisma.client.findUnique({
+          where: { slug: clientSlugParam },
+          select: { id: true },
+        })
+        if (targetClient) targetClientId = targetClient.id
+      } else {
+        // Regular users: verify the slug matches their own client
+        const targetClient = await prisma.client.findUnique({
+          where: { slug: clientSlugParam },
+          select: { id: true },
+        })
+        if (targetClient && targetClient.id === user.clientId) {
+          targetClientId = targetClient.id
+        }
+      }
+    }
+
+    console.log("[v0] Billing API: Fetching client with ID:", targetClientId)
 
     // Get client billing information
     const client = await prisma.client.findUnique({
-      where: { id: user.clientId },
+      where: { id: targetClientId },
       select: {
         id: true,
         name: true,

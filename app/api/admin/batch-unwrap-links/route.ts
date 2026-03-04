@@ -402,7 +402,6 @@ interface CtaLink {
   url: string
   type?: string
   finalUrl?: string
-  displayUrl?: string
 }
 
 async function processLink(link: CtaLink): Promise<{ link: CtaLink; unwrapped: boolean; error?: string }> {
@@ -429,7 +428,6 @@ async function processLink(link: CtaLink): Promise<{ link: CtaLink; unwrapped: b
       link: {
         ...link,
         finalUrl: finalStripped,
-        displayUrl: finalStripped,
       },
       unwrapped: true,
       error: undefined,

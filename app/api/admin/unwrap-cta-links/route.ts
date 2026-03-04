@@ -126,7 +126,6 @@ export async function POST(request: Request) {
               ...link,
               url: cleanedUrl,
               finalUrl: cleanedFinalUrl,
-              displayUrl: cleanedFinalUrl,
             })
             needsUpdate = true
           } else {
@@ -134,7 +133,6 @@ export async function POST(request: Request) {
               ...link,
               url: cleanedUrl,
               finalUrl: cleanedUrl,
-              displayUrl: cleanedUrl,
             })
           }
         }

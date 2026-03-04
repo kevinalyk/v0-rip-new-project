@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { getUserFromRequest } from "@/lib/auth"
+import { getAuthenticatedUser } from "@/lib/auth"
 
 // Matches https://... URLs and bare domain URLs like 76pac.com/9k7Tfrh
 // Excludes email addresses (foo@domain.com) via negative lookbehind on @
@@ -13,7 +13,7 @@ function redactLinks(message: string): string {
 
 export async function POST(request: Request) {
   try {
-    const user = await getUserFromRequest(request)
+    const user = await getAuthenticatedUser(request)
     if (!user || user.role !== "super_admin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
     }

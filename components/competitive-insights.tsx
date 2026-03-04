@@ -220,7 +220,7 @@ export function CompetitiveInsights({
   apiEndpoint, // Accept apiEndpoint prop
   showPersonalBadge = false, // Accept showPersonalBadge prop
   currentUser, // Accept currentUser prop
-  subscriptionPlan = "free", // Accept subscriptionPlan prop, default to "free"
+  subscriptionPlan, // Accept subscriptionPlan prop — undefined means "fetch from billing"
   hideHeader = false, // Hide header by default false
 }: CompetitiveInsightsProps) {
   const router = useRouter()
@@ -249,6 +249,7 @@ export function CompetitiveInsights({
   const [hasCompetitiveInsights, setHasCompetitiveInsights] = useState(false)
   const [loadingSubscription, setLoadingSubscription] = useState(true)
   const [hasAdminAccess, setHasAdminAccess] = useState(false)
+  const [resolvedPlan, setResolvedPlan] = useState<SubscriptionPlan | "free" | null>(subscriptionPlan ?? null)
 
   useEffect(() => {
     if (searchTerm === "" && activeSearchQuery !== "") {
@@ -354,9 +355,11 @@ export function CompetitiveInsights({
         })
         if (subscriptionResponse.ok) {
           const data = await subscriptionResponse.json()
-          // Use the subscriptionPlan prop if provided, otherwise use fetched data
-          // This assumes subscriptionPlan prop is the source of truth if passed.
-          // setSubscriptionPlan(data.client?.subscriptionPlan || null) // This line is removed as subscriptionPlan is now a prop
+          // If subscriptionPlan was explicitly passed as a prop, honour it.
+          // Otherwise resolve from the billing API response.
+          if (subscriptionPlan === undefined) {
+            setResolvedPlan(data.client?.subscriptionPlan || "free")
+          }
           setSubscriptionStatus(data.client?.subscriptionStatus || "active")
           setHasCompetitiveInsights(data.client?.hasCompetitiveInsights || false)
           setHasAdminAccess(data.hasAdminAccess || false)
@@ -812,15 +815,15 @@ export function CompetitiveInsights({
     fetchCampaigns(true) // Call fetchCampaigns with isRefresh = true
   }
 
-  const ciAccessLevel = subscriptionPlan
-    ? hasCompetitiveInsightsAccess(subscriptionPlan, hasCompetitiveInsights, subscriptionStatus)
+  const ciAccessLevel = resolvedPlan
+    ? hasCompetitiveInsightsAccess(resolvedPlan, hasCompetitiveInsights, subscriptionStatus)
     : "none"
 
   const shouldShowPaywall = ciAccessLevel === "none" && !hasAdminAccess
   const shouldShowPreview = ciAccessLevel === "preview" && !hasAdminAccess
   const previewLimit = 5
 
-  if (loading || loadingSubscription) {
+  if (loading || loadingSubscription || resolvedPlan === null) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-muted-foreground">Loading competitive insights...</div>

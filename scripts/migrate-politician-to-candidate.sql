@@ -3,13 +3,13 @@
 
 BEGIN;
 
-UPDATE "CIEntity"
+UPDATE "CiEntity"
 SET "type" = 'candidate'
 WHERE "type" = 'politician';
 
 -- Confirm how many rows were updated
 SELECT COUNT(*) AS total_candidates
-FROM "CIEntity"
+FROM "CiEntity"
 WHERE "type" = 'candidate';
 
 COMMIT;

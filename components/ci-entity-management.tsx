@@ -743,9 +743,9 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
       // Reset donation identifiers on close
       setNewEntityDonationIdentifiers({})
       // Reset raw inputs when closing the dialog
-    setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" })
+      setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" })
+    }
   }
-}
 
   const getPartyColor = (party: string | null) => {
     if (!party) return "secondary"

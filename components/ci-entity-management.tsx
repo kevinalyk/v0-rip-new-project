@@ -982,31 +982,29 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className="sticky top-0 z-10 bg-background border-b">
-          <div className="container mx-auto px-6 max-w-7xl pt-6 pb-0">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h1 className="text-3xl font-bold text-foreground mb-1">CI Entity Management</h1>
-                <p className="text-muted-foreground">
-                  Assign competitive insight emails and SMS messages to entities for better organization
-                </p>
-              </div>
-              <Button onClick={() => setShowCreateDialog(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Entity
-              </Button>
+      <div className="container mx-auto p-6 max-w-7xl">
+        <div className="mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground mb-2">CI Entity Management</h1>
+              <p className="text-muted-foreground">
+                Assign competitive insight emails and SMS messages to entities for better organization
+              </p>
             </div>
-            <TabsList>
-              <TabsTrigger value="unassigned">Unassigned Messages ({unassignedCampaigns.length})</TabsTrigger>
-              <TabsTrigger value="data-broker">Data Broker Campaigns</TabsTrigger>
-              <TabsTrigger value="recent-assignments">Recent Assignments</TabsTrigger>
-              <TabsTrigger value="entities">Entities ({pagination.totalCount})</TabsTrigger>
-            </TabsList>
+            <Button onClick={() => setShowCreateDialog(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Entity
+            </Button>
           </div>
         </div>
 
-        <div className="container mx-auto px-6 max-w-7xl py-6 space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="unassigned">Unassigned Messages ({unassignedCampaigns.length})</TabsTrigger>
+            <TabsTrigger value="data-broker">Data Broker Campaigns</TabsTrigger>
+            <TabsTrigger value="recent-assignments">Recent Assignments</TabsTrigger>
+            <TabsTrigger value="entities">Entities ({pagination.totalCount})</TabsTrigger>
+          </TabsList>
 
           <TabsContent value="unassigned" className="space-y-4">
             {unassignedCampaigns.length > 0 && (
@@ -2457,8 +2455,8 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        </div>
-      </Tabs>
+        </Tabs>
+      </div>
     </div>
   )
 }

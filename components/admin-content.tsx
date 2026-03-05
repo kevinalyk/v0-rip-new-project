@@ -36,6 +36,13 @@ export function AdminContent({ user }: AdminContentProps) {
   const [isMigratingSMS, setIsMigratingSMS] = useState(false)
   const [isSanitizingEmails, setIsSanitizingEmails] = useState(false)
   const [isBackfillingSMSLinks, setIsBackfillingSMSLinks] = useState(false)
+  const [isReassigningSubstack, setIsReassigningSubstack] = useState(false)
+  const [reassignSubstackResults, setReassignSubstackResults] = useState<{
+    unassigned: number
+    reassigned: number
+    unmatched: number
+    samples: Array<{ campaignId: string; subject: string; entity: string }>
+  } | null>(null)
   const [isRedactingSMSLinks, setIsRedactingSMSLinks] = useState(false)
   const [redactSMSLinksResults, setRedactSMSLinksResults] = useState<{
     dryRun: boolean
@@ -602,6 +609,30 @@ export function AdminContent({ user }: AdminContentProps) {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+  }
+
+  const handleReassignSubstack = async () => {
+    setIsReassigningSubstack(true)
+    setReassignSubstackResults(null)
+    try {
+      const response = await fetch("/api/admin/reassign-substack", {
+        method: "POST",
+        credentials: "include",
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setReassignSubstackResults(data)
+        toast.success(
+          `Substack reassignment done: ${data.unassigned} unassigned, ${data.reassigned} reassigned, ${data.unmatched} unmatched`
+        )
+      } else {
+        toast.error(data.error || "Failed to reassign Substack campaigns")
+      }
+    } catch {
+      toast.error("Failed to reassign Substack campaigns")
+    } finally {
+      setIsReassigningSubstack(false)
+    }
   }
 
   const handleBulkReassign = async () => {
@@ -1514,6 +1545,44 @@ export function AdminContent({ user }: AdminContentProps) {
               </>
             )}
           </Button>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Reassign Substack Campaigns</CardTitle>
+          <CardDescription>
+            Unassigns all Substack campaigns, then reassigns them using only explicit{" "}
+            <code>donationIdentifiers.substack</code> matches. Fixes any false-positive assignments from the old
+            fuzzy name-matching logic.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button
+            onClick={handleReassignSubstack}
+            disabled={isReassigningSubstack}
+            className="gap-2"
+          >
+            {isReassigningSubstack ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
+            Reassign All Substack Campaigns
+          </Button>
+          {reassignSubstackResults && (
+            <div className="text-sm space-y-2">
+              <p className="font-medium">
+                {reassignSubstackResults.unassigned} unassigned &rarr; {reassignSubstackResults.reassigned} reassigned,{" "}
+                {reassignSubstackResults.unmatched} left unmatched
+              </p>
+              {reassignSubstackResults.samples.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-muted-foreground font-medium">Sample assignments:</p>
+                  {reassignSubstackResults.samples.map((s) => (
+                    <div key={s.campaignId} className="text-xs text-muted-foreground">
+                      &ldquo;{s.subject}&rdquo; &rarr; {s.entity}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
       <Card>

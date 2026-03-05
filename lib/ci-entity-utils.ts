@@ -148,11 +148,12 @@ export async function findEntityForSender(
     const mapping = emailMapping || domainMapping
     const entity = mapping?.entity
 
-    // Substack detection — match via donationIdentifiers.substack first, then fuzzy name match
+    // Substack detection — only match via explicit donationIdentifiers.substack handle.
+    // Fuzzy name matching was removed because it caused false positives (e.g. rajaforil@substack.com
+    // being assigned to an unrelated entity). If no explicit handle is set, leave unassigned.
     if (!mapping && domain === "substack.com") {
       const localPart = senderEmail.split("@")[0].toLowerCase()
 
-      // 1. Check entities that have a matching donationIdentifiers.substack handle
       const allEntities = await prisma.ciEntity.findMany({
         where: { donationIdentifiers: { not: null } },
         select: { id: true, name: true, donationIdentifiers: true },
@@ -164,34 +165,7 @@ export async function findEntityForSender(
           return { entityId: entity.id, assignmentMethod: "auto_substack" }
         }
       }
-
-      // 2. Fuzzy fallback — match local part or sender name against entity names
-      const normalized = localPart.replace(/[-_]/g, " ")
-      const nameEntities = await prisma.ciEntity.findMany({
-        where: {
-          OR: [
-            { name: { contains: normalized, mode: "insensitive" } },
-            { name: { contains: localPart, mode: "insensitive" } },
-          ],
-        },
-        select: { id: true, name: true },
-        take: 1,
-      })
-      if (nameEntities.length > 0) {
-        console.log(`[Substack] Matched ${senderEmail} → entity "${nameEntities[0].name}" via name fuzzy match`)
-        return { entityId: nameEntities[0].id, assignmentMethod: "auto_substack" }
-      }
-
-      if (senderName) {
-        const nameMatch = await prisma.ciEntity.findFirst({
-          where: { name: { contains: senderName.trim(), mode: "insensitive" } },
-          select: { id: true, name: true },
-        })
-        if (nameMatch) {
-          console.log(`[Substack] Matched ${senderEmail} → entity "${nameMatch.name}" via sender name`)
-          return { entityId: nameMatch.id, assignmentMethod: "auto_substack" }
-        }
-      }
+      // No explicit match — fall through to unassigned
     }
 
     if (entity && entity.type === "data_broker" && emailSubject && emailBody) {

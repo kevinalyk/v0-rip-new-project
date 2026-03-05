@@ -162,6 +162,37 @@ export function extractPersonalizedNames(html: string): string[] {
 }
 
 /**
+ * Find a unique subject for a given senderEmail after redaction.
+ * If the redacted subject already exists for that sender, append trailing spaces
+ * one at a time (up to 5 attempts) until a unique value is found.
+ * This handles the case where two emails from the same sender become identical
+ * after name redaction (e.g. "Hey Sal," and "Hey Jason," both become "Hey [Omitted],").
+ */
+export async function findUniqueRedactedSubject(
+  senderEmail: string,
+  redactedSubject: string,
+  excludeId?: string,
+  prismaClient?: typeof import("@/lib/prisma").default,
+): Promise<string> {
+  const client = prismaClient || (await import("@/lib/prisma")).default
+  let candidate = redactedSubject
+
+  for (let attempt = 0; attempt <= 5; attempt++) {
+    const where: Record<string, unknown> = { senderEmail, subject: candidate }
+    if (excludeId) where.id = { not: excludeId }
+
+    const collision = await client.competitiveInsightCampaign.findFirst({ where: where as any })
+    if (!collision) return candidate
+
+    // Append one more trailing space and try again
+    candidate = redactedSubject + " ".repeat(attempt + 1)
+  }
+
+  // Fallback: return with 5 spaces (extremely unlikely to still collide)
+  return candidate
+}
+
+/**
  * Auto-detect and persist any personalized names found in email HTML.
  * Adds new names to the RedactedName table and clears the cache.
  * Returns the list of newly added names.

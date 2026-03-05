@@ -215,7 +215,6 @@ export async function POST(request: Request) {
           ...link,
           url: cleanedUrl,
           finalUrl: cleanedFinalUrl,
-          displayUrl: cleanedFinalUrl,
         })
         linksUpdated++
         unwrapDetails.push({
@@ -228,7 +227,6 @@ export async function POST(request: Request) {
           ...link,
           url: cleanedUrl,
           finalUrl: cleanedUrl,
-          displayUrl: cleanedUrl,
         })
         unwrapDetails.push({
           original: cleanedUrl,

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { cookies } from "next/headers"
 import { jwtVerify } from "jose"
-import { applyRedaction } from "@/lib/redaction-utils"
+import { applyRedaction, findUniqueRedactedSubject } from "@/lib/redaction-utils"
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "your-secret-key")
 
@@ -197,7 +197,7 @@ export async function PUT(request: Request) {
 
     while (hasMoreEmails) {
       const emails = await prisma.competitiveInsightCampaign.findMany({
-        select: { id: true, subject: true, emailContent: true, emailPreview: true, senderName: true },
+        select: { id: true, senderEmail: true, subject: true, emailContent: true, emailPreview: true, senderName: true },
         skip: emailOffset,
         take: emailBatchSize,
         orderBy: { id: "asc" },
@@ -216,7 +216,13 @@ export async function PUT(request: Request) {
         if (email.subject) {
           const { result, count } = redactNames(email.subject, names)
           if (count > 0) {
-            updateData.subject = result
+            // Use dedup helper to avoid unique (senderEmail, subject) constraint violations
+            const uniqueSubject = await findUniqueRedactedSubject(
+              email.senderEmail,
+              result,
+              email.id,
+            )
+            updateData.subject = uniqueSubject
             emailInstancesRedacted += count
             modified = true
           }
@@ -250,20 +256,11 @@ export async function PUT(request: Request) {
         }
 
         if (modified) {
-          try {
-            await prisma.competitiveInsightCampaign.update({
-              where: { id: email.id },
-              data: updateData,
-            })
-            emailModified++
-          } catch (updateError: any) {
-            // Skip records where redacted subject would collide with an existing unique (senderEmail, subject) pair
-            if (updateError?.code === "P2002") {
-              console.log(`[v0] Batch redaction: skipping email ${email.id} - unique constraint conflict after redaction`)
-            } else {
-              throw updateError
-            }
-          }
+          await prisma.competitiveInsightCampaign.update({
+            where: { id: email.id },
+            data: updateData,
+          })
+          emailModified++
         }
       }
 

@@ -5,7 +5,7 @@ import { sanitizeSubject } from "@/lib/campaign-detector"
 import https from "https"
 import http from "http"
 import { URL } from "url"
-import { getRedactedNames, applyRedaction, autoDetectAndSaveNames, clearRedactionCache } from "@/lib/redaction-utils"
+import { getRedactedNames, applyRedaction, autoDetectAndSaveNames, clearRedactionCache, findUniqueRedactedSubject } from "@/lib/redaction-utils"
 
 // Custom fetch using Node's http/https modules to properly handle SSL
 async function customFetch(
@@ -1397,7 +1397,10 @@ export async function processCompetitiveInsights(
 
     // Apply name redaction to protect seed identities — always fetches fresh from DB
     const redactedNames = await getRedactedNames()
-    const redactedSubject = (applyRedaction(sanitizedSubject, redactedNames) as string) || sanitizedSubject
+    const rawRedactedSubject = (applyRedaction(sanitizedSubject, redactedNames) as string) || sanitizedSubject
+    // If the redacted subject collides with an existing row for the same sender,
+    // append trailing spaces until a unique value is found (up to 5 attempts).
+    const redactedSubject = await findUniqueRedactedSubject(senderEmail, rawRedactedSubject, undefined, prisma)
     const redactedSenderName = (applyRedaction(senderName, redactedNames) as string) || senderName
     const redactedEmailPreview = (applyRedaction(emailPreview, redactedNames) as string) || emailPreview
     const redactedEmailContent = sanitizedEmailContent

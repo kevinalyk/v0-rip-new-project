@@ -1,11 +1,13 @@
 "use client"
 
+import { DialogFooter } from "@/components/ui/dialog"
+
 import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -129,9 +131,6 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [entityToDelete, setEntityToDelete] = useState<Entity | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
-
-  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false)
-  const [isBulkDeleting, setIsBulkDeleting] = useState(false)
 
   // Create/Edit entity form
   const [editingEntityId, setEditingEntityId] = useState<string | null>(null)
@@ -452,9 +451,9 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setNewEntityState("")
           setNewEntityNationwide(false)
           setNewEntityDonationIdentifiers({})
-          setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" })
-          fetchData()
-          toast.success("Entity updated successfully!")
+    setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" }) // Reset raw inputs too
+    fetchData()
+    toast.success("Entity updated successfully!")
         } else {
           const data = await response.json()
           toast.error(data.error || "Failed to update entity")
@@ -478,16 +477,16 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
         if (response.ok) {
           setShowCreateDialog(false)
           setNewEntityName("")
-          setNewEntityType("candidate")
+          setNewEntityType("candidate") // Changed from "politician"
           setNewEntityDescription("")
           setNewEntityTag("")
           setNewEntityParty("")
           setNewEntityState("")
           setNewEntityNationwide(false)
           setNewEntityDonationIdentifiers({})
-          setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" })
-          fetchData()
-          toast.success("Entity created successfully!")
+    setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" }) // Reset raw inputs too
+    fetchData()
+    toast.success("Entity created successfully!")
         } else {
           const data = await response.json()
           toast.error(data.error || "Failed to create entity")
@@ -743,9 +742,9 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
       // Reset donation identifiers on close
       setNewEntityDonationIdentifiers({})
       // Reset raw inputs when closing the dialog
-      setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" })
-    }
+    setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" })
   }
+}
 
   const getPartyColor = (party: string | null) => {
     if (!party) return "secondary"
@@ -931,35 +930,6 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
     }
   }
 
-  const handleBulkDelete = async () => {
-    if (selectedCampaigns.length === 0) return
-    setIsBulkDeleting(true)
-    try {
-      const campaignTypes = selectedCampaigns.map((id) => {
-        const campaign = unassignedCampaigns.find((c) => c.id === id)
-        return campaign?.type ?? "email"
-      })
-      const response = await fetch("/api/ci-entities/bulk-delete", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ campaignIds: selectedCampaigns, campaignTypes }),
-      })
-      const data = await response.json()
-      if (response.ok) {
-        toast.success(`Deleted ${data.total} campaign(s)`)
-        setSelectedCampaigns([])
-        setShowBulkDeleteDialog(false)
-        fetchData()
-      } else {
-        toast.error(data.error || "Failed to delete campaigns")
-      }
-    } catch {
-      toast.error("Failed to delete campaigns")
-    } finally {
-      setIsBulkDeleting(false)
-    }
-  }
-
   const handleAssignFromPreview = () => {
     if (!selectedPreviewCampaign) return
 
@@ -1010,19 +980,9 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
             {unassignedCampaigns.length > 0 && (
               <div className="flex justify-between items-center">
                 <p className="text-sm text-muted-foreground">{selectedCampaigns.length} selected</p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="destructive"
-                    onClick={() => setShowBulkDeleteDialog(true)}
-                    disabled={selectedCampaigns.length === 0}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete Selected
-                  </Button>
-                  <Button onClick={() => setShowAssignDialog(true)} disabled={selectedCampaigns.length === 0}>
-                    Assign Selected
-                  </Button>
-                </div>
+                <Button onClick={() => setShowAssignDialog(true)} disabled={selectedCampaigns.length === 0}>
+                  Assign Selected
+                </Button>
               </div>
             )}
 
@@ -2215,28 +2175,6 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           </AlertDialogContent>
         </AlertDialog>
 
-        <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete {selectedCampaigns.length} Campaign(s)?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will permanently delete the {selectedCampaigns.length} selected campaign(s). This action cannot be
-                undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={isBulkDeleting}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleBulkDelete}
-                disabled={isBulkDeleting}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                {isBulkDeleting ? "Deleting..." : `Delete ${selectedCampaigns.length} Campaign(s)`}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
         {selectedPreviewCampaign && (
           <Dialog
             open={!!selectedPreviewCampaign}
@@ -2455,7 +2393,6 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        </Tabs>
       </div>
     </div>
   )

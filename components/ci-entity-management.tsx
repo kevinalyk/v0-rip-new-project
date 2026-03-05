@@ -452,9 +452,9 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setNewEntityState("")
           setNewEntityNationwide(false)
           setNewEntityDonationIdentifiers({})
-    setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" }) // Reset raw inputs too
-    fetchData()
-    toast.success("Entity updated successfully!")
+          setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" })
+          fetchData()
+          toast.success("Entity updated successfully!")
         } else {
           const data = await response.json()
           toast.error(data.error || "Failed to update entity")
@@ -478,16 +478,16 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
         if (response.ok) {
           setShowCreateDialog(false)
           setNewEntityName("")
-          setNewEntityType("candidate") // Changed from "politician"
+          setNewEntityType("candidate")
           setNewEntityDescription("")
           setNewEntityTag("")
           setNewEntityParty("")
           setNewEntityState("")
           setNewEntityNationwide(false)
           setNewEntityDonationIdentifiers({})
-    setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" }) // Reset raw inputs too
-    fetchData()
-    toast.success("Entity created successfully!")
+          setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" })
+          fetchData()
+          toast.success("Entity created successfully!")
         } else {
           const data = await response.json()
           toast.error(data.error || "Failed to create entity")

@@ -233,6 +233,7 @@ export function CompetitiveInsights({
   const [selectedStateFilter, setSelectedStateFilter] = useState<string>("all")
   const [selectedMessageType, setSelectedMessageType] = useState<string>("all")
   const [selectedDonationPlatform, setSelectedDonationPlatform] = useState<string>("all")
+  const [showThirdParty, setShowThirdParty] = useState<boolean>(false)
   const [senderSearchTerm, setSenderSearchTerm] = useState("") // Declared senderSearchTerm
   const senderSearchInputRef = useRef<HTMLInputElement>(null) // Declare senderSearchInputRef
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null)
@@ -287,6 +288,7 @@ export function CompetitiveInsights({
       selectedPartyFilter !== "all" ||
       selectedMessageType !== "all" ||
       selectedDonationPlatform !== "all" ||
+      showThirdParty ||
       dateRange.from !== undefined ||
       dateRange.to !== undefined
     )
@@ -295,6 +297,7 @@ export function CompetitiveInsights({
     selectedSender,
     selectedPartyFilter,
     selectedMessageType,
+    showThirdParty,
     selectedDonationPlatform,
     dateRange.from,
     dateRange.to,
@@ -481,8 +484,13 @@ export function CompetitiveInsights({
   }
 
   const currentFilteredCampaigns = campaigns.filter((campaign) => {
-    if (campaign.entity?.type === "data_broker") {
-      return false
+    const isDataBroker = campaign.entity?.type === "data_broker"
+    if (showThirdParty) {
+      // Only show third-party campaigns
+      if (!isDataBroker) return false
+    } else {
+      // Default: exclude third-party campaigns
+      if (isDataBroker) return false
     }
 
     const matchesSearch =
@@ -750,6 +758,7 @@ export function CompetitiveInsights({
     setSenderSearchTerm("") // Corrected variable name
     setSelectedMessageType("all")
     setSelectedDonationPlatform("all")
+    setShowThirdParty(false)
     setShowAutocomplete(false)
     setCurrentPage(1)
   }
@@ -1024,6 +1033,7 @@ export function CompetitiveInsights({
     setSelectedPartyFilter(filterSettings.selectedPartyFilter || "all")
     setSelectedMessageType(filterSettings.selectedMessageType || "all")
     setSelectedDonationPlatform(filterSettings.selectedDonationPlatform || "all")
+    setShowThirdParty(filterSettings.showThirdParty || false)
     setDateRange({
       from: filterSettings.dateRange?.from ? new Date(filterSettings.dateRange.from) : undefined,
       to: filterSettings.dateRange?.to ? new Date(filterSettings.dateRange.to) : undefined,
@@ -1039,6 +1049,7 @@ export function CompetitiveInsights({
       selectedPartyFilter,
       selectedMessageType,
       selectedDonationPlatform,
+      showThirdParty,
       dateRange: {
         from: dateRange.from?.toISOString(),
         to: dateRange.to?.toISOString(),
@@ -1268,6 +1279,15 @@ export function CompetitiveInsights({
                   </SelectContent>
                 </Select>
 
+                <Button
+                  variant={showThirdParty ? "default" : "outline"}
+                  onClick={() => setShowThirdParty((prev) => !prev)}
+                  disabled={shouldShowPaywall || shouldShowPreview}
+                  className="w-full md:w-auto whitespace-nowrap"
+                >
+                  Third Party
+                </Button>
+
                 {/* Platform Filter - Conditional rendering */}
                 {(currentUserClient === "winred" || currentUserClient === "RIP") && (
                   <Select value={selectedDonationPlatform} onValueChange={setSelectedDonationPlatform}>
@@ -1388,7 +1408,8 @@ export function CompetitiveInsights({
   selectedSender.length === 0 &&
                       selectedPartyFilter === "all" &&
                       selectedMessageType === "all" &&
-                      selectedDonationPlatform === "all") // Added platform filter to reset condition
+                      selectedDonationPlatform === "all" &&
+                      !showThirdParty)
                   }
                 >
                   <RotateCcw className="mr-2 h-4 w-4" />

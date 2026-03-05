@@ -132,6 +132,9 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
   const [entityToDelete, setEntityToDelete] = useState<Entity | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false)
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false)
+
   // Create/Edit entity form
   const [editingEntityId, setEditingEntityId] = useState<string | null>(null)
   const [newEntityName, setNewEntityName] = useState("")
@@ -930,6 +933,35 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
     }
   }
 
+  const handleBulkDelete = async () => {
+    if (selectedCampaigns.length === 0) return
+    setIsBulkDeleting(true)
+    try {
+      const campaignTypes = selectedCampaigns.map((id) => {
+        const campaign = unassignedCampaigns.find((c) => c.id === id)
+        return campaign?.type ?? "email"
+      })
+      const response = await fetch("/api/ci-entities/bulk-delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ campaignIds: selectedCampaigns, campaignTypes }),
+      })
+      const data = await response.json()
+      if (response.ok) {
+        toast.success(`Deleted ${data.total} campaign(s)`)
+        setSelectedCampaigns([])
+        setShowBulkDeleteDialog(false)
+        fetchUnassignedCampaigns()
+      } else {
+        toast.error(data.error || "Failed to delete campaigns")
+      }
+    } catch {
+      toast.error("Failed to delete campaigns")
+    } finally {
+      setIsBulkDeleting(false)
+    }
+  }
+
   const handleAssignFromPreview = () => {
     if (!selectedPreviewCampaign) return
 
@@ -952,11 +984,11 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-6 max-w-7xl">
-        <div className="mb-6">
-          <div className="flex items-center justify-between">
+      <div className="sticky top-0 z-10 bg-background border-b">
+        <div className="container mx-auto px-6 max-w-7xl pt-6 pb-0">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-3xl font-bold text-foreground mb-2">CI Entity Management</h1>
+              <h1 className="text-3xl font-bold text-foreground mb-1">CI Entity Management</h1>
               <p className="text-muted-foreground">
                 Assign competitive insight emails and SMS messages to entities for better organization
               </p>
@@ -966,23 +998,38 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
               Create Entity
             </Button>
           </div>
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList>
+              <TabsTrigger value="unassigned">Unassigned Messages ({unassignedCampaigns.length})</TabsTrigger>
+              <TabsTrigger value="data-broker">Data Broker Campaigns</TabsTrigger>
+              <TabsTrigger value="recent-assignments">Recent Assignments</TabsTrigger>
+              <TabsTrigger value="entities">Entities ({pagination.totalCount})</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
+      </div>
 
+      <div className="container mx-auto px-6 max-w-7xl py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="unassigned">Unassigned Messages ({unassignedCampaigns.length})</TabsTrigger>
-            <TabsTrigger value="data-broker">Data Broker Campaigns</TabsTrigger>
-            <TabsTrigger value="recent-assignments">Recent Assignments</TabsTrigger>
-            <TabsTrigger value="entities">Entities ({pagination.totalCount})</TabsTrigger>
-          </TabsList>
+          <TabsList className="hidden" />
 
           <TabsContent value="unassigned" className="space-y-4">
             {unassignedCampaigns.length > 0 && (
               <div className="flex justify-between items-center">
                 <p className="text-sm text-muted-foreground">{selectedCampaigns.length} selected</p>
-                <Button onClick={() => setShowAssignDialog(true)} disabled={selectedCampaigns.length === 0}>
-                  Assign Selected
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="destructive"
+                    onClick={() => setShowBulkDeleteDialog(true)}
+                    disabled={selectedCampaigns.length === 0}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Selected
+                  </Button>
+                  <Button onClick={() => setShowAssignDialog(true)} disabled={selectedCampaigns.length === 0}>
+                    Assign Selected
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -2175,6 +2222,28 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           </AlertDialogContent>
         </AlertDialog>
 
+        <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {selectedCampaigns.length} Campaign(s)?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete the {selectedCampaigns.length} selected campaign(s). This action cannot be
+                undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isBulkDeleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleBulkDelete}
+                disabled={isBulkDeleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isBulkDeleting ? "Deleting..." : `Delete ${selectedCampaigns.length} Campaign(s)`}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {selectedPreviewCampaign && (
           <Dialog
             open={!!selectedPreviewCampaign}
@@ -2393,6 +2462,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </Tabs>
       </div>
     </div>
   )

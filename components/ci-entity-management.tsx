@@ -172,6 +172,8 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
   const [showDeleteMessageDialog, setShowDeleteMessageDialog] = useState(false)
   const [messageToDelete, setMessageToDelete] = useState<Campaign | null>(null)
   const [isDeletingMessage, setIsDeletingMessage] = useState(false)
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false)
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false)
 
   const [selectedPreviewCampaign, setSelectedPreviewCampaign] = useState<Campaign | null>(null)
   const [emailZoom, setEmailZoom] = useState(100)
@@ -875,6 +877,36 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
     setShowDeleteMessageDialog(true)
   }
 
+  const handleBulkDeleteCampaigns = async () => {
+    if (selectedCampaigns.length === 0) return
+    try {
+      setIsBulkDeleting(true)
+      const emails = selectedCampaigns.filter((id) => {
+        const c = unassignedCampaigns.find((x) => x.id === id)
+        return c?.type !== "sms"
+      })
+      const sms = selectedCampaigns.filter((id) => {
+        const c = unassignedCampaigns.find((x) => x.id === id)
+        return c?.type === "sms"
+      })
+
+      await Promise.all([
+        ...emails.map((id) => fetch(`/api/campaigns/${id}`, { method: "DELETE" })),
+        ...sms.map((id) => fetch(`/api/sms/${id}`, { method: "DELETE" })),
+      ])
+
+      setShowBulkDeleteDialog(false)
+      setSelectedCampaigns([])
+      fetchData()
+      toast.success(`Deleted ${selectedCampaigns.length} campaign(s)`)
+    } catch (error) {
+      console.error("Error bulk deleting campaigns:", error)
+      toast.error("Failed to delete some campaigns")
+    } finally {
+      setIsBulkDeleting(false)
+    }
+  }
+
   const prepareEmailHtml = (html: string, senderEmail?: string) => {
     const noLinkStyle = `<style>a { pointer-events: none !important; cursor: default !important; text-decoration: none !important; color: inherit !important; }</style>`
     if (html.includes("<head>")) {
@@ -980,9 +1012,19 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
             {unassignedCampaigns.length > 0 && (
               <div className="flex justify-between items-center">
                 <p className="text-sm text-muted-foreground">{selectedCampaigns.length} selected</p>
-                <Button onClick={() => setShowAssignDialog(true)} disabled={selectedCampaigns.length === 0}>
-                  Assign Selected
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="destructive"
+                    onClick={() => setShowBulkDeleteDialog(true)}
+                    disabled={selectedCampaigns.length < 2}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Delete Selected
+                  </Button>
+                  <Button onClick={() => setShowAssignDialog(true)} disabled={selectedCampaigns.length === 0}>
+                    Assign Selected
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -2170,6 +2212,28 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
                 {isDeletingMessage ? "Deleting..." : "Delete Message"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {selectedCampaigns.length} Campaign(s)?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to permanently delete {selectedCampaigns.length} selected campaign(s)?
+                <p className="mt-2 text-destructive font-medium">This action cannot be undone.</p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isBulkDeleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleBulkDeleteCampaigns}
+                disabled={isBulkDeleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isBulkDeleting ? "Deleting..." : `Delete ${selectedCampaigns.length} Campaign(s)`}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

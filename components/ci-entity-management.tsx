@@ -949,7 +949,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
         toast.success(`Deleted ${data.total} campaign(s)`)
         setSelectedCampaigns([])
         setShowBulkDeleteDialog(false)
-        fetchUnassignedCampaigns()
+        fetchData()
       } else {
         toast.error(data.error || "Failed to delete campaigns")
       }

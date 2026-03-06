@@ -489,8 +489,19 @@ export function CompetitiveInsights({
     if (isDataBroker) return false
 
     if (showThirdParty) {
-      // Only show third-party campaigns (email campaigns not domain-mapped to the entity)
-      if (campaign.type !== "email" || isDomainMappedToEntity(campaign)) return false
+      // Only show third-party campaigns: emails whose sender is NOT mapped to the entity
+      if (campaign.type !== "email") return false
+      if (campaign.entityId && campaign.entity) {
+        const mappings = entityMappings[campaign.entityId]
+        if (mappings) {
+          const senderEmail = campaign.senderEmail.toLowerCase()
+          const senderDomain = senderEmail.split("@")[1]
+          const isMapped =
+            mappings.emails.includes(senderEmail) ||
+            (senderDomain && mappings.domains.includes(senderDomain))
+          if (isMapped) return false
+        }
+      }
     }
 
     const matchesSearch =

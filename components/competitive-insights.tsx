@@ -489,20 +489,7 @@ export function CompetitiveInsights({
     // Always exclude data broker entities regardless of third party filter
     if (isDataBroker) return false
 
-    if (showThirdParty) {
-      // Only show third-party campaigns: emails whose sender is NOT mapped to the entity.
-      // Mirrors isDomainMappedToEntity exactly (which is declared later, causing TDZ if called here).
-      if (campaign.type !== "email") return false
-      if (!campaign.entityId || !campaign.entity) return false // No entity = can't determine, exclude
-      const mappings = entityMappings[campaign.entityId]
-      if (!mappings) return false // No mappings loaded yet = assume mapped, exclude
-      const senderEmail = campaign.senderEmail.toLowerCase()
-      const senderDomain = senderEmail.split("@")[1]
-      const isMapped =
-        mappings.emails.includes(senderEmail) ||
-        (senderDomain && mappings.domains.includes(senderDomain))
-      if (isMapped) return false // Sender IS mapped to entity = not third party, exclude
-    }
+    // Third-party filter is applied server-side via the API — no client-side filtering needed
 
     const matchesSearch =
       campaign.senderName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -591,6 +578,7 @@ export function CompetitiveInsights({
       if (selectedMessageType && selectedMessageType !== "all") params.append("messageType", selectedMessageType)
       if (selectedDonationPlatform && selectedDonationPlatform !== "all")
         params.append("donationPlatform", selectedDonationPlatform)
+      if (showThirdParty) params.append("thirdParty", "true")
       if (dateRange.from) params.append("fromDate", dateRange.from.toISOString())
       if (dateRange.to) params.append("toDate", dateRange.to.toISOString())
 

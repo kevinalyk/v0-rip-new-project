@@ -45,20 +45,7 @@ export async function GET(request: NextRequest) {
     const limit = Number.parseInt(searchParams.get("limit") || "10")
     const tag = searchParams.get("tag") || undefined
     const subscriptionsOnly = searchParams.get("subscriptionsOnly") === "true"
-
-    console.log("[v0] API params:", {
-      search,
-      senders,
-      party,
-      state,
-      messageType,
-      donationPlatform,
-      donationPlatformRaw: searchParams.get("donationPlatform"),
-      page,
-      limit,
-      tag,
-      subscriptionsOnly,
-    })
+    const thirdParty = searchParams.get("thirdParty") === "true"
 
     let subscribedEntityIds: string[] = []
     if (subscriptionsOnly) {
@@ -132,6 +119,17 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // For third-party filter: fetch all mapped sender emails and domains so we can exclude them
+    let mappedEmails: string[] = []
+    let mappedDomains: string[] = []
+    if (thirdParty) {
+      const allMappings = await prisma.ciEntityMapping.findMany({
+        select: { senderEmail: true, senderDomain: true },
+      })
+      mappedEmails = allMappings.map((m) => m.senderEmail).filter(Boolean) as string[]
+      mappedDomains = allMappings.map((m) => m.senderDomain).filter(Boolean) as string[]
+    }
+
     const emailWhere: any = {
       isHidden: authResult.user.role === "super_admin" ? undefined : false,
       isDeleted: false,
@@ -142,6 +140,17 @@ export async function GET(request: NextRequest) {
       ...(dateFilter && { dateReceived: dateFilter }),
       ...(subscriptionsOnly && subscribedEntityIds.length > 0 && { entityId: { in: subscribedEntityIds } }),
       ...(taggedEntityIds.length > 0 && { entityId: { in: taggedEntityIds } }),
+      // Third-party: only emails whose sender is NOT in any entity's explicit mappings
+      ...(thirdParty && {
+        AND: [
+          ...(mappedEmails.length > 0 ? [{ senderEmail: { notIn: mappedEmails } }] : []),
+          ...(mappedDomains.length > 0
+            ? mappedDomains.map((domain) => ({
+                NOT: { senderEmail: { endsWith: `@${domain}` } },
+              }))
+            : []),
+        ],
+      }),
     }
 
     if (search) {
@@ -219,17 +228,17 @@ export async function GET(request: NextRequest) {
     let emailInsights: any[] = []
     let smsMessages: any[] = []
 
+    // Third party is email-only (SMS has no domain mapping concept)
+    const effectiveMessageType = thirdParty ? "email" : messageType
+
     const shouldFetchAll = donationPlatform && donationPlatform !== "all"
-    const fetchAllForCombining = messageType === "all" || !messageType
+    const fetchAllForCombining = effectiveMessageType === "all" || !effectiveMessageType
     
     // Safety limit: when fetching all for filtering, cap at 5000 records to prevent timeout
     const SAFETY_LIMIT = 5000
 
-    console.log("[v0] Fetch strategy:", { shouldFetchAll, fetchAllForCombining, donationPlatform })
-
     try {
-      if (messageType === "all" || messageType === "email" || !messageType) {
-        console.log("[v0] About to fetch emails...")
+      if (effectiveMessageType === "all" || effectiveMessageType === "email" || !effectiveMessageType) {
         const emailQuery = {
           where: emailWhere,
           include: {
@@ -266,11 +275,11 @@ export async function GET(request: NextRequest) {
         })
         
         emailInsights = await prisma.competitiveInsightCampaign.findMany(emailQuery)
-        console.log("[v0] Fetched emails:", emailInsights.length)
+  
       }
 
-      if (messageType === "all" || messageType === "sms" || !messageType) {
-        console.log("[v0] About to fetch SMS...")
+      if (effectiveMessageType === "all" || effectiveMessageType === "sms" || !effectiveMessageType) {
+  
         const smsQuery = {
           where: smsWhere,
           include: {
@@ -307,7 +316,7 @@ export async function GET(request: NextRequest) {
         })
         
         smsMessages = await prisma.smsQueue.findMany(smsQuery)
-        console.log("[v0] Fetched SMS:", smsMessages.length)
+  
       }
     } catch (dbError) {
       console.error("[v0] Database query error:", dbError)

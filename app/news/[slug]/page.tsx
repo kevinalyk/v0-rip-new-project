@@ -8,7 +8,13 @@ interface Props {
   params: { slug: string }
 }
 
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
+
   try {
     const post = await prisma.announcement.findUnique({
       where: { slug: params.slug },
@@ -17,6 +23,39 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     if (!post) {
       return { title: "Post Not Found | RIP Tool" }
     }
+
+    const plainText = stripHtml(post.body)
+    const description = plainText.slice(0, 160).trim()
+    const url = `${baseUrl}/news/${post.slug}`
+    const ogImageUrl = post.imageUrl ?? `${url}/opengraph-image`
+    const publishedTime = post.publishedAt instanceof Date
+      ? post.publishedAt.toISOString()
+      : new Date(post.publishedAt).toISOString()
+
+    return {
+      title: `${post.title} | RIP Tool`,
+      description,
+      openGraph: {
+        title: post.title,
+        description,
+        url,
+        siteName: "RIP Tool",
+        type: "article",
+        publishedTime,
+        images: [{ url: ogImageUrl, width: 1200, height: 630, alt: post.title }],
+      },
+      twitter: {
+        card: "summary_large_image",
+        title: post.title,
+        description,
+        images: [ogImageUrl],
+      },
+    }
+  } catch (err) {
+    console.error("[generateMetadata] Failed to fetch announcement for slug:", params.slug, err)
+    return { title: "RIP Tool News" }
+  }
+}
 
     const description = post.body.slice(0, 160).replace(/\s+/g, " ").trim()
     const url = `${process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"}/news/${post.slug}`

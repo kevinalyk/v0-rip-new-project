@@ -5,6 +5,10 @@ export const runtime = "nodejs"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
+}
+
 export default async function Image({ params }: { params: { slug: string } }) {
   let title = "RIP Tool News"
   let body = "Competitive Intelligence Platform"
@@ -17,8 +21,9 @@ export default async function Image({ params }: { params: { slug: string } }) {
     })
     if (post) {
       title = post.title
-      body = post.body.slice(0, 120).replace(/\s+/g, " ").trim()
-      if (post.body.length > 120) body += "..."
+      const plain = stripHtml(post.body)
+      body = plain.slice(0, 120).trim()
+      if (plain.length > 120) body += "..."
       publishedAt = new Date(post.publishedAt).toLocaleDateString("en-US", {
         month: "long",
         day: "numeric",

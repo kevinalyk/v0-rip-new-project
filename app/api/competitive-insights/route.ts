@@ -306,8 +306,9 @@ export async function GET(request: NextRequest) {
     let emailInsights: any[] = []
     let smsMessages: any[] = []
 
-    // Third party and house file only are email-only (SMS has no domain mapping concept)
-    const effectiveMessageType = thirdParty || houseFileOnly ? "email" : messageType
+    // Third party is email-only (SMS has no domain mapping concept).
+    // House file only still includes SMS — it just filters out third-party emails.
+    const effectiveMessageType = thirdParty ? "email" : messageType
 
     const shouldFetchAll = donationPlatform && donationPlatform !== "all"
     const fetchAllForCombining = effectiveMessageType === "all" || !effectiveMessageType
@@ -467,7 +468,8 @@ export async function GET(request: NextRequest) {
     // When third party is active, the DB query is paginated so allInsights only has one page.
     // We need a separate count query to get the real total.
     let overrideTotal: number | null = null
-    if ((thirdParty && thirdPartyCampaignIds !== null) || (houseFileOnly && houseFileCampaignIds !== null)) {
+    // Only use overrideTotal for thirdParty — houseFileOnly includes SMS so we let allInsights handle the count normally
+    if (thirdParty && thirdPartyCampaignIds !== null) {
       overrideTotal = await prisma.competitiveInsightCampaign.count({ where: emailWhere })
     }
 

@@ -296,13 +296,6 @@ export async function GET(request: NextRequest) {
             : { skip, take: limit }),
         }
         
-        console.log("[v0] Email query params:", { 
-          shouldFetchAll, 
-          fetchAllForCombining, 
-          skip, 
-          take: shouldFetchAll || fetchAllForCombining ? SAFETY_LIMIT : limit 
-        })
-        
         emailInsights = await prisma.competitiveInsightCampaign.findMany(emailQuery)
   
       }
@@ -337,22 +330,13 @@ export async function GET(request: NextRequest) {
             : { skip, take: limit }),
         }
         
-        console.log("[v0] SMS query params:", { 
-          shouldFetchAll, 
-          fetchAllForCombining, 
-          skip, 
-          take: shouldFetchAll || fetchAllForCombining ? SAFETY_LIMIT : limit 
-        })
-        
         smsMessages = await prisma.smsQueue.findMany(smsQuery)
   
       }
     } catch (dbError) {
-      console.error("[v0] Database query error:", dbError)
+      console.error("Database query error:", dbError)
       throw dbError
     }
-
-    console.log("[v0] Raw results:", { emailCount: emailInsights.length, smsCount: smsMessages.length })
 
     const parsedEmailInsights = emailInsights.map((insight) => {
       let ctaLinks = []
@@ -431,7 +415,12 @@ export async function GET(request: NextRequest) {
       return dateB - dateA
     })
 
-    console.log("[v0] Combined insights before platform filter:", allInsights.length)
+    // When third party is active, the DB query is paginated so allInsights only has one page.
+    // We need a separate count query to get the real total.
+    let overrideTotal: number | null = null
+    if (thirdParty && thirdPartyCampaignIds !== null) {
+      overrideTotal = await prisma.competitiveInsightCampaign.count({ where: emailWhere })
+    }
 
     if (donationPlatform && donationPlatform !== "all") {
       // Substack is a sender-domain filter, not a CTA link filter
@@ -468,11 +457,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const totalCount = allInsights.length
+    const totalCount = overrideTotal !== null ? overrideTotal : allInsights.length
 
-    const paginatedInsights = allInsights.slice(skip, skip + limit)
-
-    console.log("[v0] Final paginated results:", paginatedInsights.length)
+    // When we have an overrideTotal (thirdParty case), allInsights is already paginated from DB
+    const paginatedInsights = overrideTotal !== null ? allInsights : allInsights.slice(skip, skip + limit)
 
     return NextResponse.json({
       insights: paginatedInsights,

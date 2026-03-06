@@ -409,12 +409,13 @@ export function CompetitiveInsights({
   useEffect(() => {
     fetchCampaigns()
   }, [
-    activeSearchQuery, // Changed from debouncedSearchTerm to activeSearchQuery
+    activeSearchQuery,
     selectedSender,
     selectedPartyFilter,
     selectedStateFilter,
     selectedMessageType,
     selectedDonationPlatform,
+    showThirdParty,
     dateRange.from,
     dateRange.to,
     currentPage,
@@ -588,7 +589,6 @@ export function CompetitiveInsights({
       if (selectedPartyFilter && selectedPartyFilter !== "all") params.append("party", selectedPartyFilter)
       if (selectedStateFilter && selectedStateFilter !== "all") params.append("state", selectedStateFilter)
       if (selectedMessageType && selectedMessageType !== "all") params.append("messageType", selectedMessageType)
-      console.log("[v0] Frontend platform filter state:", selectedDonationPlatform)
       if (selectedDonationPlatform && selectedDonationPlatform !== "all")
         params.append("donationPlatform", selectedDonationPlatform)
       if (dateRange.from) params.append("fromDate", dateRange.from.toISOString())
@@ -603,21 +603,11 @@ export function CompetitiveInsights({
       // Add clientSlug to params
       if (clientSlug) params.append("clientSlug", clientSlug)
 
-      console.log("[v0] Fetching with query string:", params.toString())
-      console.log("[v0] Current page state:", currentPage, "Items per page:", itemsPerPage)
-
       const endpoint = apiEndpoint 
         ? `${apiEndpoint}?${params.toString()}` 
         : `/api/competitive-insights?${params.toString()}`
       const response = await fetch(endpoint)
       const data = await response.json()
-
-      console.log("[v0] API response:", { 
-        insightsCount: data.insights?.length, 
-        pagination: data.pagination,
-        firstInsightDate: data.insights?.[0]?.dateReceived,
-        lastInsightDate: data.insights?.[data.insights?.length - 1]?.dateReceived
-      })
 
       // Filter out hidden campaigns unless the user is a super admin
       const insights = data.insights || []

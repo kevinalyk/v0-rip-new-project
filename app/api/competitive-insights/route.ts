@@ -120,9 +120,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // For house-file-only filter: build the set of "house file" campaign IDs (inverse of third party).
-    // A campaign is house-file when its entity has at least one mapping AND the campaign's sender IS in those mappings,
-    // OR the entity has no mappings at all (assumed direct/house file).
+    // For house-file-only filter: exclude any campaign that is "third party".
+    // A campaign is third-party when its entity has at least one mapping AND the sender is NOT in those mappings.
+    // House file = everything that is NOT third party (entities with no mappings are treated as house file by default).
     let houseFileCampaignIds: string[] | null = null
     if (houseFileOnly) {
       const allMappings = await prisma.ciEntityMapping.findMany({
@@ -138,7 +138,7 @@ export async function GET(request: NextRequest) {
         if (m.senderDomain) mappingsByEntity[m.entityId].domains.add(m.senderDomain.toLowerCase())
       }
 
-      const entitiesWithMappings = Object.keys(mappingsByEntity)
+      const entitiesWithMappings = new Set(Object.keys(mappingsByEntity))
 
       // Fetch all email campaigns
       const candidates = await prisma.competitiveInsightCampaign.findMany({
@@ -154,14 +154,15 @@ export async function GET(request: NextRequest) {
       houseFileCampaignIds = candidates
         .filter((c) => {
           if (!c.entityId) return false
-          // Entity has no mappings at all → assumed house file, keep
-          if (!entitiesWithMappings.includes(c.entityId)) return true
+          // Entity has no mappings → not third party → house file, keep
+          if (!entitiesWithMappings.has(c.entityId)) return true
           const em = mappingsByEntity[c.entityId]
           if (!em) return true
           const email = c.senderEmail.toLowerCase()
           const domain = email.split("@")[1]
-          // Sender IS in mappings → house file, keep
-          return em.emails.has(email) || (!!domain && em.domains.has(domain))
+          // Third party = sender NOT in entity's mappings → exclude
+          const isThirdParty = !em.emails.has(email) && (!domain || !em.domains.has(domain))
+          return !isThirdParty
         })
         .map((c) => c.id)
     }

@@ -4,13 +4,23 @@ import { verifyAuth } from "@/lib/auth"
 
 export async function GET(request: NextRequest, { params }: { params: { slug: string } }) {
   try {
-    const authResult = await verifyAuth(request)
-    if (!authResult.success || !authResult.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Allow unauthenticated requests for OG metadata scraping (indicated by ?public=1)
+    // Full announcement data (body) still requires auth
+    const isPublicRequest = request.nextUrl.searchParams.get("public") === "1"
+
+    if (!isPublicRequest) {
+      const authResult = await verifyAuth(request)
+      if (!authResult.success || !authResult.user) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      }
     }
 
     const announcement = await prisma.announcement.findUnique({
       where: { slug: params.slug },
+      // For public requests, only return the fields needed for OG metadata
+      select: isPublicRequest
+        ? { title: true, slug: true, publishedAt: true, body: true, imageUrl: true }
+        : undefined,
     })
 
     if (!announcement) {

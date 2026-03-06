@@ -234,6 +234,7 @@ export function CompetitiveInsights({
   const [selectedMessageType, setSelectedMessageType] = useState<string>("all")
   const [selectedDonationPlatform, setSelectedDonationPlatform] = useState<string>("all")
   const [showThirdParty, setShowThirdParty] = useState<boolean>(false)
+  const [showHouseFileOnly, setShowHouseFileOnly] = useState<boolean>(false)
   const [senderSearchTerm, setSenderSearchTerm] = useState("") // Declared senderSearchTerm
   const senderSearchInputRef = useRef<HTMLInputElement>(null) // Declare senderSearchInputRef
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null)
@@ -289,6 +290,7 @@ export function CompetitiveInsights({
       selectedMessageType !== "all" ||
       selectedDonationPlatform !== "all" ||
       showThirdParty ||
+      showHouseFileOnly ||
       dateRange.from !== undefined ||
       dateRange.to !== undefined
     )
@@ -298,6 +300,7 @@ export function CompetitiveInsights({
     selectedPartyFilter,
     selectedMessageType,
     showThirdParty,
+    showHouseFileOnly,
     selectedDonationPlatform,
     dateRange.from,
     dateRange.to,
@@ -416,6 +419,7 @@ export function CompetitiveInsights({
     selectedMessageType,
     selectedDonationPlatform,
     showThirdParty,
+    showHouseFileOnly,
     dateRange.from,
     dateRange.to,
     currentPage,
@@ -579,6 +583,7 @@ export function CompetitiveInsights({
       if (selectedDonationPlatform && selectedDonationPlatform !== "all")
         params.append("donationPlatform", selectedDonationPlatform)
       if (showThirdParty) params.append("thirdParty", "true")
+      if (showHouseFileOnly) params.append("houseFileOnly", "true")
       if (dateRange.from) params.append("fromDate", dateRange.from.toISOString())
       if (dateRange.to) params.append("toDate", dateRange.to.toISOString())
 
@@ -747,6 +752,7 @@ export function CompetitiveInsights({
     setSelectedMessageType("all")
     setSelectedDonationPlatform("all")
     setShowThirdParty(false)
+    setShowHouseFileOnly(false)
     setShowAutocomplete(false)
     setCurrentPage(1)
   }
@@ -1022,6 +1028,7 @@ export function CompetitiveInsights({
     setSelectedMessageType(filterSettings.selectedMessageType || "all")
     setSelectedDonationPlatform(filterSettings.selectedDonationPlatform || "all")
     setShowThirdParty(filterSettings.showThirdParty || false)
+    setShowHouseFileOnly(filterSettings.showHouseFileOnly || false)
     setDateRange({
       from: filterSettings.dateRange?.from ? new Date(filterSettings.dateRange.from) : undefined,
       to: filterSettings.dateRange?.to ? new Date(filterSettings.dateRange.to) : undefined,
@@ -1038,6 +1045,7 @@ export function CompetitiveInsights({
       selectedMessageType,
       selectedDonationPlatform,
       showThirdParty,
+      showHouseFileOnly,
       dateRange: {
         from: dateRange.from?.toISOString(),
         to: dateRange.to?.toISOString(),
@@ -1253,13 +1261,19 @@ export function CompetitiveInsights({
                 </Select>
 
                 <Select
-                  value={showThirdParty ? "third_party" : selectedMessageType}
+                  value={showThirdParty ? "third_party" : showHouseFileOnly ? "house_file_only" : selectedMessageType}
                   onValueChange={(val) => {
                     if (val === "third_party") {
                       setShowThirdParty(true)
+                      setShowHouseFileOnly(false)
+                      setSelectedMessageType("all")
+                    } else if (val === "house_file_only") {
+                      setShowHouseFileOnly(true)
+                      setShowThirdParty(false)
                       setSelectedMessageType("all")
                     } else {
                       setShowThirdParty(false)
+                      setShowHouseFileOnly(false)
                       setSelectedMessageType(val)
                     }
                   }}
@@ -1273,6 +1287,7 @@ export function CompetitiveInsights({
                     <SelectItem value="email">Email Only</SelectItem>
                     <SelectItem value="sms">SMS Only</SelectItem>
                     <SelectItem value="third_party">Third Party</SelectItem>
+                    <SelectItem value="house_file_only">House File Only</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -1397,6 +1412,7 @@ export function CompetitiveInsights({
                       selectedPartyFilter === "all" &&
                       selectedMessageType === "all" &&
                       !showThirdParty &&
+                      !showHouseFileOnly &&
                       selectedDonationPlatform === "all")
                   }
                 >

@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
     const tag = searchParams.get("tag") || undefined
     const subscriptionsOnly = searchParams.get("subscriptionsOnly") === "true"
     const thirdParty = searchParams.get("thirdParty") === "true"
+    const houseFileOnly = searchParams.get("houseFileOnly") === "true"
 
     let subscribedEntityIds: string[] = []
     if (subscriptionsOnly) {
@@ -119,6 +120,53 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // For house-file-only filter: exclude any campaign that is "third party".
+    // A campaign is third-party when its entity has at least one mapping AND the sender is NOT in those mappings.
+    // House file = everything that is NOT third party (entities with no mappings are treated as house file by default).
+    let houseFileCampaignIds: string[] | null = null
+    if (houseFileOnly) {
+      const allMappings = await prisma.ciEntityMapping.findMany({
+        select: { entityId: true, senderEmail: true, senderDomain: true },
+      })
+
+      const mappingsByEntity: Record<string, { emails: Set<string>; domains: Set<string> }> = {}
+      for (const m of allMappings) {
+        if (!mappingsByEntity[m.entityId]) {
+          mappingsByEntity[m.entityId] = { emails: new Set(), domains: new Set() }
+        }
+        if (m.senderEmail) mappingsByEntity[m.entityId].emails.add(m.senderEmail.toLowerCase())
+        if (m.senderDomain) mappingsByEntity[m.entityId].domains.add(m.senderDomain.toLowerCase())
+      }
+
+      const entitiesWithMappings = new Set(Object.keys(mappingsByEntity))
+
+      // Fetch all email campaigns
+      const candidates = await prisma.competitiveInsightCampaign.findMany({
+        where: {
+          isDeleted: false,
+          isHidden: authResult.user.role === "super_admin" ? undefined : false,
+          entityId: { not: null },
+          entity: { type: { not: "data_broker" } },
+        },
+        select: { id: true, entityId: true, senderEmail: true },
+      })
+
+      houseFileCampaignIds = candidates
+        .filter((c) => {
+          if (!c.entityId) return false
+          // Entity has no mappings → not third party → house file, keep
+          if (!entitiesWithMappings.has(c.entityId)) return true
+          const em = mappingsByEntity[c.entityId]
+          if (!em) return true
+          const email = c.senderEmail.toLowerCase()
+          const domain = email.split("@")[1]
+          // Third party = sender NOT in entity's mappings → exclude
+          const isThirdParty = !em.emails.has(email) && (!domain || !em.domains.has(domain))
+          return !isThirdParty
+        })
+        .map((c) => c.id)
+    }
+
     // For third-party filter: build the set of "third party" campaign IDs.
     // A campaign is third-party when its entity has at least one mapping AND the campaign's
     // senderEmail/senderDomain is NOT in that entity's specific mappings — mirroring isDomainMappedToEntity in the UI.
@@ -180,6 +228,7 @@ export async function GET(request: NextRequest) {
       ...(subscriptionsOnly && subscribedEntityIds.length > 0 && { entityId: { in: subscribedEntityIds } }),
       ...(taggedEntityIds.length > 0 && { entityId: { in: taggedEntityIds } }),
       ...(thirdPartyCampaignIds !== null && { id: { in: thirdPartyCampaignIds } }),
+      ...(houseFileCampaignIds !== null && { id: { in: houseFileCampaignIds } }),
     }
 
     if (search) {
@@ -257,7 +306,8 @@ export async function GET(request: NextRequest) {
     let emailInsights: any[] = []
     let smsMessages: any[] = []
 
-    // Third party is email-only (SMS has no domain mapping concept)
+    // Third party is email-only (SMS has no domain mapping concept).
+    // House file only still includes SMS — it just filters out third-party emails.
     const effectiveMessageType = thirdParty ? "email" : messageType
 
     const shouldFetchAll = donationPlatform && donationPlatform !== "all"
@@ -418,6 +468,7 @@ export async function GET(request: NextRequest) {
     // When third party is active, the DB query is paginated so allInsights only has one page.
     // We need a separate count query to get the real total.
     let overrideTotal: number | null = null
+    // Only use overrideTotal for thirdParty — houseFileOnly includes SMS so we let allInsights handle the count normally
     if (thirdParty && thirdPartyCampaignIds !== null) {
       overrideTotal = await prisma.competitiveInsightCampaign.count({ where: emailWhere })
     }

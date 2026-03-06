@@ -97,23 +97,6 @@ export function redactSmsMessage(
 
 
 
-  // Filter out common false positives (words that look like names but aren't)
-  const stopWords = new Set([
-    "The", "This", "That", "They", "Their", "There", "These", "Those",
-    "Will", "With", "When", "What", "Which", "Where", "While",
-    "Your", "You", "Our", "For", "But", "And", "Not", "Now",
-    "New", "Big", "Can", "Has", "Was", "Are", "All", "Any",
-    "We", "He", "She", "It", "In", "On", "Of", "To", "At",
-    "By", "As", "An", "If", "Or", "So", "Up", "Do",
-    "Supreme", "Court", "Democrats", "Republicans", "Congress",
-    "America", "American", "Americans", "United", "States",
-    "Stop", "Help", "Join", "Give", "Read", "Click", "Here",
-    "Today", "Just", "More", "Less", "From", "Into", "Over",
-  ])
-
-  return Array.from(found).filter((name) => !stopWords.has(name))
-}
-
 /**
  * Find a unique subject for a given senderEmail after redaction.
  * If the redacted subject already exists for that sender, append trailing spaces

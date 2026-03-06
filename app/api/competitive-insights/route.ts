@@ -119,15 +119,54 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // For third-party filter: fetch all mapped sender emails and domains so we can exclude them
-    let mappedEmails: string[] = []
-    let mappedDomains: string[] = []
+    // For third-party filter: build the set of "third party" campaign IDs.
+    // A campaign is third-party when its entity has at least one mapping AND the campaign's
+    // senderEmail/senderDomain is NOT in that entity's specific mappings — mirroring isDomainMappedToEntity in the UI.
+    let thirdPartyCampaignIds: string[] | null = null
     if (thirdParty) {
+      // Fetch all entity mappings grouped by entity
       const allMappings = await prisma.ciEntityMapping.findMany({
-        select: { senderEmail: true, senderDomain: true },
+        select: { entityId: true, senderEmail: true, senderDomain: true },
       })
-      mappedEmails = allMappings.map((m) => m.senderEmail).filter(Boolean) as string[]
-      mappedDomains = allMappings.map((m) => m.senderDomain).filter(Boolean) as string[]
+
+      // Build a lookup: entityId -> { emails: Set, domains: Set }
+      const mappingsByEntity: Record<string, { emails: Set<string>; domains: Set<string> }> = {}
+      for (const m of allMappings) {
+        if (!mappingsByEntity[m.entityId]) {
+          mappingsByEntity[m.entityId] = { emails: new Set(), domains: new Set() }
+        }
+        if (m.senderEmail) mappingsByEntity[m.entityId].emails.add(m.senderEmail.toLowerCase())
+        if (m.senderDomain) mappingsByEntity[m.entityId].domains.add(m.senderDomain.toLowerCase())
+      }
+
+      const entitiesWithMappings = Object.keys(mappingsByEntity)
+      if (entitiesWithMappings.length === 0) {
+        // No mappings exist at all — nothing can be third party
+        thirdPartyCampaignIds = []
+      } else {
+        // Fetch all email campaigns whose entity has at least one mapping
+        const candidates = await prisma.competitiveInsightCampaign.findMany({
+          where: {
+            isDeleted: false,
+            isHidden: authResult.user.role === "super_admin" ? undefined : false,
+            entityId: { in: entitiesWithMappings },
+            entity: { type: { not: "data_broker" } },
+          },
+          select: { id: true, entityId: true, senderEmail: true },
+        })
+
+        // Keep only campaigns whose sender is NOT in their entity's mappings
+        thirdPartyCampaignIds = candidates
+          .filter((c) => {
+            if (!c.entityId) return false
+            const em = mappingsByEntity[c.entityId]
+            if (!em) return false
+            const email = c.senderEmail.toLowerCase()
+            const domain = email.split("@")[1]
+            return !em.emails.has(email) && (!domain || !em.domains.has(domain))
+          })
+          .map((c) => c.id)
+      }
     }
 
     const emailWhere: any = {
@@ -140,17 +179,7 @@ export async function GET(request: NextRequest) {
       ...(dateFilter && { dateReceived: dateFilter }),
       ...(subscriptionsOnly && subscribedEntityIds.length > 0 && { entityId: { in: subscribedEntityIds } }),
       ...(taggedEntityIds.length > 0 && { entityId: { in: taggedEntityIds } }),
-      // Third-party: only emails whose sender is NOT in any entity's explicit mappings
-      ...(thirdParty && {
-        AND: [
-          ...(mappedEmails.length > 0 ? [{ senderEmail: { notIn: mappedEmails } }] : []),
-          ...(mappedDomains.length > 0
-            ? mappedDomains.map((domain) => ({
-                NOT: { senderEmail: { endsWith: `@${domain}` } },
-              }))
-            : []),
-        ],
-      }),
+      ...(thirdPartyCampaignIds !== null && { id: { in: thirdPartyCampaignIds } }),
     }
 
     if (search) {

@@ -95,54 +95,7 @@ export function redactSmsMessage(
   }
 }
 
-/**
- * Extract personalized first names from email HTML.
- * Detects names injected via common ESP personalization patterns:
- *   - Salutations: "Hey Wolfgang,", "Hi Wolfgang,", "Dear Wolfgang,"
- *   - Inline personalization: "chip in, Wolfgang?", "join us, Wolfgang!"
- *   - HubSpot/Mailchimp span pattern: <span ...>Wolfgang</span> following a salutation keyword
- *   - Preview text: "Wolfgang, The Supreme Court..."
- * Returns an array of unique capitalized names found.
- */
-export function extractPersonalizedNames(html: string): string[] {
-  if (!html) return []
 
-  // Strip HTML tags to get plain text for pattern matching
-  const plainText = html
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&#[0-9]+;/g, " ")
-    .replace(/&[a-z]+;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-
-  const found = new Set<string>()
-  const namePattern = /([A-Z][a-z]{1,19})/
-
-  // Pattern 1: Salutation at start — "Wolfgang, The Supreme Court..."
-  // Matches a capitalized word at the very start followed by a comma
-  const previewMatch = plainText.match(/^([A-Z][a-z]{1,19}),\s/)
-  if (previewMatch) found.add(previewMatch[1])
-
-  // Pattern 2: "Hey/Hi/Dear/Hello [Name]," or "Hey/Hi/Dear [Name]!"
-  const salutationRegex = /\b(?:Hey|Hi|Dear|Hello|Howdy)\s+([A-Z][a-z]{1,19})[,!]/g
-  let m
-  while ((m = salutationRegex.exec(plainText)) !== null) found.add(m[1])
-
-  // Pattern 3: "chip in, [Name]?" / "join us, [Name]!" / "with us, [Name]"
-  // Catches mid-sentence personalization like "Will you chip in, Wolfgang?"
-  const midSentenceRegex = /\b(?:chip in|join us|with us|thank you|counting on you|need you),\s+([A-Z][a-z]{1,19})[?!.]/g
-  while ((m = midSentenceRegex.exec(plainText)) !== null) found.add(m[1])
-
-  // Pattern 4: HubSpot/Mailchimp span with text-transform:capitalize
-  // <span style="text-transform: capitalize;">Wolfgang</span>
-  const spanRegex = /<span[^>]*text-transform\s*:\s*capitalize[^>]*>([A-Za-z]{2,20})<\/span>/gi
-  while ((m = spanRegex.exec(html)) !== null) {
-    const name = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase()
-    if (/^[A-Z][a-z]{1,19}$/.test(name)) found.add(name)
-  }
 
   // Filter out common false positives (words that look like names but aren't)
   const stopWords = new Set([

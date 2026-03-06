@@ -5,6 +5,7 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "sonner"
 import { DomainProvider } from "@/lib/domain-context"
+import { Analytics } from "@vercel/analytics/next"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -32,6 +33,7 @@ export default function RootLayout({
             <Toaster />
           </DomainProvider>
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   )

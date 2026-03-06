@@ -485,12 +485,12 @@ export function CompetitiveInsights({
 
   const currentFilteredCampaigns = campaigns.filter((campaign) => {
     const isDataBroker = campaign.entity?.type === "data_broker"
+    // Always exclude data broker entities regardless of third party filter
+    if (isDataBroker) return false
+
     if (showThirdParty) {
-      // Only show third-party campaigns
-      if (!isDataBroker) return false
-    } else {
-      // Default: exclude third-party campaigns
-      if (isDataBroker) return false
+      // Only show third-party campaigns (email campaigns not domain-mapped to the entity)
+      if (campaign.type !== "email" || isDomainMappedToEntity(campaign)) return false
     }
 
     const matchesSearch =
@@ -1265,8 +1265,16 @@ export function CompetitiveInsights({
                 </Select>
 
                 <Select
-                  value={selectedMessageType}
-                  onValueChange={setSelectedMessageType}
+                  value={showThirdParty ? "third_party" : selectedMessageType}
+                  onValueChange={(val) => {
+                    if (val === "third_party") {
+                      setShowThirdParty(true)
+                      setSelectedMessageType("all")
+                    } else {
+                      setShowThirdParty(false)
+                      setSelectedMessageType(val)
+                    }
+                  }}
                   disabled={shouldShowPaywall || shouldShowPreview}
                 >
                   <SelectTrigger className="w-full md:w-[180px]">
@@ -1276,17 +1284,9 @@ export function CompetitiveInsights({
                     <SelectItem value="all">All Messages</SelectItem>
                     <SelectItem value="email">Email Only</SelectItem>
                     <SelectItem value="sms">SMS Only</SelectItem>
+                    <SelectItem value="third_party">Third Party</SelectItem>
                   </SelectContent>
                 </Select>
-
-                <Button
-                  variant={showThirdParty ? "default" : "outline"}
-                  onClick={() => setShowThirdParty((prev) => !prev)}
-                  disabled={shouldShowPaywall || shouldShowPreview}
-                  className="w-full md:w-auto whitespace-nowrap"
-                >
-                  Third Party
-                </Button>
 
                 {/* Platform Filter - Conditional rendering */}
                 {(currentUserClient === "winred" || currentUserClient === "RIP") && (
@@ -1408,8 +1408,8 @@ export function CompetitiveInsights({
   selectedSender.length === 0 &&
                       selectedPartyFilter === "all" &&
                       selectedMessageType === "all" &&
-                      selectedDonationPlatform === "all" &&
-                      !showThirdParty)
+                      !showThirdParty &&
+                      selectedDonationPlatform === "all")
                   }
                 >
                   <RotateCcw className="mr-2 h-4 w-4" />

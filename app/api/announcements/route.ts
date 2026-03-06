@@ -14,16 +14,23 @@ function generateSlug(title: string): string {
   return `${base}-${suffix}`
 }
 
-// GET — all authenticated users
+// GET — public with ?public=1, otherwise requires auth
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await verifyAuth(request)
-    if (!authResult.success || !authResult.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const isPublicRequest = request.nextUrl.searchParams.get("public") === "1"
+
+    if (!isPublicRequest) {
+      const authResult = await verifyAuth(request)
+      if (!authResult.success || !authResult.user) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      }
     }
 
     const announcements = await prisma.announcement.findMany({
       orderBy: { publishedAt: "desc" },
+      select: isPublicRequest
+        ? { id: true, slug: true, title: true, body: true, imageUrl: true, publishedAt: true }
+        : undefined,
     })
 
     return NextResponse.json(announcements)

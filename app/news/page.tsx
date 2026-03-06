@@ -74,12 +74,14 @@ export default function NewsPage() {
     const checkAuth = async () => {
       try {
         const res = await fetch("/api/auth/me", { credentials: "include" })
-        if (!res.ok) { router.push("/login"); return }
-        const user = await res.json()
-        setUserRole(user.role)
-        setClientSlug(user.clientId || "rip")
+        if (res.ok) {
+          const user = await res.json()
+          setUserRole(user.role)
+          setClientSlug(user.clientId || "rip")
+        }
+        // Not authenticated — news is public, just continue without admin features
       } catch {
-        router.push("/login")
+        // Ignore — unauthenticated visitors can still read news
       } finally {
         setAuthLoading(false)
       }
@@ -90,7 +92,9 @@ export default function NewsPage() {
   const fetchAnnouncements = async () => {
     try {
       setLoading(true)
-      const res = await fetch("/api/announcements", { credentials: "include" })
+      // Use public endpoint for unauthenticated visitors
+      const url = userRole ? "/api/announcements" : "/api/announcements?public=1"
+      const res = await fetch(url, { credentials: "include" })
       if (res.ok) setAnnouncements(await res.json())
     } catch {
       toast({ title: "Error", description: "Failed to load announcements", variant: "destructive" })
@@ -101,7 +105,7 @@ export default function NewsPage() {
 
   useEffect(() => {
     if (!authLoading) fetchAnnouncements()
-  }, [authLoading])
+  }, [authLoading, userRole])
 
   const openCreate = () => {
     setEditTarget(null)

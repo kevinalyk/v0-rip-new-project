@@ -233,6 +233,7 @@ export function CompetitiveInsights({
   const [selectedStateFilter, setSelectedStateFilter] = useState<string>("all")
   const [selectedMessageType, setSelectedMessageType] = useState<string>("all")
   const [selectedDonationPlatform, setSelectedDonationPlatform] = useState<string>("all")
+  const [showThirdParty, setShowThirdParty] = useState<boolean>(false)
   const [senderSearchTerm, setSenderSearchTerm] = useState("") // Declared senderSearchTerm
   const senderSearchInputRef = useRef<HTMLInputElement>(null) // Declare senderSearchInputRef
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null)
@@ -287,6 +288,7 @@ export function CompetitiveInsights({
       selectedPartyFilter !== "all" ||
       selectedMessageType !== "all" ||
       selectedDonationPlatform !== "all" ||
+      showThirdParty ||
       dateRange.from !== undefined ||
       dateRange.to !== undefined
     )
@@ -295,6 +297,7 @@ export function CompetitiveInsights({
     selectedSender,
     selectedPartyFilter,
     selectedMessageType,
+    showThirdParty,
     selectedDonationPlatform,
     dateRange.from,
     dateRange.to,
@@ -406,12 +409,13 @@ export function CompetitiveInsights({
   useEffect(() => {
     fetchCampaigns()
   }, [
-    activeSearchQuery, // Changed from debouncedSearchTerm to activeSearchQuery
+    activeSearchQuery,
     selectedSender,
     selectedPartyFilter,
     selectedStateFilter,
     selectedMessageType,
     selectedDonationPlatform,
+    showThirdParty,
     dateRange.from,
     dateRange.to,
     currentPage,
@@ -481,9 +485,11 @@ export function CompetitiveInsights({
   }
 
   const currentFilteredCampaigns = campaigns.filter((campaign) => {
-    if (campaign.entity?.type === "data_broker") {
-      return false
-    }
+    const isDataBroker = campaign.entity?.type === "data_broker"
+    // Always exclude data broker entities regardless of third party filter
+    if (isDataBroker) return false
+
+    // Third-party filter is applied server-side via the API — no client-side filtering needed
 
     const matchesSearch =
       campaign.senderName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -570,9 +576,9 @@ export function CompetitiveInsights({
       if (selectedPartyFilter && selectedPartyFilter !== "all") params.append("party", selectedPartyFilter)
       if (selectedStateFilter && selectedStateFilter !== "all") params.append("state", selectedStateFilter)
       if (selectedMessageType && selectedMessageType !== "all") params.append("messageType", selectedMessageType)
-      console.log("[v0] Frontend platform filter state:", selectedDonationPlatform)
       if (selectedDonationPlatform && selectedDonationPlatform !== "all")
         params.append("donationPlatform", selectedDonationPlatform)
+      if (showThirdParty) params.append("thirdParty", "true")
       if (dateRange.from) params.append("fromDate", dateRange.from.toISOString())
       if (dateRange.to) params.append("toDate", dateRange.to.toISOString())
 
@@ -585,21 +591,11 @@ export function CompetitiveInsights({
       // Add clientSlug to params
       if (clientSlug) params.append("clientSlug", clientSlug)
 
-      console.log("[v0] Fetching with query string:", params.toString())
-      console.log("[v0] Current page state:", currentPage, "Items per page:", itemsPerPage)
-
       const endpoint = apiEndpoint 
         ? `${apiEndpoint}?${params.toString()}` 
         : `/api/competitive-insights?${params.toString()}`
       const response = await fetch(endpoint)
       const data = await response.json()
-
-      console.log("[v0] API response:", { 
-        insightsCount: data.insights?.length, 
-        pagination: data.pagination,
-        firstInsightDate: data.insights?.[0]?.dateReceived,
-        lastInsightDate: data.insights?.[data.insights?.length - 1]?.dateReceived
-      })
 
       // Filter out hidden campaigns unless the user is a super admin
       const insights = data.insights || []
@@ -750,6 +746,7 @@ export function CompetitiveInsights({
     setSenderSearchTerm("") // Corrected variable name
     setSelectedMessageType("all")
     setSelectedDonationPlatform("all")
+    setShowThirdParty(false)
     setShowAutocomplete(false)
     setCurrentPage(1)
   }
@@ -1024,6 +1021,7 @@ export function CompetitiveInsights({
     setSelectedPartyFilter(filterSettings.selectedPartyFilter || "all")
     setSelectedMessageType(filterSettings.selectedMessageType || "all")
     setSelectedDonationPlatform(filterSettings.selectedDonationPlatform || "all")
+    setShowThirdParty(filterSettings.showThirdParty || false)
     setDateRange({
       from: filterSettings.dateRange?.from ? new Date(filterSettings.dateRange.from) : undefined,
       to: filterSettings.dateRange?.to ? new Date(filterSettings.dateRange.to) : undefined,
@@ -1039,6 +1037,7 @@ export function CompetitiveInsights({
       selectedPartyFilter,
       selectedMessageType,
       selectedDonationPlatform,
+      showThirdParty,
       dateRange: {
         from: dateRange.from?.toISOString(),
         to: dateRange.to?.toISOString(),
@@ -1254,8 +1253,16 @@ export function CompetitiveInsights({
                 </Select>
 
                 <Select
-                  value={selectedMessageType}
-                  onValueChange={setSelectedMessageType}
+                  value={showThirdParty ? "third_party" : selectedMessageType}
+                  onValueChange={(val) => {
+                    if (val === "third_party") {
+                      setShowThirdParty(true)
+                      setSelectedMessageType("all")
+                    } else {
+                      setShowThirdParty(false)
+                      setSelectedMessageType(val)
+                    }
+                  }}
                   disabled={shouldShowPaywall || shouldShowPreview}
                 >
                   <SelectTrigger className="w-full md:w-[180px]">
@@ -1265,6 +1272,7 @@ export function CompetitiveInsights({
                     <SelectItem value="all">All Messages</SelectItem>
                     <SelectItem value="email">Email Only</SelectItem>
                     <SelectItem value="sms">SMS Only</SelectItem>
+                    <SelectItem value="third_party">Third Party</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -1388,7 +1396,8 @@ export function CompetitiveInsights({
   selectedSender.length === 0 &&
                       selectedPartyFilter === "all" &&
                       selectedMessageType === "all" &&
-                      selectedDonationPlatform === "all") // Added platform filter to reset condition
+                      !showThirdParty &&
+                      selectedDonationPlatform === "all")
                   }
                 >
                   <RotateCcw className="mr-2 h-4 w-4" />

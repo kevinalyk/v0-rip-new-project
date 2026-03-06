@@ -45,20 +45,7 @@ export async function GET(request: NextRequest) {
     const limit = Number.parseInt(searchParams.get("limit") || "10")
     const tag = searchParams.get("tag") || undefined
     const subscriptionsOnly = searchParams.get("subscriptionsOnly") === "true"
-
-    console.log("[v0] API params:", {
-      search,
-      senders,
-      party,
-      state,
-      messageType,
-      donationPlatform,
-      donationPlatformRaw: searchParams.get("donationPlatform"),
-      page,
-      limit,
-      tag,
-      subscriptionsOnly,
-    })
+    const thirdParty = searchParams.get("thirdParty") === "true"
 
     let subscribedEntityIds: string[] = []
     if (subscriptionsOnly) {
@@ -132,6 +119,56 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // For third-party filter: build the set of "third party" campaign IDs.
+    // A campaign is third-party when its entity has at least one mapping AND the campaign's
+    // senderEmail/senderDomain is NOT in that entity's specific mappings — mirroring isDomainMappedToEntity in the UI.
+    let thirdPartyCampaignIds: string[] | null = null
+    if (thirdParty) {
+      // Fetch all entity mappings grouped by entity
+      const allMappings = await prisma.ciEntityMapping.findMany({
+        select: { entityId: true, senderEmail: true, senderDomain: true },
+      })
+
+      // Build a lookup: entityId -> { emails: Set, domains: Set }
+      const mappingsByEntity: Record<string, { emails: Set<string>; domains: Set<string> }> = {}
+      for (const m of allMappings) {
+        if (!mappingsByEntity[m.entityId]) {
+          mappingsByEntity[m.entityId] = { emails: new Set(), domains: new Set() }
+        }
+        if (m.senderEmail) mappingsByEntity[m.entityId].emails.add(m.senderEmail.toLowerCase())
+        if (m.senderDomain) mappingsByEntity[m.entityId].domains.add(m.senderDomain.toLowerCase())
+      }
+
+      const entitiesWithMappings = Object.keys(mappingsByEntity)
+      if (entitiesWithMappings.length === 0) {
+        // No mappings exist at all — nothing can be third party
+        thirdPartyCampaignIds = []
+      } else {
+        // Fetch all email campaigns whose entity has at least one mapping
+        const candidates = await prisma.competitiveInsightCampaign.findMany({
+          where: {
+            isDeleted: false,
+            isHidden: authResult.user.role === "super_admin" ? undefined : false,
+            entityId: { in: entitiesWithMappings },
+            entity: { type: { not: "data_broker" } },
+          },
+          select: { id: true, entityId: true, senderEmail: true },
+        })
+
+        // Keep only campaigns whose sender is NOT in their entity's mappings
+        thirdPartyCampaignIds = candidates
+          .filter((c) => {
+            if (!c.entityId) return false
+            const em = mappingsByEntity[c.entityId]
+            if (!em) return false
+            const email = c.senderEmail.toLowerCase()
+            const domain = email.split("@")[1]
+            return !em.emails.has(email) && (!domain || !em.domains.has(domain))
+          })
+          .map((c) => c.id)
+      }
+    }
+
     const emailWhere: any = {
       isHidden: authResult.user.role === "super_admin" ? undefined : false,
       isDeleted: false,
@@ -142,6 +179,7 @@ export async function GET(request: NextRequest) {
       ...(dateFilter && { dateReceived: dateFilter }),
       ...(subscriptionsOnly && subscribedEntityIds.length > 0 && { entityId: { in: subscribedEntityIds } }),
       ...(taggedEntityIds.length > 0 && { entityId: { in: taggedEntityIds } }),
+      ...(thirdPartyCampaignIds !== null && { id: { in: thirdPartyCampaignIds } }),
     }
 
     if (search) {
@@ -219,17 +257,17 @@ export async function GET(request: NextRequest) {
     let emailInsights: any[] = []
     let smsMessages: any[] = []
 
+    // Third party is email-only (SMS has no domain mapping concept)
+    const effectiveMessageType = thirdParty ? "email" : messageType
+
     const shouldFetchAll = donationPlatform && donationPlatform !== "all"
-    const fetchAllForCombining = messageType === "all" || !messageType
+    const fetchAllForCombining = effectiveMessageType === "all" || !effectiveMessageType
     
     // Safety limit: when fetching all for filtering, cap at 5000 records to prevent timeout
     const SAFETY_LIMIT = 5000
 
-    console.log("[v0] Fetch strategy:", { shouldFetchAll, fetchAllForCombining, donationPlatform })
-
     try {
-      if (messageType === "all" || messageType === "email" || !messageType) {
-        console.log("[v0] About to fetch emails...")
+      if (effectiveMessageType === "all" || effectiveMessageType === "email" || !effectiveMessageType) {
         const emailQuery = {
           where: emailWhere,
           include: {
@@ -258,19 +296,12 @@ export async function GET(request: NextRequest) {
             : { skip, take: limit }),
         }
         
-        console.log("[v0] Email query params:", { 
-          shouldFetchAll, 
-          fetchAllForCombining, 
-          skip, 
-          take: shouldFetchAll || fetchAllForCombining ? SAFETY_LIMIT : limit 
-        })
-        
         emailInsights = await prisma.competitiveInsightCampaign.findMany(emailQuery)
-        console.log("[v0] Fetched emails:", emailInsights.length)
+  
       }
 
-      if (messageType === "all" || messageType === "sms" || !messageType) {
-        console.log("[v0] About to fetch SMS...")
+      if (effectiveMessageType === "all" || effectiveMessageType === "sms" || !effectiveMessageType) {
+  
         const smsQuery = {
           where: smsWhere,
           include: {
@@ -299,22 +330,13 @@ export async function GET(request: NextRequest) {
             : { skip, take: limit }),
         }
         
-        console.log("[v0] SMS query params:", { 
-          shouldFetchAll, 
-          fetchAllForCombining, 
-          skip, 
-          take: shouldFetchAll || fetchAllForCombining ? SAFETY_LIMIT : limit 
-        })
-        
         smsMessages = await prisma.smsQueue.findMany(smsQuery)
-        console.log("[v0] Fetched SMS:", smsMessages.length)
+  
       }
     } catch (dbError) {
-      console.error("[v0] Database query error:", dbError)
+      console.error("Database query error:", dbError)
       throw dbError
     }
-
-    console.log("[v0] Raw results:", { emailCount: emailInsights.length, smsCount: smsMessages.length })
 
     const parsedEmailInsights = emailInsights.map((insight) => {
       let ctaLinks = []
@@ -393,7 +415,12 @@ export async function GET(request: NextRequest) {
       return dateB - dateA
     })
 
-    console.log("[v0] Combined insights before platform filter:", allInsights.length)
+    // When third party is active, the DB query is paginated so allInsights only has one page.
+    // We need a separate count query to get the real total.
+    let overrideTotal: number | null = null
+    if (thirdParty && thirdPartyCampaignIds !== null) {
+      overrideTotal = await prisma.competitiveInsightCampaign.count({ where: emailWhere })
+    }
 
     if (donationPlatform && donationPlatform !== "all") {
       // Substack is a sender-domain filter, not a CTA link filter
@@ -430,11 +457,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const totalCount = allInsights.length
+    const totalCount = overrideTotal !== null ? overrideTotal : allInsights.length
 
-    const paginatedInsights = allInsights.slice(skip, skip + limit)
-
-    console.log("[v0] Final paginated results:", paginatedInsights.length)
+    // When we have an overrideTotal (thirdParty case), allInsights is already paginated from DB
+    const paginatedInsights = overrideTotal !== null ? allInsights : allInsights.slice(skip, skip + limit)
 
     return NextResponse.json({
       insights: paginatedInsights,

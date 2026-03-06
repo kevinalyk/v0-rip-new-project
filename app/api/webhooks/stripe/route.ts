@@ -113,10 +113,14 @@ export async function POST(req: NextRequest) {
         const session = event.data.object
         console.log("[Stripe Webhook] Checkout completed:", session.id)
 
-        const clientId = session.metadata?.clientId
+        const clientId = session.client_reference_id || session.metadata?.clientId
         const plan = session.metadata?.plan as SubscriptionPlan
         const hasCompetitiveInsights = session.metadata?.hasCompetitiveInsights === "true"
         const subscriptionType = session.metadata?.subscriptionType // "plan", "ci", or "both"
+
+        if (!clientId) {
+          console.error("[Stripe Webhook] checkout.session.completed missing clientId — no client_reference_id or metadata.clientId", session.id)
+        }
 
         if (clientId && session.subscription) {
           const existingClient = await prisma.client.findUnique({

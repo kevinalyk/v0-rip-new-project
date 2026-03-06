@@ -1,9 +1,10 @@
 import { ImageResponse } from "next/og"
-import prisma from "@/lib/prisma"
 
-export const runtime = "nodejs"
+export const runtime = "edge"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
+
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
@@ -11,28 +12,26 @@ function stripHtml(html: string): string {
 
 export default async function Image({ params }: { params: { slug: string } }) {
   let title = "RIP Tool News"
-  let body = "Competitive Intelligence Platform"
+  let excerpt = "Competitive Intelligence for Political Campaigns"
   let publishedAt = ""
-  let articleImageUrl: string | null = null
 
   try {
-    const post = await prisma.announcement.findUnique({
-      where: { slug: params.slug },
+    const res = await fetch(`${BASE_URL}/api/announcements/by-slug/${params.slug}?public=1`, {
+      cache: "no-store",
     })
-    if (post) {
-      title = post.title
-      const plain = stripHtml(post.body)
-      body = plain.slice(0, 120).trim()
-      if (plain.length > 120) body += "..."
+    if (res.ok) {
+      const post = await res.json()
+      title = post.title ?? title
+      const plain = stripHtml(post.body ?? "")
+      excerpt = plain.slice(0, 120).trim() + (plain.length > 120 ? "..." : "")
       publishedAt = new Date(post.publishedAt).toLocaleDateString("en-US", {
         month: "long",
         day: "numeric",
         year: "numeric",
       })
-      articleImageUrl = post.imageUrl
     }
   } catch {
-    // Fall through to defaults
+    // fall through to defaults
   }
 
   return new ImageResponse(
@@ -60,16 +59,6 @@ export default async function Image({ params }: { params: { slug: string } }) {
             backgroundColor: "#dc2a28",
           }}
         />
-
-        {/* Article image as subtle background tint (if exists) */}
-        {articleImageUrl && (
-          <div style={{ position: "absolute", inset: 0, display: "flex" }}>
-            <img
-              src={articleImageUrl}
-              style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.12 }}
-            />
-          </div>
-        )}
 
         {/* Content */}
         <div
@@ -121,7 +110,7 @@ export default async function Image({ params }: { params: { slug: string } }) {
             >
               {title}
             </div>
-            {body && (
+            {excerpt && (
               <div
                 style={{
                   fontSize: "22px",
@@ -130,7 +119,7 @@ export default async function Image({ params }: { params: { slug: string } }) {
                   maxWidth: "820px",
                 }}
               >
-                {body}
+                {excerpt}
               </div>
             )}
           </div>

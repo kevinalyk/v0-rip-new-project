@@ -489,19 +489,18 @@ export function CompetitiveInsights({
     if (isDataBroker) return false
 
     if (showThirdParty) {
-      // Only show third-party campaigns: emails whose sender is NOT mapped to the entity
+      // Only show third-party campaigns: emails whose sender is NOT mapped to the entity.
+      // Mirrors isDomainMappedToEntity exactly (which is declared later, causing TDZ if called here).
       if (campaign.type !== "email") return false
-      if (campaign.entityId && campaign.entity) {
-        const mappings = entityMappings[campaign.entityId]
-        if (mappings) {
-          const senderEmail = campaign.senderEmail.toLowerCase()
-          const senderDomain = senderEmail.split("@")[1]
-          const isMapped =
-            mappings.emails.includes(senderEmail) ||
-            (senderDomain && mappings.domains.includes(senderDomain))
-          if (isMapped) return false
-        }
-      }
+      if (!campaign.entityId || !campaign.entity) return false // No entity = can't determine, exclude
+      const mappings = entityMappings[campaign.entityId]
+      if (!mappings) return false // No mappings loaded yet = assume mapped, exclude
+      const senderEmail = campaign.senderEmail.toLowerCase()
+      const senderDomain = senderEmail.split("@")[1]
+      const isMapped =
+        mappings.emails.includes(senderEmail) ||
+        (senderDomain && mappings.domains.includes(senderDomain))
+      if (isMapped) return false // Sender IS mapped to entity = not third party, exclude
     }
 
     const matchesSearch =

@@ -1,10 +1,9 @@
 import { ImageResponse } from "next/og"
+import prisma from "@/lib/prisma"
 
-export const runtime = "edge"
+export const runtime = "nodejs"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
-
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
@@ -16,13 +15,13 @@ export default async function Image({ params }: { params: { slug: string } }) {
   let publishedAt = ""
 
   try {
-    const res = await fetch(`${BASE_URL}/api/announcements/by-slug/${params.slug}?public=1`, {
-      cache: "no-store",
+    const post = await prisma.announcement.findUnique({
+      where: { slug: params.slug },
+      select: { title: true, body: true, publishedAt: true },
     })
-    if (res.ok) {
-      const post = await res.json()
-      title = post.title ?? title
-      const plain = stripHtml(post.body ?? "")
+    if (post) {
+      title = post.title
+      const plain = stripHtml(post.body)
       excerpt = plain.slice(0, 120).trim() + (plain.length > 120 ? "..." : "")
       publishedAt = new Date(post.publishedAt).toLocaleDateString("en-US", {
         month: "long",

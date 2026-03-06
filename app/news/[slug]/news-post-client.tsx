@@ -50,12 +50,14 @@ export default function NewsPostClient({ slug }: { slug: string }) {
     const checkAuth = async () => {
       try {
         const res = await fetch("/api/auth/me", { credentials: "include" })
-        if (!res.ok) { router.push("/login"); return }
-        const user = await res.json()
-        setUserRole(user.role)
-        setClientSlug(user.clientId || "rip")
+        if (res.ok) {
+          const user = await res.json()
+          setUserRole(user.role)
+          setClientSlug(user.clientId || "rip")
+        }
+        // Not authenticated — that's fine, news is public. Just leave userRole as null.
       } catch {
-        router.push("/login")
+        // Ignore — unauthenticated visitors can still read news
       } finally {
         setAuthLoading(false)
       }
@@ -67,7 +69,11 @@ export default function NewsPostClient({ slug }: { slug: string }) {
     if (authLoading) return
     const fetchPost = async () => {
       try {
-        const res = await fetch(`/api/announcements/by-slug/${slug}`, { credentials: "include" })
+        // Use ?public=1 for unauthenticated visitors, authenticated path for logged-in users
+        const url = userRole
+          ? `/api/announcements/by-slug/${slug}`
+          : `/api/announcements/by-slug/${slug}?public=1`
+        const res = await fetch(url, { credentials: "include" })
         if (res.status === 404) { setNotFound(true); return }
         if (res.ok) setPost(await res.json())
       } catch {
@@ -77,7 +83,7 @@ export default function NewsPostClient({ slug }: { slug: string }) {
       }
     }
     fetchPost()
-  }, [authLoading, slug])
+  }, [authLoading, slug, userRole])
 
   const handleDelete = async () => {
     if (!post) return

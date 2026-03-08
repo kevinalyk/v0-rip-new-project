@@ -239,6 +239,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
     "VT",
     "VA",
     "WA",
+    "WI",
     "WV",
     "WY",
   ]

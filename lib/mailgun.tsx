@@ -44,7 +44,7 @@ export async function sendPasswordResetEmail(email: string, resetToken: string):
           </p>
         </div>
         <div style="text-align: center; font-size: 12px; color: #999; margin-top: 20px;">
-          <p>Republican Inboxing Protocol</p>
+          <p>Inbox.GOP</p>
           <p>If the button doesn't work, copy and paste this link into your browser:</p>
           <p style="word-break: break-all;">${resetUrl}</p>
         </div>
@@ -66,7 +66,7 @@ ${resetUrl}
 If you didn't request a password reset, you can safely ignore this email. Your password will not be changed.
 
 ---
-Republican Inboxing Protocol
+Inbox.GOP
   `,
   )
 
@@ -177,7 +177,7 @@ export async function sendSubscriptionCancellationWarning(
         </div>
         
         <div style="text-align: center; font-size: 12px; color: #999; margin-top: 20px;">
-          <p>Republican Inboxing Protocol</p>
+          <p>Inbox.GOP</p>
           <p>If the button doesn't work, visit: ${billingUrl}</p>
         </div>
       </body>
@@ -214,7 +214,7 @@ To keep your current plan and maintain access, you can reactivate your subscript
 Manage your subscription: ${billingUrl}
 
 ---
-Republican Inboxing Protocol
+Inbox.GOP
   `,
   )
 

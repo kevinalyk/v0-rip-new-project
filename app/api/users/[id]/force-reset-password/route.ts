@@ -112,7 +112,7 @@ async function sendPasswordResetNotification(email: string, userName: string, te
           </p>
         </div>
         <div style="text-align: center; font-size: 12px; color: #999; margin-top: 20px;">
-          <p>Republican Inboxing Protocol</p>
+          <p>Inbox.GOP</p>
           <p>Login URL: ${loginUrl}</p>
         </div>
       </body>
@@ -137,7 +137,7 @@ Log in here: ${loginUrl}
 If you did not request this password reset, please contact your administrator immediately.
 
 ---
-Republican Inboxing Protocol
+Inbox.GOP
   `,
   )
 

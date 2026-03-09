@@ -121,9 +121,7 @@ function LoginForm({ successMessage = "" }) {
           />
         </div>
         <h1 className="text-4xl font-bold text-rip-blue mt-2">Inbox.GOP</h1>
-        <p className="mt-2 text-muted-foreground max-w-md">
-          The Republican Inboxing Protocol
-        </p>
+        <p className="mt-2 text-muted-foreground max-w-md">Inbox.GOP</p>
       </div>
 
       <Card className="w-full max-w-md">

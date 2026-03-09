@@ -147,7 +147,7 @@ export default function SignupPage() {
           />
         </div>
         <h1 className="text-4xl font-bold text-rip-blue">Inbox.GOP</h1>
-        <p className="mt-2 text-muted-foreground">The Republican Inboxing Protocol</p>
+        <p className="mt-2 text-muted-foreground">Inbox.GOP</p>
       </div>
 
       <Card className="w-full max-w-md">

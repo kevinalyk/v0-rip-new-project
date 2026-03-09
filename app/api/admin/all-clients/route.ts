@@ -4,10 +4,10 @@ import { verifyAuth } from "@/lib/auth"
 
 // Normalize the messy subscription plan values into clean display tiers
 // Based on actual DB values:
-//   "free" / "starter"                       → Free
-//   "basic" / "basic_inboxing" / "paid"      → Basic  (Stripe writes "paid" for Basic)
-//   "all" / "professional" / "pro"           → Professional  (Stripe writes "all" for Pro)
-//   "enterprise"                             → Professional  (manually provisioned top-tier)
+//   "free" / "starter"                   → Free
+//   "basic" / "basic_inboxing" / "paid"  → Basic        (Stripe writes "paid" for Basic)
+//   "all" / "professional" / "pro"       → Professional (Stripe writes "all" for Pro)
+//   "enterprise"                         → Enterprise   (manually provisioned top-tier)
 function normalizeTier(plan: string): { label: string; color: string } {
   const p = plan?.toLowerCase() ?? ""
   if (p === "free" || p === "starter" || p === "") {
@@ -16,8 +16,11 @@ function normalizeTier(plan: string): { label: string; color: string } {
   if (p === "basic" || p === "basic_inboxing" || p === "paid") {
     return { label: "Basic", color: "default" }
   }
-  if (p === "all" || p === "professional" || p === "pro" || p === "enterprise") {
+  if (p === "all" || p === "professional" || p === "pro") {
     return { label: "Professional", color: "destructive" }
+  }
+  if (p === "enterprise") {
+    return { label: "Enterprise", color: "destructive" }
   }
   return { label: plan ?? "Unknown", color: "outline" }
 }

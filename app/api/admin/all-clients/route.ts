@@ -20,7 +20,7 @@ function normalizeTier(plan: string): { label: string; color: string } {
     return { label: "Professional", color: "destructive" }
   }
   if (p === "enterprise") {
-    return { label: "Enterprise", color: "destructive" }
+    return { label: "Enterprise", color: "enterprise" }
   }
   return { label: plan ?? "Unknown", color: "outline" }
 }

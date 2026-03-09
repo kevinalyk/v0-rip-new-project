@@ -10,7 +10,7 @@ function stripHtml(html: string): string {
 }
 
 export default async function Image({ params }: { params: { slug: string } }) {
-  let title = "RIP Tool News"
+  let title = "Inbox.GOP News"
   let excerpt = "Competitive Intelligence for Political Campaigns"
   let publishedAt = ""
 
@@ -83,7 +83,7 @@ export default async function Image({ params }: { params: { slug: string } }) {
                 borderRadius: "4px",
               }}
             >
-              RIP TOOL
+              INBOX.GOP
             </div>
             <div style={{ color: "#6b7280", fontSize: "16px", fontWeight: "500" }}>NEWS</div>
           </div>

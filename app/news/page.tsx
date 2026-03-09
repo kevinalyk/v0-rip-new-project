@@ -226,7 +226,7 @@ export default function NewsPage() {
               <Megaphone size={22} className="text-[#dc2a28]" />
               <h1 className="text-2xl font-bold tracking-tight">{"What's New"}</h1>
             </div>
-            <p className="text-sm text-muted-foreground">Updates, improvements, and new features from the RIP team</p>
+            <p className="text-sm text-muted-foreground">Updates, improvements, and new features from the Inbox.GOP team</p>
           </div>
           {isSuperAdmin && (
             <Button onClick={openCreate} className="bg-[#dc2a28] hover:bg-[#dc2a28]/90 text-white gap-2">

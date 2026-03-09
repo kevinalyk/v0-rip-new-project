@@ -137,22 +137,23 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
       <div className="text-center mb-8">
-        <div className="relative w-48 h-48 mx-auto mb-4">
+        <div className="relative w-32 h-32 mx-auto mb-4">
           <Image
-            src="/images/FullLogo_Transparent_NoBuffer.png"
-            alt="RIP - Republican Inboxing Protocol"
+            src="/images/IconOnly_Transparent_NoBuffer.png"
+            alt="Inbox.GOP"
             fill
             style={{ objectFit: "contain" }}
             priority
           />
         </div>
-        <h1 className="text-3xl font-bold text-rip-blue">New Client Registration</h1>
+        <h1 className="text-4xl font-bold text-rip-blue">Inbox.GOP</h1>
+        <p className="mt-2 text-muted-foreground">Inbox.GOP</p>
       </div>
 
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Create Client Account</CardTitle>
-          <CardDescription>Register your organization to get started with RIP Tool</CardDescription>
+          <CardDescription>Register your organization to get started with Inbox.GOP</CardDescription>
         </CardHeader>
         <CardContent>
           {error && (

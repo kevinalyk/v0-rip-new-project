@@ -29,8 +29,8 @@ export async function generateMetadata({ params }: { params: { token: string } }
 
     if (!campaign) {
       return {
-        title: "Shared Campaign - RIP",
-        description: "View this shared campaign on RIP Tool",
+        title: "Shared Campaign — Inbox.GOP",
+        description: "View this shared campaign on Inbox.GOP",
       }
     }
 
@@ -39,16 +39,16 @@ export async function generateMetadata({ params }: { params: { token: string } }
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
     if (campaign.shareTokenCreatedAt && campaign.shareTokenCreatedAt < sevenDaysAgo) {
       return {
-        title: "Expired Link - RIP",
+        title: "Expired Link — Inbox.GOP",
         description: "This share link has expired",
       }
     }
 
     const entityName = campaign.entity?.name || (isSms ? campaign.phoneNumber : campaign.senderName)
-    const title = `${entityName} on RIP`
+    const title = `${entityName} — Inbox.GOP`
     const description = isSms
       ? (campaign as any).message?.slice(0, 160)
-      : campaign.subject?.slice(0, 160) || "View this campaign on RIP Tool"
+      : campaign.subject?.slice(0, 160) || "View this campaign on Inbox.GOP"
 
     return {
       title,
@@ -76,8 +76,8 @@ export async function generateMetadata({ params }: { params: { token: string } }
   } catch (error) {
     console.error("[OG] Error generating share metadata:", error)
     return {
-      title: "Shared Campaign - RIP",
-      description: "View this shared campaign on RIP Tool",
+      title: "Shared Campaign — Inbox.GOP",
+      description: "View this shared campaign on Inbox.GOP",
     }
   }
 }

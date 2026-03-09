@@ -424,6 +424,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                       onClick={() => navigate("/rip/admin/tools")}
                     />
                     <NavItem
+                      icon={<Users size={18} />}
+                      label="Accounts"
+                      active={pathname === "/rip/admin/accounts"}
+                      collapsed={false}
+                      onClick={() => navigate("/rip/admin/accounts")}
+                    />
+                    <NavItem
                       icon={<Building2 size={18} />}
                       label="CI Entities"
                       active={pathname === "/rip/admin/ci-entities"}

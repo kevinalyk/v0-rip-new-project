@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
-import { AdminContent } from "@/components/admin-content"
+import { AdminAccountsContent } from "@/components/admin-accounts-content"
 import { AppLayout } from "@/components/app-layout"
 
-export default function AdminToolsPage() {
+export default function AdminAccountsPage() {
   const router = useRouter()
   const params = useParams()
   const clientSlug = params.clientSlug as string
@@ -15,15 +15,12 @@ export default function AdminToolsPage() {
   useEffect(() => {
     const checkSuperAdmin = async () => {
       try {
-        // First check if clientSlug is 'rip'
         if (clientSlug !== "rip") {
           router.push(`/${clientSlug}/ci/campaigns`)
           return
         }
 
-        const response = await fetch("/api/auth/me", {
-          credentials: "include",
-        })
+        const response = await fetch("/api/auth/me", { credentials: "include" })
 
         if (!response.ok) {
           router.push("/login")
@@ -33,11 +30,7 @@ export default function AdminToolsPage() {
         const user = await response.json()
 
         if (user.role !== "super_admin") {
-          // Not a super-admin, redirect to their client page
-          const clientResponse = await fetch("/api/client/slug", {
-            credentials: "include",
-          })
-
+          const clientResponse = await fetch("/api/client/slug", { credentials: "include" })
           if (clientResponse.ok) {
             const { slug } = await clientResponse.json()
             router.push(`/${slug}`)
@@ -48,8 +41,8 @@ export default function AdminToolsPage() {
         }
 
         setLoading(false)
-      } catch (error) {
-        console.error("Auth check error:", error)
+      } catch (err) {
+        console.error("Auth check error:", err)
         setError("Authentication error. Please try logging in again.")
         setTimeout(() => router.push("/login"), 1000)
       }
@@ -80,7 +73,7 @@ export default function AdminToolsPage() {
   return (
     <AppLayout isAdminView={true}>
       <div className="container mx-auto py-8 px-4">
-        <AdminContent />
+        <AdminAccountsContent />
       </div>
     </AppLayout>
   )

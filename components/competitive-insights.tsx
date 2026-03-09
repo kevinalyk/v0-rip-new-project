@@ -273,6 +273,8 @@ export function CompetitiveInsights({
 
   const [allSenders, setAllSenders] = useState<string[]>([]) // Initialized once
   const [currentUserClient, setCurrentUserClient] = useState<string | null>(null)
+  const [fetchedUser, setFetchedUser] = useState<any>(null)
+  const resolvedUser = currentUser ?? fetchedUser
   const [subscribedEntityIds, setSubscribedEntityIds] = useState<string[]>([])
   const [allEntities, setAllEntities] = useState<{ id: string; name: string }[]>([])
 
@@ -340,19 +342,11 @@ export function CompetitiveInsights({
         let userData // Declare userData here
         if (userResponse.ok) {
           userData = await userResponse.json()
-          // Use the currentUser prop if provided, otherwise use fetched data
-          const userToSet = currentUser || { role: userData.role, clientId: userData.client?.id }
-          // If not using the prop, set the state for internal use (e.g., in super_admin check)
           if (!currentUser) {
-            // This state update should ideally be handled by a context or prop if it's meant to be globally available.
-            // For now, we'll ensure the super_admin check works based on fetched data if currentUser prop is not provided.
+            setFetchedUser({ role: userData.role, clientId: userData.client?.id })
           }
         } else {
           console.error("Failed to fetch user info")
-          // If not using the currentUser prop and fetch fails, assume no admin access for now.
-          if (!currentUser) {
-            // similar to above, manage state if needed.
-          }
         }
 
         // Fetch subscription info
@@ -605,7 +599,7 @@ export function CompetitiveInsights({
       // Filter out hidden campaigns unless the user is a super admin
       const insights = data.insights || []
       setCampaigns(
-        currentUser?.role === "super_admin" ? insights : insights.filter((campaign: Campaign) => !campaign.isHidden),
+        resolvedUser?.role === "super_admin" ? insights : insights.filter((campaign: Campaign) => !campaign.isHidden),
       )
 
       // Set pagination metadata
@@ -1534,7 +1528,7 @@ export function CompetitiveInsights({
                               key={campaign.id}
                               className={`border-b hover:bg-muted/30 cursor-pointer transition-colors ${
                                 shouldShowPreview && index >= previewLimit ? "blur-sm" : ""
-                              } ${campaign.isHidden && currentUser?.role === "super_admin" ? "opacity-60" : ""}`}
+                              } ${campaign.isHidden && resolvedUser?.role === "super_admin" ? "opacity-60" : ""}`}
                               onClick={() => {
                                 if (!shouldShowPreview || index < previewLimit) {
                                   setSelectedCampaign(campaign)
@@ -1553,7 +1547,7 @@ export function CompetitiveInsights({
                                       <>
                                         <div className="flex items-center gap-2 mb-1">
                                           <div className="font-medium text-sm truncate">{campaign.entity.name}</div>
-                                          {campaign.isHidden && currentUser?.role === "super_admin" && (
+                                          {campaign.isHidden && resolvedUser?.role === "super_admin" && (
                                             <Badge variant="outline" className="text-xs bg-muted">
                                               <EyeOff className="h-3 w-3 mr-1" />
                                               Hidden
@@ -1632,7 +1626,7 @@ export function CompetitiveInsights({
                                               Personal
                                             </Badge>
                                           )}
-                                          {campaign.isHidden && currentUser?.role === "super_admin" && (
+                                          {campaign.isHidden && resolvedUser?.role === "super_admin" && (
                                             <Badge variant="outline" className="text-xs bg-muted">
                                               <EyeOff className="h-3 w-3 mr-1" />
                                               Hidden
@@ -2051,7 +2045,7 @@ export function CompetitiveInsights({
                         </DialogDescription>
                       </div>
                       <div className="flex items-center gap-3 mr-8">
-                        {currentUser?.role === "super_admin" && (
+                        {resolvedUser?.role === "super_admin" && (
                           <Button
                             variant="outline"
                             size="sm"

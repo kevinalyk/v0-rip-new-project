@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { AdminContent } from "@/components/admin-content"
+import { AdminAccountsContent } from "@/components/admin-accounts-content"
 import { AppLayout } from "@/components/app-layout"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function AdminToolsPage() {
   const router = useRouter()
@@ -80,7 +82,18 @@ export default function AdminToolsPage() {
   return (
     <AppLayout isAdminView={true}>
       <div className="container mx-auto py-8 px-4">
-        <AdminContent />
+        <Tabs defaultValue="tools">
+          <TabsList className="mb-6">
+            <TabsTrigger value="tools">Tools</TabsTrigger>
+            <TabsTrigger value="accounts">Accounts</TabsTrigger>
+          </TabsList>
+          <TabsContent value="tools">
+            <AdminContent />
+          </TabsContent>
+          <TabsContent value="accounts">
+            <AdminAccountsContent />
+          </TabsContent>
+        </Tabs>
       </div>
     </AppLayout>
   )

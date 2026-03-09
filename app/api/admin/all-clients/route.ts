@@ -1,0 +1,71 @@
+import { type NextRequest, NextResponse } from "next/server"
+import prisma from "@/lib/prisma"
+import { verifyAuth } from "@/lib/auth"
+
+// Normalize the messy subscription plan values into clean display tiers
+function normalizeTier(plan: string): { label: string; color: string } {
+  const p = plan?.toLowerCase() ?? ""
+  if (p === "free" || p === "starter" || p === "all") {
+    return { label: "Free", color: "secondary" }
+  }
+  if (p === "basic" || p === "basic_inboxing") {
+    return { label: "Basic", color: "default" }
+  }
+  if (p === "professional" || p === "pro" || p === "enterprise") {
+    return { label: "Professional", color: "destructive" }
+  }
+  if (p === "paid") {
+    return { label: "Basic", color: "default" }
+  }
+  return { label: plan ?? "Unknown", color: "outline" }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const authResult = await verifyAuth(request)
+    if (!authResult.success || !authResult.user || authResult.user.role !== "super_admin") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const clients = await prisma.client.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        active: true,
+        subscriptionPlan: true,
+        subscriptionStatus: true,
+        hasCompetitiveInsights: true,
+        emailVolumeLimit: true,
+        emailVolumeUsed: true,
+        subscriptionRenewDate: true,
+        cancelAtPeriodEnd: true,
+        totalUsers: true,
+        createdAt: true,
+        stripeCustomerId: true,
+        users: {
+          where: { role: "admin" },
+          select: { firstName: true, lastName: true, email: true },
+          take: 1,
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    })
+
+    const result = clients.map((c) => ({
+      ...c,
+      tier: normalizeTier(c.subscriptionPlan),
+      ownerName:
+        c.users[0]
+          ? [c.users[0].firstName, c.users[0].lastName].filter(Boolean).join(" ") || c.users[0].email
+          : null,
+      ownerEmail: c.users[0]?.email ?? null,
+    }))
+
+    return NextResponse.json(result)
+  } catch (error) {
+    console.error("Error fetching all clients:", error)
+    return NextResponse.json({ error: "Failed to fetch clients" }, { status: 500 })
+  }
+}

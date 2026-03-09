@@ -111,25 +111,25 @@ function LoginForm({ successMessage = "" }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
       <div className="text-center mb-12">
-        <div className="relative w-64 h-64 mx-auto mb-4">
+        <div className="relative w-40 h-40 mx-auto mb-4">
           <Image
-            src="/images/FullLogo_Transparent_NoBuffer.png"
-            alt="RIP - Republican Inboxing Protocol"
+            src="/images/IconOnly_Transparent_NoBuffer.png"
+            alt="Inbox.GOP"
             fill
             style={{ objectFit: "contain" }}
             priority
           />
         </div>
-        <h1 className="text-3xl font-bold text-rip-blue mt-2">Republican Inboxing Protocol</h1>
-        <p className="mt-4 text-muted-foreground max-w-md">
-          Coming soon — A tool dedicated to helping Republicans and conservatives inbox effectively.
+        <h1 className="text-4xl font-bold text-rip-blue mt-2">Inbox.GOP</h1>
+        <p className="mt-2 text-muted-foreground max-w-md">
+          The Republican Inboxing Protocol
         </p>
       </div>
 
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Sign in to your account</CardTitle>
-          <CardDescription>Enter your email and password to access the RIP tool</CardDescription>
+          <CardDescription>Enter your email and password to access Inbox.GOP</CardDescription>
         </CardHeader>
         <CardContent>
           {dbStatus === "disconnected" && (

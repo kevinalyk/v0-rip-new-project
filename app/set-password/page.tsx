@@ -140,7 +140,7 @@ function SetPasswordForm() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-4">
           <div className="flex justify-center">
-            <Image src="/images/FullLogo_Transparent_NoBuffer.png" alt="RIP Tool Logo" width={120} height={40} />
+            <Image src="/images/IconOnly_Transparent_NoBuffer.png" alt="Inbox.GOP" width={60} height={60} />
           </div>
           <div>
             <CardTitle className="text-2xl">Set Your Password</CardTitle>

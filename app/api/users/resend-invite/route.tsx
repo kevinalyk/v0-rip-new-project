@@ -71,9 +71,9 @@ export async function POST(request: NextRequest) {
     const mailgunApiKey = process.env.MAILGUN_API_KEY!
 
     const formData = new FormData()
-    formData.append("from", `RIP Tool <hello@${mailgunDomain}>`)
+    formData.append("from", `Inbox.GOP <hello@${mailgunDomain}>`)
     formData.append("to", user[0].email)
-    formData.append("subject", "Reminder: Set your RIP Tool password")
+    formData.append("subject", "Reminder: Set your Inbox.GOP password")
     formData.append(
       "html",
       `
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
           <div class="container">
             <h2>Reminder: Set Your Password</h2>
             <p>Hi ${user[0].firstName},</p>
-            <p>This is a reminder to set your password for RIP Tool. Click the button below to get started:</p>
+            <p>This is a reminder to set your password for Inbox.GOP. Click the button below to get started:</p>
             <a href="${invitationLink}" class="button">Set Your Password</a>
             <p>Or copy and paste this link into your browser:</p>
             <p style="word-break: break-all; color: #0070f3;">${invitationLink}</p>

@@ -157,7 +157,7 @@ export default function SharePageClient() {
           </p>
           <Button onClick={handleClose}>{isAuthenticated ? "Go to Dashboard" : "Go to Login"}</Button>
           <div className="pt-4 border-t">
-            <p className="text-xs text-muted-foreground">Powered by RIP Tool</p>
+            <p className="text-xs text-muted-foreground">Powered by Inbox.GOP</p>
           </div>
         </div>
       </div>
@@ -311,7 +311,7 @@ export default function SharePageClient() {
 
           <div className="mt-4 pt-4 border-t text-center">
             <p className="text-xs text-muted-foreground">
-              Shared via <span className="font-medium">RIP Tool</span> • Competitive Intelligence Platform
+              Shared via <span className="font-medium">Inbox.GOP</span> • Competitive Intelligence Platform
             </p>
           </div>
         </DialogContent>

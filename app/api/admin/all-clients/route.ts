@@ -45,8 +45,8 @@ export async function GET(request: NextRequest) {
         createdAt: true,
         stripeCustomerId: true,
         users: {
-          where: { role: "admin" },
-          select: { firstName: true, lastName: true, email: true },
+          where: { role: { in: ["owner", "admin"] } },
+          select: { firstName: true, lastName: true, email: true, role: true },
           take: 1,
           orderBy: { createdAt: "asc" },
         },

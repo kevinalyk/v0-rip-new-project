@@ -3,19 +3,24 @@ import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
 
 // Normalize the messy subscription plan values into clean display tiers
+// Based on actual DB values:
+//   "free" / "starter"                   → Free
+//   "basic" / "basic_inboxing" / "paid"  → Basic        (Stripe writes "paid" for Basic)
+//   "all" / "professional" / "pro"       → Professional (Stripe writes "all" for Pro)
+//   "enterprise"                         → Enterprise   (manually provisioned top-tier)
 function normalizeTier(plan: string): { label: string; color: string } {
   const p = plan?.toLowerCase() ?? ""
-  if (p === "free" || p === "starter" || p === "all") {
+  if (p === "free" || p === "starter" || p === "") {
     return { label: "Free", color: "secondary" }
   }
-  if (p === "basic" || p === "basic_inboxing") {
+  if (p === "basic" || p === "basic_inboxing" || p === "paid") {
     return { label: "Basic", color: "default" }
   }
-  if (p === "professional" || p === "pro" || p === "enterprise") {
+  if (p === "all" || p === "professional" || p === "pro") {
     return { label: "Professional", color: "destructive" }
   }
-  if (p === "paid") {
-    return { label: "Basic", color: "default" }
+  if (p === "enterprise") {
+    return { label: "Enterprise", color: "enterprise" }
   }
   return { label: plan ?? "Unknown", color: "outline" }
 }

@@ -32,6 +32,7 @@ function TierBadge({ tier }: { tier: { label: string; color: string } }) {
     secondary: "bg-muted text-muted-foreground",
     default: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
     destructive: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+    enterprise: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
     outline: "bg-muted text-muted-foreground border border-border",
   }
   return (
@@ -124,6 +125,15 @@ export function AdminAccountsContent() {
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground">{ciCount} with CI add-on</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Enterprise</CardDescription>
+            <CardTitle className="text-3xl">{tierCounts["Enterprise"] ?? 0}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground">accounts on enterprise tier</p>
           </CardContent>
         </Card>
       </div>

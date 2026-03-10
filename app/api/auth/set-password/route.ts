@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import bcryptjs from "bcryptjs"
-import prisma from "@/lib/prisma"
+import { neon } from "@neondatabase/serverless"
+
+const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(request: Request) {
   try {
@@ -14,21 +16,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Password must be at least 8 characters long" }, { status: 400 })
     }
 
-    const invitation = await prisma.userInvitation.findFirst({
-      where: {
-        token: token,
-      },
-      select: {
-        id: true,
-        userId: true,
-        expiresAt: true,
-        used: true,
-      },
-    })
+    // Find the invitation using raw SQL (UserInvitation table exists but not in Prisma schema)
+    const invitations = await sql`
+      SELECT id, "userId", "expiresAt", used
+      FROM "UserInvitation"
+      WHERE token = ${token}
+      LIMIT 1
+    `
 
-    if (!invitation) {
+    if (!invitations || invitations.length === 0) {
       return NextResponse.json({ error: "Invalid token" }, { status: 400 })
     }
+
+    const invitation = invitations[0]
 
     // Check if token has been used
     if (invitation.used) {
@@ -44,18 +44,18 @@ export async function POST(request: Request) {
     const hashedPassword = await bcryptjs.hash(password, 10)
 
     // Update user password and mark first login as false
-    await prisma.user.update({
-      where: { id: invitation.userId },
-      data: {
-        password: hashedPassword,
-        firstLogin: false,
-      },
-    })
+    await sql`
+      UPDATE "User"
+      SET password = ${hashedPassword}, "firstLogin" = false, "updatedAt" = NOW()
+      WHERE id = ${invitation.userId}
+    `
 
-    await prisma.userInvitation.update({
-      where: { id: invitation.id },
-      data: { used: true },
-    })
+    // Mark invitation as used
+    await sql`
+      UPDATE "UserInvitation"
+      SET used = true
+      WHERE id = ${invitation.id}
+    `
 
     return NextResponse.json({ message: "Password set successfully" })
   } catch (error) {

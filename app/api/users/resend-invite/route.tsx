@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     await sql`
       UPDATE "UserInvitation"
       SET used = true
-      WHERE userid = ${userId} AND used = false
+      WHERE "userId" = ${userId} AND used = false
     `
 
     // Generate new invitation token
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
 
     // Store new invitation token
     await sql`
-      INSERT INTO "UserInvitation" (token, userid, expiresat)
+      INSERT INTO "UserInvitation" (token, "userId", "expiresAt")
       VALUES (${invitationToken}, ${userId}, ${expiresAt})
     `
 

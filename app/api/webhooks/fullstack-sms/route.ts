@@ -94,41 +94,17 @@ export async function POST(request: Request) {
     console.log("Campaign ID:", data.campaign_id)
     console.log("Company ID:", data.company_id)
 
-    // Apply redaction + URL stripping up front so the dedup comparison uses the
-    // same representation that gets stored — otherwise raw URLs vs "[Omitted Link]" never match.
-    const redactedNamesEarly = await getRedactedNames()
-    const urlRegexEarly = /https?:\/\/[^\s]+|(?<![a-zA-Z0-9@])(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:\/[^\s]*)?/g
-    const preRedactedMessage = ((applyRedaction(cleanedMessage, redactedNamesEarly) as string) || cleanedMessage)
-      .replace(urlRegexEarly, "[Omitted Link]")
-
-    // Normalize for dedup: trim, lowercase, collapse whitespace, strip trailing " x" noise,
-    // limit to first 160 chars so minor truncation differences don't cause false negatives.
+    // Compute a deterministic dedup hash from sender + normalized message content.
+    // Normalize: strip trailing " x" test suffix, collapse whitespace, lowercase, first 160 chars.
+    // This hash is stored with @unique so concurrent webhooks can't both insert — the DB rejects
+    // the second one atomically, avoiding race conditions that read-then-write can never solve.
     const normalizeForDedup = (msg: string) =>
       msg.replace(/\s+x\s*$/i, "").replace(/\s+/g, " ").trim().toLowerCase().substring(0, 160)
 
-    const normalizedIncoming = normalizeForDedup(preRedactedMessage)
-
-    // Look for existing SMS with same sender within last 10 minutes, compare normalized stored message
-    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000)
-    const recentFromSender = await prisma.smsQueue.findMany({
-      where: {
-        phoneNumber: actualSender,
-        createdAt: { gte: tenMinutesAgo },
-      },
-      select: { id: true, message: true },
-    })
-    const existingSms = recentFromSender.find(
-      (s) => normalizeForDedup(s.message || "") === normalizedIncoming
-    ) || null
-
-    if (existingSms) {
-      console.log("[FullStack SMS] Duplicate SMS detected, ignoring:", existingSms.id)
-      return NextResponse.json({
-        success: true,
-        message: "Duplicate SMS ignored",
-        smsId: existingSms.id,
-      })
-    }
+    const dedupHash = crypto
+      .createHash("sha256")
+      .update(`${actualSender}::${normalizeForDedup(cleanedMessage)}`)
+      .digest("hex")
 
     let ctaLinks: Array<{ url: string; finalUrl?: string; type: string }> = []
     try {
@@ -158,30 +134,39 @@ export async function POST(request: Request) {
     const urlRegex = /https?:\/\/[^\s]+|(?<![a-zA-Z0-9@])(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:\/[^\s]*)?/g
     const redactedMessage = nameRedactedMessage.replace(urlRegex, "[Omitted Link]")
 
-    // Store the raw SMS data in the queue for processing
-    const smsData = {
-      id: uuidv4(),
-      rawData: body,
-      processed: true, // Set to true so SMS shows up in campaigns immediately
-      processingAttempts: 0,
-      phoneNumber: actualSender, // Store the actual sender, not the gateway
-      toNumber: data.to,
-      message: redactedMessage, // Store redacted message without the sender prefix
-      campaignId: data.campaign_id,
-      companyId: data.company_id,
-      entityId: entityAssignment?.entityId || null,
-      assignmentMethod: entityAssignment?.assignmentMethod || null,
-      assignedAt: entityAssignment ? new Date() : null,
-      ctaLinks: JSON.stringify(ctaLinks), // Store extracted links as JSON
-      createdAt: new Date(),
-    }
-
-    // Save to the SmsQueue table
-    await prisma.smsQueue.create({
-      data: smsData,
+    // Save to the SmsQueue table using upsert on dedupHash.
+    // If two webhooks arrive simultaneously they both try to insert the same dedupHash —
+    // the DB unique constraint ensures only one succeeds; the other is silently ignored.
+    const smsId = uuidv4()
+    const result = await prisma.smsQueue.upsert({
+      where: { dedupHash },
+      create: {
+        id: smsId,
+        rawData: body,
+        processed: true,
+        processingAttempts: 0,
+        phoneNumber: actualSender,
+        toNumber: data.to,
+        message: redactedMessage,
+        campaignId: data.campaign_id,
+        companyId: data.company_id,
+        entityId: entityAssignment?.entityId || null,
+        assignmentMethod: entityAssignment?.assignmentMethod || null,
+        assignedAt: entityAssignment ? new Date() : null,
+        ctaLinks: JSON.stringify(ctaLinks),
+        dedupHash,
+        createdAt: new Date(),
+      },
+      update: {}, // no-op: if it already exists, do nothing
     })
 
-    console.log("[FullStack SMS] SMS queued for processing:", smsData.id)
+    const isDuplicate = result.id !== smsId
+    if (isDuplicate) {
+      console.log("[FullStack SMS] Duplicate SMS detected via dedupHash, ignored:", result.id)
+      return NextResponse.json({ success: true, message: "Duplicate SMS ignored", smsId: result.id })
+    }
+
+    console.log("[FullStack SMS] SMS queued for processing:", result.id)
 
     // Return a success response to FullStack
     return NextResponse.json({

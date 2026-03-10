@@ -127,6 +127,15 @@ const US_STATES = [
 
 // Final cleanup pass on any extracted text
 function sanitizeExtractedText(text: string): string {
+  // Cut at the FIRST occurrence of zero-width ESP padding characters BEFORE any other
+  // processing, because these chars (U+034F combining grapheme joiner, U+200C zero-width
+  // non-joiner, U+200B zero-width space, U+FEFF BOM) appear right after the real preview
+  // text and before the &nbsp; spam. e.g. "Is this really true? ͏‌&nbsp;͏‌&nbsp;..."
+  const zwPaddingIndex = text.search(/[\u034F\u200B\u200C\u200D\uFEFF]/)
+  if (zwPaddingIndex > 0) {
+    text = text.substring(0, zwPaddingIndex)
+  }
+
   let result = text
     // Decode any remaining HTML entities including &nbsp;
     .replace(/&nbsp;/gi, " ").replace(/&#160;/g, " ")
@@ -135,9 +144,10 @@ function sanitizeExtractedText(text: string): string {
     .replace(/&ldquo;/g, '"').replace(/&rdquo;/g, '"')
     // Remove ESP filler: standalone numbers at the start (e.g. "96 They hope...")
     .replace(/^\d+\s+/, "")
+    // Strip any remaining zero-width chars that survived
+    .replace(/[\u034F\u200B\u200C\u200D\uFEFF]/g, "")
 
-  // ESPs pad preheaders with many spaces/nbsp to push inbox preview clipping.
-  // After entity decoding those become spaces — cut at the first run of 3+ spaces.
+  // Also cut at the first run of 3+ spaces (fallback for other padding styles)
   const paddingIndex = result.search(/\s{3,}/)
   if (paddingIndex > 0) {
     result = result.substring(0, paddingIndex)

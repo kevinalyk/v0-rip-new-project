@@ -127,7 +127,7 @@ const US_STATES = [
 
 // Final cleanup pass on any extracted text
 function sanitizeExtractedText(text: string): string {
-  return text
+  let result = text
     // Decode any remaining HTML entities including &nbsp;
     .replace(/&nbsp;/gi, " ").replace(/&#160;/g, " ")
     .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
@@ -135,9 +135,15 @@ function sanitizeExtractedText(text: string): string {
     .replace(/&ldquo;/g, '"').replace(/&rdquo;/g, '"')
     // Remove ESP filler: standalone numbers at the start (e.g. "96 They hope...")
     .replace(/^\d+\s+/, "")
-    // Collapse whitespace
-    .replace(/\s+/g, " ")
-    .trim()
+
+  // ESPs pad preheaders with many spaces/nbsp to push inbox preview clipping.
+  // After entity decoding those become spaces — cut at the first run of 3+ spaces.
+  const paddingIndex = result.search(/\s{3,}/)
+  if (paddingIndex > 0) {
+    result = result.substring(0, paddingIndex)
+  }
+
+  return result.replace(/\s+/g, " ").trim()
 }
 
 // Extract preheader text from raw HTML (hidden preview text ESPs inject)

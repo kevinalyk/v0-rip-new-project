@@ -1644,7 +1644,7 @@ export function CompetitiveInsights({
                   <td className="p-4">
                     <div>
                       <div className="text-sm font-medium truncate max-w-md">{campaign.subject}</div>
-                      {campaign.emailPreview && (
+                      {campaign.emailPreview && campaign.type !== "sms" && (
                         <div className="text-xs text-muted-foreground truncate max-w-md mt-1">
                           {cleanEmailPreview(campaign.emailPreview)}
                         </div>

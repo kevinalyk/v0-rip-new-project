@@ -125,6 +125,21 @@ const US_STATES = [
   "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
   ]
 
+// Final cleanup pass on any extracted text
+function sanitizeExtractedText(text: string): string {
+  return text
+    // Decode any remaining HTML entities including &nbsp;
+    .replace(/&nbsp;/gi, " ").replace(/&#160;/g, " ")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/&ldquo;/g, '"').replace(/&rdquo;/g, '"')
+    // Remove ESP filler: standalone numbers at the start (e.g. "96 They hope...")
+    .replace(/^\d+\s+/, "")
+    // Collapse whitespace
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
 // Extract preheader text from raw HTML (hidden preview text ESPs inject)
 function extractPreheaderFromHtml(html: string): string {
   const patterns = [
@@ -135,11 +150,9 @@ function extractPreheaderFromHtml(html: string): string {
   for (const pattern of patterns) {
     const match = html.match(pattern)
     if (match && match[1]) {
-      const text = match[1]
-        .replace(/<[^>]*>/g, " ")
-        .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-        .replace(/\s+/g, " ").trim()
+      const text = sanitizeExtractedText(
+        match[1].replace(/<[^>]*>/g, " ")
+      )
       if (text.length > 10) return text.substring(0, 200)
     }
   }
@@ -148,16 +161,13 @@ function extractPreheaderFromHtml(html: string): string {
 
 // Extract first meaningful visible text from HTML, skipping style/script/hidden blocks
 function extractFirstVisibleText(html: string): string {
-  const text = html
+  const raw = html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
     .replace(/<[^>]*style=["'][^"']*(?:display\s*:\s*none|max-height\s*:\s*0|visibility\s*:\s*hidden|mso-hide)[^"']*["'][^>]*>[\s\S]*?<\/[a-z]+>/gi, " ")
     .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-    .replace(/\s+/g, " ").trim()
-  return text.substring(0, 200)
+  return sanitizeExtractedText(raw).substring(0, 200)
 }
 
 // Detect if a string looks like CSS/code noise rather than real content
@@ -207,14 +217,11 @@ function cleanEmailPreview(preview: string, emailContent?: string | null): strin
   }
 
   // Decode entities and clean up the stored text
-  let cleaned = preview
-    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-    .replace(/&ldquo;/g, '"').replace(/&rdquo;/g, '"')
-    .replace(/\s+/g, " ").trim()
+  let cleaned = sanitizeExtractedText(preview)
 
-  // Final check after decoding
-  if (looksLikeCode(cleaned) || cleaned.length < 10) {
+  // Final check after decoding — also reject dot-only or very short results
+  const isUseless = looksLikeCode(cleaned) || cleaned.length < 10 || /^[\s.…]+$/.test(cleaned)
+  if (isUseless) {
     if (emailContent) {
       const preheader = extractPreheaderFromHtml(emailContent)
       if (preheader) return preheader

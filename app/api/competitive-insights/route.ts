@@ -242,10 +242,10 @@ export async function GET(request: NextRequest) {
     }
 
   if (senders.length > 0) {
-    emailWhere.OR = senders.flatMap(sender => [
-      { entity: { name: sender } },
-      { senderName: sender }
-    ])
+    emailWhere.entity = {
+      ...emailWhere.entity,
+      name: { in: senders },
+    }
   }
 
     if (party && party !== "all") {
@@ -284,10 +284,10 @@ export async function GET(request: NextRequest) {
     }
 
   if (senders.length > 0) {
-    smsWhere.OR = senders.flatMap(sender => [
-      { entity: { name: sender } },
-      { phoneNumber: sender }
-    ])
+    smsWhere.entity = {
+      ...smsWhere.entity,
+      name: { in: senders },
+    }
   }
 
     if (party && party !== "all") {

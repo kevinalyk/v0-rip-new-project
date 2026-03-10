@@ -12,10 +12,8 @@
  */
 
 import { neon } from "@neondatabase/serverless"
-import * as dotenv from "dotenv"
-dotenv.config({ path: ".env.local" })
 
-const sql = neon(process.env.DATABASE_URL!)
+const sql = neon("postgresql://neondb_owner:npg_g57hjJyxqHls@ep-winter-base-a4ibvtlr.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require")
 
 /** Mirror of campaign-detector normalizeSubject — must stay in sync */
 function normalizeSubject(subject: string): string {

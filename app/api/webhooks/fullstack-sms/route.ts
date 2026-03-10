@@ -94,15 +94,21 @@ export async function POST(request: Request) {
     console.log("Campaign ID:", data.campaign_id)
     console.log("Company ID:", data.company_id)
 
-    // Normalize message for dedup: trim, lowercase, strip trailing " x" noise that
-    // FullStack sometimes appends, and take only the first 100 chars so that
-    // minor URL/link differences don't prevent matching.
+    // Apply redaction + URL stripping up front so the dedup comparison uses the
+    // same representation that gets stored — otherwise raw URLs vs "[Omitted Link]" never match.
+    const redactedNamesEarly = await getRedactedNames()
+    const urlRegexEarly = /https?:\/\/[^\s]+|(?<![a-zA-Z0-9@])(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:\/[^\s]*)?/g
+    const preRedactedMessage = ((applyRedaction(cleanedMessage, redactedNamesEarly) as string) || cleanedMessage)
+      .replace(urlRegexEarly, "[Omitted Link]")
+
+    // Normalize for dedup: trim, lowercase, collapse whitespace, strip trailing " x" noise,
+    // limit to first 160 chars so minor truncation differences don't cause false negatives.
     const normalizeForDedup = (msg: string) =>
-      msg.replace(/\s+x\s*$/i, "").replace(/\s+/g, " ").trim().toLowerCase().substring(0, 100)
+      msg.replace(/\s+x\s*$/i, "").replace(/\s+/g, " ").trim().toLowerCase().substring(0, 160)
 
-    const normalizedIncoming = normalizeForDedup(cleanedMessage)
+    const normalizedIncoming = normalizeForDedup(preRedactedMessage)
 
-    // Look for existing SMS with same sender within last 10 minutes, then compare normalized text
+    // Look for existing SMS with same sender within last 10 minutes, compare normalized stored message
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000)
     const recentFromSender = await prisma.smsQueue.findMany({
       where: {

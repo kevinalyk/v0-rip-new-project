@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server"
 import bcryptjs from "bcryptjs"
 import prisma from "@/lib/prisma"
+import { neon } from "@neondatabase/serverless"
 import { getAuthenticatedUser, isSystemAdmin } from "@/lib/auth"
 import { updateClientUserSeats } from "@/lib/stripe-user-seats"
+
+const sql = neon(process.env.DATABASE_URL!)
 
 // Get a specific user
 export async function GET(request: Request, { params }: { params: { id: string } }) {
@@ -252,25 +255,26 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
       return NextResponse.json({ error: "Cannot delete your own account" }, { status: 400 })
     }
 
-    const currentUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { role: true },
-    })
+    // Use raw SQL for all lookups/deletes to avoid Prisma choking on null passwords
+    const currentUserRows = await sql`SELECT role FROM "User" WHERE id = ${userId} LIMIT 1`
+    const currentUser = currentUserRows[0]
 
-    const targetUser = await prisma.user.findUnique({
-      where: { id: params.id },
-      select: { role: true },
-    })
+    const targetUserRows = await sql`SELECT role, "clientId" FROM "User" WHERE id = ${params.id} LIMIT 1`
+    const targetUser = targetUserRows[0]
+
+    if (!targetUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
 
     // Only super_admins can delete owners
-    if (targetUser?.role === "owner" && currentUser?.role !== "super_admin") {
+    if (targetUser.role === "owner" && currentUser?.role !== "super_admin") {
       return NextResponse.json({ error: "Forbidden - Only super admins can delete owner users" }, { status: 403 })
     }
 
     // Regular admins cannot delete other admins, owners, or super_admins
     if (
       currentUser?.role === "admin" &&
-      (targetUser?.role === "admin" || targetUser?.role === "owner" || targetUser?.role === "super_admin")
+      (targetUser.role === "admin" || targetUser.role === "owner" || targetUser.role === "super_admin")
     ) {
       return NextResponse.json(
         { error: "Forbidden - Admins cannot delete admin, owner, or super admin users" },
@@ -279,31 +283,22 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     }
 
     // Owners can delete admins and users, but not other owners or super_admins
-    if (currentUser?.role === "owner" && (targetUser?.role === "owner" || targetUser?.role === "super_admin")) {
+    if (currentUser?.role === "owner" && (targetUser.role === "owner" || targetUser.role === "super_admin")) {
       return NextResponse.json(
         { error: "Forbidden - Owners cannot delete other owners or super admins" },
         { status: 403 },
       )
     }
 
-    const targetUserData = await prisma.user.findUnique({
-      where: { id: params.id },
-      select: { clientId: true },
-    })
-
     // Delete user domain access first (due to foreign key constraints)
-    await prisma.userDomainAccess.deleteMany({
-      where: { userId: params.id },
-    })
+    await sql`DELETE FROM "UserDomainAccess" WHERE "userId" = ${params.id}`
 
     // Delete the user
-    await prisma.user.delete({
-      where: { id: params.id },
-    })
+    await sql`DELETE FROM "User" WHERE id = ${params.id}`
 
-    if (targetUserData?.clientId && targetUserData.clientId !== "RIP") {
+    if (targetUser?.clientId && targetUser.clientId !== "RIP") {
       try {
-        await updateClientUserSeats(targetUserData.clientId)
+        await updateClientUserSeats(targetUser.clientId)
       } catch (error) {
         console.error("[v0] Failed to update user seats in Stripe after deletion:", error)
         // Don't fail the deletion if Stripe update fails

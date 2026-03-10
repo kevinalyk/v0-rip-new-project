@@ -55,6 +55,11 @@ function formatDateForImap(date: Date): string {
 export function normalizeSubject(subject: string): string {
   return subject
     .replace(/^(re|fwd|fw|forward):\s*/i, "") // Remove prefixes
+    // Treat personalized names and [Omitted] tokens as the same placeholder.
+    // Matches a capitalized word (or [Omitted]) at the start or after a comma/space
+    // followed by punctuation — e.g. "Sal, help us" and "[Omitted], help us" both normalize to "__NAME__, help us"
+    .replace(/\[Omitted\]/g, "__NAME__")
+    .replace(/\b[A-Z][a-z]{1,20}\b(?=\s*[,!?:])/g, "__NAME__")
     .replace(/\s+/g, " ") // Replace multiple spaces with a single space
     .trim() // Remove leading/trailing spaces
     .toLowerCase() // Convert to lowercase
@@ -807,13 +812,23 @@ export async function scanForCompetitiveInsights(options: {
     for (const [fingerprint, emails] of allEmailsByFingerprint.entries()) {
       const firstEmail = emails[0]
 
-      const existing = await prisma.competitiveInsightCampaign.findFirst({
+      // Dedup check: normalize both the incoming subject AND any stored subjects for this
+      // sender so that "Sal, help us" and "[Omitted], help us" are treated as the same campaign.
+      const normalizedIncoming = normalizeSubject(firstEmail.subject)
+      const candidatesForSender = await prisma.competitiveInsightCampaign.findMany({
         where: {
           senderEmail: firstEmail.senderEmail,
-          subject: firstEmail.subject,
-          isDeleted: false, // Only update if not deleted
+          isDeleted: false,
+          dateReceived: {
+            gte: new Date(new Date(firstEmail.date).setHours(0, 0, 0, 0)),
+            lt: new Date(new Date(firstEmail.date).setHours(23, 59, 59, 999)),
+          },
         },
+        select: { id: true, subject: true, inboxCount: true, spamCount: true, notDeliveredCount: true, clientId: true },
       })
+      const existing = candidatesForSender.find(
+        (c) => normalizeSubject(c.subject) === normalizedIncoming
+      ) || null
 
       if (existing) {
         const inboxCount = emails.filter((e) => e.placement === "inbox").length

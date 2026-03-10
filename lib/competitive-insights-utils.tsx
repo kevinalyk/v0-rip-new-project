@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma"
 import { generateText } from "ai"
 import * as cheerio from "cheerio"
-import { sanitizeSubject } from "@/lib/campaign-detector"
+import { sanitizeSubject, normalizeSubject } from "@/lib/campaign-detector"
 import https from "https"
 import http from "http"
 import { URL } from "url"
@@ -1407,27 +1407,29 @@ export async function processCompetitiveInsights(
 
     // Apply name redaction to protect seed identities — always fetches fresh from DB
     const redactedNames = await getRedactedNames()
-    const rawRedactedSubject = (applyRedaction(sanitizedSubject, redactedNames) as string) || sanitizedSubject
-    // If the redacted subject collides with an existing row for the same sender,
-    // append trailing spaces until a unique value is found (up to 5 attempts).
-    const redactedSubject = await findUniqueRedactedSubject(senderEmail, rawRedactedSubject, undefined, prisma)
+    const redactedSubject = ((applyRedaction(sanitizedSubject, redactedNames) as string) || sanitizedSubject).trim()
     const redactedSenderName = (applyRedaction(senderName, redactedNames) as string) || senderName
     const redactedEmailPreview = (applyRedaction(emailPreview, redactedNames) as string) || emailPreview
     const redactedEmailContent = sanitizedEmailContent
       ? (applyRedaction(sanitizedEmailContent, redactedNames) as string)
       : sanitizedEmailContent
 
-    // Normalize subject for dedup: trim whitespace and also search for trailing-space
-    // padded variants that may have been stored by previous ingestion runs
-    const trimmedRedactedSubject = redactedSubject.trim()
-    const existing = await prisma.competitiveInsightCampaign.findFirst({
+    // Dedup: fetch all campaigns from this sender on this day and compare normalized subjects
+    // so "[Omitted], help us" matches "Sal, help us" and we update instead of inserting.
+    const normalizedRedacted = normalizeSubject(redactedSubject)
+    const dayStart = new Date(dateReceived)
+    dayStart.setHours(0, 0, 0, 0)
+    const dayEnd = new Date(dateReceived)
+    dayEnd.setHours(23, 59, 59, 999)
+    const sameDayCandidates = await prisma.competitiveInsightCampaign.findMany({
       where: {
-        senderEmail: senderEmail,
-        subject: {
-          in: [trimmedRedactedSubject, ...Array.from({length: 10}, (_, i) => trimmedRedactedSubject + " ".repeat(i + 1))],
-        },
+        senderEmail,
+        dateReceived: { gte: dayStart, lt: dayEnd },
       },
     })
+    const existing = sameDayCandidates.find(
+      (c) => normalizeSubject(c.subject) === normalizedRedacted
+    ) || null
 
     if (existing) {
       await prisma.competitiveInsightCampaign.update({

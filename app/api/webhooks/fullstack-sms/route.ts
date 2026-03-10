@@ -94,17 +94,26 @@ export async function POST(request: Request) {
     console.log("Campaign ID:", data.campaign_id)
     console.log("Company ID:", data.company_id)
 
-    // Look for existing SMS with same phone number and message within the last 5 minutes
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
-    const existingSms = await prisma.smsQueue.findFirst({
+    // Normalize message for dedup: trim, lowercase, strip trailing " x" noise that
+    // FullStack sometimes appends, and take only the first 100 chars so that
+    // minor URL/link differences don't prevent matching.
+    const normalizeForDedup = (msg: string) =>
+      msg.replace(/\s+x\s*$/i, "").replace(/\s+/g, " ").trim().toLowerCase().substring(0, 100)
+
+    const normalizedIncoming = normalizeForDedup(cleanedMessage)
+
+    // Look for existing SMS with same sender within last 10 minutes, then compare normalized text
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000)
+    const recentFromSender = await prisma.smsQueue.findMany({
       where: {
         phoneNumber: actualSender,
-        message: cleanedMessage,
-        createdAt: {
-          gte: fiveMinutesAgo,
-        },
+        createdAt: { gte: tenMinutesAgo },
       },
+      select: { id: true, message: true },
     })
+    const existingSms = recentFromSender.find(
+      (s) => normalizeForDedup(s.message || "") === normalizedIncoming
+    ) || null
 
     if (existingSms) {
       console.log("[FullStack SMS] Duplicate SMS detected, ignoring:", existingSms.id)

@@ -125,98 +125,105 @@ const US_STATES = [
   "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
   ]
 
-// Helper function to clean email preview text
-function cleanEmailPreview(preview: string): string {
-  if (!preview) return ""
+// Extract preheader text from raw HTML (hidden preview text ESPs inject)
+function extractPreheaderFromHtml(html: string): string {
+  const patterns = [
+    /class=["'][^"']*(?:preheader|preview[-_]?text|preview)["'][^>]*>([\s\S]*?)<\/[a-z]+>/i,
+    /<(?:div|span|td|p)[^>]*style=["'][^"']*(?:display\s*:\s*none|max-height\s*:\s*0|overflow\s*:\s*hidden)[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|span|td|p)>/i,
+    /<(?:div|span|td|p)[^>]*style=["'][^"']*mso-hide\s*:\s*all[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|span|td|p)>/i,
+  ]
+  for (const pattern of patterns) {
+    const match = html.match(pattern)
+    if (match && match[1]) {
+      const text = match[1]
+        .replace(/<[^>]*>/g, " ")
+        .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+        .replace(/\s+/g, " ").trim()
+      if (text.length > 10) return text.substring(0, 200)
+    }
+  }
+  return ""
+}
 
-  // If the stored value looks like raw HTML, try to extract the preheader first
+// Extract first meaningful visible text from HTML, skipping style/script/hidden blocks
+function extractFirstVisibleText(html: string): string {
+  const text = html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]*style=["'][^"']*(?:display\s*:\s*none|max-height\s*:\s*0|visibility\s*:\s*hidden|mso-hide)[^"']*["'][^>]*>[\s\S]*?<\/[a-z]+>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ").trim()
+  return text.substring(0, 200)
+}
+
+// Detect if a string looks like CSS/code noise rather than real content
+function looksLikeCode(text: string): boolean {
+  // CSS selector lists: "a, p, span, div..."
+  if (/^[\s,]*[a-z]+(\s*,\s*[a-z]+){2,}/i.test(text)) return true
+  // CSS property patterns: "property: value;"
+  if (/[a-z-]+\s*:\s*[^;,\n]{3,};/.test(text)) return true
+  // CSS comment blocks
+  if (/\/\*[\s\S]*?\*\//.test(text)) return true
+  // HTML attribute noise: x-apple-data-detectors, mso-, webkit-
+  if (/x-apple-data-detectors|mso-|webkit-|!important/.test(text)) return true
+  // &nbsp; spam
+  if ((/&nbsp;/g.exec(text) || []).length > 3) return true
+  // High ratio of code keywords
+  const codeKeywords = ['div','span','body','html','font','table','td','tr',
+    'background-color','margin','padding','border','display','position','float',
+    'color','text-align','font-size','line-height','mso','webkit']
+  const words = text.toLowerCase().split(/[\s,;:(){}]+/).filter(w => w.length > 1)
+  const codeCount = words.filter(w => codeKeywords.includes(w)).length
+  return words.length > 3 && codeCount / words.length > 0.3
+}
+
+// Helper function to clean email preview text, with optional full HTML fallback
+function cleanEmailPreview(preview: string, emailContent?: string | null): string {
+  if (!preview && !emailContent) return ""
+
+  // If stored preview looks like code noise, skip it and go straight to HTML fallback
+  if (!preview || looksLikeCode(preview)) {
+    if (emailContent) {
+      const preheader = extractPreheaderFromHtml(emailContent)
+      if (preheader) return preheader
+      return extractFirstVisibleText(emailContent)
+    }
+    return ""
+  }
+
+  // If stored preview is raw HTML, try to extract preheader from it
   if (/<[a-z]/i.test(preview)) {
-    const preheaderPatterns = [
-      /class=["'][^"']*(?:preheader|preview[-_]?text|preview)["'][^>]*>([\s\S]*?)<\/[a-z]+>/i,
-      /<(?:div|span|td|p)[^>]*style=["'][^"']*(?:display\s*:\s*none|max-height\s*:\s*0|overflow\s*:\s*hidden)[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|span|td|p)>/i,
-      /<(?:div|span|td|p)[^>]*style=["'][^"']*mso-hide\s*:\s*all[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|span|td|p)>/i,
-    ]
-    for (const pattern of preheaderPatterns) {
-      const match = preview.match(pattern)
-      if (match && match[1]) {
-        const text = match[1]
-          .replace(/<[^>]*>/g, " ")
-          .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
-          .replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-          .replace(/\s+/g, " ").trim()
-        if (text.length > 10) return text.substring(0, 200)
-      }
+    const preheader = extractPreheaderFromHtml(preview)
+    if (preheader) return preheader
+    // Fall back to full emailContent preheader
+    if (emailContent) {
+      const contentPreheader = extractPreheaderFromHtml(emailContent)
+      if (contentPreheader) return contentPreheader
     }
   }
 
-  // Detect CSS selector patterns like ", p, span, font, td, div"
-  if (/^[\s,]*[a-z]+(\s*,\s*[a-z]+)+/i.test(preview)) return ""
+  // Decode entities and clean up the stored text
+  let cleaned = preview
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/&ldquo;/g, '"').replace(/&rdquo;/g, '"')
+    .replace(/\s+/g, " ").trim()
 
-  // Common HTML/CSS keywords
-  const codeKeywords = [
-    'div', 'span', 'body', 'html', 'font', 'table', 'td', 'tr', 'tab',
-    'img', 'header', 'footer', 'nav', 'section', 'article', 'background-color',
-    'margin', 'padding', 'border', 'width', 'height', 'display', 'var',
-    'position', 'top', 'left', 'right', 'bottom', 'float',
-    'color', 'background', 'text-align', 'font-size', 'line-height'
-  ]
-  const words = preview.toLowerCase().split(/[\s,;:()]+/).filter(w => w.length > 1)
-  const codeWordCount = words.filter(word => codeKeywords.includes(word)).length
-  if (words.length > 0 && codeWordCount / words.length > 0.35) return ""
-
-  // Remove HTML tags
-  let cleaned = preview.replace(/<[^>]*>/g, " ")
-  cleaned = cleaned.replace(/\{[^}]*\}/g, " ")
-  cleaned = cleaned.replace(/:[a-z-]+/g, " ")
-  cleaned = cleaned.replace(/[.#][a-zA-Z0-9_-]+/g, " ")
-
-  // Remove @media, @import, @font-face statements
-  cleaned = cleaned.replace(/@[a-z-]+[^;{]*[;{]/gi, " ")
-  
-  // Remove CSS property declarations (property: value;)
-  cleaned = cleaned.replace(/[a-z-]+\s*:\s*[^;]+;/gi, " ")
-  
-  // Remove common CSS patterns and keywords
-  cleaned = cleaned.replace(/ReadMsgBody|ExternalClass|mso-|webkit-|interpolation-mode|text-decoration|var\(--/gi, " ")
-  
-  // Remove curly braces, semicolons, parentheses and other CSS punctuation
-  cleaned = cleaned.replace(/[{};()]/g, " ")
-  
-  // Remove CSS comments
-  cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, " ")
-  
-  // Decode HTML entities
-  cleaned = cleaned
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&ldquo;/g, '"')
-    .replace(/&rdquo;/g, '"')
-  
-  // Clean up whitespace
-  cleaned = cleaned.replace(/\s+/g, " ").trim()
-  
-  // Final check: if result is too short, mostly punctuation, or still contains code keywords
-  if (cleaned.length < 15) {
+  // Final check after decoding
+  if (looksLikeCode(cleaned) || cleaned.length < 10) {
+    if (emailContent) {
+      const preheader = extractPreheaderFromHtml(emailContent)
+      if (preheader) return preheader
+      return extractFirstVisibleText(emailContent)
+    }
     return ""
   }
-  
-  const finalWords = cleaned.toLowerCase().split(/\s+/)
-  const finalCodeCount = finalWords.filter(word => codeKeywords.includes(word)).length
-  if (finalWords.length > 0 && finalCodeCount / finalWords.length > 0.25) {
-    // Still too many code keywords after cleaning
-    return ""
-  }
-  
-  // Limit to 100 characters
-  if (cleaned.length > 100) {
-    cleaned = cleaned.substring(0, 100) + "..."
-  }
-  
-  return cleaned
+
+  return cleaned.length > 200 ? cleaned.substring(0, 200) + "..." : cleaned
 }
   
 export function CompetitiveInsights({
@@ -1650,9 +1657,9 @@ export function CompetitiveInsights({
                   <td className="p-4">
                     <div>
                       <div className="text-sm font-medium truncate max-w-md">{campaign.subject}</div>
-                      {campaign.emailPreview && campaign.type !== "sms" && (
+                      {campaign.type !== "sms" && (cleanEmailPreview(campaign.emailPreview, campaign.emailContent)) && (
                         <div className="text-xs text-muted-foreground truncate max-w-md mt-1">
-                          {cleanEmailPreview(campaign.emailPreview)}
+                          {cleanEmailPreview(campaign.emailPreview, campaign.emailContent)}
                         </div>
                       )}
                     </div>

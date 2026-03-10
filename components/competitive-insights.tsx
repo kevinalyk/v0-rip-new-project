@@ -137,11 +137,14 @@ function sanitizeExtractedText(text: string): string {
   }
 
   let result = text
-    // Decode any remaining HTML entities including &nbsp;
-    .replace(/&nbsp;/gi, " ").replace(/&#160;/g, " ")
-    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-    .replace(/&ldquo;/g, '"').replace(/&rdquo;/g, '"')
+    // Decode HTML entities — including literal "&nbsp;" stored as plain text in DB
+    .replace(/&nbsp;/gi, " ").replace(/&#160;/gi, " ")
+    .replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"').replace(/&#39;/gi, "'")
+    .replace(/&ldquo;/gi, '"').replace(/&rdquo;/gi, '"')
+    .replace(/&hellip;/gi, "…").replace(/&mdash;/gi, "—").replace(/&ndash;/gi, "–")
+    // Remove any remaining unrecognized &...; entity fragments (e.g. "&n..." at end of truncated string)
+    .replace(/&[a-z#0-9]{1,10};?/gi, " ")
     // Remove ESP filler: standalone numbers at the start (e.g. "96 They hope...")
     .replace(/^\d+\s+/, "")
     // Strip any remaining zero-width chars that survived

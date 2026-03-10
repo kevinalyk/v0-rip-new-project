@@ -1417,14 +1417,14 @@ export async function processCompetitiveInsights(
       ? (applyRedaction(sanitizedEmailContent, redactedNames) as string)
       : sanitizedEmailContent
 
-    // Normalize subject for dedup: trim whitespace so trailing-space variants
-    // (produced by findUniqueRedactedSubject padding) still merge correctly
+    // Normalize subject for dedup: trim whitespace and also search for trailing-space
+    // padded variants that may have been stored by previous ingestion runs
     const trimmedRedactedSubject = redactedSubject.trim()
     const existing = await prisma.competitiveInsightCampaign.findFirst({
       where: {
         senderEmail: senderEmail,
         subject: {
-          in: [trimmedRedactedSubject, ...Array.from({length: 5}, (_, i) => trimmedRedactedSubject + " ".repeat(i + 1))],
+          in: [trimmedRedactedSubject, ...Array.from({length: 10}, (_, i) => trimmedRedactedSubject + " ".repeat(i + 1))],
         },
       },
     })
@@ -1451,7 +1451,7 @@ export async function processCompetitiveInsights(
         data: {
           senderEmail,
           senderName: redactedSenderName,
-          subject: redactedSubject,
+          subject: trimmedRedactedSubject,
           dateReceived,
           inboxCount,
           spamCount,

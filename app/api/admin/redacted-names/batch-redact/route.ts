@@ -197,7 +197,7 @@ export async function PUT(request: Request) {
 
     while (hasMoreEmails) {
       const emails = await prisma.competitiveInsightCampaign.findMany({
-        select: { id: true, senderEmail: true, subject: true, emailContent: true, emailPreview: true, senderName: true },
+        select: { id: true, senderEmail: true, subject: true, emailContent: true, emailPreview: true, senderName: true, inboxCount: true, spamCount: true, notDeliveredCount: true },
         skip: emailOffset,
         take: emailBatchSize,
         orderBy: { id: "asc" },
@@ -216,14 +216,34 @@ export async function PUT(request: Request) {
         if (email.subject) {
           const { result, count } = redactNames(email.subject, names)
           if (count > 0) {
-            // Use dedup helper to avoid unique (senderEmail, subject) constraint violations
-            const uniqueSubject = await findUniqueRedactedSubject(
-              email.senderEmail,
-              result,
-              email.id,
-            )
-            updateData.subject = uniqueSubject
             emailInstancesRedacted += count
+            // Check if another row already has this redacted subject for the same sender
+            const collision = await prisma.competitiveInsightCampaign.findFirst({
+              where: { senderEmail: email.senderEmail, subject: result, id: { not: email.id } },
+              select: { id: true, inboxCount: true, spamCount: true, notDeliveredCount: true },
+            })
+            if (collision) {
+              // Merge this row's counts into the collision and delete this row
+              const totalCount = email.inboxCount + email.spamCount + email.notDeliveredCount + collision.inboxCount + collision.spamCount + collision.notDeliveredCount
+              const mergedInbox = collision.inboxCount + email.inboxCount
+              const mergedSpam = collision.spamCount + email.spamCount
+              const mergedNotDelivered = collision.notDeliveredCount + email.notDeliveredCount
+              await prisma.competitiveInsightCampaign.update({
+                where: { id: collision.id },
+                data: {
+                  inboxCount: mergedInbox,
+                  spamCount: mergedSpam,
+                  notDeliveredCount: mergedNotDelivered,
+                  inboxRate: totalCount > 0 ? (mergedInbox / totalCount) * 100 : 0,
+                  emailContent: email.emailContent || undefined,
+                  emailPreview: email.emailPreview || undefined,
+                },
+              })
+              await prisma.competitiveInsightCampaign.delete({ where: { id: email.id } })
+              emailModified++
+              continue // skip the normal update below
+            }
+            updateData.subject = result
             modified = true
           }
         }

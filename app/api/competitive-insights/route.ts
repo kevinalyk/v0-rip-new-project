@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
+import { normalizeSubject } from "@/lib/campaign-detector"
 
 export async function GET(request: NextRequest) {
   try {
@@ -347,7 +348,33 @@ export async function GET(request: NextRequest) {
         }
         
         emailInsights = await prisma.competitiveInsightCampaign.findMany(emailQuery)
-  
+
+        // Display-side dedup: if two rows share senderEmail + same calendar day + same
+        // normalized subject, keep only the [Omitted] version (or highest inboxCount if neither has it).
+        const dedupMap = new Map<string, typeof emailInsights[0]>()
+        for (const insight of emailInsights) {
+          const day = insight.dateReceived
+            ? new Date(insight.dateReceived).toISOString().slice(0, 10)
+            : "unknown"
+          const key = `${insight.senderEmail}__${day}__${normalizeSubject(insight.subject || "")}`
+          const existing = dedupMap.get(key)
+          if (!existing) {
+            dedupMap.set(key, insight)
+          } else {
+            // Prefer the [Omitted] version; if both or neither have it, prefer higher inboxCount
+            const incomingHasOmitted = (insight.subject || "").includes("[Omitted]")
+            const existingHasOmitted = (existing.subject || "").includes("[Omitted]")
+            if (incomingHasOmitted && !existingHasOmitted) {
+              dedupMap.set(key, insight)
+            } else if (!incomingHasOmitted && existingHasOmitted) {
+              // keep existing
+            } else if ((insight.inboxCount ?? 0) > (existing.inboxCount ?? 0)) {
+              dedupMap.set(key, insight)
+            }
+          }
+        }
+        emailInsights = Array.from(dedupMap.values())
+
       }
 
       if (effectiveMessageType === "all" || effectiveMessageType === "sms" || !effectiveMessageType) {

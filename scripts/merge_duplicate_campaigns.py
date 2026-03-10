@@ -1,13 +1,16 @@
 import re
+import os
 import psycopg2
 import psycopg2.extras
 from collections import defaultdict
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
-HOST = "ep-winter-base-a4ibvtlr.us-east-1.aws.neon.tech"
-USER = "neondb_owner"
-PASS = "npg_g57hjJyxqHls"
-DBNAME = "neondb"
+db_url = os.environ.get("BACKUP_DATABASE_URL") or os.environ.get("DATABASE_URL")
+if not db_url:
+    raise RuntimeError("No database URL found in BACKUP_DATABASE_URL or DATABASE_URL")
+
+parsed = urlparse(db_url)
 
 def normalize_subject(subject):
     if not subject:
@@ -21,10 +24,11 @@ def normalize_subject(subject):
 
 def main():
     conn = psycopg2.connect(
-        host=HOST,
-        user=USER,
-        password=PASS,
-        dbname=DBNAME,
+        host=parsed.hostname,
+        port=parsed.port or 5432,
+        user=parsed.username,
+        password=parsed.password,
+        dbname=parsed.path.lstrip("/"),
         sslmode="require"
     )
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)

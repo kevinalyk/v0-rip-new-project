@@ -180,8 +180,6 @@ function looksLikeCode(text: string): boolean {
   if (/\/\*[\s\S]*?\*\//.test(text)) return true
   // HTML attribute noise: x-apple-data-detectors, mso-, webkit-
   if (/x-apple-data-detectors|mso-|webkit-|!important/.test(text)) return true
-  // &nbsp; spam
-  if ((/&nbsp;/g.exec(text) || []).length > 3) return true
   // High ratio of code keywords
   const codeKeywords = ['div','span','body','html','font','table','td','tr',
     'background-color','margin','padding','border','display','position','float',
@@ -195,42 +193,50 @@ function looksLikeCode(text: string): boolean {
 function cleanEmailPreview(preview: string, emailContent?: string | null): string {
   if (!preview && !emailContent) return ""
 
-  // If stored preview looks like code noise, skip it and go straight to HTML fallback
-  if (!preview || looksLikeCode(preview)) {
+  // Sanitize entities first so looksLikeCode and length checks work on clean text
+  const sanitizedPreview = preview ? sanitizeExtractedText(preview) : ""
+
+  // If stored preview looks like code noise or is empty after sanitizing, use HTML fallback
+  if (!sanitizedPreview || looksLikeCode(sanitizedPreview)) {
     if (emailContent) {
       const preheader = extractPreheaderFromHtml(emailContent)
       if (preheader) return preheader
-      return extractFirstVisibleText(emailContent)
+      const visible = extractFirstVisibleText(emailContent)
+      return isUselessText(visible) ? "" : visible
     }
     return ""
   }
 
   // If stored preview is raw HTML, try to extract preheader from it
-  if (/<[a-z]/i.test(preview)) {
+  if (/<[a-z]/i.test(sanitizedPreview)) {
     const preheader = extractPreheaderFromHtml(preview)
     if (preheader) return preheader
-    // Fall back to full emailContent preheader
     if (emailContent) {
       const contentPreheader = extractPreheaderFromHtml(emailContent)
       if (contentPreheader) return contentPreheader
     }
   }
 
-  // Decode entities and clean up the stored text
-  let cleaned = sanitizeExtractedText(preview)
-
-  // Final check after decoding — also reject dot-only or very short results
-  const isUseless = looksLikeCode(cleaned) || cleaned.length < 10 || /^[\s.…]+$/.test(cleaned)
-  if (isUseless) {
+  // Reject dot-only, whitespace-only, or very short results
+  if (isUselessText(sanitizedPreview)) {
     if (emailContent) {
       const preheader = extractPreheaderFromHtml(emailContent)
       if (preheader) return preheader
-      return extractFirstVisibleText(emailContent)
+      const visible = extractFirstVisibleText(emailContent)
+      return isUselessText(visible) ? "" : visible
     }
     return ""
   }
 
-  return cleaned.length > 200 ? cleaned.substring(0, 200) + "..." : cleaned
+  // Truncate cleanly — never cut mid-word or mid-entity
+  if (sanitizedPreview.length > 200) {
+    return sanitizedPreview.substring(0, 200).replace(/\s+\S*$/, "") + "..."
+  }
+  return sanitizedPreview
+}
+
+function isUselessText(text: string): boolean {
+  return text.length < 10 || /^[\s.…\-–—|]+$/.test(text)
 }
   
 export function CompetitiveInsights({

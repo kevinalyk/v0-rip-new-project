@@ -385,6 +385,7 @@ model SmsQueue {
   isDeleted           Boolean  @default(false) // Soft delete flag
   deletedAt           DateTime? // When it was deleted
   deletedBy           String?  // Which admin deleted it
+  dedupHash           String?  @unique // SHA256(phoneNumber + normalizedMessage) for race-safe dedup
   createdAt          DateTime  @default(now())
   processedAt        DateTime?
 

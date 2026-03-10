@@ -125,92 +125,137 @@ const US_STATES = [
   "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
   ]
 
-// Helper function to clean email preview text
-function cleanEmailPreview(preview: string): string {
-  if (!preview) return ""
-  
-  // Detect CSS selector patterns like ", p, span, font, td, div" (comma-separated element names)
-  // This is the most common bad pattern from style blocks
-  if (/^[\s,]*[a-z]+(\s*,\s*[a-z]+)+/i.test(preview)) {
-    return "" // This is CSS selector list, not content
+// Final cleanup pass on any extracted text
+function sanitizeExtractedText(text: string): string {
+  // Cut at the FIRST occurrence of zero-width ESP padding characters BEFORE any other
+  // processing, because these chars (U+034F combining grapheme joiner, U+200C zero-width
+  // non-joiner, U+200B zero-width space, U+FEFF BOM) appear right after the real preview
+  // text and before the &nbsp; spam. e.g. "Is this really true? ͏‌&nbsp;͏‌&nbsp;..."
+  const zwPaddingIndex = text.search(/[\u034F\u200B\u200C\u200D\uFEFF]/)
+  if (zwPaddingIndex > 0) {
+    text = text.substring(0, zwPaddingIndex)
   }
-  
-  // Common HTML/CSS element and property keywords that indicate this is code, not content
-  const codeKeywords = [
-    'div', 'span', 'body', 'html', 'font', 'table', 'td', 'tr', 'tab',
-    'img', 'header', 'footer', 'nav', 'section', 'article', 'background-color',
-    'margin', 'padding', 'border', 'width', 'height', 'display', 'var',
-    'position', 'top', 'left', 'right', 'bottom', 'float',
-    'color', 'background', 'text-align', 'font-size', 'line-height'
+
+  let result = text
+    // Decode HTML entities — including literal "&nbsp;" stored as plain text in DB
+    .replace(/&nbsp;/gi, " ").replace(/&#160;/gi, " ")
+    .replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"').replace(/&#39;/gi, "'")
+    .replace(/&ldquo;/gi, '"').replace(/&rdquo;/gi, '"')
+    .replace(/&hellip;/gi, "…").replace(/&mdash;/gi, "—").replace(/&ndash;/gi, "–")
+    // Remove any remaining unrecognized &...; entity fragments (e.g. "&n..." at end of truncated string)
+    .replace(/&[a-z#0-9]{1,10};?/gi, " ")
+    // Remove ESP filler: standalone numbers at the start (e.g. "96 They hope...")
+    .replace(/^\d+\s+/, "")
+    // Strip any remaining zero-width chars that survived
+    .replace(/[\u034F\u200B\u200C\u200D\uFEFF]/g, "")
+
+  // Also cut at the first run of 3+ spaces (fallback for other padding styles)
+  const paddingIndex = result.search(/\s{3,}/)
+  if (paddingIndex > 0) {
+    result = result.substring(0, paddingIndex)
+  }
+
+  return result.replace(/\s+/g, " ").trim()
+}
+
+// Extract preheader text from raw HTML (hidden preview text ESPs inject)
+function extractPreheaderFromHtml(html: string): string {
+  const patterns = [
+    /class=["'][^"']*(?:preheader|preview[-_]?text|preview)["'][^>]*>([\s\S]*?)<\/[a-z]+>/i,
+    /<(?:div|span|td|p)[^>]*style=["'][^"']*(?:display\s*:\s*none|max-height\s*:\s*0|overflow\s*:\s*hidden)[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|span|td|p)>/i,
+    /<(?:div|span|td|p)[^>]*style=["'][^"']*mso-hide\s*:\s*all[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|span|td|p)>/i,
   ]
-  
-  // Check if preview is mostly code keywords (early detection)
-  const words = preview.toLowerCase().split(/[\s,;:()]+/).filter(w => w.length > 1)
-  const codeWordCount = words.filter(word => codeKeywords.includes(word)).length
-  if (words.length > 0 && codeWordCount / words.length > 0.35) {
-    // More than 35% of words are code keywords, this is likely CSS/HTML
+  for (const pattern of patterns) {
+    const match = html.match(pattern)
+    if (match && match[1]) {
+      const text = sanitizeExtractedText(
+        match[1].replace(/<[^>]*>/g, " ")
+      )
+      if (text.length > 10) return text.substring(0, 200)
+    }
+  }
+  return ""
+}
+
+// Extract first meaningful visible text from HTML, skipping style/script/hidden blocks
+function extractFirstVisibleText(html: string): string {
+  const raw = html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]*style=["'][^"']*(?:display\s*:\s*none|max-height\s*:\s*0|visibility\s*:\s*hidden|mso-hide)[^"']*["'][^>]*>[\s\S]*?<\/[a-z]+>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<[^>]*>/g, " ")
+  return sanitizeExtractedText(raw).substring(0, 200)
+}
+
+// Detect if a string looks like CSS/code noise rather than real content
+function looksLikeCode(text: string): boolean {
+  // CSS selector lists: "a, p, span, div..."
+  if (/^[\s,]*[a-z]+(\s*,\s*[a-z]+){2,}/i.test(text)) return true
+  // CSS property patterns: "property: value;"
+  if (/[a-z-]+\s*:\s*[^;,\n]{3,};/.test(text)) return true
+  // CSS comment blocks
+  if (/\/\*[\s\S]*?\*\//.test(text)) return true
+  // HTML attribute noise: x-apple-data-detectors, mso-, webkit-
+  if (/x-apple-data-detectors|mso-|webkit-|!important/.test(text)) return true
+  // High ratio of code keywords
+  const codeKeywords = ['div','span','body','html','font','table','td','tr',
+    'background-color','margin','padding','border','display','position','float',
+    'color','text-align','font-size','line-height','mso','webkit']
+  const words = text.toLowerCase().split(/[\s,;:(){}]+/).filter(w => w.length > 1)
+  const codeCount = words.filter(w => codeKeywords.includes(w)).length
+  return words.length > 3 && codeCount / words.length > 0.3
+}
+
+// Helper function to clean email preview text, with optional full HTML fallback
+function cleanEmailPreview(preview: string, emailContent?: string | null): string {
+  if (!preview && !emailContent) return ""
+
+  // Sanitize entities first so looksLikeCode and length checks work on clean text
+  const sanitizedPreview = preview ? sanitizeExtractedText(preview) : ""
+
+  // If stored preview looks like code noise or is empty after sanitizing, use HTML fallback
+  if (!sanitizedPreview || looksLikeCode(sanitizedPreview)) {
+    if (emailContent) {
+      const preheader = extractPreheaderFromHtml(emailContent)
+      if (preheader) return preheader
+      const visible = extractFirstVisibleText(emailContent)
+      return isUselessText(visible) ? "" : visible
+    }
     return ""
   }
-  
-  // Remove HTML tags
-  let cleaned = preview.replace(/<[^>]*>/g, " ")
-  
-  // Remove CSS blocks (anything between { })
-  cleaned = cleaned.replace(/\{[^}]*\}/g, " ")
-  
-  // Remove CSS pseudo-classes like :hover, :active
-  cleaned = cleaned.replace(/:[a-z-]+/g, " ")
-  
-  // Remove CSS selectors and class names
-  cleaned = cleaned.replace(/[.#][a-zA-Z0-9_-]+/g, " ")
-  
-  // Remove @media, @import, @font-face statements
-  cleaned = cleaned.replace(/@[a-z-]+[^;{]*[;{]/gi, " ")
-  
-  // Remove CSS property declarations (property: value;)
-  cleaned = cleaned.replace(/[a-z-]+\s*:\s*[^;]+;/gi, " ")
-  
-  // Remove common CSS patterns and keywords
-  cleaned = cleaned.replace(/ReadMsgBody|ExternalClass|mso-|webkit-|interpolation-mode|text-decoration|var\(--/gi, " ")
-  
-  // Remove curly braces, semicolons, parentheses and other CSS punctuation
-  cleaned = cleaned.replace(/[{};()]/g, " ")
-  
-  // Remove CSS comments
-  cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, " ")
-  
-  // Decode HTML entities
-  cleaned = cleaned
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&ldquo;/g, '"')
-    .replace(/&rdquo;/g, '"')
-  
-  // Clean up whitespace
-  cleaned = cleaned.replace(/\s+/g, " ").trim()
-  
-  // Final check: if result is too short, mostly punctuation, or still contains code keywords
-  if (cleaned.length < 15) {
+
+  // If stored preview is raw HTML, try to extract preheader from it
+  if (/<[a-z]/i.test(sanitizedPreview)) {
+    const preheader = extractPreheaderFromHtml(preview)
+    if (preheader) return preheader
+    if (emailContent) {
+      const contentPreheader = extractPreheaderFromHtml(emailContent)
+      if (contentPreheader) return contentPreheader
+    }
+  }
+
+  // Reject dot-only, whitespace-only, or very short results
+  if (isUselessText(sanitizedPreview)) {
+    if (emailContent) {
+      const preheader = extractPreheaderFromHtml(emailContent)
+      if (preheader) return preheader
+      const visible = extractFirstVisibleText(emailContent)
+      return isUselessText(visible) ? "" : visible
+    }
     return ""
   }
-  
-  const finalWords = cleaned.toLowerCase().split(/\s+/)
-  const finalCodeCount = finalWords.filter(word => codeKeywords.includes(word)).length
-  if (finalWords.length > 0 && finalCodeCount / finalWords.length > 0.25) {
-    // Still too many code keywords after cleaning
-    return ""
+
+  // Truncate cleanly — never cut mid-word or mid-entity
+  if (sanitizedPreview.length > 200) {
+    return sanitizedPreview.substring(0, 200).replace(/\s+\S*$/, "") + "..."
   }
-  
-  // Limit to 100 characters
-  if (cleaned.length > 100) {
-    cleaned = cleaned.substring(0, 100) + "..."
-  }
-  
-  return cleaned
+  return sanitizedPreview
+}
+
+function isUselessText(text: string): boolean {
+  return text.length < 10 || /^[\s.…\-–—|]+$/.test(text)
 }
   
 export function CompetitiveInsights({
@@ -1644,9 +1689,9 @@ export function CompetitiveInsights({
                   <td className="p-4">
                     <div>
                       <div className="text-sm font-medium truncate max-w-md">{campaign.subject}</div>
-                      {campaign.emailPreview && (
+                      {campaign.type !== "sms" && (cleanEmailPreview(campaign.emailPreview, campaign.emailContent)) && (
                         <div className="text-xs text-muted-foreground truncate max-w-md mt-1">
-                          {cleanEmailPreview(campaign.emailPreview)}
+                          {cleanEmailPreview(campaign.emailPreview, campaign.emailContent)}
                         </div>
                       )}
                     </div>

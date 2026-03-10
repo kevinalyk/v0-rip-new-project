@@ -18,7 +18,7 @@ export async function POST(request: Request) {
 
     // Find the invitation using raw SQL (UserInvitation table exists but not in Prisma schema)
     const invitations = await sql`
-      SELECT id, "userId", "expiresAt", used
+      SELECT id, userid, expiresat, used
       FROM "UserInvitation"
       WHERE token = ${token}
       LIMIT 1
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     }
 
     // Check if token has expired
-    if (new Date() > new Date(invitation.expiresAt)) {
+    if (new Date() > new Date(invitation.expiresat)) {
       return NextResponse.json({ error: "Token has expired" }, { status: 400 })
     }
 
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     await sql`
       UPDATE "User"
       SET password = ${hashedPassword}, "firstLogin" = false, "updatedAt" = NOW()
-      WHERE id = ${invitation.userId}
+      WHERE id = ${invitation.userid}
     `
 
     // Mark invitation as used

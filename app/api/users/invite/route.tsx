@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
 
     // Store invitation token
     await sql`
-      INSERT INTO "UserInvitation" (token, "userId", "expiresAt")
+      INSERT INTO "UserInvitation" (token, userid, expiresat)
       VALUES (${invitationToken}, ${newUser[0].id}, ${expiresAt})
     `
 

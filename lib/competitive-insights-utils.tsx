@@ -1346,28 +1346,47 @@ export async function processCompetitiveInsights(
 
     let emailPreview = ""
     if (sanitizedEmailContent) {
-      // Remove <style> and <script> blocks entirely before stripping HTML tags
-      let textContent = sanitizedEmailContent
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
-        .replace(/<[^>]*>/g, " ")
-      
-      // Decode HTML entities
-      textContent = textContent
-        .replace(/&nbsp;/g, " ")
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-      
-      // Clean up whitespace
-      textContent = textContent.replace(/\s+/g, " ").trim()
-      
-      // Take first 300 characters of actual content
-      emailPreview = textContent.substring(0, 300)
-      if (textContent.length > 300) {
-        emailPreview += "..."
+      // --- Step 1: Try to extract preheader/preview text (hidden element used by ESPs) ---
+      // ESPs hide preview text using class names or display:none patterns
+      const preheaderPatterns = [
+        // class="preheader", class="preview", class="previewText", etc.
+        /class=["'][^"']*(?:preheader|preview[-_]?text|preview)["'][^>]*>([\s\S]*?)<\/[a-z]+>/i,
+        // display:none or max-height:0 hidden divs/spans/tds (Austin's patterns)
+        /<(?:div|span|td|p)[^>]*style=["'][^"']*(?:display\s*:\s*none|max-height\s*:\s*0|overflow\s*:\s*hidden)[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|span|td|p)>/i,
+        // mso-hide:all
+        /<(?:div|span|td|p)[^>]*style=["'][^"']*mso-hide\s*:\s*all[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|span|td|p)>/i,
+      ]
+
+      for (const pattern of preheaderPatterns) {
+        const match = sanitizedEmailContent.match(pattern)
+        if (match && match[1]) {
+          // Strip any inner tags and decode entities
+          const text = match[1]
+            .replace(/<[^>]*>/g, " ")
+            .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+            .replace(/\s+/g, " ").trim()
+          if (text.length > 10) {
+            emailPreview = text.substring(0, 300)
+            break
+          }
+        }
+      }
+
+      // --- Step 2: Fall back to first meaningful visible text if no preheader found ---
+      if (!emailPreview) {
+        let textContent = sanitizedEmailContent
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
+          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
+          // Remove hidden elements entirely so their text doesn't bleed into preview
+          .replace(/<[^>]*style=["'][^"']*(?:display\s*:\s*none|max-height\s*:\s*0|visibility\s*:\s*hidden)[^"']*["'][^>]*>[\s\S]*?<\/[a-z]+>/gi, " ")
+          .replace(/<[^>]*>/g, " ")
+          .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+          .replace(/\s+/g, " ").trim()
+
+        emailPreview = textContent.substring(0, 300)
+        if (textContent.length > 300) emailPreview += "..."
       }
     }
 

@@ -128,14 +128,31 @@ const US_STATES = [
 // Helper function to clean email preview text
 function cleanEmailPreview(preview: string): string {
   if (!preview) return ""
-  
-  // Detect CSS selector patterns like ", p, span, font, td, div" (comma-separated element names)
-  // This is the most common bad pattern from style blocks
-  if (/^[\s,]*[a-z]+(\s*,\s*[a-z]+)+/i.test(preview)) {
-    return "" // This is CSS selector list, not content
+
+  // If the stored value looks like raw HTML, try to extract the preheader first
+  if (/<[a-z]/i.test(preview)) {
+    const preheaderPatterns = [
+      /class=["'][^"']*(?:preheader|preview[-_]?text|preview)["'][^>]*>([\s\S]*?)<\/[a-z]+>/i,
+      /<(?:div|span|td|p)[^>]*style=["'][^"']*(?:display\s*:\s*none|max-height\s*:\s*0|overflow\s*:\s*hidden)[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|span|td|p)>/i,
+      /<(?:div|span|td|p)[^>]*style=["'][^"']*mso-hide\s*:\s*all[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|span|td|p)>/i,
+    ]
+    for (const pattern of preheaderPatterns) {
+      const match = preview.match(pattern)
+      if (match && match[1]) {
+        const text = match[1]
+          .replace(/<[^>]*>/g, " ")
+          .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+          .replace(/\s+/g, " ").trim()
+        if (text.length > 10) return text.substring(0, 200)
+      }
+    }
   }
-  
-  // Common HTML/CSS element and property keywords that indicate this is code, not content
+
+  // Detect CSS selector patterns like ", p, span, font, td, div"
+  if (/^[\s,]*[a-z]+(\s*,\s*[a-z]+)+/i.test(preview)) return ""
+
+  // Common HTML/CSS keywords
   const codeKeywords = [
     'div', 'span', 'body', 'html', 'font', 'table', 'td', 'tr', 'tab',
     'img', 'header', 'footer', 'nav', 'section', 'article', 'background-color',
@@ -143,27 +160,16 @@ function cleanEmailPreview(preview: string): string {
     'position', 'top', 'left', 'right', 'bottom', 'float',
     'color', 'background', 'text-align', 'font-size', 'line-height'
   ]
-  
-  // Check if preview is mostly code keywords (early detection)
   const words = preview.toLowerCase().split(/[\s,;:()]+/).filter(w => w.length > 1)
   const codeWordCount = words.filter(word => codeKeywords.includes(word)).length
-  if (words.length > 0 && codeWordCount / words.length > 0.35) {
-    // More than 35% of words are code keywords, this is likely CSS/HTML
-    return ""
-  }
-  
+  if (words.length > 0 && codeWordCount / words.length > 0.35) return ""
+
   // Remove HTML tags
   let cleaned = preview.replace(/<[^>]*>/g, " ")
-  
-  // Remove CSS blocks (anything between { })
   cleaned = cleaned.replace(/\{[^}]*\}/g, " ")
-  
-  // Remove CSS pseudo-classes like :hover, :active
   cleaned = cleaned.replace(/:[a-z-]+/g, " ")
-  
-  // Remove CSS selectors and class names
   cleaned = cleaned.replace(/[.#][a-zA-Z0-9_-]+/g, " ")
-  
+
   // Remove @media, @import, @font-face statements
   cleaned = cleaned.replace(/@[a-z-]+[^;{]*[;{]/gi, " ")
   

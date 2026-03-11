@@ -1498,13 +1498,6 @@ export function CompetitiveInsights({
 
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
-          <Tabs value={activeView} onValueChange={(v) => setActiveView(v as "emails" | "reporting")} className="flex-1">
-            <TabsList>
-              <TabsTrigger value="emails">Campaigns</TabsTrigger>
-              <TabsTrigger value="reporting">Analytics</TabsTrigger>
-            </TabsList>
-          </Tabs>
-
           <CiViewsManager
             clientSlug={clientSlug}
             currentFilters={getCurrentFilters()}

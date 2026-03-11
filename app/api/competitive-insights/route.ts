@@ -126,9 +126,12 @@ export async function GET(request: NextRequest) {
     // House file = everything that is NOT third party (entities with no mappings are treated as house file by default).
     let houseFileCampaignIds: string[] | null = null
     if (houseFileOnly) {
-      const allMappings = await prisma.ciEntityMapping.findMany({
-        select: { entityId: true, senderEmail: true, senderDomain: true },
-      })
+      const [allMappings, allEntities] = await Promise.all([
+        prisma.ciEntityMapping.findMany({
+          select: { entityId: true, senderEmail: true, senderDomain: true },
+        }),
+        prisma.ciEntity.findMany({ select: { id: true, donationIdentifiers: true } }),
+      ])
 
       const mappingsByEntity: Record<string, { emails: Set<string>; domains: Set<string> }> = {}
       for (const m of allMappings) {
@@ -137,6 +140,14 @@ export async function GET(request: NextRequest) {
         }
         if (m.senderEmail) mappingsByEntity[m.entityId].emails.add(m.senderEmail.toLowerCase())
         if (m.senderDomain) mappingsByEntity[m.entityId].domains.add(m.senderDomain.toLowerCase())
+      }
+      // Inject Substack handles as synthetic email mappings
+      for (const entity of allEntities) {
+        const handle = (entity.donationIdentifiers as any)?.substack as string | undefined
+        if (handle) {
+          if (!mappingsByEntity[entity.id]) mappingsByEntity[entity.id] = { emails: new Set(), domains: new Set() }
+          mappingsByEntity[entity.id].emails.add(`${handle.toLowerCase()}@substack.com`)
+        }
       }
 
       const entitiesWithMappings = new Set(Object.keys(mappingsByEntity))
@@ -173,10 +184,12 @@ export async function GET(request: NextRequest) {
     // senderEmail/senderDomain is NOT in that entity's specific mappings — mirroring isDomainMappedToEntity in the UI.
     let thirdPartyCampaignIds: string[] | null = null
     if (thirdParty) {
-      // Fetch all entity mappings grouped by entity
-      const allMappings = await prisma.ciEntityMapping.findMany({
-        select: { entityId: true, senderEmail: true, senderDomain: true },
-      })
+      const [allMappings, allEntities] = await Promise.all([
+        prisma.ciEntityMapping.findMany({
+          select: { entityId: true, senderEmail: true, senderDomain: true },
+        }),
+        prisma.ciEntity.findMany({ select: { id: true, donationIdentifiers: true } }),
+      ])
 
       // Build a lookup: entityId -> { emails: Set, domains: Set }
       const mappingsByEntity: Record<string, { emails: Set<string>; domains: Set<string> }> = {}
@@ -186,6 +199,14 @@ export async function GET(request: NextRequest) {
         }
         if (m.senderEmail) mappingsByEntity[m.entityId].emails.add(m.senderEmail.toLowerCase())
         if (m.senderDomain) mappingsByEntity[m.entityId].domains.add(m.senderDomain.toLowerCase())
+      }
+      // Inject Substack handles as synthetic email mappings
+      for (const entity of allEntities) {
+        const handle = (entity.donationIdentifiers as any)?.substack as string | undefined
+        if (handle) {
+          if (!mappingsByEntity[entity.id]) mappingsByEntity[entity.id] = { emails: new Set(), domains: new Set() }
+          mappingsByEntity[entity.id].emails.add(`${handle.toLowerCase()}@substack.com`)
+        }
       }
 
       const entitiesWithMappings = Object.keys(mappingsByEntity)

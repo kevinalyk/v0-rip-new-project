@@ -33,7 +33,7 @@ import {
   Phone,
   Info,
 } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -270,6 +270,7 @@ export function CompetitiveInsights({
   hideHeader = false, // Hide header by default false
 }: CompetitiveInsightsProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const { toast } = useToast()
   const [activeView, setActiveView] = useState<"emails" | "reporting">(defaultView)
   const [searchTerm, setSearchTerm] = useState("")
@@ -367,6 +368,11 @@ export function CompetitiveInsights({
   const filteredSenders = useMemo(() => {
     const filtered = allSenders.filter((sender) => sender.toLowerCase().includes(senderSearchTerm.toLowerCase()))
 
+    // On the Following page (/ci/subscriptions), only show entities the client is subscribed to
+    if (pathname?.includes("/ci/subscriptions")) {
+      return filtered.filter((sender) => isEntityFollowed(sender)).sort((a, b) => a.localeCompare(b))
+    }
+
     // Separate followed and not-followed entities
     const followed = filtered.filter((sender) => isEntityFollowed(sender))
     const notFollowed = filtered.filter((sender) => !isEntityFollowed(sender))
@@ -377,7 +383,7 @@ export function CompetitiveInsights({
 
     // Return followed first, then the rest
     return [...followed, ...notFollowed]
-  }, [allSenders, senderSearchTerm, allEntities, subscribedEntityIds])
+  }, [allSenders, senderSearchTerm, allEntities, subscribedEntityIds, pathname])
 
   // Modify useEffect to fetch user and then campaigns
   useEffect(() => {

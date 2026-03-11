@@ -92,10 +92,10 @@ export async function GET(request: NextRequest) {
 
     // Fetch SMS messages separately
     let smsMessages: { id: string; createdAt: Date }[] = []
-    if (includeSMS && entityIds) {
+    if (includeSMS) {
       smsMessages = await prisma.smsQueue.findMany({
         where: {
-          entityId: { in: entityIds },
+          ...(entityIds ? { entityId: { in: entityIds } } : {}),
           isDeleted: false,
           isHidden: false,
           ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),

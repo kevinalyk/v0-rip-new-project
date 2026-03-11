@@ -364,23 +364,27 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
               </div>
             )}
 
-            <NavSection
-              icon={<BarChart3 size={20} />}
-              label="Reports"
-              collapsed={collapsed}
-              expanded={expandedSections.reports}
-              onToggle={() => toggleSection("reports")}
-            />
-            {expandedSections.reports && !collapsed && (
-              <div className="ml-4 space-y-1">
-                <NavItem
-                  icon={<BarChart3 size={18} />}
-                  label="Reporting"
-                  active={pathname.includes("/reports/")}
-                  collapsed={false}
-                  onClick={() => navigate(`/${getClientSlug()}/reports/reporting`)}
+            {userRole === "super_admin" && (
+              <>
+                <NavSection
+                  icon={<BarChart3 size={20} />}
+                  label="Reports"
+                  collapsed={collapsed}
+                  expanded={expandedSections.reports}
+                  onToggle={() => toggleSection("reports")}
                 />
-              </div>
+                {expandedSections.reports && !collapsed && (
+                  <div className="ml-4 space-y-1">
+                    <NavItem
+                      icon={<BarChart3 size={18} />}
+                      label="Reporting"
+                      active={pathname.includes("/reports/")}
+                      collapsed={false}
+                      onClick={() => navigate(`/${getClientSlug()}/reports/reporting`)}
+                    />
+                  </div>
+                )}
+              </>
             )}
 
             {userRole === "super_admin" && (selectedClientSlug === "rip" || !selectedClientSlug) && (

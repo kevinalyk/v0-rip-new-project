@@ -59,7 +59,7 @@ export function CiAnalyticsView({
 
   useEffect(() => {
     fetchAnalytics()
-  }, [selectedSender, selectedPartyFilter, selectedMessageType, dateRange, clientSlug])
+  }, [selectedSender, selectedPartyFilter, selectedMessageType, dateRange, clientSlug, chartDays])
 
   const fetchAnalytics = async () => {
     setLoading(true)
@@ -71,7 +71,7 @@ export function CiAnalyticsView({
       if (selectedMessageType && selectedMessageType !== "all") params.append("messageType", selectedMessageType)
       if (dateRange.from) params.append("fromDate", dateRange.from.toISOString())
       if (dateRange.to) params.append("toDate", dateRange.to.toISOString())
-      // Pass browser timezone so server can convert UTC → local for day/hour aggregation
+      params.append("chartDays", String(chartDays))
       params.append("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone)
 
       const res = await fetch(`/api/ci/analytics?${params.toString()}`, { credentials: "include" })
@@ -176,9 +176,6 @@ export function CiAnalyticsView({
         <>
           {/* Volume Over Time — always visible */}
           {(data?.volumeData?.length ?? 0) > 0 && (() => {
-            const cutoff = new Date()
-            cutoff.setDate(cutoff.getDate() - chartDays)
-            const filteredVolume = data.volumeData.filter((d) => new Date(d.date) >= cutoff)
             return (
             <Card>
               <CardHeader>
@@ -203,7 +200,7 @@ export function CiAnalyticsView({
               <CardContent>
                 <div className="h-[380px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={filteredVolume} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+                    <LineChart data={data.volumeData} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis
                         dataKey="date"

@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     const toDate = searchParams.get("toDate") || undefined
     const messageType = searchParams.get("messageType") || undefined
     const timezone = searchParams.get("timezone") || "UTC"
+    const chartDays = parseInt(searchParams.get("chartDays") || "7")
 
     // Helper: get local day/hour for a UTC date using the client's timezone
     const getLocalDay = (date: Date) => {
@@ -45,9 +46,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Build date filters
+    // Build date filters — default to last chartDays days if no explicit range given
     const dateFilter: { gte?: Date; lte?: Date } = {}
-    if (fromDate) dateFilter.gte = new Date(fromDate)
+    if (fromDate) {
+      dateFilter.gte = new Date(fromDate)
+    } else {
+      const defaultStart = new Date()
+      defaultStart.setDate(defaultStart.getDate() - chartDays)
+      defaultStart.setHours(0, 0, 0, 0)
+      dateFilter.gte = defaultStart
+    }
     if (toDate) dateFilter.lte = new Date(toDate)
 
     // Build entity filter from sender slugs

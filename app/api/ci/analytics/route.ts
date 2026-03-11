@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     let entityIds: string[] | undefined
     if (senders.length > 0) {
       const entities = await prisma.ciEntity.findMany({
-        where: { slug: { in: senders } },
+        where: { name: { in: senders } },
         select: { id: true },
       })
       entityIds = entities.map((e) => e.id)

@@ -60,6 +60,7 @@ import { ChartContainer } from "@/components/ui/chart"
 import { CiEntitySubscribeButton } from "./ci-entity-subscribe-button"
 import { useToast } from "@/hooks/use-toast"
 import { CiViewsManager } from "./ci-views-manager" // Imported CiViewsManager
+import { CiAnalyticsView } from "./ci-analytics-view"
 
 interface CompetitiveInsightsProps {
   clientSlug: string
@@ -1784,7 +1785,7 @@ export function CompetitiveInsights({
                 ]}
                 clientSlug={clientSlug}
               />
-            ) : selectedSender.length === 0 ? ( // Check if no entities selected
+            ) : selectedSender.length === 0 ? (
               <Card>
                 <CardContent className="py-16">
                   <div className="flex flex-col items-center justify-center text-center space-y-4">
@@ -1794,7 +1795,7 @@ export function CompetitiveInsights({
                     <div className="space-y-2">
                       <h3 className="text-xl font-semibold">Select an Entity to View Analytics</h3>
                       <p className="text-muted-foreground max-w-md">
-                        Choose a specific entity from the dropdown above to see detailed reporting metrics, charts, and
+                        Choose a specific entity from the filters above to see detailed reporting metrics, charts, and
                         insights for their campaigns.
                       </p>
                     </div>
@@ -1802,248 +1803,14 @@ export function CompetitiveInsights({
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardDescription>Total Emails</CardDescription>
-                      <CardTitle className="text-3xl">{reportingMetrics.totalEmails}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-xs text-muted-foreground">Tracked competitive emails</p>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardDescription>Total CTAs</CardDescription>
-                      <CardTitle className="text-3xl">{reportingMetrics.totalCTAs}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-xs text-muted-foreground">Call-to-action links</p>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardDescription>Most Common CTA</CardDescription>
-                      <CardTitle className="text-xl capitalize">{reportingMetrics.mostCommonCTAType}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-xs text-muted-foreground">Primary conversion strategy</p>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardDescription>Avg Emails/Day</CardDescription>
-                      <CardTitle className="text-3xl">{reportingMetrics.avgPerDay}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-xs text-muted-foreground">Based on date range</p>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Pro plan blur overlay for charts */}
-                {shouldShowPreview && (
-                  <div className="relative">
-                    <div className="blur-sm pointer-events-none">
-                      {/* Blurred preview content */}
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                        <Card>
-                          <CardHeader>
-                            <CardTitle>CTA Type Distribution</CardTitle>
-                            <CardDescription>Breakdown of call-to-action types</CardDescription>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="h-80 bg-muted/20 rounded" />
-                          </CardContent>
-                        </Card>
-
-                        <Card>
-                          <CardHeader>
-                            <CardTitle>Email Volume Over Time</CardTitle>
-                            <CardDescription>Daily email count trends</CardDescription>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="h-80 bg-muted/20 rounded" />
-                          </CardContent>
-                        </Card>
-                      </div>
-                    </div>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <PaywallOverlay
-                        title="Unlock Full Analytics"
-                        description="Upgrade to Enterprise or add Competitive Insights to access detailed reporting."
-                        features={[
-                          "CTA distribution charts",
-                          "Volume trend analysis",
-                          "Recent email tracking",
-                          "Detailed insights",
-                        ]}
-                        clientSlug={clientSlug}
-                        variant="blur"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Full charts for Enterprise/CI users */}
-                {!shouldShowPreview && (
-                  <>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>CTA Type Distribution</CardTitle>
-                          <CardDescription>Breakdown of call-to-action types</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          {reportingMetrics.ctaDistributionData.length > 0 ? (
-                            <ChartContainer
-                              config={{
-                                value: {
-                                  label: "CTAs",
-                                  color: "#ef4445",
-                                },
-                              }}
-                              className="h-80"
-                            >
-                              <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                  <Pie
-                                    data={reportingMetrics.ctaDistributionData}
-                                    cx="50%"
-                                    cy="50%"
-                                    labelLine={false}
-                                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                                    outerRadius={100}
-                                    fill="#8884d8"
-                                    dataKey="value"
-                                  >
-                                    {reportingMetrics.ctaDistributionData.map((entry, index) => (
-                                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                  </Pie>
-                                  <Tooltip content={<CustomTooltip />} />
-                                </PieChart>
-                              </ResponsiveContainer>
-                            </ChartContainer>
-                          ) : (
-                            <div className="h-80 flex items-center justify-center text-muted-foreground">
-                              No CTA data available
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-
-                      {/* Line Chart - Volume Over Time */}
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Email Volume Over Time</CardTitle>
-                          <CardDescription>Daily email count trends</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <ChartContainer
-                            config={{
-                              count: {
-                                label: "Emails",
-                                color: "#ef4445",
-                              },
-                            }}
-                            className="h-80"
-                          >
-                            <ResponsiveContainer width="100%" height="100%">
-                              <LineChart data={reportingMetrics.volumeData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                <XAxis dataKey="date" stroke="#9ca3af" />
-                                <YAxis stroke="#9ca3af" />
-                                <Tooltip content={<CustomTooltip />} />
-                                <Legend />
-                                <Line type="monotone" dataKey="count" stroke="#ef4445" strokeWidth={2} name="Emails" />
-                              </LineChart>
-                            </ResponsiveContainer>
-                          </ChartContainer>
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Day of Week Activity</CardTitle>
-                        <CardDescription>Email volume by day of the week</CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-7 gap-2">
-                          {reportingMetrics.dayOfWeekData.map((dayData) => {
-                            const bgOpacity = Math.max(0.1, dayData.intensity)
-                            const backgroundColor = `rgba(239, 68, 69, ${bgOpacity})`
-
-                            return (
-                              <div
-                                key={dayData.day}
-                                className="flex flex-col items-center justify-center p-4 rounded-lg border transition-all hover:scale-105"
-                                style={{ backgroundColor }}
-                              >
-                                <div className="text-xs font-medium text-foreground mb-2">
-                                  {dayData.day.slice(0, 3)}
-                                </div>
-                                <div className="text-2xl font-bold text-foreground">{dayData.count}</div>
-                                <div className="text-xs text-muted-foreground mt-1">emails</div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Most Recent Emails</CardTitle>
-                        <CardDescription>Latest 5 emails from this sender</CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-4">
-                          {reportingMetrics.mostRecentEmails.map((email) => (
-                            <div
-                              key={email.id}
-                              className="flex items-start justify-between gap-4 p-4 rounded-lg border hover:bg-muted/30 cursor-pointer transition-colors"
-                              onClick={() => setSelectedCampaign(email)}
-                            >
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <Mail className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                  <p className="font-medium truncate">{email.subject}</p>
-                                </div>
-                                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                  <div className="flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    {format(new Date(email.dateReceived), "MMM d, yyyy")}
-                                  </div>
-                                  {email.ctaLinks.length > 0 && (
-                                    <div className="flex items-center gap-1">
-                                      <LinkIcon className="h-3 w-3" />
-                                      {email.ctaLinks.length} CTA{email.ctaLinks.length !== 1 ? "s" : ""}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex flex-col items-end gap-1">
-                                <Badge variant="secondary" className={getPlacementColor(email.inboxRate)}>
-                                  {email.inboxRate.toFixed(1)}% inbox
-                                </Badge>
-                              </div>
-                            </div>
-                          ))}
-                          {reportingMetrics.mostRecentEmails.length === 0 && (
-                            <div className="text-center py-8 text-muted-foreground">No emails found</div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </>
-                )}
-              </div>
+              <CiAnalyticsView
+                clientSlug={clientSlug}
+                selectedSender={selectedSender}
+                selectedPartyFilter={selectedPartyFilter}
+                selectedMessageType={selectedMessageType}
+                dateRange={dateRange}
+                shouldShowPreview={shouldShowPreview}
+              />
             )}
           </>
         )}

@@ -47,35 +47,65 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch ALL matching campaigns (no pagination) for analytics
-    const campaigns = await prisma.competitiveInsightCampaign.findMany({
-      where: {
-        clientId: targetClientId,
-        ...(entityIds ? { entityId: { in: entityIds } } : {}),
-        ...(party && party !== "all" ? { entity: { party } } : {}),
-        ...(messageType && messageType !== "all" ? { messageType } : {}),
-        ...(Object.keys(dateFilter).length > 0 ? { dateReceived: dateFilter } : {}),
-      },
-      select: {
-        id: true,
-        dateReceived: true,
-        messageType: true,
-        inboxRate: true,
-        inboxCount: true,
-        spamCount: true,
-      },
-    })
+    // CompetitiveInsightCampaign = emails only (no messageType field)
+    // SmsQueue = SMS only, uses createdAt instead of dateReceived, no inboxRate
+    const includeEmails = !messageType || messageType === "all" || messageType === "email"
+    const includeSMS = !messageType || messageType === "all" || messageType === "sms"
 
-    if (campaigns.length === 0) {
+    // Fetch email campaigns
+    let emailCampaigns: { id: string; dateReceived: Date; inboxRate: number; inboxCount: number | null; spamCount: number | null }[] = []
+    if (includeEmails) {
+      emailCampaigns = await prisma.competitiveInsightCampaign.findMany({
+        where: {
+          clientId: targetClientId,
+          ...(entityIds ? { entityId: { in: entityIds } } : {}),
+          ...(party && party !== "all" ? { entity: { party } } : {}),
+          ...(Object.keys(dateFilter).length > 0 ? { dateReceived: dateFilter } : {}),
+          isDeleted: false,
+          isHidden: false,
+        },
+        select: {
+          id: true,
+          dateReceived: true,
+          inboxRate: true,
+          inboxCount: true,
+          spamCount: true,
+        },
+      })
+    }
+
+    // Fetch SMS messages separately
+    let smsMessages: { id: string; createdAt: Date }[] = []
+    if (includeSMS && entityIds) {
+      smsMessages = await prisma.smsQueue.findMany({
+        where: {
+          entityId: { in: entityIds },
+          isDeleted: false,
+          isHidden: false,
+          ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
+        },
+        select: {
+          id: true,
+          createdAt: true,
+        },
+      })
+    }
+
+    if (emailCampaigns.length === 0 && smsMessages.length === 0) {
       return NextResponse.json(buildEmptyResponse())
     }
+
+    // Unified date list for day-of-week / hour-of-day (both email + SMS)
+    const allDates: { date: Date; type: "email" | "sms" }[] = [
+      ...emailCampaigns.map((c) => ({ date: new Date(c.dateReceived), type: "email" as const })),
+      ...smsMessages.map((s) => ({ date: new Date(s.createdAt), type: "sms" as const })),
+    ]
 
     // --- Day of Week aggregation ---
     const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     const dayOfWeekCounts = [0, 0, 0, 0, 0, 0, 0]
-    campaigns.forEach((c) => {
-      const day = new Date(c.dateReceived).getDay()
-      dayOfWeekCounts[day]++
+    allDates.forEach(({ date }) => {
+      dayOfWeekCounts[date.getDay()]++
     })
     const maxDayCount = Math.max(...dayOfWeekCounts, 1)
     const dayOfWeekData = dayOfWeekCounts.map((count, i) => ({
@@ -84,15 +114,13 @@ export async function GET(request: NextRequest) {
       intensity: count / maxDayCount,
     }))
 
-    // Most active day
     const mostActiveDayIndex = dayOfWeekCounts.indexOf(Math.max(...dayOfWeekCounts))
     const mostActiveDay = dayNames[mostActiveDayIndex]
 
     // --- Hour of Day aggregation ---
     const hourOfDayCounts = Array(24).fill(0)
-    campaigns.forEach((c) => {
-      const hour = new Date(c.dateReceived).getHours()
-      hourOfDayCounts[hour]++
+    allDates.forEach(({ date }) => {
+      hourOfDayCounts[date.getHours()]++
     })
     const mostActiveHourIndex = hourOfDayCounts.indexOf(Math.max(...hourOfDayCounts))
     const formatHour = (h: number) => {
@@ -106,31 +134,25 @@ export async function GET(request: NextRequest) {
     const mostActiveHour = formatHour(mostActiveHourIndex)
 
     // --- Volume over time with 7-day moving average ---
-    const dailyMap = new Map<string, { emails: number; sms: number }>()
-
-    // Initialize date range
-    const dates = campaigns.map((c) => new Date(c.dateReceived).getTime())
-    const minDate = new Date(Math.min(...dates))
-    const maxDate = new Date(Math.max(...dates))
+    const allTimestamps = allDates.map(({ date }) => date.getTime())
+    const minDate = new Date(Math.min(...allTimestamps))
+    const maxDate = new Date(Math.max(...allTimestamps))
     minDate.setHours(0, 0, 0, 0)
     maxDate.setHours(0, 0, 0, 0)
 
+    const dailyMap = new Map<string, { emails: number; sms: number }>()
     const cursor = new Date(minDate)
     while (cursor <= maxDate) {
-      const key = cursor.toISOString().split("T")[0]
-      dailyMap.set(key, { emails: 0, sms: 0 })
+      dailyMap.set(cursor.toISOString().split("T")[0], { emails: 0, sms: 0 })
       cursor.setDate(cursor.getDate() + 1)
     }
 
-    campaigns.forEach((c) => {
-      const key = new Date(c.dateReceived).toISOString().split("T")[0]
+    allDates.forEach(({ date, type }) => {
+      const key = date.toISOString().split("T")[0]
       const entry = dailyMap.get(key)
       if (entry) {
-        if (c.messageType === "sms") {
-          entry.sms++
-        } else {
-          entry.emails++
-        }
+        if (type === "sms") entry.sms++
+        else entry.emails++
       }
     })
 
@@ -138,25 +160,20 @@ export async function GET(request: NextRequest) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, counts]) => ({ date, ...counts }))
 
-    // Compute 7-day moving averages
     const volumeData = dailyArray.map((day, index) => {
       const start = Math.max(0, index - 6)
-      const window = dailyArray.slice(start, index + 1)
-      const emailsAvg = Math.round((window.reduce((s, d) => s + d.emails, 0) / window.length) * 10) / 10
-      const smsAvg = Math.round((window.reduce((s, d) => s + d.sms, 0) / window.length) * 10) / 10
+      const windowSlice = dailyArray.slice(start, index + 1)
+      const emailsAvg = Math.round((windowSlice.reduce((s, d) => s + d.emails, 0) / windowSlice.length) * 10) / 10
+      const smsAvg = Math.round((windowSlice.reduce((s, d) => s + d.sms, 0) / windowSlice.length) * 10) / 10
       return { ...day, emailsAvg, smsAvg }
     })
 
-    // --- Inboxing pie data ---
+    // --- Inboxing pie data (emails only — SMS has no seed test data) ---
     let totalInboxed = 0
     let totalSpam = 0
-    let totalWithData = 0
-    campaigns.forEach((c) => {
-      if (c.inboxCount != null || c.spamCount != null) {
-        totalInboxed += c.inboxCount ?? 0
-        totalSpam += c.spamCount ?? 0
-        totalWithData++
-      }
+    emailCampaigns.forEach((c) => {
+      totalInboxed += c.inboxCount ?? 0
+      totalSpam += c.spamCount ?? 0
     })
 
     const grandTotal = totalInboxed + totalSpam
@@ -171,8 +188,8 @@ export async function GET(request: NextRequest) {
           ]
         : []
 
-    const totalEmails = campaigns.filter((c) => c.messageType !== "sms").length
-    const totalSMS = campaigns.filter((c) => c.messageType === "sms").length
+    const totalEmails = emailCampaigns.length
+    const totalSMS = smsMessages.length
 
     return NextResponse.json({
       totalEmails,

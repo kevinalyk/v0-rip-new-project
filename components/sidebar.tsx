@@ -27,6 +27,7 @@ import {
   ChevronUp,
   LayoutDashboard,
   Inbox,
+  ExternalLink,
   Building,
   Star,
   Globe,
@@ -250,6 +251,15 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
             >
               <Megaphone size={20} />
               {!collapsed && <span>{"What's New"}</span>}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn("w-full justify-start gap-3 px-3", collapsed && "justify-center")}
+              onClick={() => window.open("https://directory.gop", "_blank")}
+            >
+              <ExternalLink size={20} />
+              {!collapsed && <span>GOP Directory</span>}
             </Button>
             {mounted && (
               <Button
@@ -533,6 +543,15 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
           >
             <Megaphone size={20} />
             {!collapsed && <span>{"What's New"}</span>}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn("w-full justify-start gap-3 px-3", collapsed && "justify-center")}
+            onClick={() => window.open("https://directory.gop", "_blank")}
+          >
+            <ExternalLink size={20} />
+            {!collapsed && <span>GOP Directory</span>}
           </Button>
           {mounted && (
             <Button

@@ -184,24 +184,21 @@ export async function GET(request: NextRequest) {
       return { ...day, emailsAvg, smsAvg }
     })
 
-    // --- Inboxing pie data (emails only — SMS has no seed test data) ---
-    // Sum inboxCount + spamCount across all campaigns to get total seed placements.
-    // These are the actual counts of individual seed email results (inbox vs spam).
-    let totalInboxed = 0
-    let totalSpam = 0
-    emailCampaigns.forEach((c) => {
-      totalInboxed += c.inboxCount ?? 0
-      totalSpam += c.spamCount ?? 0
-    })
-    const grandTotal = totalInboxed + totalSpam
-    const inboxPct = grandTotal > 0 ? Math.round((totalInboxed / grandTotal) * 100) : 0
-    const spamPct = grandTotal > 0 ? 100 - inboxPct : 0
+    // --- Inboxing pie data ---
+    // For each email: inboxRate >= 50 = inbox, < 50 = spam.
+    // Get the total count of each, then compute %.
+    const emailsWithPlacement = emailCampaigns.filter((c) => c.inboxRate != null && c.inboxRate > 0)
+    const inboxedCount = emailsWithPlacement.filter((c) => c.inboxRate >= 50).length
+    const spammedCount = emailsWithPlacement.length - inboxedCount
+    const placementTotal = emailsWithPlacement.length
+    const inboxPct = placementTotal > 0 ? Math.round((inboxedCount / placementTotal) * 100) : 0
+    const spamPct = placementTotal > 0 ? 100 - inboxPct : 0
 
     const inboxingData =
-      grandTotal > 0
+      placementTotal > 0
         ? [
-            { name: "Inbox", value: inboxPct, count: totalInboxed },
-            { name: "Spam", value: spamPct, count: totalSpam },
+            { name: "Inbox", value: inboxPct },
+            { name: "Spam", value: spamPct },
           ]
         : []
 

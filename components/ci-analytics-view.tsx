@@ -39,7 +39,7 @@ interface AnalyticsData {
   mostActiveHour: string | null
   dayOfWeekData: Array<{ day: string; count: number; intensity: number }>
   volumeData: Array<{ date: string; emails: number; sms: number; emailsAvg: number; smsAvg: number }>
-  inboxingData: Array<{ name: string; value: number; count: number }>
+  inboxingData: Array<{ name: string; value: number }>
   hasCampaigns: boolean
 }
 
@@ -303,8 +303,8 @@ export function CiAnalyticsView({
             {/* Inboxing Pie Chart */}
             <Card>
               <CardHeader>
-                <CardTitle>Inboxing Rate</CardTitle>
-                <CardDescription>Seed test inbox vs spam placement across tracked campaigns</CardDescription>
+                <CardTitle>Email Placement</CardTitle>
+                <CardDescription>Inbox vs spam rate across all tracked emails</CardDescription>
               </CardHeader>
               <CardContent>
                 {data.inboxingData.length > 0 ? (
@@ -326,7 +326,7 @@ export function CiAnalyticsView({
                               <Cell key={`cell-${index}`} fill={INBOX_COLORS[index % INBOX_COLORS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip formatter={(value: number, name: string) => [`${value}%`, name]} />
+                          <Tooltip formatter={(value: number) => [`${value}%`]} />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
@@ -338,16 +338,14 @@ export function CiAnalyticsView({
                             style={{ backgroundColor: INBOX_COLORS[i] }}
                           />
                           <span className="font-medium">{item.name}</span>
-                          <span className="text-muted-foreground">
-                            {item.value}% ({item.count.toLocaleString()} seed placements)
-                          </span>
+                          <span className="text-muted-foreground">{item.value}%</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 ) : (
                   <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
-                    No inboxing data available for these campaigns
+                    No placement data available for these campaigns
                   </div>
                 )}
               </CardContent>

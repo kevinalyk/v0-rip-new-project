@@ -339,7 +339,7 @@ export function CiAnalyticsView({
                           />
                           <span className="font-medium">{item.name}</span>
                           <span className="text-muted-foreground">
-                            {item.value}% ({item.count.toLocaleString()} seed tests)
+                            {item.value}% avg · {item.count.toLocaleString()} campaigns
                           </span>
                         </div>
                       ))}

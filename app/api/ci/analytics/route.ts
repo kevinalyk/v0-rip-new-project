@@ -185,22 +185,23 @@ export async function GET(request: NextRequest) {
     })
 
     // --- Inboxing pie data (emails only — SMS has no seed test data) ---
-    let totalInboxed = 0
-    let totalSpam = 0
-    emailCampaigns.forEach((c) => {
-      totalInboxed += c.inboxCount ?? 0
-      totalSpam += c.spamCount ?? 0
-    })
-
-    const grandTotal = totalInboxed + totalSpam
-    const inboxPct = grandTotal > 0 ? Math.round((totalInboxed / grandTotal) * 100) : 0
-    const spamPct = grandTotal > 0 ? 100 - inboxPct : 0
+    // inboxRate is already a % per campaign (e.g. 57.52). Average it across all campaigns
+    // that have seed test data. Do NOT sum inboxCount/spamCount — those are raw seed
+    // account numbers that balloon into the thousands when summed across many campaigns.
+    const campaignsWithInboxData = emailCampaigns.filter((c) => c.inboxRate != null && c.inboxRate > 0)
+    const avgInboxRate =
+      campaignsWithInboxData.length > 0
+        ? Math.round(
+            campaignsWithInboxData.reduce((sum, c) => sum + c.inboxRate, 0) / campaignsWithInboxData.length
+          )
+        : 0
+    const avgSpamRate = campaignsWithInboxData.length > 0 ? 100 - avgInboxRate : 0
 
     const inboxingData =
-      grandTotal > 0
+      campaignsWithInboxData.length > 0
         ? [
-            { name: "Inbox", value: inboxPct, count: totalInboxed },
-            { name: "Spam", value: spamPct, count: totalSpam },
+            { name: "Inbox", value: avgInboxRate, count: campaignsWithInboxData.length },
+            { name: "Spam", value: avgSpamRate, count: campaignsWithInboxData.length },
           ]
         : []
 

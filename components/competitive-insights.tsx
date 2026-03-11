@@ -1785,23 +1785,6 @@ export function CompetitiveInsights({
                 ]}
                 clientSlug={clientSlug}
               />
-            ) : selectedSender.length === 0 ? (
-              <Card>
-                <CardContent className="py-16">
-                  <div className="flex flex-col items-center justify-center text-center space-y-4">
-                    <div className="rounded-full bg-muted p-6">
-                      <BarChart3 className="h-12 w-12 text-muted-foreground" />
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="text-xl font-semibold">Select an Entity to View Analytics</h3>
-                      <p className="text-muted-foreground max-w-md">
-                        Choose a specific entity from the filters above to see detailed reporting metrics, charts, and
-                        insights for their campaigns.
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
             ) : (
               <CiAnalyticsView
                 clientSlug={clientSlug}

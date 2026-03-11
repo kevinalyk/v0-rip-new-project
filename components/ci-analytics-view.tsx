@@ -93,17 +93,7 @@ export function CiAnalyticsView({
     )
   }
 
-  if (!data || !data.hasCampaigns) {
-    return (
-      <Card>
-        <CardContent className="py-16">
-          <div className="flex flex-col items-center justify-center text-center space-y-2">
-            <p className="text-muted-foreground">No campaign data found for the selected filters.</p>
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
+  const hasEntity = selectedSender.length > 0
 
   const StatCard = ({ label, value, sub }: { label: string; value: string | number; sub: string }) => (
     <Card>
@@ -119,19 +109,21 @@ export function CiAnalyticsView({
 
   return (
     <div className="space-y-6">
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <StatCard
-          label="Most Active Day"
-          value={data.mostActiveDay ?? "—"}
-          sub={`${data.dayOfWeekData.find((d) => d.day === data.mostActiveDay)?.count ?? 0} emails on this day`}
-        />
-        <StatCard
-          label="Most Active Hour"
-          value={data.mostActiveHour ?? "—"}
-          sub="Hour of day with the most sends"
-        />
-      </div>
+      {/* Stat cards — only when an entity is selected */}
+      {hasEntity && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <StatCard
+            label="Most Active Day"
+            value={data?.mostActiveDay ?? "—"}
+            sub={`${data?.dayOfWeekData.find((d) => d.day === data?.mostActiveDay)?.count ?? 0} sends on this day`}
+          />
+          <StatCard
+            label="Most Active Hour"
+            value={data?.mostActiveHour ?? "—"}
+            sub="Hour of day with the most sends"
+          />
+        </div>
+      )}
 
       {/* Paywall overlay for non-enterprise/CI users */}
       {shouldShowPreview ? (
@@ -182,8 +174,8 @@ export function CiAnalyticsView({
         </div>
       ) : (
         <>
-          {/* Volume Over Time */}
-          {data.volumeData.length > 0 && (() => {
+          {/* Volume Over Time — always visible */}
+          {(data?.volumeData?.length ?? 0) > 0 && (() => {
             const cutoff = new Date()
             cutoff.setDate(cutoff.getDate() - chartDays)
             const filteredVolume = data.volumeData.filter((d) => new Date(d.date) >= cutoff)
@@ -272,7 +264,8 @@ export function CiAnalyticsView({
             )
           })()}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Day of week + inboxing only when an entity is selected */}
+          {hasEntity && <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Day of Week Activity */}
             <Card>
               <CardHeader>
@@ -350,7 +343,7 @@ export function CiAnalyticsView({
                 )}
               </CardContent>
             </Card>
-          </div>
+          </div>}
         </>
       )}
     </div>

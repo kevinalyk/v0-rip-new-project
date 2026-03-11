@@ -55,6 +55,7 @@ export function CiAnalyticsView({
 }: CiAnalyticsViewProps) {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<AnalyticsData | null>(null)
+  const [chartDays, setChartDays] = useState<7 | 30 | 90 | 365>(7)
 
   useEffect(() => {
     fetchAnalytics()
@@ -70,6 +71,8 @@ export function CiAnalyticsView({
       if (selectedMessageType && selectedMessageType !== "all") params.append("messageType", selectedMessageType)
       if (dateRange.from) params.append("fromDate", dateRange.from.toISOString())
       if (dateRange.to) params.append("toDate", dateRange.to.toISOString())
+      // Pass browser timezone so server can convert UTC → local for day/hour aggregation
+      params.append("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone)
 
       const res = await fetch(`/api/ci/analytics?${params.toString()}`, { credentials: "include" })
       if (res.ok) {
@@ -180,16 +183,35 @@ export function CiAnalyticsView({
       ) : (
         <>
           {/* Volume Over Time */}
-          {data.volumeData.length > 0 && (
+          {data.volumeData.length > 0 && (() => {
+            const cutoff = new Date()
+            cutoff.setDate(cutoff.getDate() - chartDays)
+            const filteredVolume = data.volumeData.filter((d) => new Date(d.date) >= cutoff)
+            return (
             <Card>
               <CardHeader>
-                <CardTitle>Content Volume Over Time</CardTitle>
-                <CardDescription>Daily email and SMS volume with 7-day moving average</CardDescription>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle>Content Volume Over Time</CardTitle>
+                    <CardDescription>Daily email and SMS volume with 7-day moving average</CardDescription>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs border rounded-md overflow-hidden shrink-0">
+                    {([7, 30, 90, 365] as const).map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => setChartDays(d)}
+                        className={`px-3 py-1.5 transition-colors ${chartDays === d ? "bg-foreground text-background font-medium" : "hover:bg-muted text-muted-foreground"}`}
+                      >
+                        {d === 365 ? "1Y" : `${d}D`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="h-[380px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={data.volumeData} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+                    <LineChart data={filteredVolume} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis
                         dataKey="date"
@@ -247,7 +269,8 @@ export function CiAnalyticsView({
                 </div>
               </CardContent>
             </Card>
-          )}
+            )
+          })()}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Day of Week Activity */}
@@ -281,23 +304,23 @@ export function CiAnalyticsView({
             <Card>
               <CardHeader>
                 <CardTitle>Inboxing Rate</CardTitle>
-                <CardDescription>Overall inbox vs spam placement across all campaigns</CardDescription>
+                <CardDescription>Seed test inbox vs spam placement across tracked campaigns</CardDescription>
               </CardHeader>
               <CardContent>
                 {data.inboxingData.length > 0 ? (
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="h-[180px] w-full">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="h-[220px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
                             data={data.inboxingData}
                             cx="50%"
                             cy="50%"
-                            outerRadius={75}
-                            innerRadius={45}
+                            outerRadius={85}
+                            innerRadius={52}
                             dataKey="value"
                             label={({ name, value }) => `${name}: ${value}%`}
-                            labelLine={false}
+                            labelLine={true}
                           >
                             {data.inboxingData.map((_, index) => (
                               <Cell key={`cell-${index}`} fill={INBOX_COLORS[index % INBOX_COLORS.length]} />
@@ -316,7 +339,7 @@ export function CiAnalyticsView({
                           />
                           <span className="font-medium">{item.name}</span>
                           <span className="text-muted-foreground">
-                            {item.value}% ({item.count.toLocaleString()})
+                            {item.value}% ({item.count.toLocaleString()} seed tests)
                           </span>
                         </div>
                       ))}

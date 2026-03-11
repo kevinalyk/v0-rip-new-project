@@ -18,6 +18,20 @@ export async function GET(request: NextRequest) {
     const fromDate = searchParams.get("fromDate") || undefined
     const toDate = searchParams.get("toDate") || undefined
     const messageType = searchParams.get("messageType") || undefined
+    const timezone = searchParams.get("timezone") || "UTC"
+
+    // Helper: get local day/hour for a UTC date using the client's timezone
+    const getLocalDay = (date: Date) => {
+      const localDay = new Date(date.toLocaleString("en-US", { timeZone: timezone })).getDay()
+      return localDay
+    }
+    const getLocalHour = (date: Date) => {
+      return new Date(date.toLocaleString("en-US", { timeZone: timezone })).getHours()
+    }
+    const getLocalDateKey = (date: Date) => {
+      const local = new Date(date.toLocaleString("en-US", { timeZone: timezone }))
+      return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, "0")}-${String(local.getDate()).padStart(2, "0")}`
+    }
 
     // Resolve clientId
     let targetClientId = authResult.user.clientId!
@@ -103,11 +117,11 @@ export async function GET(request: NextRequest) {
       ...smsMessages.map((s) => ({ date: new Date(s.createdAt), type: "sms" as const })),
     ]
 
-    // --- Day of Week aggregation ---
+    // --- Day of Week aggregation (local timezone) ---
     const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     const dayOfWeekCounts = [0, 0, 0, 0, 0, 0, 0]
     allDates.forEach(({ date }) => {
-      dayOfWeekCounts[date.getDay()]++
+      dayOfWeekCounts[getLocalDay(date)]++
     })
     const maxDayCount = Math.max(...dayOfWeekCounts, 1)
     const dayOfWeekData = dayOfWeekCounts.map((count, i) => ({
@@ -119,10 +133,10 @@ export async function GET(request: NextRequest) {
     const mostActiveDayIndex = dayOfWeekCounts.indexOf(Math.max(...dayOfWeekCounts))
     const mostActiveDay = dayNames[mostActiveDayIndex]
 
-    // --- Hour of Day aggregation ---
+    // --- Hour of Day aggregation (local timezone) ---
     const hourOfDayCounts = Array(24).fill(0)
     allDates.forEach(({ date }) => {
-      hourOfDayCounts[date.getHours()]++
+      hourOfDayCounts[getLocalHour(date)]++
     })
     const mostActiveHourIndex = hourOfDayCounts.indexOf(Math.max(...hourOfDayCounts))
     const formatHour = (h: number) => {
@@ -137,20 +151,20 @@ export async function GET(request: NextRequest) {
 
     // --- Volume over time with 7-day moving average ---
     const allTimestamps = allDates.map(({ date }) => date.getTime())
-    const minDate = new Date(Math.min(...allTimestamps))
-    const maxDate = new Date(Math.max(...allTimestamps))
-    minDate.setHours(0, 0, 0, 0)
-    maxDate.setHours(0, 0, 0, 0)
+    const minDateKey = allDates.map(({ date }) => getLocalDateKey(date)).sort()[0]
+    const maxDateKey = allDates.map(({ date }) => getLocalDateKey(date)).sort().at(-1)!
 
     const dailyMap = new Map<string, { emails: number; sms: number }>()
-    const cursor = new Date(minDate)
-    while (cursor <= maxDate) {
-      dailyMap.set(cursor.toISOString().split("T")[0], { emails: 0, sms: 0 })
+    const cursor = new Date(minDateKey + "T00:00:00")
+    const endDate = new Date(maxDateKey + "T00:00:00")
+    while (cursor <= endDate) {
+      const key = cursor.toISOString().split("T")[0]
+      dailyMap.set(key, { emails: 0, sms: 0 })
       cursor.setDate(cursor.getDate() + 1)
     }
 
     allDates.forEach(({ date, type }) => {
-      const key = date.toISOString().split("T")[0]
+      const key = getLocalDateKey(date)
       const entry = dailyMap.get(key)
       if (entry) {
         if (type === "sms") entry.sms++

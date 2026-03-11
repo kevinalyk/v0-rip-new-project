@@ -134,13 +134,10 @@ export async function POST(request: Request) {
     const urlRegex = /https?:\/\/[^\s]+|(?<![a-zA-Z0-9@])(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:\/[^\s]*)?/g
     const redactedMessage = nameRedactedMessage.replace(urlRegex, "[Omitted Link]")
 
-    // Save to the SmsQueue table using upsert on dedupHash.
-    // If two webhooks arrive simultaneously they both try to insert the same dedupHash —
-    // the DB unique constraint ensures only one succeeds; the other is silently ignored.
+    // Save to the SmsQueue table
     const smsId = uuidv4()
-    const result = await prisma.smsQueue.upsert({
-      where: { dedupHash },
-      create: {
+    await prisma.smsQueue.create({
+      data: {
         id: smsId,
         rawData: body,
         processed: true,
@@ -154,25 +151,17 @@ export async function POST(request: Request) {
         assignmentMethod: entityAssignment?.assignmentMethod || null,
         assignedAt: entityAssignment ? new Date() : null,
         ctaLinks: JSON.stringify(ctaLinks),
-        dedupHash,
         createdAt: new Date(),
       },
-      update: {}, // no-op: if it already exists, do nothing
     })
 
-    const isDuplicate = result.id !== smsId
-    if (isDuplicate) {
-      console.log("[FullStack SMS] Duplicate SMS detected via dedupHash, ignored:", result.id)
-      return NextResponse.json({ success: true, message: "Duplicate SMS ignored", smsId: result.id })
-    }
-
-    console.log("[FullStack SMS] SMS queued for processing:", result.id)
+    console.log("[FullStack SMS] SMS queued for processing:", smsId)
 
     // Return a success response to FullStack
     return NextResponse.json({
       success: true,
       message: "SMS received and queued for processing",
-      smsId: smsData.id,
+      smsId,
     })
   } catch (error) {
     console.error("[FullStack SMS] Error processing SMS webhook:", error)

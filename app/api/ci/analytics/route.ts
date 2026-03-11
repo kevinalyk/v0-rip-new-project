@@ -54,17 +54,17 @@ export async function GET(request: NextRequest) {
     const includeEmails = !messageType || messageType === "all" || messageType === "email"
     const includeSMS = !messageType || messageType === "all" || messageType === "sms"
 
-    // Fetch email campaigns
+    // Fetch email campaigns — no clientId filter, campaigns are global per entity
     let emailCampaigns: { id: string; dateReceived: Date; inboxRate: number; inboxCount: number | null; spamCount: number | null }[] = []
     if (includeEmails) {
       emailCampaigns = await prisma.competitiveInsightCampaign.findMany({
         where: {
-          clientId: targetClientId,
+          isDeleted: false,
+          isHidden: false,
+          entityId: { not: null },
           ...(entityIds ? { entityId: { in: entityIds } } : {}),
           ...(party && party !== "all" ? { entity: { party } } : {}),
           ...(Object.keys(dateFilter).length > 0 ? { dateReceived: dateFilter } : {}),
-          isDeleted: false,
-          isHidden: false,
         },
         select: {
           id: true,

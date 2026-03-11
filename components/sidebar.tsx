@@ -27,6 +27,7 @@ import {
   ChevronUp,
   LayoutDashboard,
   Inbox,
+  ExternalLink,
   Building,
   Star,
   Globe,
@@ -64,6 +65,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     ci: false,
+    reports: false,
     inbox: false,
     admin: false,
     account: false,
@@ -149,6 +151,8 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
       setExpandedSections((prev) => ({ ...prev, account: true }))
     } else if (pathname.includes("/ci/")) {
       setExpandedSections((prev) => ({ ...prev, ci: true }))
+    } else if (pathname.includes("/reports/")) {
+      setExpandedSections((prev) => ({ ...prev, reports: true }))
     } else if (pathname.includes("/inbox/")) {
       setExpandedSections((prev) => ({ ...prev, inbox: true }))
     } else if (pathname.includes("/admin/")) {
@@ -247,6 +251,15 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
             >
               <Megaphone size={20} />
               {!collapsed && <span>{"What's New"}</span>}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn("w-full justify-start gap-3 px-3", collapsed && "justify-center")}
+              onClick={() => window.open("https://directory.gop", "_blank")}
+            >
+              <ExternalLink size={20} />
+              {!collapsed && <span>GOP Directory</span>}
             </Button>
             {mounted && (
               <Button
@@ -358,14 +371,30 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                   collapsed={false}
                   onClick={() => navigate(`/${getClientSlug()}/ci/directory`)}
                 />
-                <NavItem
-                  icon={<BarChart3 size={18} />}
-                  label="Reporting"
-                  active={pathname.includes("/ci/reporting")}
-                  collapsed={false}
-                  onClick={() => navigate(`/${getClientSlug()}/ci/reporting`)}
-                />
               </div>
+            )}
+
+            {userRole === "super_admin" && (
+              <>
+                <NavSection
+                  icon={<BarChart3 size={20} />}
+                  label="Reports"
+                  collapsed={collapsed}
+                  expanded={expandedSections.reports}
+                  onToggle={() => toggleSection("reports")}
+                />
+                {expandedSections.reports && !collapsed && (
+                  <div className="ml-4 space-y-1">
+                    <NavItem
+                      icon={<BarChart3 size={18} />}
+                      label="Reporting"
+                      active={pathname.includes("/reports/")}
+                      collapsed={false}
+                      onClick={() => navigate(`/${getClientSlug()}/reports/reporting`)}
+                    />
+                  </div>
+                )}
+              </>
             )}
 
             {userRole === "super_admin" && (selectedClientSlug === "rip" || !selectedClientSlug) && (
@@ -514,6 +543,15 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
           >
             <Megaphone size={20} />
             {!collapsed && <span>{"What's New"}</span>}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn("w-full justify-start gap-3 px-3", collapsed && "justify-center")}
+            onClick={() => window.open("https://directory.gop", "_blank")}
+          >
+            <ExternalLink size={20} />
+            {!collapsed && <span>GOP Directory</span>}
           </Button>
           {mounted && (
             <Button

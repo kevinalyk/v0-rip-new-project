@@ -52,13 +52,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Build date filters — default to last chartDays days if no explicit range given
+    // Build date filters — fetch chartDays + 6 extra days so the 7-day moving average
+    // has a full warm-up window. The response is then trimmed to chartDays for display.
     const dateFilter: { gte?: Date; lte?: Date } = {}
     if (fromDate) {
       dateFilter.gte = new Date(fromDate)
     } else {
       const defaultStart = new Date()
-      defaultStart.setDate(defaultStart.getDate() - chartDays)
+      defaultStart.setDate(defaultStart.getDate() - (chartDays + 6))
       defaultStart.setHours(0, 0, 0, 0)
       dateFilter.gte = defaultStart
     }
@@ -219,13 +220,17 @@ export async function GET(request: NextRequest) {
     const totalEmails = emailCampaigns.length
     const totalSMS = smsMessages.length
 
+    // Trim volumeData to the requested chartDays window for display.
+    // The extra 6 days fetched were only needed for moving average warm-up.
+    const trimmedVolumeData = !fromDate ? volumeData.slice(-chartDays) : volumeData
+
     return NextResponse.json({
       totalEmails,
       totalSMS,
       mostActiveDay,
       mostActiveHour,
       dayOfWeekData,
-      volumeData,
+      volumeData: trimmedVolumeData,
       inboxingData,
       hasCampaigns: totalEmails > 0 || totalSMS > 0,
     })

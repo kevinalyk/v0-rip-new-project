@@ -367,6 +367,11 @@ export function CompetitiveInsights({
   const filteredSenders = useMemo(() => {
     const filtered = allSenders.filter((sender) => sender.toLowerCase().includes(senderSearchTerm.toLowerCase()))
 
+    // In reporting view, only show entities the client is following
+    if (activeView === "reporting") {
+      return filtered.filter((sender) => isEntityFollowed(sender)).sort((a, b) => a.localeCompare(b))
+    }
+
     // Separate followed and not-followed entities
     const followed = filtered.filter((sender) => isEntityFollowed(sender))
     const notFollowed = filtered.filter((sender) => !isEntityFollowed(sender))
@@ -377,7 +382,7 @@ export function CompetitiveInsights({
 
     // Return followed first, then the rest
     return [...followed, ...notFollowed]
-  }, [allSenders, senderSearchTerm, allEntities, subscribedEntityIds])
+  }, [allSenders, senderSearchTerm, allEntities, subscribedEntityIds, activeView])
 
   // Modify useEffect to fetch user and then campaigns
   useEffect(() => {

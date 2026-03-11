@@ -21,17 +21,23 @@ export async function GET(request: NextRequest) {
     const timezone = searchParams.get("timezone") || "UTC"
     const chartDays = parseInt(searchParams.get("chartDays") || "7")
 
-    // Helper: get local day/hour for a UTC date using the client's timezone
-    const getLocalDay = (date: Date) => {
-      const localDay = new Date(date.toLocaleString("en-US", { timeZone: timezone })).getDay()
-      return localDay
+    // Compute timezone offset ONCE using Intl.DateTimeFormat, then apply as a simple
+    // integer ms offset to every date — avoids expensive toLocaleString per record.
+    const getTimezoneOffsetMs = (tz: string): number => {
+      const now = new Date()
+      const utcStr = now.toLocaleString("en-US", { timeZone: "UTC" })
+      const localStr = now.toLocaleString("en-US", { timeZone: tz })
+      return new Date(localStr).getTime() - new Date(utcStr).getTime()
     }
-    const getLocalHour = (date: Date) => {
-      return new Date(date.toLocaleString("en-US", { timeZone: timezone })).getHours()
-    }
+    const tzOffsetMs = getTimezoneOffsetMs(timezone)
+
+    const toLocal = (date: Date) => new Date(date.getTime() + tzOffsetMs)
+
+    const getLocalDay = (date: Date) => toLocal(date).getUTCDay()
+    const getLocalHour = (date: Date) => toLocal(date).getUTCHours()
     const getLocalDateKey = (date: Date) => {
-      const local = new Date(date.toLocaleString("en-US", { timeZone: timezone }))
-      return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, "0")}-${String(local.getDate()).padStart(2, "0")}`
+      const l = toLocal(date)
+      return `${l.getUTCFullYear()}-${String(l.getUTCMonth() + 1).padStart(2, "0")}-${String(l.getUTCDate()).padStart(2, "0")}`
     }
 
     // Resolve clientId

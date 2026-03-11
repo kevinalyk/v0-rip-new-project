@@ -109,17 +109,17 @@ export function CiAnalyticsView({
 
   return (
     <div className="space-y-6">
-      {/* Stat cards — only when an entity is selected */}
-      {hasEntity && (
+      {/* Stat cards — always visible when data exists */}
+      {data && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <StatCard
             label="Most Active Day"
-            value={data?.mostActiveDay ?? "—"}
-            sub={`${data?.dayOfWeekData.find((d) => d.day === data?.mostActiveDay)?.count ?? 0} sends on this day`}
+            value={data.mostActiveDay ?? "—"}
+            sub={`${data.dayOfWeekData.find((d) => d.day === data.mostActiveDay)?.count ?? 0} sends on this day`}
           />
           <StatCard
             label="Most Active Hour"
-            value={data?.mostActiveHour ?? "—"}
+            value={data.mostActiveHour ?? "—"}
             sub="Hour of day with the most sends"
           />
         </div>

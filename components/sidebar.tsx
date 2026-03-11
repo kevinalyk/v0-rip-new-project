@@ -64,6 +64,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     ci: false,
+    reports: false,
     inbox: false,
     admin: false,
     account: false,
@@ -149,6 +150,8 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
       setExpandedSections((prev) => ({ ...prev, account: true }))
     } else if (pathname.includes("/ci/")) {
       setExpandedSections((prev) => ({ ...prev, ci: true }))
+    } else if (pathname.includes("/reports/")) {
+      setExpandedSections((prev) => ({ ...prev, reports: true }))
     } else if (pathname.includes("/inbox/")) {
       setExpandedSections((prev) => ({ ...prev, inbox: true }))
     } else if (pathname.includes("/admin/")) {
@@ -358,12 +361,24 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                   collapsed={false}
                   onClick={() => navigate(`/${getClientSlug()}/ci/directory`)}
                 />
+              </div>
+            )}
+
+            <NavSection
+              icon={<BarChart3 size={20} />}
+              label="Reports"
+              collapsed={collapsed}
+              expanded={expandedSections.reports}
+              onToggle={() => toggleSection("reports")}
+            />
+            {expandedSections.reports && !collapsed && (
+              <div className="ml-4 space-y-1">
                 <NavItem
                   icon={<BarChart3 size={18} />}
                   label="Reporting"
-                  active={pathname.includes("/ci/reporting")}
+                  active={pathname.includes("/reports/")}
                   collapsed={false}
-                  onClick={() => navigate(`/${getClientSlug()}/ci/reporting`)}
+                  onClick={() => navigate(`/${getClientSlug()}/reports/reporting`)}
                 />
               </div>
             )}

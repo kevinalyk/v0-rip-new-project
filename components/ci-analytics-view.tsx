@@ -261,8 +261,7 @@ export function CiAnalyticsView({
             )
           })()}
 
-          {/* Day of week + inboxing only when an entity is selected */}
-          {hasEntity && <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {(data?.dayOfWeekData?.some((d) => d.count > 0) || (data?.inboxingData?.length ?? 0) > 0) && <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Day of Week Activity */}
             <Card>
               <CardHeader>

@@ -199,7 +199,7 @@ export async function GET(request: NextRequest) {
       dayOfWeekData,
       volumeData,
       inboxingData,
-      hasCampaigns: campaigns.length > 0,
+      hasCampaigns: totalEmails > 0 || totalSMS > 0,
     })
   } catch (error) {
     console.error("[ci/analytics] Error:", error)

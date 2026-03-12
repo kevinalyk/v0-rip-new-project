@@ -66,12 +66,15 @@ export async function GET(request: NextRequest) {
     }
     if (toDate) dateFilter.lte = new Date(toDate)
 
+    console.log("[v0] analytics params — party:", party, "state:", state, "senders:", senders, "messageType:", messageType, "clientId:", targetClientId)
+
     // Get the client's subscribed entity IDs to scope all queries
     const subscribedEntities = await prisma.ciEntitySubscription.findMany({
       where: { clientId: targetClientId },
       select: { entityId: true },
     })
     const subscribedEntityIds = subscribedEntities.map((s) => s.entityId)
+    console.log("[v0] subscribedEntityIds count:", subscribedEntityIds.length)
 
     // Build entity filter: if senders specified, intersect with subscribed IDs to avoid
     // cross-client data leakage. Otherwise use all subscribed IDs.
@@ -82,8 +85,9 @@ export async function GET(request: NextRequest) {
           name: { in: senders, mode: "insensitive" },
           id: { in: subscribedEntityIds },
         },
-        select: { id: true },
+        select: { id: true, name: true, party: true, state: true },
       })
+      console.log("[v0] matched sender entities:", matchedEntities)
       entityIds = matchedEntities.map((e) => e.id)
       if (entityIds.length === 0) {
         return NextResponse.json(buildEmptyResponse())
@@ -100,10 +104,12 @@ export async function GET(request: NextRequest) {
           ...(party && party !== "all" ? { party: { equals: party, mode: "insensitive" } } : {}),
           ...(state && state !== "all" ? { state: { equals: state, mode: "insensitive" } } : {}),
         },
-        select: { id: true },
+        select: { id: true, name: true, party: true, state: true },
       })
+      console.log("[v0] after party/state filter — entities:", filteredEntities.map(e => `${e.name} (${e.party}, ${e.state})`))
       entityIds = filteredEntities.map((e) => e.id)
       if (entityIds.length === 0) {
+        console.log("[v0] no entities after party/state filter — returning empty")
         return NextResponse.json(buildEmptyResponse())
       }
     }
@@ -145,6 +151,8 @@ export async function GET(request: NextRequest) {
         },
       })
     }
+
+    console.log("[v0] final entityIds count:", entityIds.length, "emails:", emailCampaigns.length, "sms:", smsMessages.length)
 
     if (emailCampaigns.length === 0 && smsMessages.length === 0) {
       return NextResponse.json(buildEmptyResponse())

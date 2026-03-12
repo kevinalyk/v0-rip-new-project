@@ -67,15 +67,12 @@ export async function GET(request: NextRequest) {
     }
     if (toDate) dateFilter.lte = new Date(toDate)
 
-    console.log("[v0] analytics params:", { clientSlug, senders, party, state, platform, messageType, chartDays })
-
     // Get the client's subscribed entity IDs to scope all queries
     const subscribedEntities = await prisma.ciEntitySubscription.findMany({
       where: { clientId: targetClientId },
       select: { entityId: true },
     })
     const subscribedEntityIds = subscribedEntities.map((s) => s.entityId)
-    console.log("[v0] subscribedEntityIds count:", subscribedEntityIds.length)
 
     // Build entity filter: if senders specified, intersect with subscribed IDs to avoid
     // cross-client data leakage. Otherwise use all subscribed IDs.
@@ -89,7 +86,6 @@ export async function GET(request: NextRequest) {
         select: { id: true },
       })
       entityIds = matchedEntities.map((e) => e.id)
-      console.log("[v0] after sender filter entityIds:", entityIds.length)
       if (entityIds.length === 0) {
         return NextResponse.json(buildEmptyResponse())
       }
@@ -101,14 +97,6 @@ export async function GET(request: NextRequest) {
     if ((party && party !== "all") || (state && state !== "all")) {
       const partyToMatch = party && party !== "all" ? party : undefined
       const stateToMatch = state && state !== "all" ? state : undefined
-      console.log("[v0] applying party/state filter:", { partyToMatch, stateToMatch, beforeCount: entityIds.length })
-
-      // Fetch actual party/state values for current entityIds to debug mismatches
-      const entityValues = await prisma.ciEntity.findMany({
-        where: { id: { in: entityIds } },
-        select: { id: true, name: true, party: true, state: true },
-      })
-      console.log("[v0] entity party/state sample:", entityValues.slice(0, 5).map(e => ({ name: e.name, party: e.party, state: e.state })))
 
       const filteredEntities = await prisma.ciEntity.findMany({
         where: {
@@ -119,7 +107,6 @@ export async function GET(request: NextRequest) {
         select: { id: true },
       })
       entityIds = filteredEntities.map((e) => e.id)
-      console.log("[v0] after party/state filter entityIds:", entityIds.length)
       if (entityIds.length === 0) {
         return NextResponse.json(buildEmptyResponse())
       }

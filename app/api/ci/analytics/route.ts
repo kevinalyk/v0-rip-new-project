@@ -92,8 +92,10 @@ export async function GET(request: NextRequest) {
 
     const isThirdPartyFilter = messageType === "third_party"
     const isHouseFileFilter = messageType === "house_file_only"
+    const hasPlatformFilter = platform && platform !== "all"
+    // Platform filters are email-only concepts (WinRed, ActBlue, Substack, etc.) — always exclude SMS when one is active
     const includeEmails = !messageType || messageType === "all" || messageType === "email" || isThirdPartyFilter || isHouseFileFilter
-    const includeSMS = (!messageType || messageType === "all" || messageType === "sms") && !isThirdPartyFilter
+    const includeSMS = (!messageType || messageType === "all" || messageType === "sms") && !isThirdPartyFilter && !hasPlatformFilter
 
     // Build third-party / house-file campaign ID sets using the same mapping logic as the CI feed.
     // A campaign is "third party" when its entity has mappings AND the sender is NOT in those mappings.

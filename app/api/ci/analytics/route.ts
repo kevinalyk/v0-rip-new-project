@@ -93,9 +93,9 @@ export async function GET(request: NextRequest) {
     const isThirdPartyFilter = messageType === "third_party"
     const isHouseFileFilter = messageType === "house_file_only"
     const hasPlatformFilter = platform && platform !== "all"
-    // Platform filters are email-only concepts (WinRed, ActBlue, Substack, etc.) — always exclude SMS when one is active
     const includeEmails = !messageType || messageType === "all" || messageType === "email" || isThirdPartyFilter || isHouseFileFilter
-    const includeSMS = (!messageType || messageType === "all" || messageType === "sms") && !isThirdPartyFilter && !hasPlatformFilter
+    // Substack is email-only — exclude SMS when Substack platform is selected
+    const includeSMS = (!messageType || messageType === "all" || messageType === "sms") && !isThirdPartyFilter && platform !== "substack"
 
     // Build third-party / house-file campaign ID sets using the same mapping logic as the CI feed.
     // A campaign is "third party" when its entity has mappings AND the sender is NOT in those mappings.
@@ -199,7 +199,7 @@ export async function GET(request: NextRequest) {
 
     let smsMessages: { id: string; createdAt: Date }[] = []
     if (includeSMS) {
-      smsMessages = await prisma.smsQueue.findMany({
+      const rawSmsMessages = await prisma.smsQueue.findMany({
         where: {
           ...(entityIdFilter ? { entityId: entityIdFilter } : {}),
           isDeleted: false,
@@ -209,8 +209,23 @@ export async function GET(request: NextRequest) {
         select: {
           id: true,
           createdAt: true,
+          ...(hasPlatformFilter ? { ctaLinks: true } : {}),
         },
       })
+
+      // Apply platform filter to SMS via ctaLinks finalUrl domain matching
+      if (hasPlatformFilter && platform !== "substack") {
+        const domains = platformDomains[platform!] || []
+        smsMessages = (rawSmsMessages as any[]).filter((s) => {
+          const links: any[] = Array.isArray(s.ctaLinks) ? s.ctaLinks : []
+          return links.some((link) => {
+            const url = typeof link === "string" ? link : (link?.finalUrl || link?.url || "")
+            return domains.some((d: string) => url.toLowerCase().includes(d))
+          })
+        })
+      } else {
+        smsMessages = rawSmsMessages
+      }
     }
 
     if (emailCampaigns.length === 0 && smsMessages.length === 0) {

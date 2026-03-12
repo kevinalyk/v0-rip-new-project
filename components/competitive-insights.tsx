@@ -1796,6 +1796,7 @@ export function CompetitiveInsights({
                 clientSlug={clientSlug}
                 selectedSender={selectedSender}
                 selectedPartyFilter={selectedPartyFilter}
+                selectedStateFilter={selectedStateFilter}
                 selectedMessageType={selectedMessageType}
                 dateRange={dateRange}
                 shouldShowPreview={shouldShowPreview}

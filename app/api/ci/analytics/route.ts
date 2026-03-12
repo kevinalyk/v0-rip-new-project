@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
     const clientSlug = searchParams.get("clientSlug")
     const senders = searchParams.getAll("sender").filter(Boolean)
     const party = searchParams.get("party") || undefined
+    const state = searchParams.get("state") || undefined
     const fromDate = searchParams.get("fromDate") || undefined
     const toDate = searchParams.get("toDate") || undefined
     const messageType = searchParams.get("messageType") || undefined
@@ -65,34 +66,58 @@ export async function GET(request: NextRequest) {
     }
     if (toDate) dateFilter.lte = new Date(toDate)
 
-    // Build entity filter from sender slugs
-    let entityIds: string[] | undefined
+    // Get the client's subscribed entity IDs to scope all queries
+    const subscribedEntities = await prisma.ciEntitySubscription.findMany({
+      where: { clientId: targetClientId },
+      select: { entityId: true },
+    })
+    const subscribedEntityIds = subscribedEntities.map((s) => s.entityId)
+
+    // Build entity filter: if senders specified, intersect with subscribed IDs to avoid
+    // cross-client data leakage. Otherwise use all subscribed IDs.
+    let entityIds: string[]
     if (senders.length > 0) {
-      const entities = await prisma.ciEntity.findMany({
-        where: { name: { in: senders } },
+      const matchedEntities = await prisma.ciEntity.findMany({
+        where: {
+          name: { in: senders, mode: "insensitive" },
+          id: { in: subscribedEntityIds },
+        },
         select: { id: true },
       })
-      entityIds = entities.map((e) => e.id)
+      entityIds = matchedEntities.map((e) => e.id)
+      if (entityIds.length === 0) {
+        return NextResponse.json(buildEmptyResponse())
+      }
+    } else {
+      entityIds = subscribedEntityIds
+    }
+
+    // Apply party/state filters by further narrowing entityIds
+    if ((party && party !== "all") || (state && state !== "all")) {
+      const filteredEntities = await prisma.ciEntity.findMany({
+        where: {
+          id: { in: entityIds },
+          ...(party && party !== "all" ? { party: { equals: party, mode: "insensitive" } } : {}),
+          ...(state && state !== "all" ? { state: { equals: state, mode: "insensitive" } } : {}),
+        },
+        select: { id: true },
+      })
+      entityIds = filteredEntities.map((e) => e.id)
       if (entityIds.length === 0) {
         return NextResponse.json(buildEmptyResponse())
       }
     }
 
-    // CompetitiveInsightCampaign = emails only (no messageType field)
-    // SmsQueue = SMS only, uses createdAt instead of dateReceived, no inboxRate
     const includeEmails = !messageType || messageType === "all" || messageType === "email"
     const includeSMS = !messageType || messageType === "all" || messageType === "sms"
 
-    // Fetch email campaigns — no clientId filter, campaigns are global per entity
     let emailCampaigns: { id: string; dateReceived: Date; inboxRate: number; inboxCount: number | null; spamCount: number | null }[] = []
     if (includeEmails) {
       emailCampaigns = await prisma.competitiveInsightCampaign.findMany({
         where: {
           isDeleted: false,
           isHidden: false,
-          entityId: { not: null },
-          ...(entityIds ? { entityId: { in: entityIds } } : {}),
-          ...(party && party !== "all" ? { entity: { party } } : {}),
+          entityId: { in: entityIds },
           ...(Object.keys(dateFilter).length > 0 ? { dateReceived: dateFilter } : {}),
         },
         select: {
@@ -105,12 +130,11 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Fetch SMS messages separately
     let smsMessages: { id: string; createdAt: Date }[] = []
     if (includeSMS) {
       smsMessages = await prisma.smsQueue.findMany({
         where: {
-          ...(entityIds ? { entityId: { in: entityIds } } : {}),
+          entityId: { in: entityIds },
           isDeleted: false,
           isHidden: false,
           ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),

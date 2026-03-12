@@ -177,9 +177,10 @@ export default function NewsPostClient({ slug }: { slug: string }) {
         </h1>
 
         {/* Body */}
-        <div className="prose prose-neutral dark:prose-invert max-w-none text-base leading-relaxed whitespace-pre-wrap text-foreground mb-10">
-          {post.body}
-        </div>
+        <div
+          className="prose prose-neutral dark:prose-invert max-w-none text-base leading-relaxed text-foreground mb-10 [&_img]:rounded-md [&_img]:max-w-full [&_img]:my-4"
+          dangerouslySetInnerHTML={{ __html: post.body }}
+        />
 
         {/* Share bar */}
         <div className="border-t border-border pt-6 flex items-center gap-3 flex-wrap">

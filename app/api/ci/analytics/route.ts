@@ -67,49 +67,27 @@ export async function GET(request: NextRequest) {
     }
     if (toDate) dateFilter.lte = new Date(toDate)
 
-    // Get the client's subscribed entity IDs to scope all queries
-    const subscribedEntities = await prisma.ciEntitySubscription.findMany({
-      where: { clientId: targetClientId },
-      select: { entityId: true },
-    })
-    const subscribedEntityIds = subscribedEntities.map((s) => s.entityId)
+    // Reporting shows ALL entities by default — no subscription scoping.
+    // Only narrow entityIds when the user explicitly selects a filter.
+    const hasEntityFilter = senders.length > 0
+    const hasPartyFilter = party && party !== "all"
+    const hasStateFilter = state && state !== "all"
 
-    // Build entity filter: if senders specified, intersect with subscribed IDs to avoid
-    // cross-client data leakage. Otherwise use all subscribed IDs.
-    let entityIds: string[]
-    if (senders.length > 0) {
+    let entityIdFilter: { in: string[] } | undefined = undefined
+
+    if (hasEntityFilter || hasPartyFilter || hasStateFilter) {
+      const entityWhere: any = {}
+      if (hasEntityFilter) entityWhere.name = { in: senders, mode: "insensitive" }
+      if (hasPartyFilter) entityWhere.party = { equals: party, mode: "insensitive" }
+      if (hasStateFilter) entityWhere.state = { equals: state, mode: "insensitive" }
+
       const matchedEntities = await prisma.ciEntity.findMany({
-        where: {
-          name: { in: senders, mode: "insensitive" },
-          id: { in: subscribedEntityIds },
-        },
+        where: entityWhere,
         select: { id: true },
       })
-      entityIds = matchedEntities.map((e) => e.id)
-      if (entityIds.length === 0) {
-        return NextResponse.json(buildEmptyResponse())
-      }
-    } else {
-      entityIds = subscribedEntityIds
-    }
-
-    // Apply party/state filters by further narrowing entityIds
-    if ((party && party !== "all") || (state && state !== "all")) {
-      const partyToMatch = party && party !== "all" ? party : undefined
-      const stateToMatch = state && state !== "all" ? state : undefined
-
-      const filteredEntities = await prisma.ciEntity.findMany({
-        where: {
-          id: { in: entityIds },
-          ...(partyToMatch ? { party: { equals: partyToMatch, mode: "insensitive" } } : {}),
-          ...(stateToMatch ? { state: { equals: stateToMatch, mode: "insensitive" } } : {}),
-        },
-        select: { id: true },
-      })
-      entityIds = filteredEntities.map((e) => e.id)
-      if (entityIds.length === 0) {
-        return NextResponse.json(buildEmptyResponse())
-      }
+      const ids = matchedEntities.map((e) => e.id)
+      if (ids.length === 0) return NextResponse.json(buildEmptyResponse())
+      entityIdFilter = { in: ids }
     }
 
     const includeEmails = !messageType || messageType === "all" || messageType === "email"
@@ -129,7 +107,7 @@ export async function GET(request: NextRequest) {
         where: {
           isDeleted: false,
           isHidden: false,
-          entityId: { in: entityIds },
+          ...(entityIdFilter ? { entityId: entityIdFilter } : {}),
           ...(Object.keys(dateFilter).length > 0 ? { dateReceived: dateFilter } : {}),
         },
         select: {
@@ -165,7 +143,7 @@ export async function GET(request: NextRequest) {
     if (includeSMS) {
       smsMessages = await prisma.smsQueue.findMany({
         where: {
-          entityId: { in: entityIds },
+          ...(entityIdFilter ? { entityId: entityIdFilter } : {}),
           isDeleted: false,
           isHidden: false,
           ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),

@@ -27,7 +27,9 @@ interface CiAnalyticsViewProps {
   clientSlug: string
   selectedSender: string[]
   selectedPartyFilter: string
+  selectedStateFilter: string
   selectedMessageType: string
+  selectedDonationPlatform: string
   dateRange: DateRange
   shouldShowPreview: boolean
 }
@@ -49,7 +51,9 @@ export function CiAnalyticsView({
   clientSlug,
   selectedSender,
   selectedPartyFilter,
+  selectedStateFilter,
   selectedMessageType,
+  selectedDonationPlatform,
   dateRange,
   shouldShowPreview,
 }: CiAnalyticsViewProps) {
@@ -59,7 +63,7 @@ export function CiAnalyticsView({
 
   useEffect(() => {
     fetchAnalytics()
-  }, [selectedSender, selectedPartyFilter, selectedMessageType, dateRange, clientSlug, chartDays])
+  }, [selectedSender, selectedPartyFilter, selectedStateFilter, selectedMessageType, selectedDonationPlatform, dateRange, clientSlug, chartDays])
 
   const fetchAnalytics = async () => {
     setLoading(true)
@@ -68,7 +72,9 @@ export function CiAnalyticsView({
       if (clientSlug) params.append("clientSlug", clientSlug)
       selectedSender.forEach((s) => params.append("sender", s))
       if (selectedPartyFilter && selectedPartyFilter !== "all") params.append("party", selectedPartyFilter)
+      if (selectedStateFilter && selectedStateFilter !== "all") params.append("state", selectedStateFilter)
       if (selectedMessageType && selectedMessageType !== "all") params.append("messageType", selectedMessageType)
+      if (selectedDonationPlatform && selectedDonationPlatform !== "all") params.append("platform", selectedDonationPlatform)
       if (dateRange.from) params.append("fromDate", dateRange.from.toISOString())
       if (dateRange.to) params.append("toDate", dateRange.to.toISOString())
       params.append("chartDays", String(chartDays))

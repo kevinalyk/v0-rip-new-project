@@ -15,6 +15,8 @@ export async function GET(request: NextRequest) {
     const clientSlug = searchParams.get("clientSlug")
     const senders = searchParams.getAll("sender").filter(Boolean)
     const party = searchParams.get("party") || undefined
+    const state = searchParams.get("state") || undefined
+    const platform = searchParams.get("platform") || undefined
     const fromDate = searchParams.get("fromDate") || undefined
     const toDate = searchParams.get("toDate") || undefined
     const messageType = searchParams.get("messageType") || undefined
@@ -65,34 +67,105 @@ export async function GET(request: NextRequest) {
     }
     if (toDate) dateFilter.lte = new Date(toDate)
 
-    // Build entity filter from sender slugs
-    let entityIds: string[] | undefined
-    if (senders.length > 0) {
-      const entities = await prisma.ciEntity.findMany({
-        where: { name: { in: senders } },
+    // Reporting shows ALL entities by default — no subscription scoping.
+    // Only narrow entityIds when the user explicitly selects a filter.
+    const hasEntityFilter = senders.length > 0
+    const hasPartyFilter = party && party !== "all"
+    const hasStateFilter = state && state !== "all"
+
+    let entityIdFilter: { in: string[] } | undefined = undefined
+
+    if (hasEntityFilter || hasPartyFilter || hasStateFilter) {
+      const entityWhere: any = {}
+      if (hasEntityFilter) entityWhere.name = { in: senders, mode: "insensitive" }
+      if (hasPartyFilter) entityWhere.party = { equals: party, mode: "insensitive" }
+      if (hasStateFilter) entityWhere.state = { equals: state, mode: "insensitive" }
+
+      const matchedEntities = await prisma.ciEntity.findMany({
+        where: entityWhere,
         select: { id: true },
       })
-      entityIds = entities.map((e) => e.id)
-      if (entityIds.length === 0) {
-        return NextResponse.json(buildEmptyResponse())
-      }
+      const ids = matchedEntities.map((e) => e.id)
+      if (ids.length === 0) return NextResponse.json(buildEmptyResponse())
+      entityIdFilter = { in: ids }
     }
 
-    // CompetitiveInsightCampaign = emails only (no messageType field)
-    // SmsQueue = SMS only, uses createdAt instead of dateReceived, no inboxRate
-    const includeEmails = !messageType || messageType === "all" || messageType === "email"
-    const includeSMS = !messageType || messageType === "all" || messageType === "sms"
+    const isThirdPartyFilter = messageType === "third_party"
+    const isHouseFileFilter = messageType === "house_file_only"
+    const hasPlatformFilter = platform && platform !== "all"
+    const includeEmails = !messageType || messageType === "all" || messageType === "email" || isThirdPartyFilter || isHouseFileFilter
+    // Substack is email-only — exclude SMS when Substack platform is selected
+    const includeSMS = (!messageType || messageType === "all" || messageType === "sms") && !isThirdPartyFilter && platform !== "substack"
 
-    // Fetch email campaigns — no clientId filter, campaigns are global per entity
-    let emailCampaigns: { id: string; dateReceived: Date; inboxRate: number; inboxCount: number | null; spamCount: number | null }[] = []
-    if (includeEmails) {
-      emailCampaigns = await prisma.competitiveInsightCampaign.findMany({
+    // Build third-party / house-file campaign ID sets using the same mapping logic as the CI feed.
+    // A campaign is "third party" when its entity has mappings AND the sender is NOT in those mappings.
+    // "House file" is the inverse: everything that is NOT third party.
+    let thirdPartyOrHouseFileCampaignIds: string[] | null = null
+    if (isThirdPartyFilter || isHouseFileFilter) {
+      const [allMappings, allEntities] = await Promise.all([
+        prisma.ciEntityMapping.findMany({
+          select: { entityId: true, senderEmail: true, senderDomain: true },
+        }),
+        prisma.ciEntity.findMany({ select: { id: true, donationIdentifiers: true } }),
+      ])
+
+      const mappingsByEntity: Record<string, { emails: Set<string>; domains: Set<string> }> = {}
+      for (const m of allMappings) {
+        if (!mappingsByEntity[m.entityId]) mappingsByEntity[m.entityId] = { emails: new Set(), domains: new Set() }
+        if (m.senderEmail) mappingsByEntity[m.entityId].emails.add(m.senderEmail.toLowerCase())
+        if (m.senderDomain) mappingsByEntity[m.entityId].domains.add(m.senderDomain.toLowerCase())
+      }
+      // Inject Substack handles as synthetic email mappings
+      for (const entity of allEntities) {
+        const handle = (entity.donationIdentifiers as any)?.substack as string | undefined
+        if (handle) {
+          if (!mappingsByEntity[entity.id]) mappingsByEntity[entity.id] = { emails: new Set(), domains: new Set() }
+          mappingsByEntity[entity.id].emails.add(`${handle.toLowerCase()}@substack.com`)
+        }
+      }
+
+      const entitiesWithMappings = new Set(Object.keys(mappingsByEntity))
+
+      const candidates = await prisma.competitiveInsightCampaign.findMany({
         where: {
           isDeleted: false,
           isHidden: false,
-          entityId: { not: null },
-          ...(entityIds ? { entityId: { in: entityIds } } : {}),
-          ...(party && party !== "all" ? { entity: { party } } : {}),
+          ...(isThirdPartyFilter ? { entityId: { in: [...entitiesWithMappings] } } : { entityId: { not: null } }),
+          ...(entityIdFilter ? { entityId: entityIdFilter } : {}),
+        },
+        select: { id: true, entityId: true, senderEmail: true },
+      })
+
+      thirdPartyOrHouseFileCampaignIds = candidates
+        .filter((c) => {
+          if (!c.entityId) return !isThirdPartyFilter // house file: keep entity-less campaigns
+          const em = mappingsByEntity[c.entityId]
+          // Entity has no mappings → house file by default
+          if (!em) return isHouseFileFilter
+          const email = (c.senderEmail ?? "").toLowerCase()
+          const domain = email.split("@")[1]
+          const isThirdParty = !em.emails.has(email) && (!domain || !em.domains.has(domain))
+          return isThirdPartyFilter ? isThirdParty : !isThirdParty
+        })
+        .map((c) => c.id)
+    }
+
+    const platformDomains: Record<string, string[]> = {
+      winred: ["winred.com"],
+      actblue: ["actblue.com"],
+      anedot: ["anedot.com"],
+      psq: ["psqimpact.com"],
+      ngpvan: ["ngpvan.com"],
+    }
+
+    let emailCampaigns: { id: string; dateReceived: Date; inboxRate: number; inboxCount: number | null; spamCount: number | null; ctaLinks?: any; senderEmail?: string | null }[] = []
+    if (includeEmails) {
+      const rawEmailCampaigns = await prisma.competitiveInsightCampaign.findMany({
+        where: {
+          isDeleted: false,
+          isHidden: false,
+          ...(entityIdFilter && !isThirdPartyFilter && !isHouseFileFilter ? { entityId: entityIdFilter } : {}),
+          ...(thirdPartyOrHouseFileCampaignIds !== null ? { id: { in: thirdPartyOrHouseFileCampaignIds } } : {}),
           ...(Object.keys(dateFilter).length > 0 ? { dateReceived: dateFilter } : {}),
         },
         select: {
@@ -101,16 +174,39 @@ export async function GET(request: NextRequest) {
           inboxRate: true,
           inboxCount: true,
           spamCount: true,
+          ctaLinks: true,
+          senderEmail: true,
         },
       })
+
+      // Apply platform filter client-side (ctaLinks is a JSON array)
+      if (platform && platform !== "all") {
+        const domains = platformDomains[platform] || []
+        emailCampaigns = rawEmailCampaigns.filter((c) => {
+          if (platform === "substack") {
+            return c.senderEmail?.toLowerCase().endsWith("@substack.com") ?? false
+          }
+          let links: any[] = []
+          if (Array.isArray(c.ctaLinks)) {
+            links = c.ctaLinks
+          } else if (typeof c.ctaLinks === "string") {
+            try { links = JSON.parse(c.ctaLinks) } catch { links = [] }
+          }
+          return links.some((link: any) => {
+            const url = typeof link === "string" ? link : (link?.finalUrl || link?.url || "")
+            return domains.some((d) => url.toLowerCase().includes(d))
+          })
+        })
+      } else {
+        emailCampaigns = rawEmailCampaigns
+      }
     }
 
-    // Fetch SMS messages separately
     let smsMessages: { id: string; createdAt: Date }[] = []
     if (includeSMS) {
-      smsMessages = await prisma.smsQueue.findMany({
+      const rawSmsMessages = await prisma.smsQueue.findMany({
         where: {
-          ...(entityIds ? { entityId: { in: entityIds } } : {}),
+          ...(entityIdFilter ? { entityId: entityIdFilter } : {}),
           isDeleted: false,
           isHidden: false,
           ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
@@ -118,24 +214,53 @@ export async function GET(request: NextRequest) {
         select: {
           id: true,
           createdAt: true,
+          ...(hasPlatformFilter ? { ctaLinks: true } : {}),
         },
       })
+
+      // Apply platform filter to SMS via ctaLinks finalUrl domain matching
+      if (hasPlatformFilter && platform !== "substack") {
+        const domains = platformDomains[platform!] || []
+        smsMessages = (rawSmsMessages as any[]).filter((s) => {
+          // Prisma JSON fields may come back as a parsed array, a raw string, or null
+          let links: any[] = []
+          if (Array.isArray(s.ctaLinks)) {
+            links = s.ctaLinks
+          } else if (typeof s.ctaLinks === "string") {
+            try { links = JSON.parse(s.ctaLinks) } catch { links = [] }
+          }
+          return links.some((link: any) => {
+            const url = typeof link === "string" ? link : (link?.finalUrl || link?.url || "")
+            return domains.some((d: string) => url.toLowerCase().includes(d))
+          })
+        })
+
+      } else {
+        smsMessages = rawSmsMessages
+      }
     }
 
     if (emailCampaigns.length === 0 && smsMessages.length === 0) {
       return NextResponse.json(buildEmptyResponse())
     }
 
-    // Unified date list for day-of-week / hour-of-day (both email + SMS)
+    // Unified date list for volume chart (includes warm-up records for moving average)
     const allDates: { date: Date; type: "email" | "sms" }[] = [
       ...emailCampaigns.map((c) => ({ date: new Date(c.dateReceived), type: "email" as const })),
       ...smsMessages.map((s) => ({ date: new Date(s.createdAt), type: "sms" as const })),
     ]
 
-    // --- Day of Week aggregation (local timezone) ---
+    // For day-of-week and hour-of-day, only count records within the actual display window
+    // (not the 6 warm-up days). This ensures stats match what's shown on the chart.
+    const displayWindowStart = fromDate
+      ? new Date(fromDate)
+      : (() => { const d = new Date(); d.setDate(d.getDate() - chartDays); d.setHours(0,0,0,0); return d })()
+    const displayDates = allDates.filter(({ date }) => date >= displayWindowStart)
+
+    // --- Day of Week aggregation (local timezone, display window only) ---
     const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     const dayOfWeekCounts = [0, 0, 0, 0, 0, 0, 0]
-    allDates.forEach(({ date }) => {
+    displayDates.forEach(({ date }) => {
       dayOfWeekCounts[getLocalDay(date)]++
     })
     const maxDayCount = Math.max(...dayOfWeekCounts, 1)
@@ -148,9 +273,9 @@ export async function GET(request: NextRequest) {
     const mostActiveDayIndex = dayOfWeekCounts.indexOf(Math.max(...dayOfWeekCounts))
     const mostActiveDay = dayNames[mostActiveDayIndex]
 
-    // --- Hour of Day aggregation (local timezone) ---
+    // --- Hour of Day aggregation (local timezone, display window only) ---
     const hourOfDayCounts = Array(24).fill(0)
-    allDates.forEach(({ date }) => {
+    displayDates.forEach(({ date }) => {
       hourOfDayCounts[getLocalHour(date)]++
     })
     const mostActiveHourIndex = hourOfDayCounts.indexOf(Math.max(...hourOfDayCounts))

@@ -1284,7 +1284,7 @@ export function CompetitiveInsights({
                     <SelectItem value="all">All Parties</SelectItem>
                     <SelectItem value="republican">Republican</SelectItem>
                     <SelectItem value="democrat">Democrat</SelectItem>
-                    <SelectItem value="independent">Independent</SelectItem>
+                    <SelectItem value="third party">Independent</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -1796,7 +1796,9 @@ export function CompetitiveInsights({
                 clientSlug={clientSlug}
                 selectedSender={selectedSender}
                 selectedPartyFilter={selectedPartyFilter}
+                selectedStateFilter={selectedStateFilter}
                 selectedMessageType={selectedMessageType}
+                selectedDonationPlatform={selectedDonationPlatform}
                 dateRange={dateRange}
                 shouldShowPreview={shouldShowPreview}
               />

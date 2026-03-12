@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, Plus, Pencil, Trash2, Upload, X, Megaphone, ArrowRight, Bold, Italic, ImagePlus } from "lucide-react"
+import { Loader2, Plus, Pencil, Trash2, Upload, X, Megaphone, ArrowRight, Bold, Italic, ImagePlus, List, Code2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { format, differenceInDays } from "date-fns"
 
@@ -64,6 +64,8 @@ export default function NewsPage() {
   const [imageUploading, setImageUploading] = useState(false)
   const [inlineImageUploading, setInlineImageUploading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [sourceMode, setSourceMode] = useState(false)
+  const [sourceHtml, setSourceHtml] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const inlineImageInputRef = useRef<HTMLInputElement>(null)
   const editorRef = useRef<HTMLDivElement>(null)
@@ -114,8 +116,9 @@ export default function NewsPage() {
     setFormTitle("")
     setFormBody("")
     setFormImageUrl(null)
+    setSourceMode(false)
+    setSourceHtml("")
     setDialogOpen(true)
-    // Reset editor content after dialog renders
     setTimeout(() => { if (editorRef.current) editorRef.current.innerHTML = "" }, 0)
   }
 
@@ -126,9 +129,22 @@ export default function NewsPage() {
     setFormTitle(a.title)
     setFormBody(a.body)
     setFormImageUrl(a.imageUrl)
+    setSourceMode(false)
+    setSourceHtml(a.body)
     setDialogOpen(true)
-    // Populate editor with existing body content
     setTimeout(() => { if (editorRef.current) editorRef.current.innerHTML = a.body }, 0)
+  }
+
+  const toggleSourceMode = () => {
+    if (!sourceMode) {
+      // Switching TO source: copy editor HTML into the textarea
+      const html = editorRef.current?.innerHTML ?? ""
+      setSourceHtml(html)
+    } else {
+      // Switching FROM source: apply textarea HTML back into editor
+      setTimeout(() => { if (editorRef.current) editorRef.current.innerHTML = sourceHtml }, 0)
+    }
+    setSourceMode((prev) => !prev)
   }
 
   const handleImageUpload = async (file: File) => {
@@ -198,8 +214,10 @@ export default function NewsPage() {
   }
 
   const handleSave = async () => {
-    const editorHtml = editorRef.current?.innerHTML ?? ""
-    const editorText = editorRef.current?.innerText?.trim() ?? ""
+    const editorHtml = sourceMode ? sourceHtml : (editorRef.current?.innerHTML ?? "")
+    const editorText = sourceMode
+      ? sourceHtml.replace(/<[^>]*>/g, "").trim()
+      : (editorRef.current?.innerText?.trim() ?? "")
     if (!formTitle.trim() || !editorText) {
       toast({ title: "Required", description: "Title and body are required", variant: "destructive" })
       return
@@ -391,15 +409,15 @@ export default function NewsPage() {
 
       {/* Create / Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open && !saving) setDialogOpen(false) }}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="shrink-0">
             <DialogTitle>{editTarget ? "Edit Post" : "New Post"}</DialogTitle>
             <DialogDescription>
               {editTarget ? "Update this announcement." : "Publish a new announcement visible to all users."}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-2 overflow-y-auto flex-1 pr-1">
             <div className="space-y-1.5">
               <Label htmlFor="post-title">Title</Label>
               <Input
@@ -414,63 +432,85 @@ export default function NewsPage() {
             <div className="space-y-1.5">
               <Label>Body</Label>
               {/* Toolbar */}
-              <div className="flex items-center gap-1 border border-border rounded-t-md px-2 py-1 bg-muted/50">
+              <div className="flex items-center gap-1 border border-border rounded-t-md px-2 py-1 bg-muted/50 flex-wrap">
+                {!sourceMode && (
+                  <>
+                    <Button
+                      type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" title="Bold"
+                      onMouseDown={(e) => { e.preventDefault(); document.execCommand("bold") }}
+                      disabled={saving}
+                    >
+                      <Bold size={14} />
+                    </Button>
+                    <Button
+                      type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" title="Italic"
+                      onMouseDown={(e) => { e.preventDefault(); document.execCommand("italic") }}
+                      disabled={saving}
+                    >
+                      <Italic size={14} />
+                    </Button>
+                    <Button
+                      type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" title="Bullet List"
+                      onMouseDown={(e) => { e.preventDefault(); document.execCommand("insertUnorderedList") }}
+                      disabled={saving}
+                    >
+                      <List size={14} />
+                    </Button>
+                    <div className="w-px h-4 bg-border mx-1" />
+                    <Button
+                      type="button" variant="ghost" size="sm" className="h-7 px-2 gap-1.5 text-xs"
+                      title="Insert image"
+                      onClick={() => inlineImageInputRef.current?.click()}
+                      disabled={saving || inlineImageUploading}
+                    >
+                      {inlineImageUploading ? <Loader2 size={13} className="animate-spin" /> : <ImagePlus size={13} />}
+                      {inlineImageUploading ? "Uploading..." : "Insert Image"}
+                    </Button>
+                    <input
+                      ref={inlineImageInputRef}
+                      type="file" accept="image/*" className="hidden"
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handleInlineImageUpload(f) }}
+                    />
+                    <div className="w-px h-4 bg-border mx-1" />
+                  </>
+                )}
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant={sourceMode ? "secondary" : "ghost"}
                   size="sm"
-                  className="h-7 w-7 p-0"
-                  title="Bold"
-                  onMouseDown={(e) => { e.preventDefault(); document.execCommand("bold") }}
+                  className="h-7 px-2 gap-1.5 text-xs ml-auto"
+                  title="Toggle HTML source"
+                  onClick={toggleSourceMode}
                   disabled={saving}
                 >
-                  <Bold size={14} />
+                  <Code2 size={13} />
+                  {sourceMode ? "Visual" : "HTML"}
                 </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0"
-                  title="Italic"
-                  onMouseDown={(e) => { e.preventDefault(); document.execCommand("italic") }}
-                  disabled={saving}
-                >
-                  <Italic size={14} />
-                </Button>
-                <div className="w-px h-4 bg-border mx-1" />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 gap-1.5 text-xs"
-                  title="Insert image"
-                  onClick={() => inlineImageInputRef.current?.click()}
-                  disabled={saving || inlineImageUploading}
-                >
-                  {inlineImageUploading
-                    ? <Loader2 size={13} className="animate-spin" />
-                    : <ImagePlus size={13} />
-                  }
-                  {inlineImageUploading ? "Uploading..." : "Insert Image"}
-                </Button>
-                <input
-                  ref={inlineImageInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleInlineImageUpload(f) }}
-                />
               </div>
-              {/* ContentEditable editor */}
-              <div
-                ref={editorRef}
-                contentEditable={!saving}
-                suppressContentEditableWarning
-                className="min-h-[240px] w-full rounded-b-md border border-t-0 border-border bg-background px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring overflow-auto"
-                style={{ whiteSpace: "pre-wrap" }}
-                data-placeholder="Describe what's new..."
-                onInput={() => {}}
-              />
+
+              {/* Visual editor */}
+              {!sourceMode && (
+                <div
+                  ref={editorRef}
+                  contentEditable={!saving}
+                  suppressContentEditableWarning
+                  className="min-h-[280px] w-full rounded-b-md border border-t-0 border-border bg-background px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring overflow-auto [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                  data-placeholder="Describe what's new..."
+                />
+              )}
+
+              {/* Source HTML editor */}
+              {sourceMode && (
+                <textarea
+                  className="min-h-[280px] w-full rounded-b-md border border-t-0 border-border bg-background px-3 py-2 text-xs font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring resize-y"
+                  value={sourceHtml}
+                  onChange={(e) => setSourceHtml(e.target.value)}
+                  disabled={saving}
+                  placeholder="<p>Write HTML here...</p>"
+                  spellCheck={false}
+                />
+              )}
+
               <style>{`
                 [data-placeholder]:empty:before {
                   content: attr(data-placeholder);

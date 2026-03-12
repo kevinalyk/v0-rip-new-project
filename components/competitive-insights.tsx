@@ -1284,7 +1284,7 @@ export function CompetitiveInsights({
                     <SelectItem value="all">All Parties</SelectItem>
                     <SelectItem value="republican">Republican</SelectItem>
                     <SelectItem value="democrat">Democrat</SelectItem>
-                    <SelectItem value="third party">Third Party</SelectItem>
+                    <SelectItem value="third party">Independent</SelectItem>
                   </SelectContent>
                 </Select>
 

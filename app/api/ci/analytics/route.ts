@@ -90,8 +90,63 @@ export async function GET(request: NextRequest) {
       entityIdFilter = { in: ids }
     }
 
-    const includeEmails = !messageType || messageType === "all" || messageType === "email"
-    const includeSMS = !messageType || messageType === "all" || messageType === "sms"
+    const isThirdPartyFilter = messageType === "third_party"
+    const isHouseFileFilter = messageType === "house_file_only"
+    const includeEmails = !messageType || messageType === "all" || messageType === "email" || isThirdPartyFilter || isHouseFileFilter
+    const includeSMS = (!messageType || messageType === "all" || messageType === "sms") && !isThirdPartyFilter
+
+    // Build third-party / house-file campaign ID sets using the same mapping logic as the CI feed.
+    // A campaign is "third party" when its entity has mappings AND the sender is NOT in those mappings.
+    // "House file" is the inverse: everything that is NOT third party.
+    let thirdPartyOrHouseFileCampaignIds: string[] | null = null
+    if (isThirdPartyFilter || isHouseFileFilter) {
+      const [allMappings, allEntities] = await Promise.all([
+        prisma.ciEntityMapping.findMany({
+          select: { entityId: true, senderEmail: true, senderDomain: true },
+        }),
+        prisma.ciEntity.findMany({ select: { id: true, donationIdentifiers: true } }),
+      ])
+
+      const mappingsByEntity: Record<string, { emails: Set<string>; domains: Set<string> }> = {}
+      for (const m of allMappings) {
+        if (!mappingsByEntity[m.entityId]) mappingsByEntity[m.entityId] = { emails: new Set(), domains: new Set() }
+        if (m.senderEmail) mappingsByEntity[m.entityId].emails.add(m.senderEmail.toLowerCase())
+        if (m.senderDomain) mappingsByEntity[m.entityId].domains.add(m.senderDomain.toLowerCase())
+      }
+      // Inject Substack handles as synthetic email mappings
+      for (const entity of allEntities) {
+        const handle = (entity.donationIdentifiers as any)?.substack as string | undefined
+        if (handle) {
+          if (!mappingsByEntity[entity.id]) mappingsByEntity[entity.id] = { emails: new Set(), domains: new Set() }
+          mappingsByEntity[entity.id].emails.add(`${handle.toLowerCase()}@substack.com`)
+        }
+      }
+
+      const entitiesWithMappings = new Set(Object.keys(mappingsByEntity))
+
+      const candidates = await prisma.competitiveInsightCampaign.findMany({
+        where: {
+          isDeleted: false,
+          isHidden: false,
+          ...(isThirdPartyFilter ? { entityId: { in: [...entitiesWithMappings] } } : { entityId: { not: null } }),
+          ...(entityIdFilter ? { entityId: entityIdFilter } : {}),
+        },
+        select: { id: true, entityId: true, senderEmail: true },
+      })
+
+      thirdPartyOrHouseFileCampaignIds = candidates
+        .filter((c) => {
+          if (!c.entityId) return !isThirdPartyFilter // house file: keep entity-less campaigns
+          const em = mappingsByEntity[c.entityId]
+          // Entity has no mappings → house file by default
+          if (!em) return isHouseFileFilter
+          const email = (c.senderEmail ?? "").toLowerCase()
+          const domain = email.split("@")[1]
+          const isThirdParty = !em.emails.has(email) && (!domain || !em.domains.has(domain))
+          return isThirdPartyFilter ? isThirdParty : !isThirdParty
+        })
+        .map((c) => c.id)
+    }
 
     const platformDomains: Record<string, string[]> = {
       winred: ["winred.com"],
@@ -107,7 +162,8 @@ export async function GET(request: NextRequest) {
         where: {
           isDeleted: false,
           isHidden: false,
-          ...(entityIdFilter ? { entityId: entityIdFilter } : {}),
+          ...(entityIdFilter && !isThirdPartyFilter && !isHouseFileFilter ? { entityId: entityIdFilter } : {}),
+          ...(thirdPartyOrHouseFileCampaignIds !== null ? { id: { in: thirdPartyOrHouseFileCampaignIds } } : {}),
           ...(Object.keys(dateFilter).length > 0 ? { dateReceived: dateFilter } : {}),
         },
         select: {

@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import AppLayout from "@/components/app-layout"
@@ -28,8 +28,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Loader2, Plus, Pencil, Trash2, Upload, X, Megaphone, ArrowRight } from "lucide-react"
+import { Loader2, Plus, Pencil, Trash2, Upload, X, Megaphone, ArrowRight, Bold, Italic, ImagePlus } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { format, differenceInDays } from "date-fns"
 
@@ -63,8 +62,11 @@ export default function NewsPage() {
   const [formBody, setFormBody] = useState("")
   const [formImageUrl, setFormImageUrl] = useState<string | null>(null)
   const [imageUploading, setImageUploading] = useState(false)
+  const [inlineImageUploading, setInlineImageUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const inlineImageInputRef = useRef<HTMLInputElement>(null)
+  const editorRef = useRef<HTMLDivElement>(null)
 
   // Delete confirm
   const [deleteTarget, setDeleteTarget] = useState<Announcement | null>(null)
@@ -113,6 +115,8 @@ export default function NewsPage() {
     setFormBody("")
     setFormImageUrl(null)
     setDialogOpen(true)
+    // Reset editor content after dialog renders
+    setTimeout(() => { if (editorRef.current) editorRef.current.innerHTML = "" }, 0)
   }
 
   const openEdit = (a: Announcement, e: React.MouseEvent) => {
@@ -123,6 +127,8 @@ export default function NewsPage() {
     setFormBody(a.body)
     setFormImageUrl(a.imageUrl)
     setDialogOpen(true)
+    // Populate editor with existing body content
+    setTimeout(() => { if (editorRef.current) editorRef.current.innerHTML = a.body }, 0)
   }
 
   const handleImageUpload = async (file: File) => {
@@ -148,14 +154,59 @@ export default function NewsPage() {
     }
   }
 
+  const handleInlineImageUpload = async (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Max 5MB", variant: "destructive" })
+      return
+    }
+    setInlineImageUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch("/api/announcements/upload-image", { method: "POST", body: fd, credentials: "include" })
+      const data = await res.json()
+      if (res.ok && editorRef.current) {
+        // Insert image at cursor position in the editor
+        editorRef.current.focus()
+        const img = document.createElement("img")
+        img.src = data.url
+        img.alt = "Inline image"
+        img.style.maxWidth = "100%"
+        img.style.borderRadius = "6px"
+        img.style.margin = "8px 0"
+        const sel = window.getSelection()
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0)
+          range.deleteContents()
+          range.insertNode(img)
+          range.setStartAfter(img)
+          range.collapse(true)
+          sel.removeAllRanges()
+          sel.addRange(range)
+        } else {
+          editorRef.current.appendChild(img)
+        }
+      } else {
+        toast({ title: "Upload failed", description: data.error, variant: "destructive" })
+      }
+    } catch {
+      toast({ title: "Upload failed", description: "Something went wrong", variant: "destructive" })
+    } finally {
+      setInlineImageUploading(false)
+      if (inlineImageInputRef.current) inlineImageInputRef.current.value = ""
+    }
+  }
+
   const handleSave = async () => {
-    if (!formTitle.trim() || !formBody.trim()) {
+    const editorHtml = editorRef.current?.innerHTML ?? ""
+    const editorText = editorRef.current?.innerText?.trim() ?? ""
+    if (!formTitle.trim() || !editorText) {
       toast({ title: "Required", description: "Title and body are required", variant: "destructive" })
       return
     }
     setSaving(true)
     try {
-      const payload = { title: formTitle, body: formBody, imageUrl: formImageUrl }
+      const payload = { title: formTitle, body: editorHtml, imageUrl: formImageUrl }
       const res = editTarget
         ? await fetch(`/api/announcements/${editTarget.id}`, {
             method: "PATCH",
@@ -323,7 +374,7 @@ export default function NewsPage() {
                     {a.title}
                   </h2>
                   <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2 mb-4">
-                    {a.body}
+                    {a.body.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()}
                   </p>
                   <Link href={`/news/${a.slug}`}>
                     <Button className="bg-[#dc2a28] hover:bg-[#dc2a28]/90 text-white gap-2 rounded-lg">
@@ -361,16 +412,72 @@ export default function NewsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="post-body">Body</Label>
-              <Textarea
-                id="post-body"
-                placeholder="Describe what's new..."
-                value={formBody}
-                onChange={(e) => setFormBody(e.target.value)}
-                disabled={saving}
-                rows={16}
-                className="resize-y min-h-[240px]"
+              <Label>Body</Label>
+              {/* Toolbar */}
+              <div className="flex items-center gap-1 border border-border rounded-t-md px-2 py-1 bg-muted/50">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  title="Bold"
+                  onMouseDown={(e) => { e.preventDefault(); document.execCommand("bold") }}
+                  disabled={saving}
+                >
+                  <Bold size={14} />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  title="Italic"
+                  onMouseDown={(e) => { e.preventDefault(); document.execCommand("italic") }}
+                  disabled={saving}
+                >
+                  <Italic size={14} />
+                </Button>
+                <div className="w-px h-4 bg-border mx-1" />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 gap-1.5 text-xs"
+                  title="Insert image"
+                  onClick={() => inlineImageInputRef.current?.click()}
+                  disabled={saving || inlineImageUploading}
+                >
+                  {inlineImageUploading
+                    ? <Loader2 size={13} className="animate-spin" />
+                    : <ImagePlus size={13} />
+                  }
+                  {inlineImageUploading ? "Uploading..." : "Insert Image"}
+                </Button>
+                <input
+                  ref={inlineImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleInlineImageUpload(f) }}
+                />
+              </div>
+              {/* ContentEditable editor */}
+              <div
+                ref={editorRef}
+                contentEditable={!saving}
+                suppressContentEditableWarning
+                className="min-h-[240px] w-full rounded-b-md border border-t-0 border-border bg-background px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring overflow-auto"
+                style={{ whiteSpace: "pre-wrap" }}
+                data-placeholder="Describe what's new..."
+                onInput={() => {}}
               />
+              <style>{`
+                [data-placeholder]:empty:before {
+                  content: attr(data-placeholder);
+                  color: hsl(var(--muted-foreground));
+                  pointer-events: none;
+                }
+              `}</style>
             </div>
 
             <div className="space-y-1.5">

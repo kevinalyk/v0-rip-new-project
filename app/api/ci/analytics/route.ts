@@ -186,8 +186,13 @@ export async function GET(request: NextRequest) {
           if (platform === "substack") {
             return c.senderEmail?.toLowerCase().endsWith("@substack.com") ?? false
           }
-          const links: any[] = Array.isArray(c.ctaLinks) ? c.ctaLinks : []
-          return links.some((link) => {
+          let links: any[] = []
+          if (Array.isArray(c.ctaLinks)) {
+            links = c.ctaLinks
+          } else if (typeof c.ctaLinks === "string") {
+            try { links = JSON.parse(c.ctaLinks) } catch { links = [] }
+          }
+          return links.some((link: any) => {
             const url = typeof link === "string" ? link : (link?.finalUrl || link?.url || "")
             return domains.some((d) => url.toLowerCase().includes(d))
           })
@@ -217,12 +222,19 @@ export async function GET(request: NextRequest) {
       if (hasPlatformFilter && platform !== "substack") {
         const domains = platformDomains[platform!] || []
         smsMessages = (rawSmsMessages as any[]).filter((s) => {
-          const links: any[] = Array.isArray(s.ctaLinks) ? s.ctaLinks : []
-          return links.some((link) => {
+          // Prisma JSON fields may come back as a parsed array, a raw string, or null
+          let links: any[] = []
+          if (Array.isArray(s.ctaLinks)) {
+            links = s.ctaLinks
+          } else if (typeof s.ctaLinks === "string") {
+            try { links = JSON.parse(s.ctaLinks) } catch { links = [] }
+          }
+          return links.some((link: any) => {
             const url = typeof link === "string" ? link : (link?.finalUrl || link?.url || "")
             return domains.some((d: string) => url.toLowerCase().includes(d))
           })
         })
+        console.log("[v0] SMS platform filter:", { platform, domains, before: rawSmsMessages.length, after: smsMessages.length })
       } else {
         smsMessages = rawSmsMessages
       }

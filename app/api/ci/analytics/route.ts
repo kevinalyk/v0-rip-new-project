@@ -234,7 +234,7 @@ export async function GET(request: NextRequest) {
             return domains.some((d: string) => url.toLowerCase().includes(d))
           })
         })
-        console.log("[v0] SMS platform filter:", { platform, domains, before: rawSmsMessages.length, after: smsMessages.length })
+
       } else {
         smsMessages = rawSmsMessages
       }
@@ -244,16 +244,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(buildEmptyResponse())
     }
 
-    // Unified date list for day-of-week / hour-of-day (both email + SMS)
+    // Unified date list for volume chart (includes warm-up records for moving average)
     const allDates: { date: Date; type: "email" | "sms" }[] = [
       ...emailCampaigns.map((c) => ({ date: new Date(c.dateReceived), type: "email" as const })),
       ...smsMessages.map((s) => ({ date: new Date(s.createdAt), type: "sms" as const })),
     ]
 
-    // --- Day of Week aggregation (local timezone) ---
+    // For day-of-week and hour-of-day, only count records within the actual display window
+    // (not the 6 warm-up days). This ensures stats match what's shown on the chart.
+    const displayWindowStart = fromDate
+      ? new Date(fromDate)
+      : (() => { const d = new Date(); d.setDate(d.getDate() - chartDays); d.setHours(0,0,0,0); return d })()
+    const displayDates = allDates.filter(({ date }) => date >= displayWindowStart)
+
+    // --- Day of Week aggregation (local timezone, display window only) ---
     const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     const dayOfWeekCounts = [0, 0, 0, 0, 0, 0, 0]
-    allDates.forEach(({ date }) => {
+    displayDates.forEach(({ date }) => {
       dayOfWeekCounts[getLocalDay(date)]++
     })
     const maxDayCount = Math.max(...dayOfWeekCounts, 1)
@@ -266,9 +273,9 @@ export async function GET(request: NextRequest) {
     const mostActiveDayIndex = dayOfWeekCounts.indexOf(Math.max(...dayOfWeekCounts))
     const mostActiveDay = dayNames[mostActiveDayIndex]
 
-    // --- Hour of Day aggregation (local timezone) ---
+    // --- Hour of Day aggregation (local timezone, display window only) ---
     const hourOfDayCounts = Array(24).fill(0)
-    allDates.forEach(({ date }) => {
+    displayDates.forEach(({ date }) => {
       hourOfDayCounts[getLocalHour(date)]++
     })
     const mostActiveHourIndex = hourOfDayCounts.indexOf(Math.max(...hourOfDayCounts))

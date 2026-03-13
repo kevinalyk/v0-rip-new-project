@@ -9,10 +9,11 @@ interface AppLayoutProps {
   children: React.ReactNode
   clientSlug?: string
   isAdminView?: boolean
+  defaultCollapsed?: boolean
 }
 
-function AppLayout({ children, clientSlug, isAdminView = false }: AppLayoutProps) {
-  const [collapsed, setCollapsed] = useState(false)
+function AppLayout({ children, clientSlug, isAdminView = false, defaultCollapsed = false }: AppLayoutProps) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed)
 
   return (
     <div className="flex h-screen bg-background">

@@ -1705,6 +1705,8 @@ export function CompetitiveInsights({
                 dateRange={dateRange}
                 shouldShowPreview={shouldShowPreview}
                 chartDays={chartDays}
+                showThirdParty={showThirdParty}
+                showHouseFileOnly={showHouseFileOnly}
               />
             )}
           </>

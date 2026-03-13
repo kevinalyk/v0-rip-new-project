@@ -33,6 +33,8 @@ interface CiAnalyticsViewProps {
   dateRange: DateRange
   shouldShowPreview: boolean
   chartDays: 7 | 30 | 90 | 365
+  showThirdParty: boolean
+  showHouseFileOnly: boolean
 }
 
 interface AnalyticsData {
@@ -58,13 +60,15 @@ export function CiAnalyticsView({
   dateRange,
   shouldShowPreview,
   chartDays,
+  showThirdParty,
+  showHouseFileOnly,
 }: CiAnalyticsViewProps) {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<AnalyticsData | null>(null)
 
   useEffect(() => {
     fetchAnalytics()
-  }, [selectedSender, selectedPartyFilter, selectedStateFilter, selectedMessageType, selectedDonationPlatform, dateRange, clientSlug, chartDays])
+  }, [selectedSender, selectedPartyFilter, selectedStateFilter, selectedMessageType, selectedDonationPlatform, dateRange, clientSlug, chartDays, showThirdParty, showHouseFileOnly])
 
   const fetchAnalytics = async () => {
     setLoading(true)
@@ -74,7 +78,14 @@ export function CiAnalyticsView({
       selectedSender.forEach((s) => params.append("sender", s))
       if (selectedPartyFilter && selectedPartyFilter !== "all") params.append("party", selectedPartyFilter)
       if (selectedStateFilter && selectedStateFilter !== "all") params.append("state", selectedStateFilter)
-      if (selectedMessageType && selectedMessageType !== "all") params.append("messageType", selectedMessageType)
+      // showThirdParty / showHouseFileOnly take precedence over the generic messageType
+      if (showThirdParty) {
+        params.append("messageType", "third_party")
+      } else if (showHouseFileOnly) {
+        params.append("messageType", "house_file_only")
+      } else if (selectedMessageType && selectedMessageType !== "all") {
+        params.append("messageType", selectedMessageType)
+      }
       if (selectedDonationPlatform && selectedDonationPlatform !== "all") params.append("platform", selectedDonationPlatform)
       if (dateRange.from) params.append("fromDate", dateRange.from.toISOString())
       if (dateRange.to) params.append("toDate", dateRange.to.toISOString())

@@ -1519,7 +1519,7 @@ export function CompetitiveInsights({
                                               Following
                                             </Badge>
                                           )}
-                                          {campaign.type === "email" && !isDomainMappedToEntity(campaign) && (
+                                          {!isDomainMappedToEntity(campaign) && (
                                             <Badge
                                               variant="outline"
                                               className="text-xs bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"

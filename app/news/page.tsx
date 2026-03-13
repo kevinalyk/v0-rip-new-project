@@ -285,7 +285,7 @@ export default function NewsPage() {
   }
 
   return (
-    <AppLayout clientSlug={clientSlug}>
+    <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
       <div className="container mx-auto py-8 px-4 max-w-3xl">
 
         {/* Header */}

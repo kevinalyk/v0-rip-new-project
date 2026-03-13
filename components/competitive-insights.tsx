@@ -1115,8 +1115,8 @@ export function CompetitiveInsights({
     <div className="mb-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Political Campaign Intelligence</h1>
-          <p className="text-muted-foreground">Monitor and analyze email activity across the political landscape</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Campaign Email Reporting</h1>
+          <p className="text-muted-foreground">Email volume, placement, and engagement across tracked political campaigns</p>
         </div>
         <div className="flex items-center gap-1 text-xs border rounded-md overflow-hidden shrink-0">
           {([7, 30, 90, 365] as const).map((d) => (
@@ -1179,40 +1179,7 @@ export function CompetitiveInsights({
             className={`space-y-4 ${shouldShowPaywall || shouldShowPreview ? "pointer-events-none opacity-50" : ""}`}
           >
             <div className={`${subscriptionPlan === "free" && !hasAdminAccess ? "relative" : ""}`}>
-              {/* Top row - Search bar centered */}
-              <div className="flex justify-center mb-6">
-                <div
-                  className={`w-full max-w-2xl relative ${subscriptionPlan === "free" && !hasAdminAccess ? "blur-sm pointer-events-none" : ""}`}
-                  ref={searchRef}
-                >
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4 z-10" />
-                  <Input
-                    placeholder="Search by entity, email, subject, or content..."
-                    value={searchTerm}
-                    onChange={(e) => handleSearchChange(e.target.value)}
-                    onKeyDown={handleSearchKeyDown} // Added Enter key handler
-                    className="pl-10"
-                    disabled={
-                      shouldShowPaywall || shouldShowPreview || (subscriptionPlan === "free" && !hasAdminAccess)
-                    }
-                  />
-                  {showAutocomplete && autocompleteSuggestions.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg z-50 max-h-64 overflow-y-auto">
-                      {autocompleteSuggestions.map((suggestion, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => handleSuggestionClick(suggestion)}
-                          className="w-full text-left px-4 py-2 hover:bg-muted transition-colors text-sm"
-                        >
-                          {suggestion}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Second row - Filters */}
+              {/* Filters */}
               <div
                 className={`flex flex-wrap gap-2 items-center ${subscriptionPlan === "free" && !hasAdminAccess ? "blur-sm pointer-events-none" : ""}`}
               >

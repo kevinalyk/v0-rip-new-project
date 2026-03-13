@@ -1115,8 +1115,7 @@ export function CompetitiveInsights({
     <div className="mb-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Analytics</h1>
-          <p className="text-muted-foreground">Email and SMS volume, placement, and engagement across tracked political campaigns</p>
+          <h1 className="text-3xl font-bold text-foreground">Analytics</h1>
         </div>
         <div className="flex items-center gap-1 text-xs border rounded-md overflow-hidden shrink-0">
           {([7, 30, 90, 365] as const).map((d) => (

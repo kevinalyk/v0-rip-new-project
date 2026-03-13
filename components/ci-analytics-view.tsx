@@ -304,15 +304,15 @@ export function CiAnalyticsView({
               <CardContent>
                 {data.inboxingData.length > 0 ? (
                   <div className="flex flex-col items-center gap-2">
-                    <div className="h-[220px] w-full">
+                    <div className="h-[280px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
+                        <PieChart margin={{ top: 30, right: 30, bottom: 30, left: 30 }}>
                           <Pie
                             data={data.inboxingData}
                             cx="50%"
                             cy="50%"
-                            outerRadius={85}
-                            innerRadius={52}
+                            outerRadius={80}
+                            innerRadius={48}
                             dataKey="value"
                             label={({ name, value }) => `${name}: ${value}%`}
                             labelLine={true}

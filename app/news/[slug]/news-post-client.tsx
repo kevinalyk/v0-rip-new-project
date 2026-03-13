@@ -6,7 +6,7 @@ import Link from "next/link"
 import AppLayout from "@/components/app-layout"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, ArrowLeft, Twitter, Facebook, Link2, Pencil, Trash2 } from "lucide-react"
+import { Loader2, ArrowLeft, Facebook, Link2, Pencil, Trash2 } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -191,8 +191,10 @@ export default function NewsPostClient({ slug }: { slug: string }) {
             rel="noopener noreferrer"
           >
             <Button variant="outline" size="sm" className="gap-2">
-              <Twitter size={14} />
-              X / Twitter
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.741l7.73-8.835L1.254 2.25H8.08l4.259 5.631 5.905-5.631Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z" />
+              </svg>
+              X
             </Button>
           </a>
           <a

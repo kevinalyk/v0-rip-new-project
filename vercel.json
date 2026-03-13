@@ -29,7 +29,7 @@
     },
     {
       "path": "/api/cron/auto-assign-unassigned",
-      "schedule": "0 * * * *"
+      "schedule": "0 6,18 * * *"
     },
     {
       "path": "/api/cron/redact-names",

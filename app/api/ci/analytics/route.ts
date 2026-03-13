@@ -95,20 +95,24 @@ export async function GET(request: NextRequest) {
     const hasPlatformFilter = platform && platform !== "all"
     const includeEmails = !messageType || messageType === "all" || messageType === "email" || isThirdPartyFilter || isHouseFileFilter
     // Substack is email-only — exclude SMS when Substack platform is selected
-    const includeSMS = (!messageType || messageType === "all" || messageType === "sms") && !isThirdPartyFilter && platform !== "substack"
+    const includeSMS = (!messageType || messageType === "all" || messageType === "sms" || isThirdPartyFilter || isHouseFileFilter) && platform !== "substack"
 
-    // Build third-party / house-file campaign ID sets using the same mapping logic as the CI feed.
-    // A campaign is "third party" when its entity has mappings AND the sender is NOT in those mappings.
-    // "House file" is the inverse: everything that is NOT third party.
+    // Build third-party / house-file ID sets for both emails and SMS.
     let thirdPartyOrHouseFileCampaignIds: string[] | null = null
+    let thirdPartyOrHouseFileSmsIds: string[] | null = null
     if (isThirdPartyFilter || isHouseFileFilter) {
-      const [allMappings, allEntities] = await Promise.all([
+      const [allMappings, allEntities, phoneMappings] = await Promise.all([
         prisma.ciEntityMapping.findMany({
           select: { entityId: true, senderEmail: true, senderDomain: true },
         }),
         prisma.ciEntity.findMany({ select: { id: true, donationIdentifiers: true } }),
+        prisma.ciEntityMapping.findMany({
+          where: { senderPhone: { not: null } },
+          select: { entityId: true, senderPhone: true },
+        }),
       ])
 
+      // Email/domain mappings
       const mappingsByEntity: Record<string, { emails: Set<string>; domains: Set<string> }> = {}
       for (const m of allMappings) {
         if (!mappingsByEntity[m.entityId]) mappingsByEntity[m.entityId] = { emails: new Set(), domains: new Set() }
@@ -126,7 +130,16 @@ export async function GET(request: NextRequest) {
 
       const entitiesWithMappings = new Set(Object.keys(mappingsByEntity))
 
-      const candidates = await prisma.competitiveInsightCampaign.findMany({
+      // Phone mappings
+      const phonesByEntity: Record<string, Set<string>> = {}
+      for (const m of phoneMappings) {
+        if (!phonesByEntity[m.entityId]) phonesByEntity[m.entityId] = new Set()
+        if (m.senderPhone) phonesByEntity[m.entityId].add(m.senderPhone)
+      }
+      const entitiesWithPhoneMappings = new Set(Object.keys(phonesByEntity))
+
+      // Email candidates
+      const emailCandidates = await prisma.competitiveInsightCampaign.findMany({
         where: {
           isDeleted: false,
           isHidden: false,
@@ -136,11 +149,10 @@ export async function GET(request: NextRequest) {
         select: { id: true, entityId: true, senderEmail: true },
       })
 
-      thirdPartyOrHouseFileCampaignIds = candidates
+      thirdPartyOrHouseFileCampaignIds = emailCandidates
         .filter((c) => {
-          if (!c.entityId) return !isThirdPartyFilter // house file: keep entity-less campaigns
+          if (!c.entityId) return !isThirdPartyFilter
           const em = mappingsByEntity[c.entityId]
-          // Entity has no mappings → house file by default
           if (!em) return isHouseFileFilter
           const email = (c.senderEmail ?? "").toLowerCase()
           const domain = email.split("@")[1]
@@ -148,6 +160,28 @@ export async function GET(request: NextRequest) {
           return isThirdPartyFilter ? isThirdParty : !isThirdParty
         })
         .map((c) => c.id)
+
+      // SMS candidates
+      const smsCandidates = await prisma.smsQueue.findMany({
+        where: {
+          isDeleted: false,
+          isHidden: false,
+          entityId: { not: null },
+          ...(isThirdPartyFilter ? { entityId: { in: [...entitiesWithPhoneMappings] } } : {}),
+          ...(entityIdFilter ? { entityId: entityIdFilter } : {}),
+        },
+        select: { id: true, entityId: true, phoneNumber: true },
+      })
+
+      thirdPartyOrHouseFileSmsIds = smsCandidates
+        .filter((s) => {
+          if (!s.entityId) return !isThirdPartyFilter
+          const phones = phonesByEntity[s.entityId]
+          if (!phones) return isHouseFileFilter
+          const isThirdParty = !phones.has(s.phoneNumber ?? "")
+          return isThirdPartyFilter ? isThirdParty : !isThirdParty
+        })
+        .map((s) => s.id)
     }
 
     const platformDomains: Record<string, string[]> = {
@@ -210,6 +244,7 @@ export async function GET(request: NextRequest) {
           isDeleted: false,
           isHidden: false,
           ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
+          ...(thirdPartyOrHouseFileSmsIds !== null ? { id: { in: thirdPartyOrHouseFileSmsIds } } : {}),
         },
         select: {
           id: true,

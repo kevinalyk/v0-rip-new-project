@@ -325,12 +325,65 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Build SMS third-party / house-file ID sets using senderPhone mappings.
+    // Mirrors the email logic above but uses CiEntityMapping.senderPhone instead.
+    let thirdPartySmsIds: string[] | null = null
+    let houseFileSmsIds: string[] | null = null
+    if (thirdParty || houseFileOnly) {
+      const phoneMappings = await prisma.ciEntityMapping.findMany({
+        where: { senderPhone: { not: null } },
+        select: { entityId: true, senderPhone: true },
+      })
+
+      const phonesByEntity: Record<string, Set<string>> = {}
+      for (const m of phoneMappings) {
+        if (!phonesByEntity[m.entityId]) phonesByEntity[m.entityId] = new Set()
+        if (m.senderPhone) phonesByEntity[m.entityId].add(m.senderPhone)
+      }
+
+      const entitiesWithPhoneMappings = new Set(Object.keys(phonesByEntity))
+
+      const smsCandidates = await prisma.smsQueue.findMany({
+        where: {
+          isDeleted: false,
+          isHidden: authResult.user.role === "super_admin" ? undefined : false,
+          entityId: { not: null },
+          entity: { type: { not: "data_broker" } },
+          ...(thirdParty ? { entityId: { in: [...entitiesWithPhoneMappings] } } : {}),
+        },
+        select: { id: true, entityId: true, phoneNumber: true },
+      })
+
+      if (thirdParty) {
+        thirdPartySmsIds = smsCandidates
+          .filter((s) => {
+            if (!s.entityId) return false
+            const phones = phonesByEntity[s.entityId]
+            if (!phones) return false
+            return !phones.has(s.phoneNumber ?? "")
+          })
+          .map((s) => s.id)
+      } else {
+        houseFileSmsIds = smsCandidates
+          .filter((s) => {
+            if (!s.entityId) return false
+            if (!entitiesWithPhoneMappings.has(s.entityId)) return true
+            const phones = phonesByEntity[s.entityId]
+            if (!phones) return true
+            return phones.has(s.phoneNumber ?? "")
+          })
+          .map((s) => s.id)
+      }
+    }
+
+    // Apply SMS third-party / house-file ID filter to smsWhere
+    if (thirdPartySmsIds !== null) smsWhere.id = { in: thirdPartySmsIds }
+    if (houseFileSmsIds !== null) smsWhere.id = { in: houseFileSmsIds }
+
     let emailInsights: any[] = []
     let smsMessages: any[] = []
 
-    // Third party is email-only (SMS has no domain mapping concept).
-    // House file only still includes SMS — it just filters out third-party emails.
-    const effectiveMessageType = thirdParty ? "email" : messageType
+    const effectiveMessageType = messageType
 
     const shouldFetchAll = donationPlatform && donationPlatform !== "all"
     const fetchAllForCombining = effectiveMessageType === "all" || !effectiveMessageType

@@ -124,7 +124,7 @@ export default function NewsPostClient({ slug }: { slug: string }) {
 
   if (notFound) {
     return (
-      <AppLayout clientSlug={clientSlug}>
+      <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
           <p className="text-lg font-medium">Post not found.</p>
           <Link href="/news">
@@ -141,7 +141,7 @@ export default function NewsPostClient({ slug }: { slug: string }) {
   if (!post) return null
 
   return (
-    <AppLayout clientSlug={clientSlug}>
+    <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
       {/* Full-width image banner */}
       {post.imageUrl && (
         <div className="w-full h-[260px] overflow-hidden">

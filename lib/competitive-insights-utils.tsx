@@ -1453,7 +1453,7 @@ export async function processCompetitiveInsights(
         data: {
           senderEmail,
           senderName: redactedSenderName,
-          subject: trimmedRedactedSubject,
+          subject: redactedSubject,
           dateReceived,
           inboxCount,
           spamCount,

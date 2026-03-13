@@ -32,6 +32,7 @@ interface CiAnalyticsViewProps {
   selectedDonationPlatform: string
   dateRange: DateRange
   shouldShowPreview: boolean
+  chartDays: 7 | 30 | 90 | 365
 }
 
 interface AnalyticsData {
@@ -56,10 +57,10 @@ export function CiAnalyticsView({
   selectedDonationPlatform,
   dateRange,
   shouldShowPreview,
+  chartDays,
 }: CiAnalyticsViewProps) {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<AnalyticsData | null>(null)
-  const [chartDays, setChartDays] = useState<7 | 30 | 90 | 365>(7)
 
   useEffect(() => {
     fetchAnalytics()
@@ -185,23 +186,8 @@ export function CiAnalyticsView({
             return (
             <Card>
               <CardHeader>
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <CardTitle>Content Volume Over Time</CardTitle>
-                    <CardDescription>Daily email and SMS volume with 7-day moving average</CardDescription>
-                  </div>
-                  <div className="flex items-center gap-1 text-xs border rounded-md overflow-hidden shrink-0">
-                    {([7, 30, 90, 365] as const).map((d) => (
-                      <button
-                        key={d}
-                        onClick={() => setChartDays(d)}
-                        className={`px-3 py-1.5 transition-colors ${chartDays === d ? "bg-foreground text-background font-medium" : "hover:bg-muted text-muted-foreground"}`}
-                      >
-                        {d === 365 ? "1Y" : `${d}D`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <CardTitle>Content Volume Over Time</CardTitle>
+                <CardDescription>Daily email and SMS volume with 7-day moving average</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="h-[380px] w-full">

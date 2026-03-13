@@ -320,6 +320,7 @@ export function CompetitiveInsights({
 
   const [allSenders, setAllSenders] = useState<string[]>([]) // Initialized once
   const [currentUserClient, setCurrentUserClient] = useState<string | null>(null)
+  const [chartDays, setChartDays] = useState<7 | 30 | 90 | 365>(30)
   const [fetchedUser, setFetchedUser] = useState<any>(null)
   const resolvedUser = currentUser ?? fetchedUser
   const [subscribedEntityIds, setSubscribedEntityIds] = useState<string[]>([])
@@ -1112,9 +1113,22 @@ export function CompetitiveInsights({
 
   {!hideHeader && (
     <div className="mb-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">Competitive Insights</h1>
-        <p className="text-muted-foreground">Track and analyze political campaigns from across the spectrum</p>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Political Campaign Intelligence</h1>
+          <p className="text-muted-foreground">Monitor and analyze email activity across the political landscape</p>
+        </div>
+        <div className="flex items-center gap-1 text-xs border rounded-md overflow-hidden shrink-0">
+          {([7, 30, 90, 365] as const).map((d) => (
+            <button
+              key={d}
+              onClick={() => setChartDays(d)}
+              className={`px-3 py-1.5 transition-colors ${chartDays === d ? "bg-foreground text-background font-medium" : "hover:bg-muted text-muted-foreground"}`}
+            >
+              {d === 365 ? "1Y" : `${d}D`}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   )}
@@ -1355,84 +1369,7 @@ export function CompetitiveInsights({
                   </Select>
                 )}
 
-                {/* Date Range Filter - Split into two separate pickers */}
-                <div className="flex items-center gap-2">
-                  {/* From Date Picker */}
-                  <Popover open={isFromCalendarOpen} onOpenChange={setIsFromCalendarOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-[140px] justify-start text-left font-normal bg-transparent"
-                        disabled={shouldShowPaywall || shouldShowPreview}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateRange.from ? (
-                          format(dateRange.from, "MMM d, yyyy")
-                        ) : (
-                          <span className="text-muted-foreground">From</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <CalendarComponent
-                        mode="single"
-                        selected={dateRange.from}
-                        onSelect={(date) => {
-                          setDateRange((prev) => ({ ...prev, from: date }))
-                          setIsFromCalendarOpen(false)
-                        }}
-                        numberOfMonths={1}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-
-                  <span className="text-muted-foreground">-</span>
-
-                  {/* To Date Picker */}
-                  <Popover open={isToCalendarOpen} onOpenChange={setIsToCalendarOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-[140px] justify-start text-left font-normal bg-transparent"
-                        disabled={shouldShowPaywall || shouldShowPreview}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateRange.to ? (
-                          format(dateRange.to, "MMM d, yyyy")
-                        ) : (
-                          <span className="text-muted-foreground">To</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <CalendarComponent
-                        mode="single"
-                        selected={dateRange.to}
-                        onSelect={(date) => {
-                          setDateRange((prev) => ({ ...prev, to: date }))
-                          setIsToCalendarOpen(false)
-                        }}
-                        disabled={(date) => {
-                          // Disable dates before the "from" date
-                          if (dateRange.from) {
-                            return date < dateRange.from
-                          }
-                          return false
-                        }}
-                        numberOfMonths={1}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-
-                  {/* Clear button */}
-                  {(dateRange.from || dateRange.to) && (
-                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={clearDateRange}>
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
+                {/* Date Range Filter - hidden, controlled by 7D/30D/90D/1Y buttons in header */}
 
                 <Button
                   variant="outline"
@@ -1801,6 +1738,7 @@ export function CompetitiveInsights({
                 selectedDonationPlatform={selectedDonationPlatform}
                 dateRange={dateRange}
                 shouldShowPreview={shouldShowPreview}
+                chartDays={chartDays}
               />
             )}
           </>

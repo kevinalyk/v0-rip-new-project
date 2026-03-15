@@ -295,6 +295,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
   }
 
   return (
+    <>
     <div
       className={cn(
         "fixed left-0 top-0 h-full bg-background border-r border-border transition-all duration-300 ease-in-out flex flex-col z-50",
@@ -594,6 +595,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
     </div>
 
     <ReportProblemDialog open={reportProblemOpen} onOpenChange={setReportProblemOpen} />
+    </>
   )
 }
 

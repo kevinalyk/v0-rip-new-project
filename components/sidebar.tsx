@@ -555,15 +555,17 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
             <ExternalLink size={20} />
             {!collapsed && <span>GOP Directory</span>}
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn("w-full justify-start gap-3 px-3 text-muted-foreground", collapsed && "justify-center")}
-            onClick={() => setReportProblemOpen(true)}
-          >
-            <AlertCircle size={20} />
-            {!collapsed && <span>Report a Problem</span>}
-          </Button>
+          {userRole !== null && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn("w-full justify-start gap-3 px-3 text-muted-foreground", collapsed && "justify-center")}
+              onClick={() => setReportProblemOpen(true)}
+            >
+              <AlertCircle size={20} />
+              {!collapsed && <span>Report a Problem</span>}
+            </Button>
+          )}
           {mounted && (
             <Button
               variant="ghost"

@@ -923,8 +923,6 @@ export async function extractCTALinks(
     })
   )
 
-  const resolved = linksWithFinalUrls.filter((l) => l.finalUrl).length
-  console.log(`[v0] Extracted ${linksWithFinalUrls.length} links, resolved ${resolved} at ingestion (${linksWithFinalUrls.length - resolved} deferred to cron)`)
   console.log(`[v0] CTA links: ${linksWithFinalUrls.map((l) => `${l.url} → ${l.finalUrl ?? "(pending cron)"}`).join(" | ")}`)
 
   const categorizedLinks = await categorizeCtasWithAI(linksWithFinalUrls)
@@ -1324,8 +1322,6 @@ export async function processCompetitiveInsights(
     const ripEmailAddresses = new Set(ripSeedEmails.map((se) => se.email))
 
     const ripResults = results.filter((r) => ripEmailAddresses.has(r.seedEmail))
-
-    console.log(`[v0] processCompetitiveInsights "${subject}" - ripSeeds: ${ripSeedEmails.length}, results: ${results.length}, ripResults: ${ripResults.length}, seedAddresses: [${Array.from(ripEmailAddresses).join(",")}], resultSeeds: [${results.map(r => r.seedEmail).join(",")}]`)
 
     if (ripResults.length === 0) {
       return

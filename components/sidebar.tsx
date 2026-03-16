@@ -556,7 +556,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
             <ExternalLink size={20} />
             {!collapsed && <span>GOP Directory</span>}
           </Button>
-          {userRole !== null && (
+          {userRole === "super_admin" && (
             <Button
               variant="ghost"
               size="sm"

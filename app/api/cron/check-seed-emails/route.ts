@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { testEmailConnection } from "@/lib/email-connection"
 import { OutlookConnection } from "@/lib/outlook-connection"
 import { decrypt } from "@/lib/encryption"
+import { getValidAccessToken } from "@/lib/microsoft-oauth"
 
 export const maxDuration = 300
 
@@ -47,21 +48,47 @@ export async function GET(request: NextRequest) {
 
       const provider = seedEmail.provider?.toLowerCase() ?? ""
 
-      // Outlook: use the specialized OutlookConnection handler which tries multiple methods
-      if (provider === "outlook" || provider === "hotmail") {
-        try {
-          const password =
-            seedEmail.twoFactorEnabled && seedEmail.appPassword
-              ? decrypt(seedEmail.appPassword)
-              : decrypt(seedEmail.password)
+      // Outlook/Hotmail: OAuth accounts use the Microsoft Graph API (getValidAccessToken),
+      // password-based accounts fall back to the OutlookConnection IMAP/POP3 handler.
+      if (provider === "outlook" || provider === "hotmail" || provider === "live") {
+        if (seedEmail.oauthConnected) {
+          // OAuth path: attempt to get (and if needed refresh) a valid access token via Graph API
+          try {
+            const token = await getValidAccessToken(seedEmail.id)
+            if (token) {
+              // Token is valid — confirm by hitting a lightweight Graph endpoint
+              const res = await fetch("https://graph.microsoft.com/v1.0/me/mailfolders/inbox?$select=id", {
+                headers: { Authorization: `Bearer ${token}` },
+              })
+              success = res.ok
+              if (!success) {
+                const body = await res.text()
+                errorMessage = `Graph API returned ${res.status}: ${body.slice(0, 200)}`
+              }
+            } else {
+              success = false
+              errorMessage = "OAuth token refresh failed — account may need to re-authenticate"
+            }
+          } catch (err) {
+            success = false
+            errorMessage = err instanceof Error ? err.message : String(err)
+          }
+        } else {
+          // Password / app-password path: use OutlookConnection IMAP/POP3
+          try {
+            const password =
+              seedEmail.twoFactorEnabled && seedEmail.appPassword
+                ? decrypt(seedEmail.appPassword)
+                : decrypt(seedEmail.password)
 
-          const outlook = new OutlookConnection(seedEmail.email, password)
-          const result = await outlook.testConnection()
-          success = result.success
-          errorMessage = result.error ?? ""
-        } catch (err) {
-          success = false
-          errorMessage = err instanceof Error ? err.message : String(err)
+            const outlook = new OutlookConnection(seedEmail.email, password)
+            const result = await outlook.testConnection()
+            success = result.success
+            errorMessage = result.error ?? ""
+          } catch (err) {
+            success = false
+            errorMessage = err instanceof Error ? err.message : String(err)
+          }
         }
       } else {
         // Gmail, Yahoo, AOL, iCloud, and all others via standard IMAP

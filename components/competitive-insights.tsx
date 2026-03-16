@@ -320,7 +320,6 @@ export function CompetitiveInsights({
 
   const [allSenders, setAllSenders] = useState<string[]>([]) // Initialized once
   const [currentUserClient, setCurrentUserClient] = useState<string | null>(null)
-  const [chartDays, setChartDays] = useState<7 | 30 | 90 | 365>(30)
   const [fetchedUser, setFetchedUser] = useState<any>(null)
   const resolvedUser = currentUser ?? fetchedUser
   const [subscribedEntityIds, setSubscribedEntityIds] = useState<string[]>([])
@@ -1113,22 +1112,8 @@ export function CompetitiveInsights({
 
   {!hideHeader && (
     <div className="mb-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Analytics</h1>
-        </div>
-        <div className="flex items-center gap-1 text-xs border rounded-md overflow-hidden shrink-0">
-          {([7, 30, 90, 365] as const).map((d) => (
-            <button
-              key={d}
-              onClick={() => setChartDays(d)}
-              className={`px-3 py-1.5 transition-colors ${chartDays === d ? "bg-foreground text-background font-medium" : "hover:bg-muted text-muted-foreground"}`}
-            >
-              {d === 365 ? "1Y" : `${d}D`}
-            </button>
-          ))}
-        </div>
-      </div>
+      <h1 className="text-3xl font-bold text-foreground mb-2">Competitive Insights</h1>
+      <p className="text-muted-foreground">Track and analyze political campaigns from across the spectrum</p>
     </div>
   )}
 
@@ -1178,7 +1163,40 @@ export function CompetitiveInsights({
             className={`space-y-4 ${shouldShowPaywall || shouldShowPreview ? "pointer-events-none opacity-50" : ""}`}
           >
             <div className={`${subscriptionPlan === "free" && !hasAdminAccess ? "relative" : ""}`}>
-              {/* Filters */}
+              {/* Top row - Search bar centered */}
+              <div className="flex justify-center mb-6">
+                <div
+                  className={`w-full max-w-2xl relative ${subscriptionPlan === "free" && !hasAdminAccess ? "blur-sm pointer-events-none" : ""}`}
+                  ref={searchRef}
+                >
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4 z-10" />
+                  <Input
+                    placeholder="Search by entity, email, subject, or content..."
+                    value={searchTerm}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    onKeyDown={handleSearchKeyDown}
+                    className="pl-10"
+                    disabled={
+                      shouldShowPaywall || shouldShowPreview || (subscriptionPlan === "free" && !hasAdminAccess)
+                    }
+                  />
+                  {showAutocomplete && autocompleteSuggestions.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg z-50 max-h-64 overflow-y-auto">
+                      {autocompleteSuggestions.map((suggestion, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleSuggestionClick(suggestion)}
+                          className="w-full text-left px-4 py-2 hover:bg-muted transition-colors text-sm"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Second row - Filters */}
               <div
                 className={`flex flex-wrap gap-2 items-center ${subscriptionPlan === "free" && !hasAdminAccess ? "blur-sm pointer-events-none" : ""}`}
               >
@@ -1335,7 +1353,78 @@ export function CompetitiveInsights({
                   </Select>
                 )}
 
-                {/* Date Range Filter - hidden, controlled by 7D/30D/90D/1Y buttons in header */}
+                {/* Date Range Filter */}
+                <div className="flex items-center gap-2">
+                  <Popover open={isFromCalendarOpen} onOpenChange={setIsFromCalendarOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-[140px] justify-start text-left font-normal bg-transparent"
+                        disabled={shouldShowPaywall || shouldShowPreview}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateRange.from ? (
+                          format(dateRange.from, "MMM d, yyyy")
+                        ) : (
+                          <span className="text-muted-foreground">From</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={dateRange.from}
+                        onSelect={(date) => {
+                          setDateRange((prev) => ({ ...prev, from: date }))
+                          setIsFromCalendarOpen(false)
+                        }}
+                        numberOfMonths={1}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+
+                  <span className="text-muted-foreground">-</span>
+
+                  <Popover open={isToCalendarOpen} onOpenChange={setIsToCalendarOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-[140px] justify-start text-left font-normal bg-transparent"
+                        disabled={shouldShowPaywall || shouldShowPreview}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateRange.to ? (
+                          format(dateRange.to, "MMM d, yyyy")
+                        ) : (
+                          <span className="text-muted-foreground">To</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={dateRange.to}
+                        onSelect={(date) => {
+                          setDateRange((prev) => ({ ...prev, to: date }))
+                          setIsToCalendarOpen(false)
+                        }}
+                        disabled={(date) => {
+                          if (dateRange.from) return date < dateRange.from
+                          return false
+                        }}
+                        numberOfMonths={1}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+
+                  {(dateRange.from || dateRange.to) && (
+                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={clearDateRange}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
 
                 <Button
                   variant="outline"
@@ -1704,7 +1793,6 @@ export function CompetitiveInsights({
                 selectedDonationPlatform={selectedDonationPlatform}
                 dateRange={dateRange}
                 shouldShowPreview={shouldShowPreview}
-                chartDays={chartDays}
                 showThirdParty={showThirdParty}
                 showHouseFileOnly={showHouseFileOnly}
               />

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { headers } from "next/headers"
 import type { SubscriptionPlan } from "@/lib/subscription-utils"
 import { unassignClientSeeds } from "@/lib/seed-utils"
-import { getPlanLimits, formatPlanName } from "@/lib/subscription-utils"
+import { getPlanLimits, formatPlanName, getUserSeatsIncluded } from "@/lib/subscription-utils"
 import { sendSubscriptionCancellationWarning } from "@/lib/mailgun"
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
@@ -238,6 +238,14 @@ export async function POST(req: NextRequest) {
             console.log("[Stripe Webhook] Plan-only subscription:", subscription.id)
           }
 
+          // Always reset these on a new checkout
+          updateData.cancelAtPeriodEnd = false
+          updateData.scheduledDowngradePlan = null
+          updateData.emailVolumeUsed = 0
+          if (updateData.subscriptionPlan) {
+            updateData.userSeatsIncluded = getUserSeatsIncluded(updateData.subscriptionPlan)
+          }
+
           await prisma.client.update({
             where: { id: clientId },
             data: updateData,
@@ -333,6 +341,10 @@ export async function POST(req: NextRequest) {
           }
         } else if (hasPlanItem && !hasCiItem) {
           updateData.stripeSubscriptionId = subscription.id
+        }
+
+        if (updateData.subscriptionPlan) {
+          updateData.userSeatsIncluded = getUserSeatsIncluded(updateData.subscriptionPlan)
         }
 
         await prisma.client.update({ where: { id: client.id }, data: updateData })
@@ -518,6 +530,12 @@ export async function POST(req: NextRequest) {
               updateData.stripeCiSubscriptionItemId = null
               updateData.hasCompetitiveInsights = false
             }
+          }
+
+          // Keep userSeatsIncluded in sync whenever plan changes
+          const activePlan = (updateData.subscriptionPlan || client.subscriptionPlan) as SubscriptionPlan
+          if (activePlan) {
+            updateData.userSeatsIncluded = getUserSeatsIncluded(activePlan)
           }
 
           if (Object.keys(updateData).length > 0) {

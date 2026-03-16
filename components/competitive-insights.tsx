@@ -71,6 +71,7 @@ interface CompetitiveInsightsProps {
   currentUser?: any // Added currentUser prop
   subscriptionPlan?: SubscriptionPlan | "free" // Added subscriptionPlan prop
   hideHeader?: boolean // Hide the "Competitive Insights" title and description
+  isReportingView?: boolean // Reporting page: different title, no search/dates, time range buttons in header
 }
 
 interface Campaign {
@@ -268,6 +269,7 @@ export function CompetitiveInsights({
   currentUser, // Accept currentUser prop
   subscriptionPlan, // Accept subscriptionPlan prop — undefined means "fetch from billing"
   hideHeader = false, // Hide header by default false
+  isReportingView = false,
 }: CompetitiveInsightsProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -320,8 +322,8 @@ export function CompetitiveInsights({
 
   const [allSenders, setAllSenders] = useState<string[]>([]) // Initialized once
   const [currentUserClient, setCurrentUserClient] = useState<string | null>(null)
-  const [chartDays, setChartDays] = useState<7 | 30 | 90 | 365>(30)
   const [fetchedUser, setFetchedUser] = useState<any>(null)
+  const [chartDays, setChartDays] = useState<7 | 30 | 90 | 365>(30)
   const resolvedUser = currentUser ?? fetchedUser
   const [subscribedEntityIds, setSubscribedEntityIds] = useState<string[]>([])
   const [allEntities, setAllEntities] = useState<{ id: string; name: string }[]>([])
@@ -1112,11 +1114,16 @@ export function CompetitiveInsights({
       )}
 
   {!hideHeader && (
-    <div className="mb-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Analytics</h1>
-        </div>
+    <div className="mb-6 flex items-center justify-between gap-4">
+      <div>
+        <h1 className="text-3xl font-bold text-foreground mb-2">
+          {isReportingView ? "Analytics" : "Competitive Insights"}
+        </h1>
+        {!isReportingView && (
+          <p className="text-muted-foreground">Track and analyze political campaigns from across the spectrum</p>
+        )}
+      </div>
+      {isReportingView && (
         <div className="flex items-center gap-1 text-xs border rounded-md overflow-hidden shrink-0">
           {([7, 30, 90, 365] as const).map((d) => (
             <button
@@ -1128,7 +1135,7 @@ export function CompetitiveInsights({
             </button>
           ))}
         </div>
-      </div>
+      )}
     </div>
   )}
 
@@ -1178,7 +1185,40 @@ export function CompetitiveInsights({
             className={`space-y-4 ${shouldShowPaywall || shouldShowPreview ? "pointer-events-none opacity-50" : ""}`}
           >
             <div className={`${subscriptionPlan === "free" && !hasAdminAccess ? "relative" : ""}`}>
-              {/* Filters */}
+              {/* Top row - Search bar centered (hidden on reporting view) */}
+              <div className={`flex justify-center mb-6 ${isReportingView ? "hidden" : ""}`}>
+                <div
+                  className={`w-full max-w-2xl relative ${subscriptionPlan === "free" && !hasAdminAccess ? "blur-sm pointer-events-none" : ""}`}
+                  ref={searchRef}
+                >
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4 z-10" />
+                  <Input
+                    placeholder="Search by entity, email, subject, or content..."
+                    value={searchTerm}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    onKeyDown={handleSearchKeyDown}
+                    className="pl-10"
+                    disabled={
+                      shouldShowPaywall || shouldShowPreview || (subscriptionPlan === "free" && !hasAdminAccess)
+                    }
+                  />
+                  {showAutocomplete && autocompleteSuggestions.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg z-50 max-h-64 overflow-y-auto">
+                      {autocompleteSuggestions.map((suggestion, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleSuggestionClick(suggestion)}
+                          className="w-full text-left px-4 py-2 hover:bg-muted transition-colors text-sm"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Second row - Filters */}
               <div
                 className={`flex flex-wrap gap-2 items-center ${subscriptionPlan === "free" && !hasAdminAccess ? "blur-sm pointer-events-none" : ""}`}
               >
@@ -1335,7 +1375,78 @@ export function CompetitiveInsights({
                   </Select>
                 )}
 
-                {/* Date Range Filter - hidden, controlled by 7D/30D/90D/1Y buttons in header */}
+                {/* Date Range Filter (hidden on reporting view) */}
+                <div className={`flex items-center gap-2 ${isReportingView ? "hidden" : ""}`}>
+                  <Popover open={isFromCalendarOpen} onOpenChange={setIsFromCalendarOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-[140px] justify-start text-left font-normal bg-transparent"
+                        disabled={shouldShowPaywall || shouldShowPreview}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateRange.from ? (
+                          format(dateRange.from, "MMM d, yyyy")
+                        ) : (
+                          <span className="text-muted-foreground">From</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={dateRange.from}
+                        onSelect={(date) => {
+                          setDateRange((prev) => ({ ...prev, from: date }))
+                          setIsFromCalendarOpen(false)
+                        }}
+                        numberOfMonths={1}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+
+                  <span className="text-muted-foreground">-</span>
+
+                  <Popover open={isToCalendarOpen} onOpenChange={setIsToCalendarOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-[140px] justify-start text-left font-normal bg-transparent"
+                        disabled={shouldShowPaywall || shouldShowPreview}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateRange.to ? (
+                          format(dateRange.to, "MMM d, yyyy")
+                        ) : (
+                          <span className="text-muted-foreground">To</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={dateRange.to}
+                        onSelect={(date) => {
+                          setDateRange((prev) => ({ ...prev, to: date }))
+                          setIsToCalendarOpen(false)
+                        }}
+                        disabled={(date) => {
+                          if (dateRange.from) return date < dateRange.from
+                          return false
+                        }}
+                        numberOfMonths={1}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+
+                  {(dateRange.from || dateRange.to) && (
+                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={clearDateRange}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
 
                 <Button
                   variant="outline"
@@ -1704,9 +1815,9 @@ export function CompetitiveInsights({
                 selectedDonationPlatform={selectedDonationPlatform}
                 dateRange={dateRange}
                 shouldShowPreview={shouldShowPreview}
-                chartDays={chartDays}
                 showThirdParty={showThirdParty}
                 showHouseFileOnly={showHouseFileOnly}
+                externalChartDays={isReportingView ? chartDays : undefined}
               />
             )}
           </>

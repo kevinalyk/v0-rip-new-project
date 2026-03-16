@@ -1449,27 +1449,57 @@ export async function processCompetitiveInsights(
         },
       })
     } else {
-      await prisma.competitiveInsightCampaign.create({
-        data: {
-          senderEmail,
-          senderName: redactedSenderName,
-          subject: redactedSubject,
-          dateReceived,
-          inboxCount,
-          spamCount,
-          notDeliveredCount,
-          inboxRate,
-          ctaLinks: ctaLinks.length > 0 ? JSON.stringify(ctaLinks) : null,
-          tags: JSON.stringify(tags),
-          emailPreview: redactedEmailPreview,
-          emailContent: redactedEmailContent,
-          entityId,
-          assignmentMethod,
-          assignedAt: entityId ? new Date() : null,
-          clientId,
-          source: clientId ? "personal" : "seed",
-        },
-      })
+      try {
+        await prisma.competitiveInsightCampaign.create({
+          data: {
+            senderEmail,
+            senderName: redactedSenderName,
+            subject: redactedSubject,
+            dateReceived,
+            inboxCount,
+            spamCount,
+            notDeliveredCount,
+            inboxRate,
+            ctaLinks: ctaLinks.length > 0 ? JSON.stringify(ctaLinks) : null,
+            tags: JSON.stringify(tags),
+            emailPreview: redactedEmailPreview,
+            emailContent: redactedEmailContent,
+            entityId,
+            assignmentMethod,
+            assignedAt: entityId ? new Date() : null,
+            clientId,
+            source: clientId ? "personal" : "seed",
+          },
+        })
+      } catch (createError: any) {
+        // Race condition: another parallel seed inserted the same campaign between
+        // our findMany check and this create. Re-fetch and update instead.
+        if (createError?.code === "P2002") {
+          const raceExisting = await prisma.competitiveInsightCampaign.findFirst({
+            where: { senderEmail, subject: redactedSubject },
+          })
+          if (raceExisting) {
+            await prisma.competitiveInsightCampaign.update({
+              where: { id: raceExisting.id },
+              data: {
+                inboxCount: raceExisting.inboxCount + inboxCount,
+                spamCount: raceExisting.spamCount + spamCount,
+                notDeliveredCount: raceExisting.notDeliveredCount + notDeliveredCount,
+                inboxRate:
+                  ((raceExisting.inboxCount + inboxCount) /
+                    (raceExisting.inboxCount + raceExisting.spamCount + raceExisting.notDeliveredCount + totalCount)) *
+                  100,
+                ctaLinks: ctaLinks.length > 0 ? JSON.stringify(ctaLinks) : raceExisting.ctaLinks,
+                tags: JSON.stringify(tags),
+                emailPreview: redactedEmailPreview || raceExisting.emailPreview,
+                emailContent: redactedEmailContent || raceExisting.emailContent,
+              },
+            })
+          }
+        } else {
+          throw createError
+        }
+      }
     }
   } catch (error) {
     console.error("Error processing competitive insights:", error)

@@ -212,7 +212,7 @@ export default function ReportsReportingPage() {
 
   return (
     <AppLayout clientSlug={clientSlug} isAdminView={clientSlug === "admin"}>
-      <CompetitiveInsights clientSlug={clientSlug} defaultView="reporting" subscriptionPlan={subscriptionPlan as any} />
+      <CompetitiveInsights clientSlug={clientSlug} defaultView="reporting" subscriptionPlan={subscriptionPlan as any} isReportingView={true} />
     </AppLayout>
   )
 }

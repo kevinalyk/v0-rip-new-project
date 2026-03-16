@@ -32,12 +32,14 @@ import {
   Star,
   Globe,
   Megaphone,
+  AlertCircle,
 } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { useTheme } from "next-themes"
 import { Separator } from "@/components/ui/separator"
 import { useDomain } from "@/lib/domain-context"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ReportProblemDialog } from "@/components/report-problem-dialog"
 
 interface Client {
   id: string
@@ -62,6 +64,8 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
   const [clients, setClients] = useState<Client[]>([])
   const [loadingClients, setLoadingClients] = useState(false)
   const [selectedClientSlug, setSelectedClientSlug] = useState<string>("")
+
+  const [reportProblemOpen, setReportProblemOpen] = useState(false)
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     ci: false,
@@ -291,6 +295,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
   }
 
   return (
+    <>
     <div
       className={cn(
         "fixed left-0 top-0 h-full bg-background border-r border-border transition-all duration-300 ease-in-out flex flex-col z-50",
@@ -551,6 +556,17 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
             <ExternalLink size={20} />
             {!collapsed && <span>GOP Directory</span>}
           </Button>
+          {userRole === "super_admin" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn("w-full justify-start gap-3 px-3 text-muted-foreground", collapsed && "justify-center")}
+              onClick={() => setReportProblemOpen(true)}
+            >
+              <AlertCircle size={20} />
+              {!collapsed && <span>Report a Problem</span>}
+            </Button>
+          )}
           {mounted && (
             <Button
               variant="ghost"
@@ -577,6 +593,9 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
         </div>
       </div>
     </div>
+
+    <ReportProblemDialog open={reportProblemOpen} onOpenChange={setReportProblemOpen} />
+    </>
   )
 }
 

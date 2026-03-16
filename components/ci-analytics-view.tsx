@@ -34,17 +34,7 @@ interface CiAnalyticsViewProps {
   shouldShowPreview: boolean
   showThirdParty: boolean
   showHouseFileOnly: boolean
-}
-
-interface AnalyticsData {
-  totalEmails: number
-  totalSMS: number
-  mostActiveDay: string | null
-  mostActiveHour: string | null
-  dayOfWeekData: Array<{ day: string; count: number; intensity: number }>
-  volumeData: Array<{ date: string; emails: number; sms: number; emailsAvg: number; smsAvg: number }>
-  inboxingData: Array<{ name: string; value: number }>
-  hasCampaigns: boolean
+  externalChartDays?: 7 | 30 | 90 | 365 // When provided (reporting view), buttons are in the parent header
 }
 
 const INBOX_COLORS = ["#22c55e", "#ef4444"]
@@ -60,10 +50,14 @@ export function CiAnalyticsView({
   shouldShowPreview,
   showThirdParty,
   showHouseFileOnly,
+  externalChartDays,
 }: CiAnalyticsViewProps) {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<AnalyticsData | null>(null)
-  const [chartDays, setChartDays] = useState<7 | 30 | 90 | 365>(7)
+  const [localChartDays, setLocalChartDays] = useState<7 | 30 | 90 | 365>(7)
+  // Use external value when provided (reporting view), otherwise use local state (CI feed)
+  const chartDays = externalChartDays ?? localChartDays
+  const setChartDays = externalChartDays !== undefined ? () => {} : setLocalChartDays
 
   useEffect(() => {
     fetchAnalytics()
@@ -201,17 +195,19 @@ export function CiAnalyticsView({
                     <CardTitle>Content Volume Over Time</CardTitle>
                     <CardDescription>Daily email and SMS volume with 7-day moving average</CardDescription>
                   </div>
-                  <div className="flex items-center gap-1 text-xs border rounded-md overflow-hidden shrink-0">
-                    {([7, 30, 90, 365] as const).map((d) => (
-                      <button
-                        key={d}
-                        onClick={() => setChartDays(d)}
-                        className={`px-3 py-1.5 transition-colors ${chartDays === d ? "bg-foreground text-background font-medium" : "hover:bg-muted text-muted-foreground"}`}
-                      >
-                        {d === 365 ? "1Y" : `${d}D`}
-                      </button>
-                    ))}
-                  </div>
+                  {externalChartDays === undefined && (
+                    <div className="flex items-center gap-1 text-xs border rounded-md overflow-hidden shrink-0">
+                      {([7, 30, 90, 365] as const).map((d) => (
+                        <button
+                          key={d}
+                          onClick={() => setLocalChartDays(d)}
+                          className={`px-3 py-1.5 transition-colors ${chartDays === d ? "bg-foreground text-background font-medium" : "hover:bg-muted text-muted-foreground"}`}
+                        >
+                          {d === 365 ? "1Y" : `${d}D`}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>

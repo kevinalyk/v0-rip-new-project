@@ -71,6 +71,7 @@ interface CompetitiveInsightsProps {
   currentUser?: any // Added currentUser prop
   subscriptionPlan?: SubscriptionPlan | "free" // Added subscriptionPlan prop
   hideHeader?: boolean // Hide the "Competitive Insights" title and description
+  isReportingView?: boolean // Reporting page: different title, no search/dates, time range buttons in header
 }
 
 interface Campaign {
@@ -268,6 +269,7 @@ export function CompetitiveInsights({
   currentUser, // Accept currentUser prop
   subscriptionPlan, // Accept subscriptionPlan prop — undefined means "fetch from billing"
   hideHeader = false, // Hide header by default false
+  isReportingView = false,
 }: CompetitiveInsightsProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -321,6 +323,7 @@ export function CompetitiveInsights({
   const [allSenders, setAllSenders] = useState<string[]>([]) // Initialized once
   const [currentUserClient, setCurrentUserClient] = useState<string | null>(null)
   const [fetchedUser, setFetchedUser] = useState<any>(null)
+  const [chartDays, setChartDays] = useState<7 | 30 | 90 | 365>(30)
   const resolvedUser = currentUser ?? fetchedUser
   const [subscribedEntityIds, setSubscribedEntityIds] = useState<string[]>([])
   const [allEntities, setAllEntities] = useState<{ id: string; name: string }[]>([])
@@ -1111,9 +1114,28 @@ export function CompetitiveInsights({
       )}
 
   {!hideHeader && (
-    <div className="mb-6">
-      <h1 className="text-3xl font-bold text-foreground mb-2">Competitive Insights</h1>
-      <p className="text-muted-foreground">Track and analyze political campaigns from across the spectrum</p>
+    <div className="mb-6 flex items-center justify-between gap-4">
+      <div>
+        <h1 className="text-3xl font-bold text-foreground mb-2">
+          {isReportingView ? "Analytics" : "Competitive Insights"}
+        </h1>
+        {!isReportingView && (
+          <p className="text-muted-foreground">Track and analyze political campaigns from across the spectrum</p>
+        )}
+      </div>
+      {isReportingView && (
+        <div className="flex items-center gap-1 text-xs border rounded-md overflow-hidden shrink-0">
+          {([7, 30, 90, 365] as const).map((d) => (
+            <button
+              key={d}
+              onClick={() => setChartDays(d)}
+              className={`px-3 py-1.5 transition-colors ${chartDays === d ? "bg-foreground text-background font-medium" : "hover:bg-muted text-muted-foreground"}`}
+            >
+              {d === 365 ? "1Y" : `${d}D`}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )}
 
@@ -1163,8 +1185,8 @@ export function CompetitiveInsights({
             className={`space-y-4 ${shouldShowPaywall || shouldShowPreview ? "pointer-events-none opacity-50" : ""}`}
           >
             <div className={`${subscriptionPlan === "free" && !hasAdminAccess ? "relative" : ""}`}>
-              {/* Top row - Search bar centered */}
-              <div className="flex justify-center mb-6">
+              {/* Top row - Search bar centered (hidden on reporting view) */}
+              <div className={`flex justify-center mb-6 ${isReportingView ? "hidden" : ""}`}>
                 <div
                   className={`w-full max-w-2xl relative ${subscriptionPlan === "free" && !hasAdminAccess ? "blur-sm pointer-events-none" : ""}`}
                   ref={searchRef}
@@ -1353,8 +1375,8 @@ export function CompetitiveInsights({
                   </Select>
                 )}
 
-                {/* Date Range Filter */}
-                <div className="flex items-center gap-2">
+                {/* Date Range Filter (hidden on reporting view) */}
+                <div className={`flex items-center gap-2 ${isReportingView ? "hidden" : ""}`}>
                   <Popover open={isFromCalendarOpen} onOpenChange={setIsFromCalendarOpen}>
                     <PopoverTrigger asChild>
                       <Button
@@ -1795,6 +1817,7 @@ export function CompetitiveInsights({
                 shouldShowPreview={shouldShowPreview}
                 showThirdParty={showThirdParty}
                 showHouseFileOnly={showHouseFileOnly}
+                externalChartDays={isReportingView ? chartDays : undefined}
               />
             )}
           </>

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { headers } from "next/headers"
 import type { SubscriptionPlan } from "@/lib/subscription-utils"
 import { unassignClientSeeds } from "@/lib/seed-utils"
-import { getPlanLimits, formatPlanName } from "@/lib/subscription-utils"
+import { getPlanLimits, formatPlanName, getUserSeatsIncluded } from "@/lib/subscription-utils"
 import { sendSubscriptionCancellationWarning } from "@/lib/mailgun"
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
@@ -238,12 +238,117 @@ export async function POST(req: NextRequest) {
             console.log("[Stripe Webhook] Plan-only subscription:", subscription.id)
           }
 
+          // Always reset these on a new checkout
+          updateData.cancelAtPeriodEnd = false
+          updateData.scheduledDowngradePlan = null
+          updateData.emailVolumeUsed = 0
+          if (updateData.subscriptionPlan) {
+            updateData.userSeatsIncluded = getUserSeatsIncluded(updateData.subscriptionPlan)
+          }
+
           await prisma.client.update({
             where: { id: clientId },
             data: updateData,
           })
           console.log("[Stripe Webhook] Updated client subscription:", clientId, updateData)
         }
+        break
+      }
+
+      case "customer.subscription.created": {
+        const subscription = event.data.object
+        console.log("[Stripe Webhook] Subscription created:", subscription.id)
+
+        // Look up client by stripeCustomerId since checkout.session may not yet have set stripeSubscriptionId
+        const client = await prisma.client.findFirst({
+          where: { stripeCustomerId: subscription.customer as string },
+        })
+
+        if (!client) {
+          console.log("[Stripe Webhook] No client found for customer:", subscription.customer, "— may be handled by checkout.session.completed")
+          break
+        }
+
+        const fullSubscription = await stripe.subscriptions.retrieve(subscription.id, {
+          expand: ["items.data.price.product"],
+        })
+
+        const updateData: any = {
+          subscriptionStatus: "active",
+          subscriptionStartDate: new Date(fullSubscription.current_period_start * 1000),
+          subscriptionRenewDate: new Date(fullSubscription.current_period_end * 1000),
+          lastUsageReset: new Date(fullSubscription.current_period_start * 1000),
+        }
+
+        let hasPlanItem = false
+        let hasCiItem = false
+        let additionalUserSeats = 0
+
+        for (const item of fullSubscription.items.data) {
+          const productName = typeof item.price.product === "object" ? item.price.product.name : null
+
+          if (
+            productName === "Basic" ||
+            productName === "Professional" ||
+            productName === "Advanced" ||
+            productName === "Enterprise" ||
+            productName === "Starter"
+          ) {
+            hasPlanItem = true
+            hasCiItem = true
+            updateData.stripeSubscriptionItemId = item.id
+            updateData.stripeCiSubscriptionItemId = item.id
+            updateData.hasCompetitiveInsights = true
+
+            const planMap: Record<string, SubscriptionPlan> = {
+              Starter: "free",
+              Basic: "paid",
+              Professional: "all",
+              Advanced: "basic_inboxing",
+              Enterprise: "enterprise",
+            }
+            const newPlan = planMap[productName]
+            if (newPlan) {
+              updateData.subscriptionPlan = newPlan
+              const planLimits = getPlanLimits(newPlan)
+              updateData.emailVolumeLimit =
+                planLimits.emailVolumeLimit === Number.POSITIVE_INFINITY ? 999999999 : planLimits.emailVolumeLimit
+              console.log("[Stripe Webhook] subscription.created — plan:", newPlan, "limit:", updateData.emailVolumeLimit)
+            }
+          } else if (productName?.includes("Competitive Insights")) {
+            hasCiItem = true
+            updateData.stripeCiSubscriptionItemId = item.id
+            updateData.hasCompetitiveInsights = true
+          } else if (productName?.includes("Plan")) {
+            hasPlanItem = true
+            updateData.stripeSubscriptionItemId = item.id
+          } else if (productName?.includes("Additional User Seats")) {
+            additionalUserSeats = item.quantity || 0
+            updateData.stripeUserSeatPriceId = item.price.id
+          }
+        }
+
+        if (additionalUserSeats > 0) updateData.additionalUserSeats = additionalUserSeats
+
+        if (hasCiItem && hasPlanItem) {
+          updateData.stripeSubscriptionId = subscription.id
+          updateData.stripeCiSubscriptionId = null
+        } else if (hasCiItem && !hasPlanItem) {
+          if (client.stripeSubscriptionId) {
+            updateData.stripeCiSubscriptionId = subscription.id
+          } else {
+            updateData.stripeSubscriptionId = subscription.id
+          }
+        } else if (hasPlanItem && !hasCiItem) {
+          updateData.stripeSubscriptionId = subscription.id
+        }
+
+        if (updateData.subscriptionPlan) {
+          updateData.userSeatsIncluded = getUserSeatsIncluded(updateData.subscriptionPlan)
+        }
+
+        await prisma.client.update({ where: { id: client.id }, data: updateData })
+        console.log("[Stripe Webhook] Updated client on subscription.created:", client.id, updateData)
         break
       }
 
@@ -425,6 +530,12 @@ export async function POST(req: NextRequest) {
               updateData.stripeCiSubscriptionItemId = null
               updateData.hasCompetitiveInsights = false
             }
+          }
+
+          // Keep userSeatsIncluded in sync whenever plan changes
+          const activePlan = (updateData.subscriptionPlan || client.subscriptionPlan) as SubscriptionPlan
+          if (activePlan) {
+            updateData.userSeatsIncluded = getUserSeatsIncluded(activePlan)
           }
 
           if (Object.keys(updateData).length > 0) {

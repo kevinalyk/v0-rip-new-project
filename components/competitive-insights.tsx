@@ -1,5 +1,5 @@
 "use client"
-// v0.1.1
+
 import type React from "react"
 
 import { useState, useEffect, useRef, useMemo } from "react"
@@ -1592,9 +1592,10 @@ export function CompetitiveInsights({
                           <tr>
                             <th className="text-left p-4 font-medium text-sm">Sender</th>
                             <th className="text-left p-4 font-medium text-sm">Subject</th>
-                <th className="text-left p-4 font-medium text-sm">Date</th>
-                  <th className="text-left p-4 font-medium text-sm">Inbox Rate</th>
-                </thead>
+                            <th className="text-left p-4 font-medium text-sm">Date</th>
+                            {/* <th className="text-left p-4 font-medium text-sm">Status</th> */}
+                          </tr>
+                        </thead>
                         <tbody>
                           {currentPaginatedCampaigns.map((campaign, index) => (
                             <tr
@@ -1737,26 +1738,26 @@ export function CompetitiveInsights({
                                   </div>
                                 </div>
                               </td>
-                              <td className="p-4">
-                                {(() => {
-                                  const counted = campaign.inboxCount + campaign.spamCount
-                                  if (counted === 0) {
-                                    return <span className="text-xs text-muted-foreground">No data</span>
-                                  }
-                                  const inboxRate = Math.round((campaign.inboxCount / counted) * 100)
-                                  const spamRate = 100 - inboxRate
-                                  return (
-                                    <div className="flex flex-col gap-1">
-                                      <span className={`text-sm font-medium ${getPlacementColor(inboxRate)}`}>
-                                        {inboxRate}% inbox
-                                      </span>
-                                      <span className="text-xs text-muted-foreground">
-                                        {spamRate}% spam &middot; {campaign.inboxCount}i / {campaign.spamCount}s
-                                      </span>
-                                    </div>
-                                  )
-                                })()}
-                              </td>
+                              {/* <td className="p-4">
+                                <div className="flex flex-wrap gap-1">
+                                  {campaign.inboxCount > 0 && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="bg-green-500/10 text-green-500 border-green-500/20"
+                                    >
+                                      Inbox
+                                    </Badge>
+                                  )}
+                                  {campaign.spamCount > 0 && (
+                                    <Badge variant="secondary" className="bg-red-500/10 text-red-500 border-red-500/20">
+                                      Spam
+                                    </Badge>
+                                  )}
+                                  {campaign.inboxCount === 0 && campaign.spamCount === 0 && (
+                                    <span className="text-xs text-muted-foreground">No data</span>
+                                  )}
+                                </div>
+                              </td> */}
                             </tr>
                           ))}
                         </tbody>

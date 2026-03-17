@@ -1,5 +1,6 @@
 import { jwtVerify, SignJWT } from "jose"
 import { cookies } from "next/headers"
+import { prisma } from "@/lib/prisma" // Declare the prisma variable
 
 // Get JWT secret from environment variable
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-this-in-production"
@@ -8,35 +9,66 @@ const secretKey = new TextEncoder().encode(JWT_SECRET)
 
 // Function to create a JWT token
 export async function createToken(payload: any, expiresIn = "7d") {
-  const jwt = await new SignJWT(payload)
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime(expiresIn)
-    .sign(secretKey)
-  return jwt
+  console.log("[v0] createToken called with payload:", payload)
+  console.log("[v0] createToken expiresIn:", expiresIn)
+  console.log("[v0] createToken JWT_SECRET exists:", !!JWT_SECRET)
+  console.log("[v0] createToken JWT_SECRET length:", JWT_SECRET.length)
+  
+  try {
+    console.log("[v0] createToken: Creating SignJWT...")
+    const jwt = await new SignJWT(payload)
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime(expiresIn)
+      .sign(secretKey)
+
+    console.log("[v0] createToken: Token created successfully")
+    console.log("[v0] createToken: Token length:", jwt.length)
+    return jwt
+  } catch (error) {
+    console.error("[v0] createToken: Error creating token:", error)
+    throw error
+  }
 }
 
 // Function to verify a JWT token
 export async function verifyToken(token: string) {
+  console.log("[v0] verifyToken called")
+  console.log("[v0] verifyToken: Token length:", token.length)
+  console.log("[v0] verifyToken: Token preview:", token.substring(0, 50) + "...")
+  console.log("[v0] verifyToken: JWT_SECRET exists:", !!JWT_SECRET)
+  
   try {
+    console.log("[v0] verifyToken: Calling jwtVerify...")
     const { payload } = await jwtVerify(token, secretKey, {
       algorithms: ["HS256"],
     })
+    console.log("[v0] verifyToken: Token verified successfully")
+    console.log("[v0] verifyToken: Payload:", payload)
     return payload
-  } catch {
+  } catch (error) {
+    console.error("[v0] verifyToken: Token verification FAILED")
+    console.error("[v0] verifyToken: Error:", error)
+    console.error("[v0] verifyToken: Error message:", error instanceof Error ? error.message : "Unknown error")
     return null
   }
 }
 
 // Function to get the current user from the token in cookies
 export async function getCurrentUser() {
-  const cookieStore = await cookies()
+  const cookieStore = cookies()
+  console.log("[v0] Getting cookies from cookieStore")
   const token = cookieStore.get("auth_token")?.value
 
   if (!token) {
+    console.log("[v0] No auth_token cookie found in cookieStore")
+    // Log all available cookies for debugging
+    const allCookies = cookieStore.getAll()
+    console.log("[v0] Available cookies:", allCookies.map(c => c.name).join(", "))
     return null
   }
 
+  console.log("[v0] Found auth_token, length:", token.length)
   try {
     return await verifyToken(token)
   } catch (error) {

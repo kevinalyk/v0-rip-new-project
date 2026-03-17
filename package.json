@@ -1,12 +1,10 @@
 {
   "name": "rip-email-tool",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "build": "prisma generate && next build",
-    "dev": "prisma generate && next dev",
-    "postinstall": "prisma generate",
-    "prepare": "prisma generate",
+    "dev": "next dev",
     "lint": "next lint",
     "seed": "tsx prisma/seed.ts",
     "start": "next start"

@@ -1417,10 +1417,9 @@ export async function processCompetitiveInsights(
       ? (applyRedaction(sanitizedEmailContent, redactedNames) as string)
       : sanitizedEmailContent
 
-    // Dedup: fetch all campaigns from this sender on this day and compare normalized subjects.
-    // Compare against rawSubject (pre-redaction original) when available so that
-    // "Sal, help us" and "[Omitted], help us" are always treated as the same campaign.
-    const normalizedRawIncoming = normalizeSubject(subject) // raw/original subject passed in
+    // Dedup: fetch all campaigns from this sender on this day and compare normalized subjects
+    // so "[Omitted], help us" matches "Sal, help us" and we update instead of inserting.
+    const normalizedRedacted = normalizeSubject(redactedSubject)
     const dayStart = new Date(dateReceived)
     dayStart.setHours(0, 0, 0, 0)
     const dayEnd = new Date(dateReceived)
@@ -1431,10 +1430,9 @@ export async function processCompetitiveInsights(
         dateReceived: { gte: dayStart, lt: dayEnd },
       },
     })
-    const existing = sameDayCandidates.find((c) => {
-      const compareSubject = (c as any).rawSubject ?? c.subject
-      return normalizeSubject(compareSubject) === normalizedRawIncoming
-    }) || null
+    const existing = sameDayCandidates.find(
+      (c) => normalizeSubject(c.subject) === normalizedRedacted
+    ) || null
 
     if (existing) {
       // Only count results from seed emails not already recorded for this campaign
@@ -1472,7 +1470,6 @@ export async function processCompetitiveInsights(
             senderEmail,
             senderName: redactedSenderName,
             subject: redactedSubject,
-            rawSubject: subject, // original pre-redaction subject for future dedup comparisons
             dateReceived,
             inboxCount,
             spamCount,

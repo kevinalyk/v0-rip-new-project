@@ -1327,6 +1327,13 @@ export async function processCompetitiveInsights(
       return
     }
 
+    // Build a map of seedEmail → placement for this run so we can filter
+    // against seenBySeedEmails when updating an existing campaign row.
+    const resultsBySeedEmail = new Map<string, string>()
+    for (const r of ripResults) {
+      resultsBySeedEmail.set(r.seedEmail, r.placement)
+    }
+
     const inboxCount = ripResults.filter((r) => r.placement === "inbox").length
     const spamCount = ripResults.filter((r) => r.placement === "spam").length
     const notDeliveredCount = ripResults.filter((r) => r.placement === "not_found").length
@@ -1428,16 +1435,26 @@ export async function processCompetitiveInsights(
     ) || null
 
     if (existing) {
+      // Only count results from seed emails not already recorded for this campaign
+      const alreadySeen = new Set<string>(Array.isArray(existing.seenBySeedEmails) ? existing.seenBySeedEmails as string[] : [])
+      const newResults = ripResults.filter((r) => !alreadySeen.has(r.seedEmail))
+      const newInbox = newResults.filter((r) => r.placement === "inbox").length
+      const newSpam = newResults.filter((r) => r.placement === "spam").length
+      const newNotDelivered = newResults.filter((r) => r.placement === "not_found").length
+      const updatedSeen = [...alreadySeen, ...newResults.map((r) => r.seedEmail)]
+      const updatedInbox = existing.inboxCount + newInbox
+      const updatedSpam = existing.spamCount + newSpam
+      const updatedNotDelivered = existing.notDeliveredCount + newNotDelivered
+      const updatedTotal = updatedInbox + updatedSpam + updatedNotDelivered
+
       await prisma.competitiveInsightCampaign.update({
         where: { id: existing.id },
         data: {
-          inboxCount: existing.inboxCount + inboxCount,
-          spamCount: existing.spamCount + spamCount,
-          notDeliveredCount: existing.notDeliveredCount + notDeliveredCount,
-          inboxRate:
-            ((existing.inboxCount + inboxCount) /
-              (existing.inboxCount + existing.spamCount + existing.notDeliveredCount + totalCount)) *
-            100,
+          inboxCount: updatedInbox,
+          spamCount: updatedSpam,
+          notDeliveredCount: updatedNotDelivered,
+          inboxRate: updatedTotal > 0 ? (updatedInbox / updatedTotal) * 100 : existing.inboxRate,
+          seenBySeedEmails: updatedSeen,
           ctaLinks: ctaLinks.length > 0 ? JSON.stringify(ctaLinks) : existing.ctaLinks,
           tags: JSON.stringify(tags),
           emailPreview: redactedEmailPreview || existing.emailPreview,
@@ -1458,6 +1475,7 @@ export async function processCompetitiveInsights(
             spamCount,
             notDeliveredCount,
             inboxRate,
+            seenBySeedEmails: ripResults.map((r) => r.seedEmail),
             ctaLinks: ctaLinks.length > 0 ? JSON.stringify(ctaLinks) : null,
             tags: JSON.stringify(tags),
             emailPreview: redactedEmailPreview,
@@ -1480,16 +1498,25 @@ export async function processCompetitiveInsights(
             where: { senderEmail, subject: redactedSubject },
           })
           if (raceExisting) {
+            const raceAlreadySeen = new Set<string>(Array.isArray(raceExisting.seenBySeedEmails) ? raceExisting.seenBySeedEmails as string[] : [])
+            const raceNewResults = ripResults.filter((r) => !raceAlreadySeen.has(r.seedEmail))
+            const raceNewInbox = raceNewResults.filter((r) => r.placement === "inbox").length
+            const raceNewSpam = raceNewResults.filter((r) => r.placement === "spam").length
+            const raceNewNotDelivered = raceNewResults.filter((r) => r.placement === "not_found").length
+            const raceUpdatedSeen = [...raceAlreadySeen, ...raceNewResults.map((r) => r.seedEmail)]
+            const raceUpdatedInbox = raceExisting.inboxCount + raceNewInbox
+            const raceUpdatedSpam = raceExisting.spamCount + raceNewSpam
+            const raceUpdatedNotDelivered = raceExisting.notDeliveredCount + raceNewNotDelivered
+            const raceUpdatedTotal = raceUpdatedInbox + raceUpdatedSpam + raceUpdatedNotDelivered
+
             await prisma.competitiveInsightCampaign.update({
               where: { id: raceExisting.id },
               data: {
-                inboxCount: raceExisting.inboxCount + inboxCount,
-                spamCount: raceExisting.spamCount + spamCount,
-                notDeliveredCount: raceExisting.notDeliveredCount + notDeliveredCount,
-                inboxRate:
-                  ((raceExisting.inboxCount + inboxCount) /
-                    (raceExisting.inboxCount + raceExisting.spamCount + raceExisting.notDeliveredCount + totalCount)) *
-                  100,
+                inboxCount: raceUpdatedInbox,
+                spamCount: raceUpdatedSpam,
+                notDeliveredCount: raceUpdatedNotDelivered,
+                inboxRate: raceUpdatedTotal > 0 ? (raceUpdatedInbox / raceUpdatedTotal) * 100 : raceExisting.inboxRate,
+                seenBySeedEmails: raceUpdatedSeen,
                 ctaLinks: ctaLinks.length > 0 ? JSON.stringify(ctaLinks) : raceExisting.ctaLinks,
                 tags: JSON.stringify(tags),
                 emailPreview: redactedEmailPreview || raceExisting.emailPreview,

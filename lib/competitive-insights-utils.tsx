@@ -1279,6 +1279,8 @@ export async function processCompetitiveInsights(
   clientId?: string | null,
 ): Promise<boolean> {
   try {
+    // Preserve the original subject (before any sanitization/redaction) for dedup use
+    const rawSubject = subject
     const sanitizedSubject = sanitizeSubject(subject)
 
     const senderDomain = senderEmail.split("@")[1]?.toLowerCase()
@@ -1417,9 +1419,11 @@ export async function processCompetitiveInsights(
       ? (applyRedaction(sanitizedEmailContent, redactedNames) as string)
       : sanitizedEmailContent
 
-    // Dedup: fetch all campaigns from this sender on this day and compare normalized subjects
-    // so "[Omitted], help us" matches "Sal, help us" and we update instead of inserting.
+    // Dedup: fetch all campaigns from this sender on this day and compare normalized subjects.
+    // Compare against both rawSubject (original) and subject (redacted) so that
+    // "[Omitted], help us" and "Sal, help us" are treated as the same campaign.
     const normalizedRedacted = normalizeSubject(redactedSubject)
+    const normalizedRaw = normalizeSubject(rawSubject)
     const dayStart = new Date(dateReceived)
     dayStart.setHours(0, 0, 0, 0)
     const dayEnd = new Date(dateReceived)
@@ -1429,10 +1433,22 @@ export async function processCompetitiveInsights(
         senderEmail,
         dateReceived: { gte: dayStart, lt: dayEnd },
       },
+      select: {
+        id: true, subject: true, rawSubject: true,
+        inboxCount: true, spamCount: true, notDeliveredCount: true,
+        ctaLinks: true, emailPreview: true, emailContent: true,
+        seenBySeedEmails: true, clientId: true, inboxRate: true,
+      },
     })
-    const existing = sameDayCandidates.find(
-      (c) => normalizeSubject(c.subject) === normalizedRedacted
-    ) || null
+    const existing = sameDayCandidates.find((c) => {
+      const normalizedStored = normalizeSubject(c.subject)
+      const normalizedStoredRaw = c.rawSubject ? normalizeSubject(c.rawSubject) : null
+      return (
+        normalizedStored === normalizedRedacted ||
+        normalizedStored === normalizedRaw ||
+        (normalizedStoredRaw !== null && (normalizedStoredRaw === normalizedRedacted || normalizedStoredRaw === normalizedRaw))
+      )
+    }) || null
 
     if (existing) {
       // Only count results from seed emails not already recorded for this campaign
@@ -1470,6 +1486,7 @@ export async function processCompetitiveInsights(
             senderEmail,
             senderName: redactedSenderName,
             subject: redactedSubject,
+            rawSubject: rawSubject,
             dateReceived,
             inboxCount,
             spamCount,

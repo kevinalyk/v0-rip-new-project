@@ -267,6 +267,7 @@ model CompetitiveInsightCampaign {
   senderName          String
   senderEmail         String
   subject             String
+  rawSubject          String?  // Original subject line before name redaction/omission (used for dedup)
   dateReceived        DateTime // When first detected
   inboxCount          Int      @default(0) // How many of the 8 RIP emails went to inbox
   spamCount           Int      @default(0) // How many went to spam

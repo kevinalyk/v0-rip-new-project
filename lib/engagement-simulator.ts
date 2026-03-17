@@ -138,6 +138,70 @@ export class EngagementSimulator {
     return Math.round(Math.max(0.1, Math.min(0.95, rate)) * 100)
   }
 
+  async simulateRipEngagement(): Promise<void> {
+    console.log("Starting RIP seed engagement simulation...")
+
+    const allAccounts = await this.getRipAccounts()
+
+    if (allAccounts.length === 0) {
+      console.log("No RIP seed accounts found, skipping")
+      return
+    }
+
+    // Process all RIP seeds every run (no random subset — we want consistent coverage)
+    for (const account of allAccounts) {
+      try {
+        await this.processAccountEngagement(account)
+        const delay = 1000 + Math.random() * 9000
+        await this.sleep(delay)
+      } catch (error) {
+        console.error(`Error processing RIP account ${account.email}:`, error)
+      }
+    }
+
+    console.log("RIP seed engagement simulation completed")
+  }
+
+  private async getRipAccounts(): Promise<SeedAccount[]> {
+    console.log("Fetching RIP-locked seed accounts...")
+
+    const accounts = await sql`
+      SELECT 
+        id,
+        email,
+        provider,
+        password,
+        "appPassword",
+        "twoFactorEnabled",
+        "personality_type" as "personalityType",
+        "open_rate_target" as "openRateTarget", 
+        "reading_schedule" as "readingSchedule",
+        "last_engagement_at" as "lastEngagementAt",
+        "engagement_enabled" as "engagementEnabled"
+      FROM "SeedEmail"
+      WHERE email IS NOT NULL
+      AND password IS NOT NULL
+      AND locked = 'true'
+      AND "assignedToClient" = 'RIP'
+    `
+
+    console.log(`Found ${accounts.length} RIP-locked accounts`)
+
+    return accounts.map((account) => ({
+      id: account.id,
+      email: account.email,
+      provider: account.provider,
+      password: account.password,
+      appPassword: account.appPassword,
+      twoFactorEnabled: account.twoFactorEnabled === "true" || account.twoFactorEnabled === true,
+      personalityType: account.personalityType || "moderate",
+      openRateTarget: account.openRateTarget || 50,
+      readingSchedule: account.readingSchedule || "flexible",
+      lastEngagementAt: account.lastEngagementAt ? new Date(account.lastEngagementAt) : null,
+      engagementEnabled: true, // Always run for RIP seeds regardless of flag
+    }))
+  }
+
   async simulateEngagement(): Promise<void> {
     console.log("🚀 Starting engagement simulation...")
 

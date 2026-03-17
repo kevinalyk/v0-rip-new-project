@@ -38,6 +38,10 @@
     {
       "path": "/api/cron/check-seed-emails",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/engage-rip-seeds",
+      "schedule": "0 8,13,19 * * *"
     }
   ]
 }

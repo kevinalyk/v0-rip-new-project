@@ -812,8 +812,9 @@ export async function scanForCompetitiveInsights(options: {
     for (const [fingerprint, emails] of allEmailsByFingerprint.entries()) {
       const firstEmail = emails[0]
 
-      // Dedup check: normalize both the incoming subject AND any stored subjects for this
-      // sender so that "Sal, help us" and "[Omitted], help us" are treated as the same campaign.
+      // Dedup check: compare using rawSubject (the original pre-redaction subject) when available,
+      // falling back to normalizing the stored subject. This ensures "Sal, help us" and
+      // "[Omitted], help us" are always treated as the same campaign even after AI redaction.
       const normalizedIncoming = normalizeSubject(firstEmail.subject)
       const candidatesForSender = await prisma.competitiveInsightCampaign.findMany({
         where: {
@@ -824,11 +825,13 @@ export async function scanForCompetitiveInsights(options: {
             lt: new Date(new Date(firstEmail.date).setHours(23, 59, 59, 999)),
           },
         },
-        select: { id: true, subject: true, inboxCount: true, spamCount: true, notDeliveredCount: true, clientId: true, seenBySeedEmails: true },
+        select: { id: true, subject: true, rawSubject: true, inboxCount: true, spamCount: true, notDeliveredCount: true, clientId: true, seenBySeedEmails: true },
       })
-      const existing = candidatesForSender.find(
-        (c) => normalizeSubject(c.subject) === normalizedIncoming
-      ) || null
+      const existing = candidatesForSender.find((c) => {
+        // Prefer comparing against rawSubject (original pre-redaction) if stored
+        const compareSubject = c.rawSubject ?? c.subject
+        return normalizeSubject(compareSubject) === normalizedIncoming
+      }) || null
 
       if (existing) {
         // Only count results from seed emails not already recorded for this campaign

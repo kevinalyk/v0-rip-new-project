@@ -1739,18 +1739,19 @@ export function CompetitiveInsights({
                               </td>
                               <td className="p-4">
                                 {(() => {
-                                  const total = campaign.inboxCount + campaign.spamCount + campaign.notDeliveredCount
-                                  if (total === 0) {
+                                  const counted = campaign.inboxCount + campaign.spamCount
+                                  if (counted === 0) {
                                     return <span className="text-xs text-muted-foreground">No data</span>
                                   }
-                                  const inboxRate = Math.round((campaign.inboxCount / total) * 100)
+                                  const inboxRate = Math.round((campaign.inboxCount / counted) * 100)
+                                  const spamRate = 100 - inboxRate
                                   return (
                                     <div className="flex flex-col gap-1">
                                       <span className={`text-sm font-medium ${getPlacementColor(inboxRate)}`}>
-                                        {inboxRate}%
+                                        {inboxRate}% inbox
                                       </span>
                                       <span className="text-xs text-muted-foreground">
-                                        {campaign.inboxCount}i / {campaign.spamCount}s
+                                        {spamRate}% spam &middot; {campaign.inboxCount}i / {campaign.spamCount}s
                                       </span>
                                     </div>
                                   )

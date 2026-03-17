@@ -30,6 +30,11 @@ export async function GET() {
       }
       if (mapping.senderDomain) {
         mappingsByEntity[mapping.entityId].domains.push(mapping.senderDomain.toLowerCase())
+        // SMS short codes are stored in senderDomain (numeric-only). Mirror them into
+        // the phones array so that isDomainMappedToEntity can find them.
+        if (/^\d+$/.test(mapping.senderDomain.trim())) {
+          mappingsByEntity[mapping.entityId].phones.push(mapping.senderDomain.trim())
+        }
       }
       if (mapping.senderPhone) {
         mappingsByEntity[mapping.entityId].phones.push(mapping.senderPhone)

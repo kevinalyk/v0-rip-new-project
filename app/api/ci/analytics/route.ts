@@ -107,8 +107,14 @@ export async function GET(request: NextRequest) {
         }),
         prisma.ciEntity.findMany({ select: { id: true, donationIdentifiers: true } }),
         prisma.ciEntityMapping.findMany({
-          where: { senderPhone: { not: null } },
-          select: { entityId: true, senderPhone: true },
+          where: {
+            OR: [
+              { senderPhone: { not: null } },
+              // Short codes are stored as numeric-only senderDomain values
+              { senderDomain: { not: null } },
+            ],
+          },
+          select: { entityId: true, senderPhone: true, senderDomain: true },
         }),
       ])
 
@@ -130,11 +136,15 @@ export async function GET(request: NextRequest) {
 
       const entitiesWithMappings = new Set(Object.keys(mappingsByEntity))
 
-      // Phone mappings
+      // Phone mappings — includes numeric-only senderDomain values (SMS short codes)
       const phonesByEntity: Record<string, Set<string>> = {}
       for (const m of phoneMappings) {
         if (!phonesByEntity[m.entityId]) phonesByEntity[m.entityId] = new Set()
         if (m.senderPhone) phonesByEntity[m.entityId].add(m.senderPhone)
+        // Mirror numeric-only senderDomain values as phone/short code identifiers
+        if (m.senderDomain && /^\d+$/.test(m.senderDomain.trim())) {
+          phonesByEntity[m.entityId].add(m.senderDomain.trim())
+        }
       }
       const entitiesWithPhoneMappings = new Set(Object.keys(phonesByEntity))
 

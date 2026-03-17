@@ -895,11 +895,13 @@ export function CompetitiveInsights({
 
     if (!mappings) return true // No mappings data yet, assume mapped
 
-    // For SMS campaigns, check phone number
+    // For SMS campaigns, check phone number against both phones and domains (short codes
+    // are stored in senderDomain as numeric-only values rather than senderPhone).
     if (campaign.type === "sms" && campaign.phoneNumber) {
       const normalizedPhone = campaign.phoneNumber.replace(/[\s\-()]/g, "")
       const normalizedMappedPhones = mappings.phones.map((p: string) => p.replace(/[\s\-()]/g, ""))
-      return normalizedMappedPhones.includes(normalizedPhone)
+      const normalizedMappedDomains = mappings.domains.map((d: string) => d.replace(/[\s\-()]/g, ""))
+      return normalizedMappedPhones.includes(normalizedPhone) || normalizedMappedDomains.includes(normalizedPhone)
     }
 
     // For email campaigns, check sender email and domain

@@ -1277,20 +1277,20 @@ export async function processCompetitiveInsights(
   emailContent?: string,
   entityAssignment?: { entityId: string; assignmentMethod: string } | string | null,
   clientId?: string | null,
-): Promise<void> {
+): Promise<boolean> {
   try {
     const sanitizedSubject = sanitizeSubject(subject)
 
     const senderDomain = senderEmail.split("@")[1]?.toLowerCase()
     if (!senderDomain) {
       console.log(`[v0] processCompetitiveInsights "${subject}" - EARLY RETURN: no senderDomain`)
-      return
+      return false
     }
 
     const isBlocked = await isDomainBlocked(senderDomain)
     if (isBlocked) {
       console.log(`[v0] processCompetitiveInsights "${subject}" - EARLY RETURN: domain blocked (${senderDomain})`)
-      return
+      return false
     }
 
     const ripClient = await prisma.client.findFirst({
@@ -1302,7 +1302,7 @@ export async function processCompetitiveInsights(
 
     if (!ripClient) {
       console.log(`[v0] processCompetitiveInsights "${subject}" - EARLY RETURN: no RIP client found`)
-      return
+      return false
     }
 
     // assignedToClient stores the slug string "RIP" (not the cuid), so we query both
@@ -1444,6 +1444,8 @@ export async function processCompetitiveInsights(
           emailContent: redactedEmailContent || existing.emailContent,
         },
       })
+      // Already existed in DB — not a new campaign
+      return false
     } else {
       try {
         await prisma.competitiveInsightCampaign.create({
@@ -1467,9 +1469,12 @@ export async function processCompetitiveInsights(
             source: clientId ? "personal" : "seed",
           },
         })
+        // Genuinely new campaign created
+        return true
       } catch (createError: any) {
-        // Race condition: another parallel seed inserted the same campaign between
-        // our findMany check and this create. Re-fetch and update instead.
+        // Race condition: another parallel run inserted the same campaign between
+        // our findMany check and this create. Update counts and treat as not-new
+        // so the caller does NOT count this as a fresh AI-processed campaign.
         if (createError?.code === "P2002") {
           const raceExisting = await prisma.competitiveInsightCampaign.findFirst({
             where: { senderEmail, subject: redactedSubject },
@@ -1492,6 +1497,8 @@ export async function processCompetitiveInsights(
               },
             })
           }
+          // Race condition — not a new campaign from this run's perspective
+          return false
         } else {
           throw createError
         }

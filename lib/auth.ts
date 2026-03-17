@@ -1,6 +1,5 @@
 import { jwtVerify, SignJWT } from "jose"
 import { cookies } from "next/headers"
-import { prisma } from "@/lib/prisma" // Declare the prisma variable
 
 // Get JWT secret from environment variable
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-this-in-production"

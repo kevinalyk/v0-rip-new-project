@@ -59,7 +59,7 @@ export async function generateMetadata({ params }: { params: { token: string } }
         type: "website",
         images: [
           {
-            url: `/share/${token}/opengraph-image`,
+            url: `/api/og/share/${token}`,
             width: 1200,
             height: 630,
             alt: `${entityName} on RIP`,
@@ -70,7 +70,7 @@ export async function generateMetadata({ params }: { params: { token: string } }
         card: "summary_large_image",
         title,
         description,
-        images: [`/share/${token}/opengraph-image`],
+        images: [`/api/og/share/${token}`],
       },
     }
   } catch (error) {

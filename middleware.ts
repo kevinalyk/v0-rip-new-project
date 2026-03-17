@@ -20,6 +20,7 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/api/auth/validate-invitation") ||
     request.nextUrl.pathname.startsWith("/api/auth/set-password") ||
     request.nextUrl.pathname.startsWith("/api/share/") ||
+    request.nextUrl.pathname.startsWith("/api/og/") ||
     request.nextUrl.pathname.startsWith("/api/announcements")
   ) {
     return NextResponse.next()

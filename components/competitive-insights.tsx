@@ -125,7 +125,7 @@ const US_STATES = [
   "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
   "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
   "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
-  ]
+]
 
 // Final cleanup pass on any extracted text
 function sanitizeExtractedText(text: string): string {
@@ -202,9 +202,9 @@ function looksLikeCode(text: string): boolean {
   // HTML attribute noise: x-apple-data-detectors, mso-, webkit-
   if (/x-apple-data-detectors|mso-|webkit-|!important/.test(text)) return true
   // High ratio of code keywords
-  const codeKeywords = ['div','span','body','html','font','table','td','tr',
-    'background-color','margin','padding','border','display','position','float',
-    'color','text-align','font-size','line-height','mso','webkit']
+  const codeKeywords = ['div', 'span', 'body', 'html', 'font', 'table', 'td', 'tr',
+    'background-color', 'margin', 'padding', 'border', 'display', 'position', 'float',
+    'color', 'text-align', 'font-size', 'line-height', 'mso', 'webkit']
   const words = text.toLowerCase().split(/[\s,;:(){}]+/).filter(w => w.length > 1)
   const codeCount = words.filter(w => codeKeywords.includes(w)).length
   return words.length > 3 && codeCount / words.length > 0.3
@@ -259,7 +259,7 @@ function cleanEmailPreview(preview: string, emailContent?: string | null): strin
 function isUselessText(text: string): boolean {
   return text.length < 10 || /^[\s.…\-–—|]+$/.test(text)
 }
-  
+
 export function CompetitiveInsights({
   clientSlug,
   defaultView = "emails",
@@ -550,8 +550,8 @@ export function CompetitiveInsights({
       campaign.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (campaign.emailContent && campaign.emailContent.toLowerCase().includes(searchTerm.toLowerCase()))
 
-  const campaignName = campaign.entity?.name || campaign.senderName
-  const matchesSender = selectedSender.length === 0 || selectedSender.includes(campaignName)
+    const campaignName = campaign.entity?.name || campaign.senderName
+    const matchesSender = selectedSender.length === 0 || selectedSender.includes(campaignName)
 
     const campaignParty = campaign.entity?.party?.toLowerCase()
     const matchesParty = selectedPartyFilter === "all" || campaignParty === selectedPartyFilter.toLowerCase() // Use renamed state
@@ -622,10 +622,10 @@ export function CompetitiveInsights({
       // Build query parameters for server-side filtering
       const params = new URLSearchParams()
 
-  if (activeSearchQuery) params.append("search", activeSearchQuery)
-  if (selectedSender.length > 0) {
-    selectedSender.forEach(sender => params.append("sender", sender))
-  }
+      if (activeSearchQuery) params.append("search", activeSearchQuery)
+      if (selectedSender.length > 0) {
+        selectedSender.forEach(sender => params.append("sender", sender))
+      }
       if (selectedPartyFilter && selectedPartyFilter !== "all") params.append("party", selectedPartyFilter)
       if (selectedStateFilter && selectedStateFilter !== "all") params.append("state", selectedStateFilter)
       if (selectedMessageType && selectedMessageType !== "all") params.append("messageType", selectedMessageType)
@@ -645,8 +645,8 @@ export function CompetitiveInsights({
       // Add clientSlug to params
       if (clientSlug) params.append("clientSlug", clientSlug)
 
-      const endpoint = apiEndpoint 
-        ? `${apiEndpoint}?${params.toString()}` 
+      const endpoint = apiEndpoint
+        ? `${apiEndpoint}?${params.toString()}`
         : `/api/competitive-insights?${params.toString()}`
       const response = await fetch(endpoint)
       const data = await response.json()
@@ -794,9 +794,9 @@ export function CompetitiveInsights({
   const resetFilters = () => {
     setSearchTerm("")
     setActiveSearchQuery("") // Reset active search query as well
-  setDateRange({ from: undefined, to: undefined })
-  setSelectedSender([])
-  setSelectedPartyFilter("all")
+    setDateRange({ from: undefined, to: undefined })
+    setSelectedSender([])
+    setSelectedPartyFilter("all")
     setSenderSearchTerm("") // Corrected variable name
     setSelectedMessageType("all")
     setSelectedDonationPlatform("all")
@@ -930,7 +930,7 @@ export function CompetitiveInsights({
 
     const ctaTypes = campaigns.reduce(
       (acc, campaign) => {
-        ;(campaign.ctaLinks || []).forEach((link) => {
+        ; (campaign.ctaLinks || []).forEach((link) => {
           // Added check for null/undefined ctaLinks
           // Check if link is new format (object with type) or old format (string)
           if (typeof link === "string") {
@@ -1060,22 +1060,22 @@ export function CompetitiveInsights({
   }
 
   const handleLoadView = (filterSettings: any) => {
-  setActiveSearchQuery(filterSettings.activeSearchQuery || "")
-  setSearchTerm(filterSettings.searchTerm || "")
-  
-  // Handle backward compatibility: old views have selectedSender as string, new views as array
-  if (filterSettings.selectedSender) {
-    if (Array.isArray(filterSettings.selectedSender)) {
-      setSelectedSender(filterSettings.selectedSender)
-    } else if (typeof filterSettings.selectedSender === "string" && filterSettings.selectedSender !== "all") {
-      // Convert old string format to array format
-      setSelectedSender([filterSettings.selectedSender])
+    setActiveSearchQuery(filterSettings.activeSearchQuery || "")
+    setSearchTerm(filterSettings.searchTerm || "")
+
+    // Handle backward compatibility: old views have selectedSender as string, new views as array
+    if (filterSettings.selectedSender) {
+      if (Array.isArray(filterSettings.selectedSender)) {
+        setSelectedSender(filterSettings.selectedSender)
+      } else if (typeof filterSettings.selectedSender === "string" && filterSettings.selectedSender !== "all") {
+        // Convert old string format to array format
+        setSelectedSender([filterSettings.selectedSender])
+      } else {
+        setSelectedSender([])
+      }
     } else {
       setSelectedSender([])
     }
-  } else {
-    setSelectedSender([])
-  }
     setSelectedPartyFilter(filterSettings.selectedPartyFilter || "all")
     setSelectedMessageType(filterSettings.selectedMessageType || "all")
     setSelectedDonationPlatform(filterSettings.selectedDonationPlatform || "all")
@@ -1116,31 +1116,40 @@ export function CompetitiveInsights({
         />
       )}
 
-  {!hideHeader && (
-    <div className="mb-6 flex items-center justify-between gap-4">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">
-          {isReportingView ? "Analytics" : "Competitive Insights"}
-        </h1>
-        {!isReportingView && (
-          <p className="text-muted-foreground">Track and analyze political campaigns from across the spectrum</p>
-        )}
-      </div>
-      {isReportingView && (
-        <div className="flex items-center gap-1 text-xs border rounded-md overflow-hidden shrink-0">
-          {([7, 30, 90, 365] as const).map((d) => (
-            <button
-              key={d}
-              onClick={() => setChartDays(d)}
-              className={`px-3 py-1.5 transition-colors ${chartDays === d ? "bg-foreground text-background font-medium" : "hover:bg-muted text-muted-foreground"}`}
-            >
-              {d === 365 ? "1Y" : `${d}D`}
-            </button>
-          ))}
+      {!hideHeader && (
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">
+              {isReportingView ? "Analytics" : "Competitive Insights"}
+            </h1>
+            {!isReportingView && (
+              <p className="text-muted-foreground">Track and analyze political campaigns from across the spectrum</p>
+            )}
+          </div>
+          {isReportingView && (
+            <div className="flex items-center gap-1 text-xs border rounded-md overflow-hidden shrink-0">
+              {([7, 30, 90, 365] as const).map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setChartDays(d)}
+                  className={`px-3 py-1.5 transition-colors ${chartDays === d ? "bg-foreground text-background font-medium" : "hover:bg-muted text-muted-foreground"}`}
+                >
+                  {d === 365 ? "1Y" : `${d}D`}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
-    </div>
-  )}
+
+      {isReportingView && (
+        <div className="mb-6 flex items-start gap-2 rounded-md border border-border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
+          <span className="mt-0.5 shrink-0">*</span>
+          <p>
+            Inboxing results are based on the seed emails we place on lists. These numbers show how often sends land in the inbox vs the spam folder.
+          </p>
+        </div>
+      )}
 
       {(subscriptionPlan === "free" || subscriptionPlan === "preview") && !hasAdminAccess && (
         <div
@@ -1172,7 +1181,7 @@ export function CompetitiveInsights({
                 // User can dismiss the banner
                 const banner = document.querySelector("[data-upgrade-banner]")
                 if (banner) {
-                  ;(banner as HTMLElement).style.display = "none"
+                  ; (banner as HTMLElement).style.display = "none"
                 }
               }}
             >
@@ -1225,6 +1234,8 @@ export function CompetitiveInsights({
               <div
                 className={`flex flex-wrap gap-2 items-center ${subscriptionPlan === "free" && !hasAdminAccess ? "blur-sm pointer-events-none" : ""}`}
               >
+                {/* Entity filter — temporarily hidden on reporting view, re-enable by removing the !isReportingView condition */}
+                {!isReportingView && (
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -1275,7 +1286,7 @@ export function CompetitiveInsights({
                           >
                             <Checkbox
                               checked={selectedSender.includes(sender)}
-                              onCheckedChange={() => {}}
+                              onCheckedChange={() => { }}
                             />
                             <span className="flex-1 truncate text-sm">{sender}</span>
                             {isEntityFollowed(sender) && (
@@ -1294,6 +1305,7 @@ export function CompetitiveInsights({
                     </div>
                   </PopoverContent>
                 </Popover>
+                )}
 
                 <Select
                   value={selectedPartyFilter} // Use renamed state
@@ -1367,13 +1379,13 @@ export function CompetitiveInsights({
                       <SelectValue placeholder="All Platforms" />
                     </SelectTrigger>
                     <SelectContent>
-                    <SelectItem value="all">All Platforms</SelectItem>
-                    <SelectItem value="winred">WinRed</SelectItem>
-                    <SelectItem value="actblue">ActBlue</SelectItem>
-                    <SelectItem value="anedot">Anedot</SelectItem>
-                    <SelectItem value="psq">PSQ</SelectItem>
-                    <SelectItem value="ngpvan">NGPVAN</SelectItem>
-                    <SelectItem value="substack">Substack</SelectItem>
+                      <SelectItem value="all">All Platforms</SelectItem>
+                      <SelectItem value="winred">WinRed</SelectItem>
+                      <SelectItem value="actblue">ActBlue</SelectItem>
+                      <SelectItem value="anedot">Anedot</SelectItem>
+                      <SelectItem value="psq">PSQ</SelectItem>
+                      <SelectItem value="ngpvan">NGPVAN</SelectItem>
+                      <SelectItem value="substack">Substack</SelectItem>
                     </SelectContent>
                   </Select>
                 )}
@@ -1468,10 +1480,10 @@ export function CompetitiveInsights({
                   disabled={
                     shouldShowPaywall ||
                     shouldShowPreview ||
-  (!searchTerm && // Check searchTerm for visual state, not debouncedSearchTerm
-  !dateRange.from &&
-  !dateRange.to &&
-  selectedSender.length === 0 &&
+                    (!searchTerm && // Check searchTerm for visual state, not debouncedSearchTerm
+                      !dateRange.from &&
+                      !dateRange.to &&
+                      selectedSender.length === 0 &&
                       selectedPartyFilter === "all" &&
                       selectedMessageType === "all" &&
                       !showThirdParty &&
@@ -1588,9 +1600,8 @@ export function CompetitiveInsights({
                           {currentPaginatedCampaigns.map((campaign, index) => (
                             <tr
                               key={campaign.id}
-                              className={`border-b hover:bg-muted/30 cursor-pointer transition-colors ${
-                                shouldShowPreview && index >= previewLimit ? "blur-sm" : ""
-                              } ${campaign.isHidden && resolvedUser?.role === "super_admin" ? "opacity-60" : ""}`}
+                              className={`border-b hover:bg-muted/30 cursor-pointer transition-colors ${shouldShowPreview && index >= previewLimit ? "blur-sm" : ""
+                                } ${campaign.isHidden && resolvedUser?.role === "super_admin" ? "opacity-60" : ""}`}
                               onClick={() => {
                                 if (!shouldShowPreview || index < previewLimit) {
                                   setSelectedCampaign(campaign)
@@ -1702,18 +1713,18 @@ export function CompetitiveInsights({
                                     )}
                                   </div>
                                 </div>
-                  </td>
-                  <td className="p-4">
-                    <div>
-                      <div className="text-sm font-medium truncate max-w-md">{campaign.subject}</div>
-                      {campaign.type !== "sms" && (cleanEmailPreview(campaign.emailPreview, campaign.emailContent)) && (
-                        <div className="text-xs text-muted-foreground truncate max-w-md mt-1">
-                          {cleanEmailPreview(campaign.emailPreview, campaign.emailContent)}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="p-4">
+                              </td>
+                              <td className="p-4">
+                                <div>
+                                  <div className="text-sm font-medium truncate max-w-md">{campaign.subject}</div>
+                                  {campaign.type !== "sms" && (cleanEmailPreview(campaign.emailPreview, campaign.emailContent)) && (
+                                    <div className="text-xs text-muted-foreground truncate max-w-md mt-1">
+                                      {cleanEmailPreview(campaign.emailPreview, campaign.emailContent)}
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-4">
                                 <div className="flex flex-col gap-1">
                                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                     <Calendar className="h-4 w-4" />

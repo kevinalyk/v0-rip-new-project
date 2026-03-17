@@ -178,7 +178,7 @@ export default function NewsPostClient({ slug }: { slug: string }) {
 
         {/* Body */}
         <div
-          className="prose prose-neutral dark:prose-invert max-w-none text-base leading-relaxed text-foreground mb-10 [&_img]:rounded-md [&_img]:max-w-full [&_img]:my-4 [&_a]:text-[#dc2a28] [&_a]:underline [&_a]:break-all hover:[&_a]:text-[#dc2a28]/80"
+          className="prose prose-neutral dark:prose-invert max-w-none text-base leading-relaxed text-foreground mb-10 [&_img]:rounded-md [&_img]:max-w-full [&_img]:my-4"
           dangerouslySetInnerHTML={{ __html: post.body }}
         />
 

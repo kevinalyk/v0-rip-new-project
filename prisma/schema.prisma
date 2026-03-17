@@ -277,6 +277,7 @@ model CompetitiveInsightCampaign {
   emailPreview        String?  @db.Text // Text snippet of email
   emailContent        String?  @db.Text // Full email content for reference
   resultIds           Json?    // Array of Result IDs that contributed to this campaign
+  seenBySeedEmails    Json     @default("[]") // Array of seed email addresses that have already contributed counts
   entityId            String?  // Link to assigned entity
   entity              CiEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
   assignmentMethod    String?  // "auto_winred", "auto_anedot", "auto_domain", "auto_phone", "manual"

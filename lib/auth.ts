@@ -56,19 +56,13 @@ export async function verifyToken(token: string) {
 
 // Function to get the current user from the token in cookies
 export async function getCurrentUser() {
-  const cookieStore = cookies()
-  console.log("[v0] Getting cookies from cookieStore")
+  const cookieStore = await cookies()
   const token = cookieStore.get("auth_token")?.value
 
   if (!token) {
-    console.log("[v0] No auth_token cookie found in cookieStore")
-    // Log all available cookies for debugging
-    const allCookies = cookieStore.getAll()
-    console.log("[v0] Available cookies:", allCookies.map(c => c.name).join(", "))
     return null
   }
 
-  console.log("[v0] Found auth_token, length:", token.length)
   try {
     return await verifyToken(token)
   } catch (error) {

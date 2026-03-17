@@ -59,145 +59,91 @@ export default async function Image({ params }: { params: { token: string } }) {
   }
 
   const typeLabel = isSms ? "SMS" : "EMAIL"
+  const metaLine = [typeLabel, entityName].filter(Boolean).join("  —  ")
+  const bottomLeft = [senderName, senderDetail].filter(Boolean).join("  ·  ")
+  const bottomRight = [dateStr, "app.rip-tool.com"].filter(Boolean).join("  ·  ")
 
   return new ImageResponse(
     (
       <div
         style={{
-          width: "100%",
-          height: "100%",
+          width: "1200px",
+          height: "630px",
           display: "flex",
           flexDirection: "column",
           backgroundColor: "#0f0f0f",
           fontFamily: "system-ui, sans-serif",
-          position: "relative",
           overflow: "hidden",
         }}
       >
-        {/* Red accent bar at top */}
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: "6px",
-            backgroundColor: "#dc2a28",
-          }}
-        />
+        {/* Red accent bar */}
+        <div style={{ display: "flex", width: "100%", height: "6px", backgroundColor: "#dc2a28" }} />
 
+        {/* Main content */}
         <div
           style={{
             display: "flex",
             flexDirection: "column",
             justifyContent: "space-between",
-            height: "100%",
-            padding: "60px 72px",
+            flex: 1,
+            padding: "52px 72px 48px 72px",
           }}
         >
-          {/* Top row: INBOX.GOP badge + type label */}
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          {/* Top: badge + meta */}
+          <div style={{ display: "flex", alignItems: "center" }}>
             <div
               style={{
+                display: "flex",
                 backgroundColor: "#dc2a28",
                 color: "#ffffff",
-                fontSize: "16px",
+                fontSize: "15px",
                 fontWeight: "700",
                 letterSpacing: "0.12em",
-                padding: "6px 16px",
+                padding: "5px 14px",
                 borderRadius: "4px",
+                marginRight: "16px",
               }}
             >
               INBOX.GOP
             </div>
-            <div style={{ color: "#6b7280", fontSize: "16px", fontWeight: "500" }}>
-              {typeLabel}
+            <div style={{ display: "flex", color: "#9ca3af", fontSize: "16px" }}>
+              {metaLine}
             </div>
-            {entityName ? (
-              <div
-                style={{
-                  marginLeft: "8px",
-                  color: "#9ca3af",
-                  fontSize: "16px",
-                }}
-              >
-                — {entityName}
-              </div>
-            ) : null}
           </div>
 
-          {/* Middle: Subject + body excerpt */}
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "20px",
-              flex: 1,
-              justifyContent: "center",
-            }}
-          >
+          {/* Middle: subject + excerpt */}
+          <div style={{ display: "flex", flexDirection: "column" }}>
             <div
               style={{
-                fontSize: subject.length > 60 ? "40px" : "50px",
+                display: "flex",
+                fontSize: subject.length > 70 ? "38px" : "50px",
                 fontWeight: "800",
                 color: "#ffffff",
                 lineHeight: 1.15,
-                maxWidth: "960px",
+                marginBottom: bodyExcerpt ? "20px" : "0px",
               }}
             >
               {truncate(subject, 100)}
             </div>
-
-            {bodyExcerpt ? (
-              <div
-                style={{
-                  fontSize: "22px",
-                  color: "#9ca3af",
-                  lineHeight: 1.5,
-                  maxWidth: "860px",
-                }}
-              >
-                {bodyExcerpt}
-              </div>
-            ) : null}
+            <div
+              style={{
+                display: "flex",
+                fontSize: "22px",
+                color: "#9ca3af",
+                lineHeight: 1.5,
+              }}
+            >
+              {bodyExcerpt}
+            </div>
           </div>
 
-          {/* Bottom: sender + date + domain */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "4px",
-              }}
-            >
-              {senderName ? (
-                <div style={{ color: "#e5e7eb", fontSize: "17px", fontWeight: "600" }}>
-                  {senderName}
-                </div>
-              ) : null}
-              {senderDetail ? (
-                <div style={{ color: "#6b7280", fontSize: "15px" }}>{senderDetail}</div>
-              ) : null}
+          {/* Bottom: sender + date */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+            <div style={{ display: "flex", color: "#6b7280", fontSize: "15px" }}>
+              {bottomLeft}
             </div>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "flex-end",
-                gap: "4px",
-              }}
-            >
-              {dateStr ? (
-                <div style={{ color: "#6b7280", fontSize: "15px" }}>{dateStr}</div>
-              ) : null}
-              <div style={{ color: "#4b5563", fontSize: "15px" }}>app.rip-tool.com</div>
+            <div style={{ display: "flex", color: "#4b5563", fontSize: "15px" }}>
+              {bottomRight}
             </div>
           </div>
         </div>

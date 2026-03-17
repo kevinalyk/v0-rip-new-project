@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, Plus, Pencil, Trash2, Upload, X, Megaphone, ArrowRight, Bold, Italic, ImagePlus, List, Code2 } from "lucide-react"
+import { Loader2, Plus, Pencil, Trash2, Upload, X, Megaphone, ArrowRight, Bold, Italic, ImagePlus, List, Code2, Link2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { format, differenceInDays } from "date-fns"
 
@@ -66,6 +66,9 @@ export default function NewsPage() {
   const [saving, setSaving] = useState(false)
   const [sourceMode, setSourceMode] = useState(false)
   const [sourceHtml, setSourceHtml] = useState("")
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false)
+  const [linkUrl, setLinkUrl] = useState("")
+  const savedSelectionRef = useRef<Range | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const inlineImageInputRef = useRef<HTMLInputElement>(null)
   const editorRef = useRef<HTMLDivElement>(null)
@@ -211,6 +214,69 @@ export default function NewsPage() {
       setInlineImageUploading(false)
       if (inlineImageInputRef.current) inlineImageInputRef.current.value = ""
     }
+  }
+
+  const openLinkDialog = () => {
+    // Save the current selection so we can restore it after the dialog opens
+    const sel = window.getSelection()
+    if (sel && sel.rangeCount > 0) {
+      savedSelectionRef.current = sel.getRangeAt(0).cloneRange()
+    } else {
+      savedSelectionRef.current = null
+    }
+    setLinkUrl("")
+    setLinkDialogOpen(true)
+  }
+
+  const handleInsertLink = () => {
+    const url = linkUrl.trim()
+    if (!url || !editorRef.current) { setLinkDialogOpen(false); return }
+    const fullUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`
+
+    editorRef.current.focus()
+
+    const sel = window.getSelection()
+    // Restore saved selection
+    if (savedSelectionRef.current && sel) {
+      sel.removeAllRanges()
+      sel.addRange(savedSelectionRef.current)
+    }
+
+    const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null
+    const selectedText = range ? range.toString() : ""
+
+    const anchor = document.createElement("a")
+    anchor.href = fullUrl
+    anchor.target = "_blank"
+    anchor.rel = "noopener noreferrer"
+
+    if (selectedText) {
+      // Wrap the selected text in the anchor
+      anchor.textContent = selectedText
+      if (range) {
+        range.deleteContents()
+        range.insertNode(anchor)
+        range.setStartAfter(anchor)
+        range.collapse(true)
+        sel!.removeAllRanges()
+        sel!.addRange(range)
+      }
+    } else {
+      // No selection — insert the URL as visible linked text
+      anchor.textContent = fullUrl
+      if (range) {
+        range.insertNode(anchor)
+        range.setStartAfter(anchor)
+        range.collapse(true)
+        sel!.removeAllRanges()
+        sel!.addRange(range)
+      } else {
+        editorRef.current.appendChild(anchor)
+      }
+    }
+
+    setLinkDialogOpen(false)
+    setLinkUrl("")
   }
 
   const handleSave = async () => {
@@ -456,6 +522,13 @@ export default function NewsPage() {
                     >
                       <List size={14} />
                     </Button>
+                    <Button
+                      type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" title="Insert Link"
+                      onMouseDown={(e) => { e.preventDefault(); openLinkDialog() }}
+                      disabled={saving}
+                    >
+                      <Link2 size={14} />
+                    </Button>
                     <div className="w-px h-4 bg-border mx-1" />
                     <Button
                       type="button" variant="ghost" size="sm" className="h-7 px-2 gap-1.5 text-xs"
@@ -568,6 +641,31 @@ export default function NewsPage() {
             >
               {saving && <Loader2 size={14} className="animate-spin" />}
               {editTarget ? "Save Changes" : "Publish"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Insert Link dialog */}
+      <Dialog open={linkDialogOpen} onOpenChange={(open) => { if (!open) { setLinkDialogOpen(false); setLinkUrl("") } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Insert Link</DialogTitle>
+            <DialogDescription>Enter a URL to insert. If text is selected, it will become the link text. Otherwise the URL itself will be shown.</DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Input
+              placeholder="https://example.com"
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleInsertLink() }}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setLinkDialogOpen(false); setLinkUrl("") }}>Cancel</Button>
+            <Button onClick={handleInsertLink} className="bg-[#dc2a28] hover:bg-[#dc2a28]/90 text-white" disabled={!linkUrl.trim()}>
+              Insert
             </Button>
           </DialogFooter>
         </DialogContent>

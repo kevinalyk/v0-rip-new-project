@@ -29,7 +29,8 @@ export default async function Image({ params }: { params: { token: string } }) {
     })
 
     if (res.ok) {
-      const data = await res.json()
+      const json = await res.json()
+      const data = json.campaign ?? json
 
       if (data.type === "sms") {
         isSms = true

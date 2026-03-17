@@ -814,6 +814,7 @@ export async function scanForCompetitiveInsights(options: {
 
       // Dedup check: normalize both the incoming subject AND any stored subjects for this
       // sender so that "Sal, help us" and "[Omitted], help us" are treated as the same campaign.
+      // Compare against both rawSubject and subject for accurate matching.
       const normalizedIncoming = normalizeSubject(firstEmail.subject)
       const candidatesForSender = await prisma.competitiveInsightCampaign.findMany({
         where: {
@@ -824,11 +825,16 @@ export async function scanForCompetitiveInsights(options: {
             lt: new Date(new Date(firstEmail.date).setHours(23, 59, 59, 999)),
           },
         },
-        select: { id: true, subject: true, inboxCount: true, spamCount: true, notDeliveredCount: true, clientId: true, seenBySeedEmails: true },
+        select: { id: true, subject: true, rawSubject: true, inboxCount: true, spamCount: true, notDeliveredCount: true, clientId: true, seenBySeedEmails: true },
       })
-      const existing = candidatesForSender.find(
-        (c) => normalizeSubject(c.subject) === normalizedIncoming
-      ) || null
+      const existing = candidatesForSender.find((c) => {
+        const normalizedStored = normalizeSubject(c.subject)
+        const normalizedStoredRaw = c.rawSubject ? normalizeSubject(c.rawSubject) : null
+        return (
+          normalizedStored === normalizedIncoming ||
+          (normalizedStoredRaw !== null && normalizedStoredRaw === normalizedIncoming)
+        )
+      }) || null
 
       if (existing) {
         // Only count results from seed emails not already recorded for this campaign

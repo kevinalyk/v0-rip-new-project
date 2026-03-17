@@ -370,15 +370,15 @@ export async function GET(request: NextRequest) {
     })
 
     // --- Inboxing pie data ---
-    // A campaign is counted as spam if ANY seed saw it in spam (spamCount > 0).
-    // Only campaigns where at least one seed received the email are counted.
+    // Sum inboxCount and spamCount across all campaigns that have placement data,
+    // then divide totalInbox / (totalInbox + totalSpam) for an accurate inbox rate.
     const emailsWithPlacement = emailCampaigns.filter(
       (c) => (c.inboxCount != null && c.inboxCount > 0) || (c.spamCount != null && c.spamCount > 0)
     )
-    const spammedCount = emailsWithPlacement.filter((c) => c.spamCount != null && c.spamCount > 0).length
-    const inboxedCount = emailsWithPlacement.length - spammedCount
-    const placementTotal = emailsWithPlacement.length
-    const inboxPct = placementTotal > 0 ? Math.round((inboxedCount / placementTotal) * 100) : 0
+    const totalInboxCount = emailsWithPlacement.reduce((sum, c) => sum + (c.inboxCount ?? 0), 0)
+    const totalSpamCount = emailsWithPlacement.reduce((sum, c) => sum + (c.spamCount ?? 0), 0)
+    const placementTotal = totalInboxCount + totalSpamCount
+    const inboxPct = placementTotal > 0 ? Math.round((totalInboxCount / placementTotal) * 100) : 0
     const spamPct = placementTotal > 0 ? 100 - inboxPct : 0
 
     const inboxingData =

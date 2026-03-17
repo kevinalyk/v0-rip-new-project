@@ -6,7 +6,20 @@ export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
+  return html
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&mdash;/gi, "—")
+    .replace(/&ndash;/gi, "–")
+    .replace(/&#\d+;/g, " ")
+    .replace(/&[a-z]+;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
 }
 
 function truncate(str: string, max: number): string {
@@ -46,7 +59,7 @@ export default async function Image({ params }: { params: { token: string } }) {
         subject = data.subject || "Shared Email"
         senderName = data.senderName || ""
         senderDetail = data.senderEmail || ""
-        const rawBody = data.emailContent || data.emailPreview || ""
+        const rawBody = data.emailContent || data.emailPreview || data.preview || ""
         bodyExcerpt = truncate(stripHtml(rawBody), 160)
         entityName = data.entityName || data.entity?.name || ""
         dateStr = data.dateReceived

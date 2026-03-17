@@ -19,7 +19,7 @@ interface Campaign {
   message?: string
   dateReceived: string
   inboxRate?: number
-  ctaLinks: Array<{ url: string; finalUrl?: string; type: string }>
+  ctaLinks: Array<{ url: string; finalUrl?: string; strippedFinalUrl?: string; type: string }>
   emailContent?: string | null
   entity?: {
     id: string
@@ -279,20 +279,20 @@ export default function SharePageClient() {
               {campaign.ctaLinks.length > 0 ? (
                 <div className="space-y-3">
                   {campaign.ctaLinks.map((link, idx) => {
-                    const displayUrl = link.strippedFinalUrl || (link as any).strippedFinalURL || link.finalUrl || link.url
+                    const bestUrl = link.strippedFinalUrl || link.finalUrl || link.url
 
                     return (
                       <div key={idx} className="rounded-lg border bg-muted/20 p-3">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
                             <a
-                              href={link.url}
+                              href={bestUrl}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-start gap-2 text-sm text-rip-red hover:underline break-all"
                             >
                               <ExternalLink className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                              <span>{displayUrl}</span>
+                              <span>{bestUrl}</span>
                             </a>
                           </div>
                           <Badge variant="secondary" className="capitalize flex-shrink-0">

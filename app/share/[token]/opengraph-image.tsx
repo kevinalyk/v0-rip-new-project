@@ -1,7 +1,6 @@
 import { ImageResponse } from "next/og"
-import prisma from "@/lib/prisma"
 
-export const runtime = "nodejs"
+export const runtime = "edge"
 export const alt = "Campaign shared on RIP"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
@@ -17,66 +16,40 @@ function truncate(str: string, max: number): string {
 export default async function Image({ params }: { params: { token: string } }) {
   let subject = "Shared Campaign"
   let senderName = ""
-  let senderDetail = "" // email address or phone number
+  let senderDetail = ""
   let bodyExcerpt = ""
   let entityName = ""
   let dateStr = ""
   let isSms = false
 
   try {
-    const campaign = await prisma.competitiveInsightCampaign.findUnique({
-      where: { shareToken: params.token },
-      select: {
-        subject: true,
-        senderName: true,
-        senderEmail: true,
-        emailContent: true,
-        emailPreview: true,
-        dateReceived: true,
-        entity: { select: { name: true } },
-      },
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
+    const res = await fetch(`${baseUrl}/api/share/${params.token}`, {
+      headers: { Accept: "application/json" },
     })
 
-    if (campaign) {
-      subject = campaign.subject || "Shared Email"
-      senderName = campaign.senderName || ""
-      senderDetail = campaign.senderEmail || ""
-      const rawBody = campaign.emailContent || campaign.emailPreview || ""
-      bodyExcerpt = truncate(stripHtml(rawBody), 160)
-      entityName = campaign.entity?.name || ""
-      dateStr = campaign.dateReceived
-        ? new Date(campaign.dateReceived).toLocaleDateString("en-US", {
-            month: "long",
-            day: "numeric",
-            year: "numeric",
-          })
-        : ""
-    } else {
-      // Try SMS
-      const sms = await prisma.smsQueue.findUnique({
-        where: { shareToken: params.token },
-        select: {
-          message: true,
-          phoneNumber: true,
-          toNumber: true,
-          createdAt: true,
-          entity: { select: { name: true } },
-        },
-      })
+    if (res.ok) {
+      const data = await res.json()
 
-      if (sms) {
+      if (data.type === "sms") {
         isSms = true
         subject = "SMS Message"
-        senderName = sms.phoneNumber || "Unknown"
-        senderDetail = sms.toNumber ? `to ${sms.toNumber}` : ""
-        bodyExcerpt = truncate(sms.message || "", 160)
-        entityName = sms.entity?.name || ""
-        dateStr = sms.createdAt
-          ? new Date(sms.createdAt).toLocaleDateString("en-US", {
-              month: "long",
-              day: "numeric",
-              year: "numeric",
-            })
+        senderName = data.phoneNumber || "Unknown"
+        senderDetail = data.toNumber ? `to ${data.toNumber}` : ""
+        bodyExcerpt = truncate(data.message || "", 160)
+        entityName = data.entityName || data.entity?.name || ""
+        dateStr = data.createdAt
+          ? new Date(data.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+          : ""
+      } else {
+        subject = data.subject || "Shared Email"
+        senderName = data.senderName || ""
+        senderDetail = data.senderEmail || ""
+        const rawBody = data.emailContent || data.emailPreview || ""
+        bodyExcerpt = truncate(stripHtml(rawBody), 160)
+        entityName = data.entityName || data.entity?.name || ""
+        dateStr = data.dateReceived
+          ? new Date(data.dateReceived).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
           : ""
       }
     }

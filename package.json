@@ -5,6 +5,7 @@
   "scripts": {
     "build": "prisma generate && next build",
     "dev": "prisma generate && next dev",
+    "postinstall": "prisma generate",
     "lint": "next lint",
     "seed": "tsx prisma/seed.ts",
     "start": "next start"

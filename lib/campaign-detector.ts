@@ -824,17 +824,24 @@ export async function scanForCompetitiveInsights(options: {
             lt: new Date(new Date(firstEmail.date).setHours(23, 59, 59, 999)),
           },
         },
-        select: { id: true, subject: true, inboxCount: true, spamCount: true, notDeliveredCount: true, clientId: true },
+        select: { id: true, subject: true, inboxCount: true, spamCount: true, notDeliveredCount: true, clientId: true, seenBySeedEmails: true },
       })
       const existing = candidatesForSender.find(
         (c) => normalizeSubject(c.subject) === normalizedIncoming
       ) || null
 
       if (existing) {
-        const inboxCount = emails.filter((e) => e.placement === "inbox").length
-        const spamCount = emails.filter((e) => e.placement === "spam").length
-        const notDeliveredCount = emails.filter((e) => e.placement === "not_found").length
-        const totalCount = emails.length
+        // Only count results from seed emails not already recorded for this campaign
+        const alreadySeen = new Set<string>(Array.isArray(existing.seenBySeedEmails) ? existing.seenBySeedEmails as string[] : [])
+        const newEmails = emails.filter((e) => !alreadySeen.has(e.seedEmail))
+        const inboxCount = newEmails.filter((e) => e.placement === "inbox").length
+        const spamCount = newEmails.filter((e) => e.placement === "spam").length
+        const notDeliveredCount = newEmails.filter((e) => e.placement === "not_found").length
+        const updatedSeen = [...alreadySeen, ...newEmails.map((e) => e.seedEmail)]
+        const updatedInbox = existing.inboxCount + inboxCount
+        const updatedSpam = existing.spamCount + spamCount
+        const updatedNotDelivered = existing.notDeliveredCount + notDeliveredCount
+        const updatedTotal = updatedInbox + updatedSpam + updatedNotDelivered
 
         // Check if this duplicate came via a personal email — if so, attach clientId
         const existingPersonalClientId = await resolvePersonalClientId(emails)
@@ -842,13 +849,11 @@ export async function scanForCompetitiveInsights(options: {
         await prisma.competitiveInsightCampaign.update({
           where: { id: existing.id },
           data: {
-            inboxCount: existing.inboxCount + inboxCount,
-            spamCount: existing.spamCount + spamCount,
-            notDeliveredCount: existing.notDeliveredCount + notDeliveredCount,
-            inboxRate:
-              ((existing.inboxCount + inboxCount) /
-                (existing.inboxCount + existing.spamCount + existing.notDeliveredCount + totalCount)) *
-              100,
+            inboxCount: updatedInbox,
+            spamCount: updatedSpam,
+            notDeliveredCount: updatedNotDelivered,
+            inboxRate: updatedTotal > 0 ? (updatedInbox / updatedTotal) * 100 : 0,
+            seenBySeedEmails: updatedSeen,
             // Only set clientId/source if not already set and we have a personal match
             ...(existingPersonalClientId && !existing.clientId
               ? { clientId: existingPersonalClientId, source: "personal" }

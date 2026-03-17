@@ -1142,6 +1142,15 @@ export function CompetitiveInsights({
     </div>
   )}
 
+      {isReportingView && (
+        <div className="mb-6 flex items-start gap-2 rounded-md border border-border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
+          <span className="mt-0.5 shrink-0">*</span>
+          <p>
+            Inbox placement data is based on results observed across our seed network. Your actual deliverability may vary depending on your list quality, sending infrastructure, and recipient engagement.
+          </p>
+        </div>
+      )}
+
       {(subscriptionPlan === "free" || subscriptionPlan === "preview") && !hasAdminAccess && (
         <div
           className="mb-6 bg-gradient-to-r from-rip-red/10 to-rip-red/5 border border-rip-red/20 rounded-lg p-6"

@@ -882,7 +882,7 @@ export async function scanForCompetitiveInsights(options: {
       const personalClientId = await resolvePersonalClientId(emails)
 
       try {
-        await processCompetitiveInsights(
+        const isNew = await processCompetitiveInsights(
           firstEmail.senderEmail,
           firstEmail.senderName,
           firstEmail.subject,
@@ -892,8 +892,13 @@ export async function scanForCompetitiveInsights(options: {
           entityAssignment,
           personalClientId,
         )
-        newInsightsCount++
-        console.log(`✅ Processed NEW campaign with AI: "${firstEmail.subject}"${personalClientId ? ` [personal: ${personalClientId}]` : ""}`)
+        if (isNew) {
+          newInsightsCount++
+          console.log(`✅ Processed NEW campaign with AI: "${firstEmail.subject}"${personalClientId ? ` [personal: ${personalClientId}]` : ""}`)
+        } else {
+          skippedDuplicates++
+          console.log(`⏭️ Skipped duplicate (race condition): "${firstEmail.subject}"`)
+        }
       } catch (error) {
         console.error(`❌ Error processing competitive insight for "${firstEmail.subject}":`, error)
       }

@@ -898,7 +898,8 @@ export function CompetitiveInsights({
     // For SMS campaigns, check phone number
     if (campaign.type === "sms" && campaign.phoneNumber) {
       const normalizedPhone = campaign.phoneNumber.replace(/[\s\-()]/g, "")
-      return mappings.phones.includes(normalizedPhone)
+      const normalizedMappedPhones = mappings.phones.map((p: string) => p.replace(/[\s\-()]/g, ""))
+      return normalizedMappedPhones.includes(normalizedPhone)
     }
 
     // For email campaigns, check sender email and domain

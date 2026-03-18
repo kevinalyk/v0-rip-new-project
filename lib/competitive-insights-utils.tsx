@@ -1355,7 +1355,6 @@ export async function processCompetitiveInsights(
     const inboxRate = totalCount > 0 ? (inboxCount / totalCount) * 100 : 0
 
     const seedEmailsList = Array.from(ripEmailAddresses)
-    const ctaLinks = emailContent ? await extractCTALinks(emailContent, seedEmailsList, sanitizedSubject) : []
 
     const tags = autoGenerateTags(senderEmail, senderName, sanitizedSubject, emailContent)
 
@@ -1463,6 +1462,12 @@ export async function processCompetitiveInsights(
     }) || null
 
     if (existing) {
+      // Only run CTA extraction if the existing record has no CTAs yet — avoids AI cost on repeat seeds
+      const ctaLinks =
+        (!existing.ctaLinks || existing.ctaLinks === "[]") && emailContent
+          ? await extractCTALinks(emailContent, seedEmailsList, sanitizedSubject)
+          : []
+
       // Only count results from seed emails not already recorded for this campaign
       const alreadySeen = new Set<string>(Array.isArray(existing.seenBySeedEmails) ? existing.seenBySeedEmails as string[] : [])
       const newResults = ripResults.filter((r) => !alreadySeen.has(r.seedEmail))
@@ -1493,6 +1498,9 @@ export async function processCompetitiveInsights(
       return false
     } else {
       try {
+        // Only extract CTAs for genuinely new campaigns
+        const ctaLinks = emailContent ? await extractCTALinks(emailContent, seedEmailsList, sanitizedSubject) : []
+
         await prisma.competitiveInsightCampaign.create({
           data: {
             senderEmail,

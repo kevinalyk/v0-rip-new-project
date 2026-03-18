@@ -1790,16 +1790,16 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
               {editingEntityId && (
                 <div className="border-t pt-4 space-y-3">
                   <div>
-                    <Label className="text-base font-semibold">Email Mappings</Label>
+                    <Label className="text-base font-semibold">Email & SMS Mappings</Label>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Emails from these addresses or domains will automatically be assigned to this entity
+                      Emails, domains, or SMS short codes will automatically be assigned to this entity
                     </p>
                   </div>
 
                   {/* Add new mapping */}
                   <div className="flex gap-2">
                     <Input
-                      placeholder="Enter email or domain (e.g., info@example.com or example.com)"
+                      placeholder="Enter email, domain, or SMS short code (e.g., info@example.com, example.com, or 55404)"
                       value={newMappingInput}
                       onChange={(e) => setNewMappingInput(e.target.value)}
                       onKeyDown={(e) => {
@@ -1820,7 +1820,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                       <div className="text-sm text-muted-foreground text-center py-4">Loading mappings...</div>
                     ) : entityMappings.length === 0 ? (
                       <div className="text-sm text-muted-foreground text-center py-4">
-                        No mappings yet. Add an email or domain above.
+                        No mappings yet. Add an email, domain, or SMS short code above.
                       </div>
                     ) : (
                   entityMappings.map((mapping) => (

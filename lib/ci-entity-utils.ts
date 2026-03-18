@@ -683,14 +683,19 @@ export async function addEntityMapping(entityId: string, emailOrDomain: string) 
   try {
     const normalized = emailOrDomain.toLowerCase().trim()
 
-    // Determine if it's an email or domain
-    const isEmail = normalized.includes("@")
+    // Determine the type: phone (numeric-only short code), email, or domain
+    const isPhone = /^\d+$/.test(normalized)
+    const isEmail = !isPhone && normalized.includes("@")
 
     // Check if mapping already exists
     const existingMapping = await prisma.ciEntityMapping.findFirst({
       where: {
         entityId,
-        OR: isEmail ? [{ senderEmail: normalized }] : [{ senderDomain: normalized }],
+        OR: isPhone
+          ? [{ senderPhone: normalized }]
+          : isEmail
+          ? [{ senderEmail: normalized }]
+          : [{ senderDomain: normalized }],
       },
     })
 
@@ -698,11 +703,13 @@ export async function addEntityMapping(entityId: string, emailOrDomain: string) 
       return { success: false, error: "Mapping already exists" }
     }
 
-    // Create the mapping
+    // Create the mapping, routing to the correct column based on type
     const mapping = await prisma.ciEntityMapping.create({
       data: {
         entityId,
-        ...(isEmail
+        ...(isPhone
+          ? { senderPhone: normalized }
+          : isEmail
           ? { senderEmail: normalized, senderDomain: normalized.split("@")[1] }
           : { senderDomain: normalized }),
       },

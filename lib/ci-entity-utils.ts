@@ -104,11 +104,12 @@ Return JSON with:
 Respond ONLY with the JSON object, no other text.`,
     })
 
-    console.log("[Data Broker AI] Analysis complete:", {
-      type: result.object.type,
-      confidence: result.object.confidence,
-      reasoning: result.object.reasoning.slice(0, 100),
-    })
+    console.log("========== [Data Broker AI] GEMINI RESULT ==========")
+    console.log("[Data Broker AI] Subject:", subject)
+    console.log("[Data Broker AI] Type:", result.object.type)
+    console.log("[Data Broker AI] Confidence:", result.object.confidence)
+    console.log("[Data Broker AI] Reasoning:", result.object.reasoning)
+    console.log("=====================================================")
     return result.object
   } catch (error) {
     console.error("[Data Broker AI] Analysis failed:", error)

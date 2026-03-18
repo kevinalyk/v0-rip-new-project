@@ -1497,9 +1497,11 @@ export async function processCompetitiveInsights(
       // Already existed in DB — not a new campaign
       return false
     } else {
+      // Declare ctaLinks outside try so it's accessible in the race condition catch block
+      let ctaLinks: any[] = []
       try {
         // Only extract CTAs for genuinely new campaigns
-        const ctaLinks = emailContent ? await extractCTALinks(emailContent, seedEmailsList, sanitizedSubject) : []
+        ctaLinks = emailContent ? await extractCTALinks(emailContent, seedEmailsList, sanitizedSubject) : []
 
         await prisma.competitiveInsightCampaign.create({
           data: {

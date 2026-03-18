@@ -1497,6 +1497,17 @@ export async function processCompetitiveInsights(
       // Already existed in DB — not a new campaign
       return false
     } else {
+      // Secondary check: another parallel seed may have already created this campaign
+      // between our first dedup check and now. Skip AI entirely if it now exists.
+      const secondaryCheck = await prisma.competitiveInsightCampaign.findFirst({
+        where: { senderEmail, subject: redactedSubject },
+        select: { id: true },
+      })
+      if (secondaryCheck) {
+        console.log(`⏭️ Skipped (created by parallel seed before CTA extraction): "${redactedSubject}"`)
+        return false
+      }
+
       // Declare ctaLinks outside try so it's accessible in the race condition catch block
       let ctaLinks: any[] = []
       try {

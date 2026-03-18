@@ -424,8 +424,20 @@ function sanitizeUrl(url: string): string {
 function normalizeUrlForCache(url: string): string {
   try {
     const urlObj = new URL(url)
-    // Remove common tracking parameters
-    const trackingParams = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "ref", "source"]
+    // Remove common tracking/per-recipient parameters that don't affect URL category.
+    // This includes generic UTM params, political campaign trackers (WinRed, ActBlue, NGP, etc.),
+    // email platform tokens, and other high-entropy per-send identifiers.
+    const trackingParams = [
+      // UTM / standard
+      "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
+      "ref", "source", "fbclid", "gclid", "msclkid", "ttclid", "li_fat_id",
+      // Political campaign / email platform high-entropy tokens
+      "e", "t", "s", "r", "ms", "pk_vid", "pk_cid", "rid", "mid", "eid",
+      "recipient", "subscriber_id", "contact_id", "list_id", "send_id",
+      "mkt_tok", "trk", "trkCampaign", "trkInfo",
+      // Generic per-send identifiers
+      "emci", "emdi", "ceid", "nid", "tid", "vid", "sid", "aid", "bid",
+    ]
     trackingParams.forEach((param) => urlObj.searchParams.delete(param))
     return urlObj.toString().toLowerCase()
   } catch {

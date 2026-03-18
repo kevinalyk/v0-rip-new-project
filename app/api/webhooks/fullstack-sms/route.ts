@@ -172,7 +172,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: "SMS received and queued for processing",
-      smsId: smsData.id,
+      smsId: result.id,
     })
   } catch (error) {
     console.error("[FullStack SMS] Error processing SMS webhook:", error)

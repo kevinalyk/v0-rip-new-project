@@ -1080,7 +1080,7 @@ export default function SeedListContent({
                             )}
                           </Button>
                         )}
-                        {(email.provider === "outlook" || email.provider === "hotmail") && (
+                        {(email.provider === "outlook" || email.provider === "hotmail" || email.provider === "live") && (
                           <Button
                             variant="ghost"
                             size="icon"

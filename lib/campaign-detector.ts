@@ -545,7 +545,7 @@ async function fetchRecentEmailsIMAP(
             spamFolders = ["Bulk"]
           } else if (seedEmail.provider === "aol") {
             spamFolders = ["Bulk"]
-          } else if (seedEmail.provider === "outlook") {
+          } else if (seedEmail.provider === "outlook" || seedEmail.provider === "hotmail" || seedEmail.provider === "live") {
             spamFolders = ["Junk Email"]
           } else {
             spamFolders = ["Spam", "Junk", "Bulk"]

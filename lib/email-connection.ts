@@ -51,6 +51,18 @@ const EMAIL_SERVERS = {
       secure: false,
     },
   },
+  live: {
+    imap: {
+      host: "outlook.office365.com",
+      port: 993,
+      tls: true,
+    },
+    smtp: {
+      host: "smtp-mail.outlook.com",
+      port: 587,
+      secure: false,
+    },
+  },
   aol: {
     imap: {
       host: "imap.aol.com",

@@ -226,7 +226,7 @@ model SeedEmail {
   id              String    @id @default(cuid())
   email           String    @unique
   password        String    @db.Text
-  provider        String    // e.g., "gmail", "yahoo", "outlook", "aol"
+  provider        String    // e.g., "gmail", "yahoo", "outlook", "hotmail", "live", "aol"
   creationDate    DateTime  @default(now())
   recoveryEmail   String?
   recoveryPhone   String?

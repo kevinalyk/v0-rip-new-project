@@ -815,6 +815,9 @@ function getServerSettings(provider: string) {
     hotmail: {
       imap: { host: "imap-mail.outlook.com", port: 993, tls: true },
     },
+    live: {
+      imap: { host: "imap-mail.outlook.com", port: 993, tls: true },
+    },
     aol: {
       imap: { host: "imap.aol.com", port: 993, tls: true },
     },

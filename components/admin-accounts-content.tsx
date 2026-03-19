@@ -4,8 +4,18 @@ import { useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Loader2, Search, Users, CheckCircle, XCircle, Building2 } from "lucide-react"
-import { format } from "date-fns"
+import { Loader2, Search, Users, CheckCircle, XCircle, Building2, ChevronDown, ChevronRight } from "lucide-react"
+import { format, formatDistanceToNow } from "date-fns"
+
+interface ClientUser {
+  id: string
+  firstName: string | null
+  lastName: string | null
+  email: string
+  role: string
+  lastActive: string | null
+  createdAt: string
+}
 
 interface ClientRow {
   id: string
@@ -46,6 +56,9 @@ export function AdminAccountsContent() {
   const [clients, setClients] = useState<ClientRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [usersMap, setUsersMap] = useState<Record<string, ClientUser[]>>({})
+  const [usersLoading, setUsersLoading] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     const fetchClients = async () => {
@@ -60,6 +73,27 @@ export function AdminAccountsContent() {
     }
     fetchClients()
   }, [])
+
+  const toggleExpand = async (clientId: string) => {
+    if (expandedId === clientId) {
+      setExpandedId(null)
+      return
+    }
+    setExpandedId(clientId)
+    if (usersMap[clientId]) return
+    setUsersLoading((prev) => ({ ...prev, [clientId]: true }))
+    try {
+      const res = await fetch(`/api/admin/client-users/${clientId}`, { credentials: "include" })
+      if (res.ok) {
+        const users = await res.json()
+        setUsersMap((prev) => ({ ...prev, [clientId]: users }))
+      }
+    } catch (err) {
+      console.error("Failed to fetch users:", err)
+    } finally {
+      setUsersLoading((prev) => ({ ...prev, [clientId]: false }))
+    }
+  }
 
   const filtered = clients.filter((c) => {
     const q = search.toLowerCase()
@@ -167,10 +201,23 @@ export function AdminAccountsContent() {
           </thead>
           <tbody className="divide-y">
             {filtered.map((c) => (
-              <tr key={c.id} className="hover:bg-muted/30 transition-colors">
+              <>
+              <tr
+                key={c.id}
+                className="hover:bg-muted/30 transition-colors cursor-pointer select-none"
+                onClick={() => toggleExpand(c.id)}
+              >
                 <td className="px-4 py-3">
-                  <div className="font-medium">{c.name}</div>
-                  <div className="text-xs text-muted-foreground">{c.slug}</div>
+                  <div className="flex items-center gap-1.5">
+                    {expandedId === c.id
+                      ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    }
+                    <div>
+                      <div className="font-medium">{c.name}</div>
+                      <div className="text-xs text-muted-foreground">{c.slug}</div>
+                    </div>
+                  </div>
                 </td>
                 <td className="px-4 py-3">
                   {c.ownerName ? (
@@ -234,6 +281,51 @@ export function AdminAccountsContent() {
                   {format(new Date(c.createdAt), "MMM d, yyyy")}
                 </td>
               </tr>
+              {expandedId === c.id && (
+                <tr key={`${c.id}-users`} className="bg-muted/20">
+                  <td colSpan={9} className="px-8 py-3">
+                    {usersLoading[c.id] ? (
+                      <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading users...
+                      </div>
+                    ) : (usersMap[c.id]?.length ?? 0) === 0 ? (
+                      <p className="text-xs text-muted-foreground py-2">No users found for this account.</p>
+                    ) : (
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-muted-foreground">
+                            <th className="text-left pb-1.5 font-medium w-1/4">Name</th>
+                            <th className="text-left pb-1.5 font-medium w-1/3">Email</th>
+                            <th className="text-left pb-1.5 font-medium w-1/6">Role</th>
+                            <th className="text-left pb-1.5 font-medium w-1/4">Last Active</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/50">
+                          {usersMap[c.id].map((u) => (
+                            <tr key={u.id}>
+                              <td className="py-1.5 pr-4">
+                                {[u.firstName, u.lastName].filter(Boolean).join(" ") || "—"}
+                              </td>
+                              <td className="py-1.5 pr-4 text-muted-foreground">{u.email}</td>
+                              <td className="py-1.5 pr-4">
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground capitalize">
+                                  {u.role}
+                                </span>
+                              </td>
+                              <td className="py-1.5 text-muted-foreground">
+                                {u.lastActive
+                                  ? formatDistanceToNow(new Date(u.lastActive), { addSuffix: true })
+                                  : "Never"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </td>
+                </tr>
+              )}
+              </>
             ))}
             {filtered.length === 0 && (
               <tr>

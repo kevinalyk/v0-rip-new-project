@@ -73,8 +73,14 @@ export async function resolveShortenedUrls(urls: string[]): Promise<Array<{ url:
         }
 
         return { url }
-      } catch (error) {
-        console.error(`[SMS Link Extractor] Error resolving ${url}:`, error)
+      } catch (error: any) {
+        const code = error?.cause?.code ?? error?.code ?? ""
+        const isCertOrNetworkError = ["CERT_HAS_EXPIRED", "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "ENOTFOUND", "ECONNREFUSED", "ETIMEDOUT"].includes(code)
+        if (isCertOrNetworkError) {
+          console.warn(`[SMS Link Extractor] Skipping redirect resolution for ${url} (${code}) — using original URL`)
+        } else {
+          console.error(`[SMS Link Extractor] Error resolving ${url}:`, error)
+        }
         // Return original URL if resolution fails
         return { url }
       }

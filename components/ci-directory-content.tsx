@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Search, User, Users, Building2, Database, Mail } from "lucide-react"
 import { toast } from "sonner"
+import { CiEntitySubscribeButton } from "@/components/ci-entity-subscribe-button"
 import {
   Pagination,
   PaginationContent,
@@ -369,6 +370,7 @@ export function CiDirectoryContent({ clientSlug }: CiDirectoryContentProps) {
                     {entity.party && <Badge className={getPartyBadgeClassName(entity.party)}>{entity.party}</Badge>}
                     {entity.state && <Badge variant="outline">{entity.state}</Badge>}
                     <Badge variant="secondary">{entity._count.totalCommunications} communications</Badge>
+                    <CiEntitySubscribeButton entityId={entity.id} entityName={entity.name} />
                   </div>
                 </div>
               ))}

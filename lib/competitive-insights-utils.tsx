@@ -856,20 +856,11 @@ export async function extractCTALinks(
   // Remove duplicates by URL
   const uniqueLinks = Array.from(new Map(links.map((link) => [link.url, link])).values())
 
-  const aiDetectedUnsubscribeUrls = await detectUnsubscribeLinksWithAI(uniqueLinks)
-
-  const filteredLinks = uniqueLinks.filter((link) => {
-    if (aiDetectedUnsubscribeUrls.has(link.url)) {
-      return false
-    }
-    return true
-  })
-
-  // Prioritize links with CTA keywords
-  const ctaLinks = filteredLinks.filter((link) =>
+  // Prioritize links with CTA keywords (regex patterns already filtered out unsubscribe links above)
+  const ctaLinks = uniqueLinks.filter((link) =>
     ctaKeywords.some((keyword) => keyword.test(link.url) || keyword.test(link.text || "")),
   )
-  const otherLinks = filteredLinks.filter(
+  const otherLinks = uniqueLinks.filter(
     (link) => !ctaKeywords.some((keyword) => keyword.test(link.url) || keyword.test(link.text || "")),
   )
 

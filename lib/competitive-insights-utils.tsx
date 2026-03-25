@@ -657,7 +657,7 @@ ${links.map((link, i) => `${i + 1}. URL: ${link.url}${link.text ? `\n   Link tex
   Example response: "1, 3, 5" or "none"`
   
   const { text } = await generateText({
-    model: "openai/gpt-4o-mini",
+    model: "google/gemini-2.0-flash-lite",
     prompt,
     temperature: 0.1,
   })
@@ -856,11 +856,15 @@ export async function extractCTALinks(
   // Remove duplicates by URL
   const uniqueLinks = Array.from(new Map(links.map((link) => [link.url, link])).values())
 
-  // Prioritize links with CTA keywords (regex patterns already filtered out unsubscribe links above)
-  const ctaLinks = uniqueLinks.filter((link) =>
+  // AI second-pass: catch obfuscated unsubscribe links regex couldn't detect (e.g. click.emails.nrsc.org/ls/click?upn=...)
+  const aiDetectedUnsubscribeUrls = await detectUnsubscribeLinksWithAI(uniqueLinks)
+  const filteredLinks = uniqueLinks.filter((link) => !aiDetectedUnsubscribeUrls.has(link.url))
+
+  // Prioritize links with CTA keywords
+  const ctaLinks = filteredLinks.filter((link) =>
     ctaKeywords.some((keyword) => keyword.test(link.url) || keyword.test(link.text || "")),
   )
-  const otherLinks = uniqueLinks.filter(
+  const otherLinks = filteredLinks.filter(
     (link) => !ctaKeywords.some((keyword) => keyword.test(link.url) || keyword.test(link.text || "")),
   )
 

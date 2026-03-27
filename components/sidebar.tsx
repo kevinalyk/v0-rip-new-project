@@ -33,6 +33,7 @@ import {
   Globe,
   Megaphone,
   AlertCircle,
+  ScanSearch,
 } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { useTheme } from "next-themes"
@@ -489,6 +490,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                       active={pathname === "/rip/admin/personal-email-domains"}
                       collapsed={false}
                       onClick={() => navigate("/rip/admin/personal-email-domains")}
+                    />
+                    <NavItem
+                      icon={<ScanSearch size={18} />}
+                      label="Seed Insights"
+                      active={pathname === "/rip/admin/seed-insights"}
+                      collapsed={false}
+                      onClick={() => navigate("/rip/admin/seed-insights")}
                     />
                   </div>
                 )}

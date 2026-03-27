@@ -41,11 +41,14 @@ export async function GET() {
       }
     }
 
-    // Inject Substack handle as a synthetic email mapping so that entities with only
-    // a Substack handle (and no explicit email mapping) are not flagged as Third Party.
     for (const entity of entities) {
       const identifiers = entity.donationIdentifiers as Record<string, any> | null
       const substackHandle = identifiers?.substack as string | undefined
+      const winredHandle = identifiers?.winred as string | undefined
+      const anedotHandle = identifiers?.anedot as string | undefined
+
+      // Inject Substack handle as a synthetic email mapping so entities with only
+      // a Substack handle are not incorrectly flagged as Third Party.
       if (substackHandle) {
         const substackEmail = `${substackHandle.toLowerCase()}@substack.com`
         if (!mappingsByEntity[entity.id]) {
@@ -54,6 +57,14 @@ export async function GET() {
         if (!mappingsByEntity[entity.id].emails.includes(substackEmail)) {
           mappingsByEntity[entity.id].emails.push(substackEmail)
         }
+      }
+
+      // Ensure entities with WinRed or Anedot identifiers (but no email/domain mappings)
+      // still appear in mappingsByEntity with empty arrays. Without this, isDomainMappedToEntity
+      // receives `undefined` for the entity and incorrectly returns `true` (mapped), hiding the
+      // Third Party badge for campaigns assigned purely via donation platform identifier.
+      if ((winredHandle || anedotHandle) && !mappingsByEntity[entity.id]) {
+        mappingsByEntity[entity.id] = { emails: [], domains: [], phones: [] }
       }
     }
 

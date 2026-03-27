@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { getServerSession } from "@/lib/auth"
+import { verifyAuth } from "@/lib/auth"
 
 export async function GET(request: Request) {
+  const user = await verifyAuth(request)
+  if (!user || user.role !== "super_admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
-    const session = await getServerSession()
-    if (!session || session.role !== "super_admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
 
     const { searchParams } = new URL(request.url)
     const from = searchParams.get("from")
@@ -87,3 +88,4 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+

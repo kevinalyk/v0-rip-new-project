@@ -3,8 +3,8 @@ import { prisma } from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
 
 export async function GET(request: Request) {
-  const user = await verifyAuth(request)
-  if (!user || user.role !== "super_admin") {
+  const authResult = await verifyAuth(request)
+  if (!authResult.success || !authResult.user || authResult.user.role !== "super_admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

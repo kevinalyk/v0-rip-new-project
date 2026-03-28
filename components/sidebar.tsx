@@ -393,9 +393,9 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                   <NavItem
                     icon={<BarChart3 size={18} />}
                     label="Trends"
-                    active={pathname.includes("/reports/reporting")}
+                    active={pathname.includes("/reports/trends")}
                     collapsed={false}
-                    onClick={() => navigate(`/${getClientSlug()}/reports/reporting`)}
+                    onClick={() => navigate(`/${getClientSlug()}/reports/trends`)}
                   />
                   {userRole === "super_admin" && (
                     <NavItem

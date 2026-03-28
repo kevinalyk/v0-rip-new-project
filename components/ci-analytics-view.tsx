@@ -305,25 +305,47 @@ export function CiAnalyticsView({
                 <CardDescription>Send volume by hour — darker cells indicate busier hours</CardDescription>
               </CardHeader>
               <CardContent>
-                {/* Bar chart */}
-                <div className="flex items-end gap-1 h-28 mb-4">
+                {/* Bar chart — fixed pixel height container with absolute-positioned bars */}
+                <div className="relative w-full mb-4" style={{ height: 112 }}>
+                  <div className="absolute inset-0 flex items-end gap-px">
+                    {data.hourOfDayData.map((h) => {
+                      const heightPx = Math.max(4, Math.round(h.intensity * 112))
+                      const bgOpacity = Math.max(0.18, h.intensity)
+                      return (
+                        <div key={h.hour} className="flex-1 relative group" style={{ height: heightPx }}>
+                          <div
+                            className="w-full h-full rounded-t transition-all"
+                            style={{ backgroundColor: `rgba(239, 68, 68, ${bgOpacity})` }}
+                          />
+                          {/* Tooltip */}
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:flex flex-col items-center z-20 pointer-events-none">
+                            <div className="bg-popover border rounded px-2 py-1 text-xs whitespace-nowrap shadow-md">
+                              <span className="font-medium">{h.label}</span>
+                              <span className="text-muted-foreground ml-1">— {h.count} sends</span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Heat map row — 24 cells with count on hover */}
+                <div className="grid gap-px mb-1" style={{ gridTemplateColumns: "repeat(24, minmax(0, 1fr))" }}>
                   {data.hourOfDayData.map((h) => {
-                    const heightPct = Math.max(4, Math.round(h.intensity * 100))
-                    const bgOpacity = Math.max(0.15, h.intensity)
+                    const bgOpacity = Math.max(0.1, h.intensity)
                     return (
-                      <div key={h.hour} className="flex-1 flex flex-col items-center justify-end gap-1 group relative">
-                        <div
-                          className="w-full rounded-t transition-all"
-                          style={{
-                            height: `${heightPct}%`,
-                            backgroundColor: `rgba(239, 68, 68, ${bgOpacity})`,
-                          }}
-                        />
-                        {/* Tooltip on hover */}
-                        <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center z-10 pointer-events-none">
+                      <div
+                        key={h.hour}
+                        className="relative flex flex-col items-center justify-center rounded-sm transition-all group cursor-default"
+                        style={{ height: 40, backgroundColor: `rgba(239, 68, 68, ${bgOpacity})` }}
+                      >
+                        <span className="text-xs font-bold text-white leading-none">{h.count > 0 ? h.count : ""}</span>
+                        {/* Tooltip */}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:flex flex-col items-center z-20 pointer-events-none">
                           <div className="bg-popover border rounded px-2 py-1 text-xs whitespace-nowrap shadow-md">
                             <span className="font-medium">{h.label}</span>
-                            <span className="text-muted-foreground ml-1">— {h.count} sends</span>
+                            <span className="text-muted-foreground ml-1">{h.count} sends</span>
                           </div>
                         </div>
                       </div>
@@ -331,26 +353,19 @@ export function CiAnalyticsView({
                   })}
                 </div>
 
-                {/* Heat map row — 24 cells colored by intensity */}
-                <div className="grid grid-cols-24 gap-px mb-2" style={{ gridTemplateColumns: "repeat(24, minmax(0, 1fr))" }}>
-                  {data.hourOfDayData.map((h) => {
-                    const bgOpacity = Math.max(0.08, h.intensity)
-                    return (
-                      <div
-                        key={h.hour}
-                        className="h-6 rounded-sm transition-all cursor-default group relative"
-                        style={{ backgroundColor: `rgba(239, 68, 68, ${bgOpacity})` }}
-                        title={`${h.label}: ${h.count} sends`}
-                      />
-                    )
-                  })}
-                </div>
-
-                {/* Hour labels — show every 3 hours */}
+                {/* Hour labels — show every 6 hours */}
                 <div className="grid text-xs text-muted-foreground" style={{ gridTemplateColumns: "repeat(24, minmax(0, 1fr))" }}>
                   {data.hourOfDayData.map((h) => (
                     <div key={h.hour} className="text-center">
-                      {h.hour % 6 === 0 ? (h.hour === 0 ? "12a" : h.hour === 12 ? "12p" : h.hour < 12 ? `${h.hour}a` : `${h.hour - 12}p`) : ""}
+                      {h.hour % 6 === 0
+                        ? h.hour === 0
+                          ? "12a"
+                          : h.hour === 12
+                            ? "12p"
+                            : h.hour < 12
+                              ? `${h.hour}a`
+                              : `${h.hour - 12}p`
+                        : ""}
                     </div>
                   ))}
                 </div>

@@ -392,11 +392,20 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                 <div className="ml-4 space-y-1">
                   <NavItem
                     icon={<BarChart3 size={18} />}
-                    label="Reporting"
-                    active={pathname.includes("/reports/")}
+                    label="Trends"
+                    active={pathname.includes("/reports/reporting")}
                     collapsed={false}
                     onClick={() => navigate(`/${getClientSlug()}/reports/reporting`)}
                   />
+                  {userRole === "super_admin" && (
+                    <NavItem
+                      icon={<Inbox size={18} />}
+                      label="Inboxing"
+                      active={pathname.includes("/reports/inboxing")}
+                      collapsed={false}
+                      onClick={() => navigate(`/${getClientSlug()}/reports/inboxing`)}
+                    />
+                  )}
                 </div>
               )}
             </>

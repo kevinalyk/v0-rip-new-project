@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation"
 import { CompetitiveInsights } from "@/components/competitive-insights"
 import { AppLayout } from "@/components/app-layout"
 import { useEffect, useState } from "react"
-import { Loader2, Lock, TrendingUp, BarChart2, PieChart } from "lucide-react"
+import { Loader2, Lock, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   AreaChart,
@@ -14,9 +14,6 @@ import {
   XAxis,
   YAxis,
   ResponsiveContainer,
-  PieChart as RechartsPieChart,
-  Pie,
-  Cell,
 } from "recharts"
 
 // Static placeholder data — never fetched, purely decorative
@@ -41,12 +38,6 @@ const staticBarData = [
   { name: "PAC", value: 10 },
 ]
 
-const staticPieData = [
-  { name: "Inbox", value: 62 },
-  { name: "Spam", value: 38 },
-]
-
-const PIE_COLORS = ["#4ade80", "#f87171"]
 
 function StaticCharts() {
   return (
@@ -84,31 +75,16 @@ function StaticCharts() {
         </ResponsiveContainer>
       </div>
 
-      {/* Bar + Pie row */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-lg border bg-card p-6">
-          <p className="font-semibold mb-4">Sends by Party</p>
-          <ResponsiveContainer width="100%" height={140}>
-            <BarChart data={staticBarData}>
-              <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <Bar dataKey="value" fill="#dc2a28" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="rounded-lg border bg-card p-6">
-          <p className="font-semibold mb-1">Email Placement</p>
-          <p className="text-xs text-muted-foreground mb-2">Inbox vs spam rate</p>
-          <ResponsiveContainer width="100%" height={140}>
-            <RechartsPieChart>
-              <Pie data={staticPieData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} dataKey="value">
-                {staticPieData.map((_, i) => (
-                  <Cell key={i} fill={PIE_COLORS[i]} />
-                ))}
-              </Pie>
-            </RechartsPieChart>
-          </ResponsiveContainer>
-        </div>
+      {/* Bar row */}
+      <div className="rounded-lg border bg-card p-6">
+        <p className="font-semibold mb-4">Sends by Party</p>
+        <ResponsiveContainer width="100%" height={140}>
+          <BarChart data={staticBarData}>
+            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+            <YAxis tick={{ fontSize: 10 }} />
+            <Bar dataKey="value" fill="#dc2a28" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     </div>
   )

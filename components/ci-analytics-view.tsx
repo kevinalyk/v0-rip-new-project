@@ -12,9 +12,6 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
 } from "recharts"
 import { PaywallOverlay } from "@/components/paywall-overlay"
 
@@ -37,7 +34,6 @@ interface CiAnalyticsViewProps {
   externalChartDays?: 7 | 30 | 90 | 365 // When provided (reporting view), buttons are in the parent header
 }
 
-const INBOX_COLORS = ["#22c55e", "#ef4444"]
 
 export function CiAnalyticsView({
   clientSlug,
@@ -274,8 +270,7 @@ export function CiAnalyticsView({
             )
           })()}
 
-          {(data?.dayOfWeekData?.some((d) => d.count > 0) || (data?.inboxingData?.length ?? 0) > 0) && <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Day of Week Activity */}
+          {data?.dayOfWeekData?.some((d) => d.count > 0) && (
             <Card>
               <CardHeader>
                 <CardTitle>Day of Week Activity</CardTitle>
@@ -301,58 +296,7 @@ export function CiAnalyticsView({
                 </div>
               </CardContent>
             </Card>
-
-            {/* Inboxing Pie Chart */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Email Placement</CardTitle>
-                <CardDescription>Inbox vs spam rate across all tracked emails</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {data.inboxingData.length > 0 ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="h-[280px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart margin={{ top: 30, right: 30, bottom: 30, left: 30 }}>
-                          <Pie
-                            data={data.inboxingData}
-                            cx="50%"
-                            cy="50%"
-                            outerRadius={80}
-                            innerRadius={48}
-                            dataKey="value"
-                            label={({ name, value }) => `${name}: ${value}%`}
-                            labelLine={true}
-                          >
-                            {data.inboxingData.map((_, index) => (
-                              <Cell key={`cell-${index}`} fill={INBOX_COLORS[index % INBOX_COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip formatter={(value: number) => [`${value}%`]} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div className="flex items-center gap-6 text-sm">
-                      {data.inboxingData.map((item, i) => (
-                        <div key={item.name} className="flex items-center gap-2">
-                          <span
-                            className="inline-block w-3 h-3 rounded-full"
-                            style={{ backgroundColor: INBOX_COLORS[i] }}
-                          />
-                          <span className="font-medium">{item.name}</span>
-                          <span className="text-muted-foreground">{item.value}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
-                    No placement data available for these campaigns
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>}
+          )}
         </>
       )}
     </div>

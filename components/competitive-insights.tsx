@@ -1142,14 +1142,7 @@ export function CompetitiveInsights({
         </div>
       )}
 
-      {isReportingView && (
-        <div className="mb-6 flex items-start gap-2 rounded-md border border-border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
-          <span className="mt-0.5 shrink-0">*</span>
-          <p>
-            Inboxing results are based on the seed emails we place on lists. These numbers show how often sends land in the inbox vs the spam folder.
-          </p>
-        </div>
-      )}
+
 
       {(subscriptionPlan === "free" || subscriptionPlan === "preview") && !hasAdminAccess && (
         <div

@@ -333,6 +333,13 @@ export async function GET(request: NextRequest) {
       return `${display}–${nextDisplay} ${period === nextPeriod ? period : period + "/" + nextPeriod}`
     }
     const mostActiveHour = formatHour(mostActiveHourIndex)
+    const maxHourCount = Math.max(...hourOfDayCounts, 1)
+    const hourOfDayData = hourOfDayCounts.map((count, h) => ({
+      hour: h,
+      label: formatHour(h),
+      count,
+      intensity: count / maxHourCount,
+    }))
 
     // --- Volume over time with 7-day moving average ---
     const allTimestamps = allDates.map(({ date }) => date.getTime())
@@ -402,6 +409,7 @@ export async function GET(request: NextRequest) {
       mostActiveDay,
       mostActiveHour,
       dayOfWeekData,
+      hourOfDayData,
       volumeData: trimmedVolumeData,
       inboxingData,
       hasCampaigns: totalEmails > 0 || totalSMS > 0,
@@ -423,6 +431,7 @@ function buildEmptyResponse() {
       count: 0,
       intensity: 0,
     })),
+    hourOfDayData: Array.from({ length: 24 }, (_, h) => ({ hour: h, label: "", count: 0, intensity: 0 })),
     volumeData: [],
     inboxingData: [],
     hasCampaigns: false,

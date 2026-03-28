@@ -777,6 +777,12 @@ export async function scanForCompetitiveInsights(options: {
 
     console.log(`✅ Finished parallel fetch for all ${ripSeedEmails.length} RIP seed emails`)
 
+    // Pre-fetch all personal email domains so we can resolve forwarded addresses without extra DB calls
+    const personalEmailDomains = await prisma.personalEmailDomain.findMany({
+      select: { domain: true },
+    })
+    const personalDomainSet = new Set(personalEmailDomains.map((d) => d.domain.toLowerCase()))
+
     // Group emails by fingerprint
     for (const { seedEmail, emails } of allEmailResults) {
       totalEmailsScanned += emails.length
@@ -788,8 +794,19 @@ export async function scanForCompetitiveInsights(options: {
           allEmailsByFingerprint.set(fingerprint, [])
         }
 
+        // For personal/forwarded emails, store the actual personal address (from the To: header)
+        // instead of inbox@rip-tool.com so seenBySeedEmails reflects the real recipient.
+        let effectiveSeedEmail = seedEmail.email
+        if (email.to) {
+          const toAddr = email.to.split(",")[0].trim().toLowerCase()
+          const toDomain = toAddr.split("@")[1]
+          if (toDomain && personalDomainSet.has(toDomain)) {
+            effectiveSeedEmail = toAddr
+          }
+        }
+
         allEmailsByFingerprint.get(fingerprint)!.push({
-          seedEmail: seedEmail.email,
+          seedEmail: effectiveSeedEmail,
           placement: email.placement,
           subject: sanitizedSubject,
           senderName: email.from.name,

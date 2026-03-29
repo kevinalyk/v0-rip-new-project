@@ -202,7 +202,7 @@ export async function GET(request: NextRequest) {
       ngpvan: ["ngpvan.com"],
     }
 
-    let emailCampaigns: { id: string; dateReceived: Date; inboxRate: number; inboxCount: number | null; spamCount: number | null; ctaLinks?: any; senderEmail?: string | null; entityParty?: string | null }[] = []
+    let emailCampaigns: { id: string; dateReceived: Date; inboxRate: number; inboxCount: number | null; spamCount: number | null; ctaLinks?: any; senderEmail?: string | null; entityId?: string | null; entityParty?: string | null }[] = []
     if (includeEmails) {
       const rawEmailCampaigns = await prisma.competitiveInsightCampaign.findMany({
         where: {
@@ -220,6 +220,7 @@ export async function GET(request: NextRequest) {
           spamCount: true,
           ctaLinks: true,
           senderEmail: true,
+          entityId: true,
           entity: { select: { party: true } },
         },
       })
@@ -603,6 +604,82 @@ export async function GET(request: NextRequest) {
 
     const trimmedInboxingByPlatformData = !fromDate ? inboxingByPlatformData.slice(-chartDays) : inboxingByPlatformData
 
+    // --- House file vs Third-party inbox rate over time ---
+    // Fetch all entity email/domain mappings unconditionally
+    const allMappingsForChart = await prisma.ciEntityMapping.findMany({
+      select: { entityId: true, senderEmail: true, senderDomain: true },
+    })
+    const mappingsByEntityForChart: Record<string, { emails: Set<string>; domains: Set<string> }> = {}
+    for (const m of allMappingsForChart) {
+      if (!mappingsByEntityForChart[m.entityId]) mappingsByEntityForChart[m.entityId] = { emails: new Set(), domains: new Set() }
+      if (m.senderEmail) mappingsByEntityForChart[m.entityId].emails.add(m.senderEmail.toLowerCase())
+      if (m.senderDomain) mappingsByEntityForChart[m.entityId].domains.add(m.senderDomain.toLowerCase())
+    }
+
+    const isThirdPartyCampaign = (c: { entityId?: string | null; senderEmail?: string | null }): boolean | null => {
+      if (!c.entityId) return null // can't classify
+      const em = mappingsByEntityForChart[c.entityId]
+      if (!em) return null // entity has no mappings — can't classify
+      const email = (c.senderEmail ?? "").toLowerCase()
+      const domain = email.split("@")[1]
+      return !em.emails.has(email) && (!domain || !em.domains.has(domain))
+    }
+
+    // Build daily map
+    type HFType = "houseFile" | "thirdParty"
+    const hfDailyMap = new Map<string, Record<HFType, { inboxCount: number; spamCount: number }>>()
+    const hfCursor = new Date(minDateKey + "T00:00:00")
+    const hfEndDate = new Date(maxDateKey + "T00:00:00")
+    while (hfCursor <= hfEndDate) {
+      const key = hfCursor.toISOString().split("T")[0]
+      hfDailyMap.set(key, {
+        houseFile: { inboxCount: 0, spamCount: 0 },
+        thirdParty: { inboxCount: 0, spamCount: 0 },
+      })
+      hfCursor.setDate(hfCursor.getDate() + 1)
+    }
+
+    for (const c of emailsWithPlacement) {
+      const tp = isThirdPartyCampaign(c)
+      if (tp === null) continue
+      const bucket: HFType = tp ? "thirdParty" : "houseFile"
+      const key = getLocalDateKey(new Date(c.dateReceived))
+      const entry = hfDailyMap.get(key)
+      if (!entry) continue
+      entry[bucket].inboxCount += c.inboxCount ?? 0
+      entry[bucket].spamCount += c.spamCount ?? 0
+    }
+
+    const hfDailyArray = Array.from(hfDailyMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, buckets]) => {
+        const hfTotal = buckets.houseFile.inboxCount + buckets.houseFile.spamCount
+        const tpTotal = buckets.thirdParty.inboxCount + buckets.thirdParty.spamCount
+        return {
+          date,
+          houseFileInboxRate: hfTotal > 0 ? Math.round((buckets.houseFile.inboxCount / hfTotal) * 1000) / 10 : null,
+          thirdPartyInboxRate: tpTotal > 0 ? Math.round((buckets.thirdParty.inboxCount / tpTotal) * 1000) / 10 : null,
+          hfTotal,
+          tpTotal,
+        }
+      })
+
+    const inboxingByFileTypeData = hfDailyArray.map((day, index) => {
+      const start = Math.max(0, index - 6)
+      const window = hfDailyArray.slice(start, index + 1)
+      const hfWindow = window.filter((d) => d.hfTotal > 0)
+      const tpWindow = window.filter((d) => d.tpTotal > 0)
+      return {
+        date: day.date,
+        houseFileInboxRate: day.houseFileInboxRate,
+        thirdPartyInboxRate: day.thirdPartyInboxRate,
+        houseFileAvg: hfWindow.length > 0 ? Math.round((hfWindow.reduce((s, d) => s + (d.houseFileInboxRate ?? 0), 0) / hfWindow.length) * 10) / 10 : null,
+        thirdPartyAvg: tpWindow.length > 0 ? Math.round((tpWindow.reduce((s, d) => s + (d.thirdPartyInboxRate ?? 0), 0) / tpWindow.length) * 10) / 10 : null,
+      }
+    })
+
+    const trimmedInboxingByFileTypeData = !fromDate ? inboxingByFileTypeData.slice(-chartDays) : inboxingByFileTypeData
+
     const totalEmails = emailCampaigns.length
     const totalSMS = smsMessages.length
 
@@ -624,6 +701,7 @@ export async function GET(request: NextRequest) {
       inboxingTimeData: trimmedInboxingTimeData,
       inboxingByPartyData: trimmedInboxingByPartyData,
       inboxingByPlatformData: trimmedInboxingByPlatformData,
+      inboxingByFileTypeData: trimmedInboxingByFileTypeData,
       hasCampaigns: totalEmails > 0 || totalSMS > 0,
     })
   } catch (error) {
@@ -649,6 +727,7 @@ function buildEmptyResponse() {
     inboxingTimeData: [],
     inboxingByPartyData: [],
     inboxingByPlatformData: [],
+    inboxingByFileTypeData: [],
     hasCampaigns: false,
   }
 }

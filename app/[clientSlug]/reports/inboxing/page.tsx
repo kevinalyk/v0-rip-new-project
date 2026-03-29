@@ -81,6 +81,14 @@ const PLATFORM_LABELS: Record<string, string> = {
   psq:     "PSQ",
 }
 
+interface InboxingByFileTypeDataPoint {
+  date: string
+  houseFileInboxRate: number | null
+  thirdPartyInboxRate: number | null
+  houseFileAvg: number | null
+  thirdPartyAvg: number | null
+}
+
 export default function InboxingPage() {
   const params = useParams()
   const clientSlug = params.clientSlug as string
@@ -89,6 +97,7 @@ export default function InboxingPage() {
   const [inboxingTimeData, setInboxingTimeData] = useState<InboxingTimeDataPoint[]>([])
   const [inboxingByPartyData, setInboxingByPartyData] = useState<InboxingByPartyDataPoint[]>([])
   const [inboxingByPlatformData, setInboxingByPlatformData] = useState<InboxingByPlatformDataPoint[]>([])
+  const [inboxingByFileTypeData, setInboxingByFileTypeData] = useState<InboxingByFileTypeDataPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -133,6 +142,7 @@ export default function InboxingPage() {
         setInboxingTimeData(data.inboxingTimeData?.length ? data.inboxingTimeData : [])
         setInboxingByPartyData(data.inboxingByPartyData?.length ? data.inboxingByPartyData : [])
         setInboxingByPlatformData(data.inboxingByPlatformData?.length ? data.inboxingByPlatformData : [])
+        setInboxingByFileTypeData(data.inboxingByFileTypeData?.length ? data.inboxingByFileTypeData : [])
       } else {
         console.log("[v0] API response not ok:", res.status, res.statusText)
       }
@@ -516,6 +526,64 @@ export default function InboxingPage() {
             ) : (
               <div className="h-[380px] flex items-center justify-center text-muted-foreground text-sm">
                 No platform placement data available for this period
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* House File vs Third-Party Inbox Rate */}
+        <Card>
+          <CardHeader>
+            <CardTitle>House File vs Third-Party Inbox Rate</CardTitle>
+            <CardDescription>
+              Daily inbox rate comparing house file sends to third-party sends with 7-day moving average
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="h-[380px] flex items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : inboxingByFileTypeData.filter((d) => d.houseFileInboxRate !== null || d.thirdPartyInboxRate !== null).length > 0 ? (
+              <div className="h-[380px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={inboxingByFileTypeData} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(v: string) => {
+                        const d = new Date(v + "T00:00:00")
+                        return `${d.getMonth() + 1}/${d.getDate()}`
+                      }}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(v: number) => `${v}%`}
+                      domain={[0, 100]}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--background))",
+                        border: "1px solid hsl(var(--border))",
+                      }}
+                      formatter={(value: number, name: string) => [
+                        value != null ? `${value}%` : "—",
+                        name,
+                      ]}
+                      labelFormatter={(v: string) => new Date(v + "T00:00:00").toLocaleDateString()}
+                    />
+                    <Legend />
+                    <Line type="monotone" dataKey="houseFileInboxRate" stroke="#22c55e" strokeWidth={2} name="House File" dot={{ fill: "#22c55e", r: 3 }} connectNulls={false} />
+                    <Line type="monotone" dataKey="houseFileAvg" stroke="#86efac" strokeWidth={2} strokeDasharray="5 5" name="House File (7d avg)" dot={false} connectNulls />
+                    <Line type="monotone" dataKey="thirdPartyInboxRate" stroke="#f59e0b" strokeWidth={2} name="Third Party" dot={{ fill: "#f59e0b", r: 3 }} connectNulls={false} />
+                    <Line type="monotone" dataKey="thirdPartyAvg" stroke="#fcd34d" strokeWidth={2} strokeDasharray="5 5" name="Third Party (7d avg)" dot={false} connectNulls />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[380px] flex items-center justify-center text-muted-foreground text-sm">
+                No house file or third-party placement data available for this period
               </div>
             )}
           </CardContent>

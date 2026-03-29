@@ -401,7 +401,8 @@ export default function InboxingPage() {
               )}
             </CardContent>
           </Card>
-          </div>
-          </AppLayout>
+        </div>
+      </div>
+    </AppLayout>
   )
 }

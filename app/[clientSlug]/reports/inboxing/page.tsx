@@ -44,7 +44,7 @@ export default function InboxingPage() {
 
   return (
     <AppLayout clientSlug={clientSlug} isAdminView={clientSlug === "admin"}>
-      <div className="space-y-6">
+      <div className="container mx-auto px-4 py-6 space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Inboxing Report</h1>
           <p className="text-muted-foreground">Email placement and deliverability analysis</p>

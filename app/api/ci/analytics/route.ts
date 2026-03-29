@@ -556,9 +556,14 @@ export async function GET(request: NextRequest) {
       platformCursor.setDate(platformCursor.getDate() + 1)
     }
 
+    console.log("[v0] emailsWithPlacement count:", emailsWithPlacement.length)
+    console.log("[v0] sample ctaLinks (first 3):", emailsWithPlacement.slice(0, 3).map(c => ({ id: c.id, ctaLinks: c.ctaLinks })))
+
+    let platformMatchCount = 0
     for (const c of emailsWithPlacement) {
       const platforms = getCampaignPlatforms(c)
       if (platforms.length === 0) continue
+      platformMatchCount++
       const key = getLocalDateKey(new Date(c.dateReceived))
       const entry = platformDailyMap.get(key)
       if (!entry) continue
@@ -568,6 +573,7 @@ export async function GET(request: NextRequest) {
         entry[p].spamCount += c.spamCount ?? 0
       }
     }
+    console.log("[v0] campaigns matched to a platform:", platformMatchCount)
 
     const platformDailyArray = Array.from(platformDailyMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))

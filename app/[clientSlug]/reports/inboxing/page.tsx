@@ -10,7 +10,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { CalendarIcon, Loader2, RefreshCw, RotateCcw, X } from "lucide-react"
 import { format } from "date-fns"
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts"
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Legend,
+} from "recharts"
 
 const INBOX_COLORS = ["#22c55e", "#ef4444"]
 
@@ -32,11 +35,20 @@ interface InboxingData {
   value: number
 }
 
+interface InboxingTimeDataPoint {
+  date: string
+  inboxRate: number | null
+  spamRate: number | null
+  inboxAvg: number | null
+  spamAvg: number | null
+}
+
 export default function InboxingPage() {
   const params = useParams()
   const clientSlug = params.clientSlug as string
 
   const [inboxingData, setInboxingData] = useState<InboxingData[]>([])
+  const [inboxingTimeData, setInboxingTimeData] = useState<InboxingTimeDataPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -78,6 +90,7 @@ export default function InboxingPage() {
       if (res.ok) {
         const data = await res.json()
         setInboxingData(data.inboxingData?.length ? data.inboxingData : [])
+        setInboxingTimeData(data.inboxingTimeData?.length ? data.inboxingTimeData : [])
       }
     } catch {
       // silently fail
@@ -237,7 +250,8 @@ export default function InboxingPage() {
           </div>
         </div>
 
-        <Card className="max-w-md">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
           <CardHeader>
             <CardTitle>Overall Deliverability</CardTitle>
             <CardDescription>
@@ -289,12 +303,105 @@ export default function InboxingPage() {
               </div>
             ) : (
               <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
-                No placement data available
-              </div>
-            )}
+          No placement data available
+          </div>
+          )}
           </CardContent>
-        </Card>
-      </div>
-    </AppLayout>
+          </Card>
+
+          {/* Inbox Rate Over Time */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Inbox Rate Over Time</CardTitle>
+              <CardDescription>
+                Daily inbox vs spam rate with 7-day moving average
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="h-[320px] flex items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : inboxingTimeData.filter((d) => d.inboxRate !== null).length > 0 ? (
+                <ResponsiveContainer width="100%" height={320}>
+                  <LineChart data={inboxingTimeData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 11 }}
+                      tickFormatter={(v: string) => {
+                        const d = new Date(v + "T00:00:00")
+                        return `${d.getMonth() + 1}/${d.getDate()}`
+                      }}
+                      interval="preserveStartEnd"
+                      stroke="hsl(var(--muted-foreground))"
+                    />
+                    <YAxis
+                      tickFormatter={(v: number) => `${v}%`}
+                      domain={[0, 100]}
+                      tick={{ fontSize: 11 }}
+                      stroke="hsl(var(--muted-foreground))"
+                    />
+                    <Tooltip
+                      formatter={(value: number, name: string) => [
+                        value != null ? `${value}%` : "—",
+                        name,
+                      ]}
+                      labelFormatter={(label: string) => {
+                        const d = new Date(label + "T00:00:00")
+                        return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                      }}
+                      contentStyle={{ fontSize: 12 }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                    <Line
+                      type="monotone"
+                      dataKey="inboxRate"
+                      name="Inbox"
+                      stroke="#22c55e"
+                      dot={{ r: 2 }}
+                      activeDot={{ r: 4 }}
+                      connectNulls={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="spamRate"
+                      name="Spam"
+                      stroke="#ef4444"
+                      dot={{ r: 2 }}
+                      activeDot={{ r: 4 }}
+                      connectNulls={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="inboxAvg"
+                      name="Inbox (7d avg)"
+                      stroke="#22c55e"
+                      strokeDasharray="5 4"
+                      dot={false}
+                      strokeWidth={1.5}
+                      connectNulls
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="spamAvg"
+                      name="Spam (7d avg)"
+                      stroke="#ef4444"
+                      strokeDasharray="5 4"
+                      dot={false}
+                      strokeWidth={1.5}
+                      connectNulls
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-[320px] flex items-center justify-center text-muted-foreground text-sm">
+                  No placement data available for this period
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          </div>
+          </AppLayout>
   )
 }

@@ -396,12 +396,64 @@ export async function GET(request: NextRequest) {
           ]
         : []
 
+    // --- Inboxing over time (daily inbox rate & spam rate with 7-day moving average) ---
+    // Build a daily map covering the same date range as volumeData
+    const inboxDailyMap = new Map<string, { inboxCount: number; spamCount: number }>()
+    const inboxCursor = new Date(minDateKey + "T00:00:00")
+    const inboxEndDate = new Date(maxDateKey + "T00:00:00")
+    while (inboxCursor <= inboxEndDate) {
+      const key = inboxCursor.toISOString().split("T")[0]
+      inboxDailyMap.set(key, { inboxCount: 0, spamCount: 0 })
+      inboxCursor.setDate(inboxCursor.getDate() + 1)
+    }
+
+    for (const c of emailsWithPlacement) {
+      const key = getLocalDateKey(new Date(c.dateReceived))
+      const entry = inboxDailyMap.get(key)
+      if (entry) {
+        entry.inboxCount += c.inboxCount ?? 0
+        entry.spamCount += c.spamCount ?? 0
+      }
+    }
+
+    const inboxDailyArray = Array.from(inboxDailyMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, counts]) => {
+        const total = counts.inboxCount + counts.spamCount
+        const inboxRate = total > 0 ? Math.round((counts.inboxCount / total) * 1000) / 10 : null
+        const spamRate = total > 0 ? Math.round((counts.spamCount / total) * 1000) / 10 : null
+        return { date, inboxRate, spamRate, total }
+      })
+
+    // Compute 7-day moving average for inbox/spam rate (only over days with data)
+    const inboxingTimeData = inboxDailyArray.map((day, index) => {
+      const start = Math.max(0, index - 6)
+      const windowWithData = inboxDailyArray.slice(start, index + 1).filter((d) => d.total > 0)
+      const inboxAvg =
+        windowWithData.length > 0
+          ? Math.round((windowWithData.reduce((s, d) => s + (d.inboxRate ?? 0), 0) / windowWithData.length) * 10) / 10
+          : null
+      const spamAvg =
+        windowWithData.length > 0
+          ? Math.round((windowWithData.reduce((s, d) => s + (d.spamRate ?? 0), 0) / windowWithData.length) * 10) / 10
+          : null
+      return {
+        date: day.date,
+        inboxRate: day.inboxRate,
+        spamRate: day.spamRate,
+        inboxAvg,
+        spamAvg,
+      }
+    })
+
     const totalEmails = emailCampaigns.length
     const totalSMS = smsMessages.length
 
     // Trim volumeData to the requested chartDays window for display.
     // The extra 6 days fetched were only needed for moving average warm-up.
     const trimmedVolumeData = !fromDate ? volumeData.slice(-chartDays) : volumeData
+
+    const trimmedInboxingTimeData = !fromDate ? inboxingTimeData.slice(-chartDays) : inboxingTimeData
 
     return NextResponse.json({
       totalEmails,
@@ -412,6 +464,7 @@ export async function GET(request: NextRequest) {
       hourOfDayData,
       volumeData: trimmedVolumeData,
       inboxingData,
+      inboxingTimeData: trimmedInboxingTimeData,
       hasCampaigns: totalEmails > 0 || totalSMS > 0,
     })
   } catch (error) {
@@ -434,6 +487,7 @@ function buildEmptyResponse() {
     hourOfDayData: Array.from({ length: 24 }, (_, h) => ({ hour: h, label: "", count: 0, intensity: 0 })),
     volumeData: [],
     inboxingData: [],
+    inboxingTimeData: [],
     hasCampaigns: false,
   }
 }

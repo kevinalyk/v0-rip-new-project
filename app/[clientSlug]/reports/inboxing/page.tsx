@@ -4,10 +4,28 @@ import { useParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { AppLayout } from "@/components/app-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar as CalendarComponent } from "@/components/ui/calendar"
+import { CalendarIcon, Loader2, RefreshCw, RotateCcw, X } from "lucide-react"
+import { format } from "date-fns"
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts"
 
 const INBOX_COLORS = ["#22c55e", "#ef4444"]
+
+const US_STATES = [
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+  "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+  "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+  "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+  "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+]
+
+interface DateRange {
+  from: Date | undefined
+  to: Date | undefined
+}
 
 interface InboxingData {
   name: string
@@ -17,30 +35,56 @@ interface InboxingData {
 export default function InboxingPage() {
   const params = useParams()
   const clientSlug = params.clientSlug as string
+
   const [inboxingData, setInboxingData] = useState<InboxingData[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+
+  // Filters
+  const [selectedState, setSelectedState] = useState("all")
+  const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined })
+  const [isFromCalendarOpen, setIsFromCalendarOpen] = useState(false)
+  const [isToCalendarOpen, setIsToCalendarOpen] = useState(false)
+
+  const isFiltersActive =
+    selectedState !== "all" || !!dateRange.from || !!dateRange.to
+
+  const fetchData = async (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true)
+    } else {
+      setLoading(true)
+    }
+    try {
+      const qp = new URLSearchParams()
+      qp.append("clientSlug", clientSlug)
+      qp.append("chartDays", "30")
+      if (selectedState !== "all") qp.append("state", selectedState)
+      if (dateRange.from) qp.append("fromDate", dateRange.from.toISOString())
+      if (dateRange.to) qp.append("toDate", dateRange.to.toISOString())
+
+      const res = await fetch(`/api/ci/analytics?${qp}`, { credentials: "include" })
+      if (res.ok) {
+        const data = await res.json()
+        setInboxingData(data.inboxingData?.length ? data.inboxingData : [])
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const params = new URLSearchParams()
-        params.append("clientSlug", clientSlug)
-        params.append("days", "30")
-        const res = await fetch(`/api/ci/analytics?${params}`, { credentials: "include" })
-        if (res.ok) {
-          const data = await res.json()
-          if (data.inboxingData?.length) {
-            setInboxingData(data.inboxingData)
-          }
-        }
-      } catch {
-        // silently fail
-      } finally {
-        setLoading(false)
-      }
-    }
     fetchData()
-  }, [clientSlug])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientSlug, selectedState, dateRange])
+
+  const resetFilters = () => {
+    setSelectedState("all")
+    setDateRange({ from: undefined, to: undefined })
+  }
 
   return (
     <AppLayout clientSlug={clientSlug} isAdminView={clientSlug === "admin"}>
@@ -50,10 +94,132 @@ export default function InboxingPage() {
           <p className="text-muted-foreground">Email placement and deliverability analysis</p>
         </div>
 
+        {/* Filter bar */}
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* State filter */}
+            <Select value={selectedState} onValueChange={setSelectedState}>
+              <SelectTrigger className="w-full md:w-[180px]">
+                <SelectValue placeholder="Filter by state" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[300px]">
+                <SelectItem value="all">All States</SelectItem>
+                {US_STATES.map((state) => (
+                  <SelectItem key={state} value={state}>
+                    {state}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Date range */}
+            <div className="flex items-center gap-2">
+              <Popover open={isFromCalendarOpen} onOpenChange={setIsFromCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-[140px] justify-start text-left font-normal bg-transparent"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange.from ? (
+                      format(dateRange.from, "MMM d, yyyy")
+                    ) : (
+                      <span className="text-muted-foreground">From</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="single"
+                    selected={dateRange.from}
+                    onSelect={(date) => {
+                      setDateRange((prev) => ({ ...prev, from: date }))
+                      setIsFromCalendarOpen(false)
+                    }}
+                    numberOfMonths={1}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+
+              <span className="text-muted-foreground">-</span>
+
+              <Popover open={isToCalendarOpen} onOpenChange={setIsToCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-[140px] justify-start text-left font-normal bg-transparent"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange.to ? (
+                      format(dateRange.to, "MMM d, yyyy")
+                    ) : (
+                      <span className="text-muted-foreground">To</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="single"
+                    selected={dateRange.to}
+                    onSelect={(date) => {
+                      setDateRange((prev) => ({ ...prev, to: date }))
+                      setIsToCalendarOpen(false)
+                    }}
+                    disabled={(date) => {
+                      if (dateRange.from) return date < dateRange.from
+                      return false
+                    }}
+                    numberOfMonths={1}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+
+              {(dateRange.from || dateRange.to) && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9"
+                  onClick={() => setDateRange({ from: undefined, to: undefined })}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
+            {/* Refresh */}
+            <Button
+              variant="outline"
+              onClick={() => fetchData(true)}
+              className="w-full md:w-auto bg-transparent"
+              disabled={refreshing}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              {refreshing ? "Refreshing..." : "Refresh"}
+            </Button>
+
+            {/* Reset */}
+            <Button
+              variant="outline"
+              onClick={resetFilters}
+              className="w-full md:w-auto bg-transparent"
+              disabled={!isFiltersActive}
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Reset Filters
+            </Button>
+          </div>
+        </div>
+
         <Card className="max-w-md">
           <CardHeader>
             <CardTitle>Overall Deliverability</CardTitle>
-            <CardDescription>Inbox vs spam rate across all tracked emails (last 30 days)</CardDescription>
+            <CardDescription>
+              {dateRange.from || dateRange.to
+                ? `Inbox vs spam rate${dateRange.from ? ` from ${format(dateRange.from, "MMM d, yyyy")}` : ""}${dateRange.to ? ` to ${format(dateRange.to, "MMM d, yyyy")}` : ""}`
+                : "Inbox vs spam rate across all tracked emails (last 30 days)"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (

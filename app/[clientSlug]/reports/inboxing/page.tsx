@@ -485,31 +485,29 @@ export default function InboxingPage() {
                       labelFormatter={(v: string) => new Date(v + "T00:00:00").toLocaleDateString()}
                     />
                     <Legend />
-                    {(["winred", "actblue", "anedot", "psq"] as const).map((p) => (
-                      <>
-                        <Line
-                          key={`${p}-rate`}
-                          type="monotone"
-                          dataKey={`${p}InboxRate`}
-                          stroke={PLATFORM_COLORS[p].solid}
-                          strokeWidth={2}
-                          name={PLATFORM_LABELS[p]}
-                          dot={{ fill: PLATFORM_COLORS[p].solid, r: 3 }}
-                          connectNulls={false}
-                        />
-                        <Line
-                          key={`${p}-avg`}
-                          type="monotone"
-                          dataKey={`${p}InboxAvg`}
-                          stroke={PLATFORM_COLORS[p].avg}
-                          strokeWidth={2}
-                          strokeDasharray="5 5"
-                          name={`${PLATFORM_LABELS[p]} (7d avg)`}
-                          dot={false}
-                          connectNulls
-                        />
-                      </>
-                    ))}
+                    {(["winred", "actblue", "anedot", "psq"] as const).flatMap((p) => [
+                      <Line
+                        key={`${p}-rate`}
+                        type="monotone"
+                        dataKey={`${p}InboxRate`}
+                        stroke={PLATFORM_COLORS[p].solid}
+                        strokeWidth={2}
+                        name={PLATFORM_LABELS[p]}
+                        dot={{ fill: PLATFORM_COLORS[p].solid, r: 3 }}
+                        connectNulls={false}
+                      />,
+                      <Line
+                        key={`${p}-avg`}
+                        type="monotone"
+                        dataKey={`${p}InboxAvg`}
+                        stroke={PLATFORM_COLORS[p].avg}
+                        strokeWidth={2}
+                        strokeDasharray="5 5"
+                        name={`${PLATFORM_LABELS[p]} (7d avg)`}
+                        dot={false}
+                        connectNulls
+                      />,
+                    ])}
                   </LineChart>
                 </ResponsiveContainer>
               </div>

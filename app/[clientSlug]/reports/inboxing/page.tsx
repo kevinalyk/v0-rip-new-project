@@ -41,6 +41,7 @@ export default function InboxingPage() {
   const [refreshing, setRefreshing] = useState(false)
 
   // Filters
+  const [chartDays, setChartDays] = useState<7 | 30 | 90 | 365>(30)
   const [selectedState, setSelectedState] = useState("all")
   const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined })
   const [isFromCalendarOpen, setIsFromCalendarOpen] = useState(false)
@@ -48,6 +49,12 @@ export default function InboxingPage() {
 
   const isFiltersActive =
     selectedState !== "all" || !!dateRange.from || !!dateRange.to
+
+  const handleChartDaysChange = (d: 7 | 30 | 90 | 365) => {
+    setChartDays(d)
+    // Clear custom date range when a preset period is selected
+    setDateRange({ from: undefined, to: undefined })
+  }
 
   const fetchData = async (isRefresh = false) => {
     if (isRefresh) {
@@ -58,10 +65,14 @@ export default function InboxingPage() {
     try {
       const qp = new URLSearchParams()
       qp.append("clientSlug", clientSlug)
-      qp.append("chartDays", "30")
+      // Use custom date range if set, otherwise use the preset period
+      if (dateRange.from || dateRange.to) {
+        if (dateRange.from) qp.append("fromDate", dateRange.from.toISOString())
+        if (dateRange.to) qp.append("toDate", dateRange.to.toISOString())
+      } else {
+        qp.append("chartDays", String(chartDays))
+      }
       if (selectedState !== "all") qp.append("state", selectedState)
-      if (dateRange.from) qp.append("fromDate", dateRange.from.toISOString())
-      if (dateRange.to) qp.append("toDate", dateRange.to.toISOString())
 
       const res = await fetch(`/api/ci/analytics?${qp}`, { credentials: "include" })
       if (res.ok) {
@@ -79,19 +90,33 @@ export default function InboxingPage() {
   useEffect(() => {
     fetchData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientSlug, selectedState, dateRange])
+  }, [clientSlug, chartDays, selectedState, dateRange])
 
   const resetFilters = () => {
     setSelectedState("all")
     setDateRange({ from: undefined, to: undefined })
+    setChartDays(30)
   }
 
   return (
     <AppLayout clientSlug={clientSlug} isAdminView={clientSlug === "admin"}>
       <div className="container mx-auto px-4 py-6 space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Inboxing Report</h1>
-          <p className="text-muted-foreground">Email placement and deliverability analysis</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">Inboxing Report</h1>
+            <p className="text-muted-foreground">Email placement and deliverability analysis</p>
+          </div>
+          <div className="flex items-center gap-1 text-xs border rounded-md overflow-hidden shrink-0">
+            {([7, 30, 90, 365] as const).map((d) => (
+              <button
+                key={d}
+                onClick={() => handleChartDaysChange(d)}
+                className={`px-3 py-1.5 transition-colors ${chartDays === d && !dateRange.from && !dateRange.to ? "bg-foreground text-background font-medium" : "hover:bg-muted text-muted-foreground"}`}
+              >
+                {d === 365 ? "1Y" : `${d}D`}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Filter bar */}
@@ -218,7 +243,7 @@ export default function InboxingPage() {
             <CardDescription>
               {dateRange.from || dateRange.to
                 ? `Inbox vs spam rate${dateRange.from ? ` from ${format(dateRange.from, "MMM d, yyyy")}` : ""}${dateRange.to ? ` to ${format(dateRange.to, "MMM d, yyyy")}` : ""}`
-                : "Inbox vs spam rate across all tracked emails (last 30 days)"}
+                : `Inbox vs spam rate across all tracked emails (last ${chartDays === 365 ? "year" : `${chartDays} days`})`}
             </CardDescription>
           </CardHeader>
           <CardContent>

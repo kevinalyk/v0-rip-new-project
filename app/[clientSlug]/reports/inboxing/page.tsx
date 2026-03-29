@@ -55,6 +55,32 @@ interface InboxingByPartyDataPoint {
   demSpamAvg: number | null
 }
 
+interface InboxingByPlatformDataPoint {
+  date: string
+  winredInboxRate: number | null
+  winredInboxAvg: number | null
+  actblueInboxRate: number | null
+  actblueInboxAvg: number | null
+  anedotInboxRate: number | null
+  anedotInboxAvg: number | null
+  psqInboxRate: number | null
+  psqInboxAvg: number | null
+}
+
+const PLATFORM_COLORS: Record<string, { solid: string; avg: string }> = {
+  winred:   { solid: "#ef4444", avg: "#fca5a5" },
+  actblue:  { solid: "#3b82f6", avg: "#93c5fd" },
+  anedot:   { solid: "#f59e0b", avg: "#fcd34d" },
+  psq:      { solid: "#8b5cf6", avg: "#c4b5fd" },
+}
+
+const PLATFORM_LABELS: Record<string, string> = {
+  winred:  "WinRed",
+  actblue: "ActBlue",
+  anedot:  "Anedot",
+  psq:     "PSQ",
+}
+
 export default function InboxingPage() {
   const params = useParams()
   const clientSlug = params.clientSlug as string
@@ -62,6 +88,7 @@ export default function InboxingPage() {
   const [inboxingData, setInboxingData] = useState<InboxingData[]>([])
   const [inboxingTimeData, setInboxingTimeData] = useState<InboxingTimeDataPoint[]>([])
   const [inboxingByPartyData, setInboxingByPartyData] = useState<InboxingByPartyDataPoint[]>([])
+  const [inboxingByPlatformData, setInboxingByPlatformData] = useState<InboxingByPlatformDataPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -105,6 +132,7 @@ export default function InboxingPage() {
         setInboxingData(data.inboxingData?.length ? data.inboxingData : [])
         setInboxingTimeData(data.inboxingTimeData?.length ? data.inboxingTimeData : [])
         setInboxingByPartyData(data.inboxingByPartyData?.length ? data.inboxingByPartyData : [])
+        setInboxingByPlatformData(data.inboxingByPlatformData?.length ? data.inboxingByPlatformData : [])
       }
     } catch {
       // silently fail
@@ -407,6 +435,87 @@ export default function InboxingPage() {
             ) : (
               <div className="h-[380px] flex items-center justify-center text-muted-foreground text-sm">
                 No party placement data available for this period
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Inbox Rate by Platform */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Inbox Rate by Platform</CardTitle>
+            <CardDescription>
+              Daily inbox rate per donation platform with 7-day moving average
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="h-[380px] flex items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (["winred", "actblue", "anedot", "psq"] as const).some((p) =>
+                inboxingByPlatformData.some((d) => d[`${p}InboxRate`] !== null)
+              ) ? (
+              <div className="h-[380px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={inboxingByPlatformData} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(v: string) => {
+                        const d = new Date(v + "T00:00:00")
+                        return `${d.getMonth() + 1}/${d.getDate()}`
+                      }}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(v: number) => `${v}%`}
+                      domain={[0, 100]}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--background))",
+                        border: "1px solid hsl(var(--border))",
+                      }}
+                      formatter={(value: number, name: string) => [
+                        value != null ? `${value}%` : "—",
+                        name,
+                      ]}
+                      labelFormatter={(v: string) => new Date(v + "T00:00:00").toLocaleDateString()}
+                    />
+                    <Legend />
+                    {(["winred", "actblue", "anedot", "psq"] as const).map((p) => (
+                      <>
+                        <Line
+                          key={`${p}-rate`}
+                          type="monotone"
+                          dataKey={`${p}InboxRate`}
+                          stroke={PLATFORM_COLORS[p].solid}
+                          strokeWidth={2}
+                          name={PLATFORM_LABELS[p]}
+                          dot={{ fill: PLATFORM_COLORS[p].solid, r: 3 }}
+                          connectNulls={false}
+                        />
+                        <Line
+                          key={`${p}-avg`}
+                          type="monotone"
+                          dataKey={`${p}InboxAvg`}
+                          stroke={PLATFORM_COLORS[p].avg}
+                          strokeWidth={2}
+                          strokeDasharray="5 5"
+                          name={`${PLATFORM_LABELS[p]} (7d avg)`}
+                          dot={false}
+                          connectNulls
+                        />
+                      </>
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[380px] flex items-center justify-center text-muted-foreground text-sm">
+                No platform placement data available for this period
               </div>
             )}
           </CardContent>

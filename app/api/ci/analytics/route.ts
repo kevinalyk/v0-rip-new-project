@@ -511,6 +511,92 @@ export async function GET(request: NextRequest) {
 
     const trimmedInboxingByPartyData = !fromDate ? inboxingByPartyData.slice(-chartDays) : inboxingByPartyData
 
+    // --- Inbox Rate by Platform over time ---
+    const INBOXING_PLATFORMS = ["winred", "actblue", "anedot", "psq"] as const
+    type InboxingPlatform = typeof INBOXING_PLATFORMS[number]
+    const inboxingPlatformDomains: Record<InboxingPlatform, string[]> = {
+      winred: ["winred.com"],
+      actblue: ["actblue.com"],
+      anedot: ["anedot.com"],
+      psq: ["psqimpact.com", "politicalsurveyquestions.com", "psqsurveys.com"],
+    }
+
+    // Helper: detect which platforms a campaign links to (can match multiple)
+    const getCampaignPlatforms = (c: { ctaLinks?: any }): InboxingPlatform[] => {
+      let links: any[] = []
+      if (Array.isArray(c.ctaLinks)) {
+        links = c.ctaLinks
+      } else if (typeof c.ctaLinks === "string") {
+        try { links = JSON.parse(c.ctaLinks) } catch { links = [] }
+      }
+      const matched = new Set<InboxingPlatform>()
+      for (const link of links) {
+        const url = ((typeof link === "string" ? link : (link?.finalUrl || link?.url || "")) as string).toLowerCase()
+        for (const platform of INBOXING_PLATFORMS) {
+          if (inboxingPlatformDomains[platform].some((d) => url.includes(d))) {
+            matched.add(platform)
+          }
+        }
+      }
+      return Array.from(matched)
+    }
+
+    // Build daily map per platform
+    const platformDailyMap = new Map<string, Record<InboxingPlatform, { inboxCount: number; spamCount: number }>>()
+    const platformCursor = new Date(minDateKey + "T00:00:00")
+    const platformEndDate = new Date(maxDateKey + "T00:00:00")
+    while (platformCursor <= platformEndDate) {
+      const key = platformCursor.toISOString().split("T")[0]
+      platformDailyMap.set(key, {
+        winred: { inboxCount: 0, spamCount: 0 },
+        actblue: { inboxCount: 0, spamCount: 0 },
+        anedot: { inboxCount: 0, spamCount: 0 },
+        psq: { inboxCount: 0, spamCount: 0 },
+      })
+      platformCursor.setDate(platformCursor.getDate() + 1)
+    }
+
+    for (const c of emailsWithPlacement) {
+      const platforms = getCampaignPlatforms(c)
+      if (platforms.length === 0) continue
+      const key = getLocalDateKey(new Date(c.dateReceived))
+      const entry = platformDailyMap.get(key)
+      if (!entry) continue
+      // Attribute inbox/spam counts to each matched platform
+      for (const p of platforms) {
+        entry[p].inboxCount += c.inboxCount ?? 0
+        entry[p].spamCount += c.spamCount ?? 0
+      }
+    }
+
+    const platformDailyArray = Array.from(platformDailyMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, plats]) => {
+        const row: Record<string, string | number | null> = { date }
+        for (const p of INBOXING_PLATFORMS) {
+          const total = plats[p].inboxCount + plats[p].spamCount
+          row[`${p}InboxRate`] = total > 0 ? Math.round((plats[p].inboxCount / total) * 1000) / 10 : null
+          row[`${p}Total`] = total
+        }
+        return row
+      })
+
+    const inboxingByPlatformData = platformDailyArray.map((day, index) => {
+      const start = Math.max(0, index - 6)
+      const window = platformDailyArray.slice(start, index + 1)
+      const row: Record<string, string | number | null> = { date: day.date }
+      for (const p of INBOXING_PLATFORMS) {
+        row[`${p}InboxRate`] = day[`${p}InboxRate`]
+        const w = window.filter((d) => (d[`${p}Total`] as number) > 0)
+        row[`${p}InboxAvg`] = w.length > 0
+          ? Math.round((w.reduce((s, d) => s + ((d[`${p}InboxRate`] as number) ?? 0), 0) / w.length) * 10) / 10
+          : null
+      }
+      return row
+    })
+
+    const trimmedInboxingByPlatformData = !fromDate ? inboxingByPlatformData.slice(-chartDays) : inboxingByPlatformData
+
     const totalEmails = emailCampaigns.length
     const totalSMS = smsMessages.length
 
@@ -531,6 +617,7 @@ export async function GET(request: NextRequest) {
       inboxingData,
       inboxingTimeData: trimmedInboxingTimeData,
       inboxingByPartyData: trimmedInboxingByPartyData,
+      inboxingByPlatformData: trimmedInboxingByPlatformData,
       hasCampaigns: totalEmails > 0 || totalSMS > 0,
     })
   } catch (error) {
@@ -555,6 +642,7 @@ function buildEmptyResponse() {
     inboxingData: [],
     inboxingTimeData: [],
     inboxingByPartyData: [],
+    inboxingByPlatformData: [],
     hasCampaigns: false,
   }
 }

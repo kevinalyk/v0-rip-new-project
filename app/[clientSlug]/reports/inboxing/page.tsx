@@ -357,7 +357,7 @@ export default function InboxingPage() {
           <CardHeader>
             <CardTitle>Inbox Rate by Party</CardTitle>
             <CardDescription>
-              Daily Republican vs Democrat inbox and spam rate with 7-day moving average
+              Daily Republican vs Democrat inbox rate with 7-day moving average
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -395,16 +395,12 @@ export default function InboxingPage() {
                       labelFormatter={(v: string) => new Date(v + "T00:00:00").toLocaleDateString()}
                     />
                     <Legend />
-                    {/* Republican lines — red */}
+                    {/* Republican inbox — red */}
                     <Line type="monotone" dataKey="repInboxRate" stroke="#ef4444" strokeWidth={2} name="Rep Inbox" dot={{ fill: "#ef4444", r: 3 }} connectNulls={false} />
-                    <Line type="monotone" dataKey="repSpamRate" stroke="#ef4444" strokeWidth={2} name="Rep Spam" dot={{ fill: "#ef4444", r: 3 }} strokeDasharray="4 3" connectNulls={false} />
                     <Line type="monotone" dataKey="repInboxAvg" stroke="#fca5a5" strokeWidth={2} strokeDasharray="5 5" name="Rep Inbox (7d avg)" dot={false} connectNulls />
-                    <Line type="monotone" dataKey="repSpamAvg" stroke="#fca5a5" strokeWidth={1.5} strokeDasharray="2 4" name="Rep Spam (7d avg)" dot={false} connectNulls />
-                    {/* Democrat lines — blue */}
+                    {/* Democrat inbox — blue */}
                     <Line type="monotone" dataKey="demInboxRate" stroke="#3b82f6" strokeWidth={2} name="Dem Inbox" dot={{ fill: "#3b82f6", r: 3 }} connectNulls={false} />
-                    <Line type="monotone" dataKey="demSpamRate" stroke="#3b82f6" strokeWidth={2} name="Dem Spam" dot={{ fill: "#3b82f6", r: 3 }} strokeDasharray="4 3" connectNulls={false} />
                     <Line type="monotone" dataKey="demInboxAvg" stroke="#93c5fd" strokeWidth={2} strokeDasharray="5 5" name="Dem Inbox (7d avg)" dot={false} connectNulls />
-                    <Line type="monotone" dataKey="demSpamAvg" stroke="#93c5fd" strokeWidth={1.5} strokeDasharray="2 4" name="Dem Spam (7d avg)" dot={false} connectNulls />
                   </LineChart>
                 </ResponsiveContainer>
               </div>

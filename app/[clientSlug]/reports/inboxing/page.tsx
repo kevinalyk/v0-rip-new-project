@@ -143,8 +143,6 @@ export default function InboxingPage() {
         setInboxingByPartyData(data.inboxingByPartyData?.length ? data.inboxingByPartyData : [])
         setInboxingByPlatformData(data.inboxingByPlatformData?.length ? data.inboxingByPlatformData : [])
         setInboxingByFileTypeData(data.inboxingByFileTypeData?.length ? data.inboxingByFileTypeData : [])
-      } else {
-        console.log("[v0] API response not ok:", res.status, res.statusText)
       }
     } catch {
       // silently fail

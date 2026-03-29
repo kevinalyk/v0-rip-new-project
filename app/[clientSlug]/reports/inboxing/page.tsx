@@ -126,13 +126,9 @@ export default function InboxingPage() {
       }
       if (selectedState !== "all") qp.append("state", selectedState)
 
-      console.log("[v0] Fetching inboxing data:", `/api/ci/analytics?${qp}`)
       const res = await fetch(`/api/ci/analytics?${qp}`, { credentials: "include" })
       if (res.ok) {
         const data = await res.json()
-        console.log("[v0] inboxingByPlatformData length:", data.inboxingByPlatformData?.length)
-        console.log("[v0] inboxingByPlatformData sample (first 3):", data.inboxingByPlatformData?.slice(0, 3))
-        console.log("[v0] inboxingByPartyData length:", data.inboxingByPartyData?.length)
         setInboxingData(data.inboxingData?.length ? data.inboxingData : [])
         setInboxingTimeData(data.inboxingTimeData?.length ? data.inboxingTimeData : [])
         setInboxingByPartyData(data.inboxingByPartyData?.length ? data.inboxingByPartyData : [])

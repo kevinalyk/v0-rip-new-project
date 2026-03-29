@@ -250,14 +250,102 @@ export default function InboxingPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Inbox Rate Over Time — full width, on top */}
         <Card>
+          <CardHeader>
+            <CardTitle>Inbox Rate Over Time</CardTitle>
+            <CardDescription>
+              Daily inbox vs spam rate with 7-day moving average
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="h-[380px] flex items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : inboxingTimeData.filter((d) => d.inboxRate !== null).length > 0 ? (
+              <div className="h-[380px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={inboxingTimeData} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(v: string) => {
+                        const d = new Date(v + "T00:00:00")
+                        return `${d.getMonth() + 1}/${d.getDate()}`
+                      }}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(v: number) => `${v}%`}
+                      domain={[0, 100]}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--background))",
+                        border: "1px solid hsl(var(--border))",
+                      }}
+                      formatter={(value: number, name: string) => [
+                        value != null ? `${value}%` : "—",
+                        name,
+                      ]}
+                      labelFormatter={(v: string) => new Date(v + "T00:00:00").toLocaleDateString()}
+                    />
+                    <Legend />
+                    <Line
+                      type="monotone"
+                      dataKey="inboxRate"
+                      stroke="#22c55e"
+                      strokeWidth={2}
+                      name="Inbox"
+                      dot={{ fill: "#22c55e", r: 3 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="spamRate"
+                      stroke="#ef4444"
+                      strokeWidth={2}
+                      name="Spam"
+                      dot={{ fill: "#ef4444", r: 3 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="inboxAvg"
+                      stroke="#86efac"
+                      strokeWidth={2}
+                      strokeDasharray="5 5"
+                      name="Inbox (7d avg)"
+                      dot={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="spamAvg"
+                      stroke="#fca5a5"
+                      strokeWidth={2}
+                      strokeDasharray="5 5"
+                      name="Spam (7d avg)"
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[380px] flex items-center justify-center text-muted-foreground text-sm">
+                No placement data available for this period
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Overall Deliverability — below, max-width for the pie */}
+        <Card className="max-w-sm">
           <CardHeader>
             <CardTitle>Overall Deliverability</CardTitle>
             <CardDescription>
               {dateRange.from || dateRange.to
                 ? `Inbox vs spam rate${dateRange.from ? ` from ${format(dateRange.from, "MMM d, yyyy")}` : ""}${dateRange.to ? ` to ${format(dateRange.to, "MMM d, yyyy")}` : ""}`
-                : `Inbox vs spam rate across all tracked emails (last ${chartDays === 365 ? "year" : `${chartDays} days`})`}
+                : `Inbox vs spam rate (last ${chartDays === 365 ? "year" : `${chartDays} days`})`}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -303,105 +391,11 @@ export default function InboxingPage() {
               </div>
             ) : (
               <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
-          No placement data available
-          </div>
-          )}
+                No placement data available
+              </div>
+            )}
           </CardContent>
-          </Card>
-
-          {/* Inbox Rate Over Time */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Inbox Rate Over Time</CardTitle>
-              <CardDescription>
-                Daily inbox vs spam rate with 7-day moving average
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="h-[320px] flex items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : inboxingTimeData.filter((d) => d.inboxRate !== null).length > 0 ? (
-                <ResponsiveContainer width="100%" height={320}>
-                  <LineChart data={inboxingTimeData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 11 }}
-                      tickFormatter={(v: string) => {
-                        const d = new Date(v + "T00:00:00")
-                        return `${d.getMonth() + 1}/${d.getDate()}`
-                      }}
-                      interval="preserveStartEnd"
-                      stroke="hsl(var(--muted-foreground))"
-                    />
-                    <YAxis
-                      tickFormatter={(v: number) => `${v}%`}
-                      domain={[0, 100]}
-                      tick={{ fontSize: 11 }}
-                      stroke="hsl(var(--muted-foreground))"
-                    />
-                    <Tooltip
-                      formatter={(value: number, name: string) => [
-                        value != null ? `${value}%` : "—",
-                        name,
-                      ]}
-                      labelFormatter={(label: string) => {
-                        const d = new Date(label + "T00:00:00")
-                        return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                      }}
-                      contentStyle={{ fontSize: 12 }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                    <Line
-                      type="monotone"
-                      dataKey="inboxRate"
-                      name="Inbox"
-                      stroke="#22c55e"
-                      dot={{ r: 2 }}
-                      activeDot={{ r: 4 }}
-                      connectNulls={false}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="spamRate"
-                      name="Spam"
-                      stroke="#ef4444"
-                      dot={{ r: 2 }}
-                      activeDot={{ r: 4 }}
-                      connectNulls={false}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="inboxAvg"
-                      name="Inbox (7d avg)"
-                      stroke="#22c55e"
-                      strokeDasharray="5 4"
-                      dot={false}
-                      strokeWidth={1.5}
-                      connectNulls
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="spamAvg"
-                      name="Spam (7d avg)"
-                      stroke="#ef4444"
-                      strokeDasharray="5 4"
-                      dot={false}
-                      strokeWidth={1.5}
-                      connectNulls
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-[320px] flex items-center justify-center text-muted-foreground text-sm">
-                  No placement data available for this period
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        </Card>
       </div>
     </AppLayout>
   )

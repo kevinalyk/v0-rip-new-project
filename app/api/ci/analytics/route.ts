@@ -202,7 +202,7 @@ export async function GET(request: NextRequest) {
       ngpvan: ["ngpvan.com"],
     }
 
-    let emailCampaigns: { id: string; dateReceived: Date; inboxRate: number; inboxCount: number | null; spamCount: number | null; ctaLinks?: any; senderEmail?: string | null }[] = []
+    let emailCampaigns: { id: string; dateReceived: Date; inboxRate: number; inboxCount: number | null; spamCount: number | null; ctaLinks?: any; senderEmail?: string | null; entityId?: string | null; entityParty?: string | null }[] = []
     if (includeEmails) {
       const rawEmailCampaigns = await prisma.competitiveInsightCampaign.findMany({
         where: {
@@ -220,13 +220,16 @@ export async function GET(request: NextRequest) {
           spamCount: true,
           ctaLinks: true,
           senderEmail: true,
+          entityId: true,
+          entity: { select: { party: true } },
         },
       })
 
       // Apply platform filter client-side (ctaLinks is a JSON array)
+      const mappedRaw = rawEmailCampaigns.map((c: any) => ({ ...c, entityParty: c.entity?.party ?? null }))
       if (platform && platform !== "all") {
         const domains = platformDomains[platform] || []
-        emailCampaigns = rawEmailCampaigns.filter((c) => {
+        emailCampaigns = mappedRaw.filter((c: any) => {
           if (platform === "substack") {
             return c.senderEmail?.toLowerCase().endsWith("@substack.com") ?? false
           }
@@ -242,7 +245,7 @@ export async function GET(request: NextRequest) {
           })
         })
       } else {
-        emailCampaigns = rawEmailCampaigns
+        emailCampaigns = mappedRaw
       }
     }
 
@@ -396,12 +399,289 @@ export async function GET(request: NextRequest) {
           ]
         : []
 
+    // --- Inboxing over time (daily inbox rate & spam rate with 7-day moving average) ---
+    // Build a daily map covering the same date range as volumeData
+    const inboxDailyMap = new Map<string, { inboxCount: number; spamCount: number }>()
+    const inboxCursor = new Date(minDateKey + "T00:00:00")
+    const inboxEndDate = new Date(maxDateKey + "T00:00:00")
+    while (inboxCursor <= inboxEndDate) {
+      const key = inboxCursor.toISOString().split("T")[0]
+      inboxDailyMap.set(key, { inboxCount: 0, spamCount: 0 })
+      inboxCursor.setDate(inboxCursor.getDate() + 1)
+    }
+
+    for (const c of emailsWithPlacement) {
+      const key = getLocalDateKey(new Date(c.dateReceived))
+      const entry = inboxDailyMap.get(key)
+      if (entry) {
+        entry.inboxCount += c.inboxCount ?? 0
+        entry.spamCount += c.spamCount ?? 0
+      }
+    }
+
+    const inboxDailyArray = Array.from(inboxDailyMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, counts]) => {
+        const total = counts.inboxCount + counts.spamCount
+        const inboxRate = total > 0 ? Math.round((counts.inboxCount / total) * 1000) / 10 : null
+        const spamRate = total > 0 ? Math.round((counts.spamCount / total) * 1000) / 10 : null
+        return { date, inboxRate, spamRate, total }
+      })
+
+    // Compute 7-day moving average for inbox/spam rate (only over days with data)
+    const inboxingTimeData = inboxDailyArray.map((day, index) => {
+      const start = Math.max(0, index - 6)
+      const windowWithData = inboxDailyArray.slice(start, index + 1).filter((d) => d.total > 0)
+      const inboxAvg =
+        windowWithData.length > 0
+          ? Math.round((windowWithData.reduce((s, d) => s + (d.inboxRate ?? 0), 0) / windowWithData.length) * 10) / 10
+          : null
+      const spamAvg =
+        windowWithData.length > 0
+          ? Math.round((windowWithData.reduce((s, d) => s + (d.spamRate ?? 0), 0) / windowWithData.length) * 10) / 10
+          : null
+      return {
+        date: day.date,
+        inboxRate: day.inboxRate,
+        spamRate: day.spamRate,
+        inboxAvg,
+        spamAvg,
+      }
+    })
+
+    // --- Inbox Rate by Party over time ---
+    const PARTIES = ["republican", "democrat"] as const
+    type Party = typeof PARTIES[number]
+
+    const partyDailyMap = new Map<string, Record<Party, { inboxCount: number; spamCount: number }>>()
+    const partyCursor = new Date(minDateKey + "T00:00:00")
+    const partyEndDate = new Date(maxDateKey + "T00:00:00")
+    while (partyCursor <= partyEndDate) {
+      const key = partyCursor.toISOString().split("T")[0]
+      partyDailyMap.set(key, {
+        republican: { inboxCount: 0, spamCount: 0 },
+        democrat: { inboxCount: 0, spamCount: 0 },
+      })
+      partyCursor.setDate(partyCursor.getDate() + 1)
+    }
+
+    for (const c of emailsWithPlacement) {
+      const p = (c.entityParty ?? "").toLowerCase() as Party
+      if (!PARTIES.includes(p)) continue
+      const key = getLocalDateKey(new Date(c.dateReceived))
+      const entry = partyDailyMap.get(key)
+      if (entry) {
+        entry[p].inboxCount += c.inboxCount ?? 0
+        entry[p].spamCount += c.spamCount ?? 0
+      }
+    }
+
+    const partyDailyArray = Array.from(partyDailyMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, parties]) => {
+        const rTotal = parties.republican.inboxCount + parties.republican.spamCount
+        const dTotal = parties.democrat.inboxCount + parties.democrat.spamCount
+        return {
+          date,
+          repInboxRate: rTotal > 0 ? Math.round((parties.republican.inboxCount / rTotal) * 1000) / 10 : null,
+          repSpamRate: rTotal > 0 ? Math.round((parties.republican.spamCount / rTotal) * 1000) / 10 : null,
+          demInboxRate: dTotal > 0 ? Math.round((parties.democrat.inboxCount / dTotal) * 1000) / 10 : null,
+          demSpamRate: dTotal > 0 ? Math.round((parties.democrat.spamCount / dTotal) * 1000) / 10 : null,
+          rTotal,
+          dTotal,
+        }
+      })
+
+    const inboxingByPartyData = partyDailyArray.map((day, index) => {
+      const start = Math.max(0, index - 6)
+      const window = partyDailyArray.slice(start, index + 1)
+      const repWindow = window.filter((d) => d.rTotal > 0)
+      const demWindow = window.filter((d) => d.dTotal > 0)
+      return {
+        date: day.date,
+        repInboxRate: day.repInboxRate,
+        repSpamRate: day.repSpamRate,
+        demInboxRate: day.demInboxRate,
+        demSpamRate: day.demSpamRate,
+        repInboxAvg: repWindow.length > 0 ? Math.round((repWindow.reduce((s, d) => s + (d.repInboxRate ?? 0), 0) / repWindow.length) * 10) / 10 : null,
+        repSpamAvg: repWindow.length > 0 ? Math.round((repWindow.reduce((s, d) => s + (d.repSpamRate ?? 0), 0) / repWindow.length) * 10) / 10 : null,
+        demInboxAvg: demWindow.length > 0 ? Math.round((demWindow.reduce((s, d) => s + (d.demInboxRate ?? 0), 0) / demWindow.length) * 10) / 10 : null,
+        demSpamAvg: demWindow.length > 0 ? Math.round((demWindow.reduce((s, d) => s + (d.demSpamRate ?? 0), 0) / demWindow.length) * 10) / 10 : null,
+      }
+    })
+
+    const trimmedInboxingByPartyData = !fromDate ? inboxingByPartyData.slice(-chartDays) : inboxingByPartyData
+
+    // --- Inbox Rate by Platform over time ---
+    const INBOXING_PLATFORMS = ["winred", "actblue", "anedot", "psq"] as const
+    type InboxingPlatform = typeof INBOXING_PLATFORMS[number]
+    const inboxingPlatformDomains: Record<InboxingPlatform, string[]> = {
+      winred: ["winred.com"],
+      actblue: ["actblue.com"],
+      anedot: ["anedot.com"],
+      psq: ["psqimpact.com", "politicalsurveyquestions.com", "psqsurveys.com"],
+    }
+
+    // Helper: detect which platforms a campaign links to (can match multiple)
+    const getCampaignPlatforms = (c: { ctaLinks?: any }): InboxingPlatform[] => {
+      let links: any[] = []
+      if (Array.isArray(c.ctaLinks)) {
+        links = c.ctaLinks
+      } else if (typeof c.ctaLinks === "string") {
+        try { links = JSON.parse(c.ctaLinks) } catch { links = [] }
+      }
+      const matched = new Set<InboxingPlatform>()
+      for (const link of links) {
+        const url = ((typeof link === "string" ? link : (link?.finalUrl || link?.url || "")) as string).toLowerCase()
+        for (const platform of INBOXING_PLATFORMS) {
+          if (inboxingPlatformDomains[platform].some((d) => url.includes(d))) {
+            matched.add(platform)
+          }
+        }
+      }
+      return Array.from(matched)
+    }
+
+    // Build daily map per platform
+    const platformDailyMap = new Map<string, Record<InboxingPlatform, { inboxCount: number; spamCount: number }>>()
+    const platformCursor = new Date(minDateKey + "T00:00:00")
+    const platformEndDate = new Date(maxDateKey + "T00:00:00")
+    while (platformCursor <= platformEndDate) {
+      const key = platformCursor.toISOString().split("T")[0]
+      platformDailyMap.set(key, {
+        winred: { inboxCount: 0, spamCount: 0 },
+        actblue: { inboxCount: 0, spamCount: 0 },
+        anedot: { inboxCount: 0, spamCount: 0 },
+        psq: { inboxCount: 0, spamCount: 0 },
+      })
+      platformCursor.setDate(platformCursor.getDate() + 1)
+    }
+
+    for (const c of emailsWithPlacement) {
+      const platforms = getCampaignPlatforms(c)
+      if (platforms.length === 0) continue
+      const key = getLocalDateKey(new Date(c.dateReceived))
+      const entry = platformDailyMap.get(key)
+      if (!entry) continue
+      // Attribute inbox/spam counts to each matched platform
+      for (const p of platforms) {
+        entry[p].inboxCount += c.inboxCount ?? 0
+        entry[p].spamCount += c.spamCount ?? 0
+      }
+    }
+
+    const platformDailyArray = Array.from(platformDailyMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, plats]) => {
+        const row: Record<string, string | number | null> = { date }
+        for (const p of INBOXING_PLATFORMS) {
+          const total = plats[p].inboxCount + plats[p].spamCount
+          row[`${p}InboxRate`] = total > 0 ? Math.round((plats[p].inboxCount / total) * 1000) / 10 : null
+          row[`${p}Total`] = total
+        }
+        return row
+      })
+
+    const inboxingByPlatformData = platformDailyArray.map((day, index) => {
+      const start = Math.max(0, index - 6)
+      const window = platformDailyArray.slice(start, index + 1)
+      const row: Record<string, string | number | null> = { date: day.date }
+      for (const p of INBOXING_PLATFORMS) {
+        row[`${p}InboxRate`] = day[`${p}InboxRate`]
+        const w = window.filter((d) => (d[`${p}Total`] as number) > 0)
+        row[`${p}InboxAvg`] = w.length > 0
+          ? Math.round((w.reduce((s, d) => s + ((d[`${p}InboxRate`] as number) ?? 0), 0) / w.length) * 10) / 10
+          : null
+      }
+      return row
+    })
+
+    const trimmedInboxingByPlatformData = !fromDate ? inboxingByPlatformData.slice(-chartDays) : inboxingByPlatformData
+
+    // --- House file vs Third-party inbox rate over time ---
+    // Fetch all entity email/domain mappings unconditionally
+    const allMappingsForChart = await prisma.ciEntityMapping.findMany({
+      select: { entityId: true, senderEmail: true, senderDomain: true },
+    })
+    const mappingsByEntityForChart: Record<string, { emails: Set<string>; domains: Set<string> }> = {}
+    for (const m of allMappingsForChart) {
+      if (!mappingsByEntityForChart[m.entityId]) mappingsByEntityForChart[m.entityId] = { emails: new Set(), domains: new Set() }
+      if (m.senderEmail) mappingsByEntityForChart[m.entityId].emails.add(m.senderEmail.toLowerCase())
+      if (m.senderDomain) mappingsByEntityForChart[m.entityId].domains.add(m.senderDomain.toLowerCase())
+    }
+
+    const isThirdPartyCampaign = (c: { entityId?: string | null; senderEmail?: string | null }): boolean | null => {
+      if (!c.entityId) return null // can't classify
+      const em = mappingsByEntityForChart[c.entityId]
+      if (!em) return null // entity has no mappings — can't classify
+      const email = (c.senderEmail ?? "").toLowerCase()
+      const domain = email.split("@")[1]
+      return !em.emails.has(email) && (!domain || !em.domains.has(domain))
+    }
+
+    // Build daily map
+    type HFType = "houseFile" | "thirdParty"
+    const hfDailyMap = new Map<string, Record<HFType, { inboxCount: number; spamCount: number }>>()
+    const hfCursor = new Date(minDateKey + "T00:00:00")
+    const hfEndDate = new Date(maxDateKey + "T00:00:00")
+    while (hfCursor <= hfEndDate) {
+      const key = hfCursor.toISOString().split("T")[0]
+      hfDailyMap.set(key, {
+        houseFile: { inboxCount: 0, spamCount: 0 },
+        thirdParty: { inboxCount: 0, spamCount: 0 },
+      })
+      hfCursor.setDate(hfCursor.getDate() + 1)
+    }
+
+    for (const c of emailsWithPlacement) {
+      const tp = isThirdPartyCampaign(c)
+      if (tp === null) continue
+      const bucket: HFType = tp ? "thirdParty" : "houseFile"
+      const key = getLocalDateKey(new Date(c.dateReceived))
+      const entry = hfDailyMap.get(key)
+      if (!entry) continue
+      entry[bucket].inboxCount += c.inboxCount ?? 0
+      entry[bucket].spamCount += c.spamCount ?? 0
+    }
+
+    const hfDailyArray = Array.from(hfDailyMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, buckets]) => {
+        const hfTotal = buckets.houseFile.inboxCount + buckets.houseFile.spamCount
+        const tpTotal = buckets.thirdParty.inboxCount + buckets.thirdParty.spamCount
+        return {
+          date,
+          houseFileInboxRate: hfTotal > 0 ? Math.round((buckets.houseFile.inboxCount / hfTotal) * 1000) / 10 : null,
+          thirdPartyInboxRate: tpTotal > 0 ? Math.round((buckets.thirdParty.inboxCount / tpTotal) * 1000) / 10 : null,
+          hfTotal,
+          tpTotal,
+        }
+      })
+
+    const inboxingByFileTypeData = hfDailyArray.map((day, index) => {
+      const start = Math.max(0, index - 6)
+      const window = hfDailyArray.slice(start, index + 1)
+      const hfWindow = window.filter((d) => d.hfTotal > 0)
+      const tpWindow = window.filter((d) => d.tpTotal > 0)
+      return {
+        date: day.date,
+        houseFileInboxRate: day.houseFileInboxRate,
+        thirdPartyInboxRate: day.thirdPartyInboxRate,
+        houseFileAvg: hfWindow.length > 0 ? Math.round((hfWindow.reduce((s, d) => s + (d.houseFileInboxRate ?? 0), 0) / hfWindow.length) * 10) / 10 : null,
+        thirdPartyAvg: tpWindow.length > 0 ? Math.round((tpWindow.reduce((s, d) => s + (d.thirdPartyInboxRate ?? 0), 0) / tpWindow.length) * 10) / 10 : null,
+      }
+    })
+
+    const trimmedInboxingByFileTypeData = !fromDate ? inboxingByFileTypeData.slice(-chartDays) : inboxingByFileTypeData
+
     const totalEmails = emailCampaigns.length
     const totalSMS = smsMessages.length
 
     // Trim volumeData to the requested chartDays window for display.
     // The extra 6 days fetched were only needed for moving average warm-up.
     const trimmedVolumeData = !fromDate ? volumeData.slice(-chartDays) : volumeData
+
+    const trimmedInboxingTimeData = !fromDate ? inboxingTimeData.slice(-chartDays) : inboxingTimeData
 
     return NextResponse.json({
       totalEmails,
@@ -412,6 +692,10 @@ export async function GET(request: NextRequest) {
       hourOfDayData,
       volumeData: trimmedVolumeData,
       inboxingData,
+      inboxingTimeData: trimmedInboxingTimeData,
+      inboxingByPartyData: trimmedInboxingByPartyData,
+      inboxingByPlatformData: trimmedInboxingByPlatformData,
+      inboxingByFileTypeData: trimmedInboxingByFileTypeData,
       hasCampaigns: totalEmails > 0 || totalSMS > 0,
     })
   } catch (error) {
@@ -434,6 +718,10 @@ function buildEmptyResponse() {
     hourOfDayData: Array.from({ length: 24 }, (_, h) => ({ hour: h, label: "", count: 0, intensity: 0 })),
     volumeData: [],
     inboxingData: [],
+    inboxingTimeData: [],
+    inboxingByPartyData: [],
+    inboxingByPlatformData: [],
+    inboxingByFileTypeData: [],
     hasCampaigns: false,
   }
 }

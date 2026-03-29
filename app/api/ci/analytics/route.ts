@@ -202,7 +202,7 @@ export async function GET(request: NextRequest) {
       ngpvan: ["ngpvan.com"],
     }
 
-    let emailCampaigns: { id: string; dateReceived: Date; inboxRate: number; inboxCount: number | null; spamCount: number | null; ctaLinks?: any; senderEmail?: string | null }[] = []
+    let emailCampaigns: { id: string; dateReceived: Date; inboxRate: number; inboxCount: number | null; spamCount: number | null; ctaLinks?: any; senderEmail?: string | null; entityParty?: string | null }[] = []
     if (includeEmails) {
       const rawEmailCampaigns = await prisma.competitiveInsightCampaign.findMany({
         where: {
@@ -220,13 +220,15 @@ export async function GET(request: NextRequest) {
           spamCount: true,
           ctaLinks: true,
           senderEmail: true,
+          entity: { select: { party: true } },
         },
       })
 
       // Apply platform filter client-side (ctaLinks is a JSON array)
+      const mappedRaw = rawEmailCampaigns.map((c: any) => ({ ...c, entityParty: c.entity?.party ?? null }))
       if (platform && platform !== "all") {
         const domains = platformDomains[platform] || []
-        emailCampaigns = rawEmailCampaigns.filter((c) => {
+        emailCampaigns = mappedRaw.filter((c: any) => {
           if (platform === "substack") {
             return c.senderEmail?.toLowerCase().endsWith("@substack.com") ?? false
           }
@@ -242,7 +244,7 @@ export async function GET(request: NextRequest) {
           })
         })
       } else {
-        emailCampaigns = rawEmailCampaigns
+        emailCampaigns = mappedRaw
       }
     }
 
@@ -446,6 +448,69 @@ export async function GET(request: NextRequest) {
       }
     })
 
+    // --- Inbox Rate by Party over time ---
+    const PARTIES = ["republican", "democrat"] as const
+    type Party = typeof PARTIES[number]
+
+    const partyDailyMap = new Map<string, Record<Party, { inboxCount: number; spamCount: number }>>()
+    const partyCursor = new Date(minDateKey + "T00:00:00")
+    const partyEndDate = new Date(maxDateKey + "T00:00:00")
+    while (partyCursor <= partyEndDate) {
+      const key = partyCursor.toISOString().split("T")[0]
+      partyDailyMap.set(key, {
+        republican: { inboxCount: 0, spamCount: 0 },
+        democrat: { inboxCount: 0, spamCount: 0 },
+      })
+      partyCursor.setDate(partyCursor.getDate() + 1)
+    }
+
+    for (const c of emailsWithPlacement) {
+      const p = (c.entityParty ?? "").toLowerCase() as Party
+      if (!PARTIES.includes(p)) continue
+      const key = getLocalDateKey(new Date(c.dateReceived))
+      const entry = partyDailyMap.get(key)
+      if (entry) {
+        entry[p].inboxCount += c.inboxCount ?? 0
+        entry[p].spamCount += c.spamCount ?? 0
+      }
+    }
+
+    const partyDailyArray = Array.from(partyDailyMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, parties]) => {
+        const rTotal = parties.republican.inboxCount + parties.republican.spamCount
+        const dTotal = parties.democrat.inboxCount + parties.democrat.spamCount
+        return {
+          date,
+          repInboxRate: rTotal > 0 ? Math.round((parties.republican.inboxCount / rTotal) * 1000) / 10 : null,
+          repSpamRate: rTotal > 0 ? Math.round((parties.republican.spamCount / rTotal) * 1000) / 10 : null,
+          demInboxRate: dTotal > 0 ? Math.round((parties.democrat.inboxCount / dTotal) * 1000) / 10 : null,
+          demSpamRate: dTotal > 0 ? Math.round((parties.democrat.spamCount / dTotal) * 1000) / 10 : null,
+          rTotal,
+          dTotal,
+        }
+      })
+
+    const inboxingByPartyData = partyDailyArray.map((day, index) => {
+      const start = Math.max(0, index - 6)
+      const window = partyDailyArray.slice(start, index + 1)
+      const repWindow = window.filter((d) => d.rTotal > 0)
+      const demWindow = window.filter((d) => d.dTotal > 0)
+      return {
+        date: day.date,
+        repInboxRate: day.repInboxRate,
+        repSpamRate: day.repSpamRate,
+        demInboxRate: day.demInboxRate,
+        demSpamRate: day.demSpamRate,
+        repInboxAvg: repWindow.length > 0 ? Math.round((repWindow.reduce((s, d) => s + (d.repInboxRate ?? 0), 0) / repWindow.length) * 10) / 10 : null,
+        repSpamAvg: repWindow.length > 0 ? Math.round((repWindow.reduce((s, d) => s + (d.repSpamRate ?? 0), 0) / repWindow.length) * 10) / 10 : null,
+        demInboxAvg: demWindow.length > 0 ? Math.round((demWindow.reduce((s, d) => s + (d.demInboxRate ?? 0), 0) / demWindow.length) * 10) / 10 : null,
+        demSpamAvg: demWindow.length > 0 ? Math.round((demWindow.reduce((s, d) => s + (d.demSpamRate ?? 0), 0) / demWindow.length) * 10) / 10 : null,
+      }
+    })
+
+    const trimmedInboxingByPartyData = !fromDate ? inboxingByPartyData.slice(-chartDays) : inboxingByPartyData
+
     const totalEmails = emailCampaigns.length
     const totalSMS = smsMessages.length
 
@@ -465,6 +530,7 @@ export async function GET(request: NextRequest) {
       volumeData: trimmedVolumeData,
       inboxingData,
       inboxingTimeData: trimmedInboxingTimeData,
+      inboxingByPartyData: trimmedInboxingByPartyData,
       hasCampaigns: totalEmails > 0 || totalSMS > 0,
     })
   } catch (error) {
@@ -488,6 +554,7 @@ function buildEmptyResponse() {
     volumeData: [],
     inboxingData: [],
     inboxingTimeData: [],
+    inboxingByPartyData: [],
     hasCampaigns: false,
   }
 }

@@ -43,12 +43,25 @@ interface InboxingTimeDataPoint {
   spamAvg: number | null
 }
 
+interface InboxingByPartyDataPoint {
+  date: string
+  repInboxRate: number | null
+  repSpamRate: number | null
+  demInboxRate: number | null
+  demSpamRate: number | null
+  repInboxAvg: number | null
+  repSpamAvg: number | null
+  demInboxAvg: number | null
+  demSpamAvg: number | null
+}
+
 export default function InboxingPage() {
   const params = useParams()
   const clientSlug = params.clientSlug as string
 
   const [inboxingData, setInboxingData] = useState<InboxingData[]>([])
   const [inboxingTimeData, setInboxingTimeData] = useState<InboxingTimeDataPoint[]>([])
+  const [inboxingByPartyData, setInboxingByPartyData] = useState<InboxingByPartyDataPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -91,6 +104,7 @@ export default function InboxingPage() {
         const data = await res.json()
         setInboxingData(data.inboxingData?.length ? data.inboxingData : [])
         setInboxingTimeData(data.inboxingTimeData?.length ? data.inboxingTimeData : [])
+        setInboxingByPartyData(data.inboxingByPartyData?.length ? data.inboxingByPartyData : [])
       }
     } catch {
       // silently fail
@@ -333,6 +347,70 @@ export default function InboxingPage() {
             ) : (
               <div className="h-[380px] flex items-center justify-center text-muted-foreground text-sm">
                 No placement data available for this period
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Inbox Rate by Party */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Inbox Rate by Party</CardTitle>
+            <CardDescription>
+              Daily Republican vs Democrat inbox and spam rate with 7-day moving average
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="h-[380px] flex items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : inboxingByPartyData.filter((d) => d.repInboxRate !== null || d.demInboxRate !== null).length > 0 ? (
+              <div className="h-[380px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={inboxingByPartyData} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(v: string) => {
+                        const d = new Date(v + "T00:00:00")
+                        return `${d.getMonth() + 1}/${d.getDate()}`
+                      }}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(v: number) => `${v}%`}
+                      domain={[0, 100]}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--background))",
+                        border: "1px solid hsl(var(--border))",
+                      }}
+                      formatter={(value: number, name: string) => [
+                        value != null ? `${value}%` : "—",
+                        name,
+                      ]}
+                      labelFormatter={(v: string) => new Date(v + "T00:00:00").toLocaleDateString()}
+                    />
+                    <Legend />
+                    {/* Republican lines — red */}
+                    <Line type="monotone" dataKey="repInboxRate" stroke="#ef4444" strokeWidth={2} name="Rep Inbox" dot={{ fill: "#ef4444", r: 3 }} connectNulls={false} />
+                    <Line type="monotone" dataKey="repSpamRate" stroke="#ef4444" strokeWidth={2} name="Rep Spam" dot={{ fill: "#ef4444", r: 3 }} strokeDasharray="4 3" connectNulls={false} />
+                    <Line type="monotone" dataKey="repInboxAvg" stroke="#fca5a5" strokeWidth={2} strokeDasharray="5 5" name="Rep Inbox (7d avg)" dot={false} connectNulls />
+                    <Line type="monotone" dataKey="repSpamAvg" stroke="#fca5a5" strokeWidth={1.5} strokeDasharray="2 4" name="Rep Spam (7d avg)" dot={false} connectNulls />
+                    {/* Democrat lines — blue */}
+                    <Line type="monotone" dataKey="demInboxRate" stroke="#3b82f6" strokeWidth={2} name="Dem Inbox" dot={{ fill: "#3b82f6", r: 3 }} connectNulls={false} />
+                    <Line type="monotone" dataKey="demSpamRate" stroke="#3b82f6" strokeWidth={2} name="Dem Spam" dot={{ fill: "#3b82f6", r: 3 }} strokeDasharray="4 3" connectNulls={false} />
+                    <Line type="monotone" dataKey="demInboxAvg" stroke="#93c5fd" strokeWidth={2} strokeDasharray="5 5" name="Dem Inbox (7d avg)" dot={false} connectNulls />
+                    <Line type="monotone" dataKey="demSpamAvg" stroke="#93c5fd" strokeWidth={1.5} strokeDasharray="2 4" name="Dem Spam (7d avg)" dot={false} connectNulls />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[380px] flex items-center justify-center text-muted-foreground text-sm">
+                No party placement data available for this period
               </div>
             )}
           </CardContent>

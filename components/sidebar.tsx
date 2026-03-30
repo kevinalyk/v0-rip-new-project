@@ -397,7 +397,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                     collapsed={false}
                     onClick={() => navigate(`/${getClientSlug()}/reports/trends`)}
                   />
-                  {userRole === "super_admin" && (
+                  {getClientSlug() === "rip" && (
                     <NavItem
                       icon={<Inbox size={18} />}
                       label="Inboxing"

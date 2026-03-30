@@ -17,7 +17,7 @@ export type DonationIdentifiers = {
 // Type for entity assignment
 type EntityAssignment = {
   entityId: string
-  assignmentMethod: "auto_domain" | "auto_winred" | "auto_anedot" | "auto_actblue" | "auto_phone" | "auto_substack"
+  assignmentMethod: "auto_domain" | "auto_winred" | "auto_anedot" | "auto_actblue" | "auto_psqimpact" | "auto_phone" | "auto_substack"
 } | null
 
 function stripHtmlAndExtract(html: string): string {
@@ -183,7 +183,7 @@ export async function findEntityForSender(
 
           const donationMatch = await findEntityByDonationIdentifier(ctaLinks, true)
           if (donationMatch) {
-            const method = `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" | "auto_actblue"
+            const method = `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" | "auto_actblue" | "auto_psqimpact"
             console.log(`[Data Broker] ✓ Assigned via donation identifier: ${method} (${donationMatch.matchedIdentifier})`)
             return { entityId: donationMatch.entity.id, assignmentMethod: method }
           }
@@ -200,7 +200,7 @@ export async function findEntityForSender(
     if (ctaLinks) {
       const donationMatch = await findEntityByDonationIdentifier(ctaLinks)
       if (donationMatch) {
-        return { entityId: donationMatch.entity.id, assignmentMethod: `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" | "auto_actblue" }
+        return { entityId: donationMatch.entity.id, assignmentMethod: `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" | "auto_actblue" | "auto_psqimpact" }
       }
     }
 
@@ -230,7 +230,7 @@ export async function findEntityForPhone(phoneNumber: string, ctaLinks?: any): P
     if (ctaLinks) {
       const donationMatch = await findEntityByDonationIdentifier(ctaLinks)
       if (donationMatch) {
-        return { entityId: donationMatch.entity.id, assignmentMethod: `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" | "auto_actblue" }
+        return { entityId: donationMatch.entity.id, assignmentMethod: `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" | "auto_actblue" | "auto_psqimpact" }
       }
     }
 

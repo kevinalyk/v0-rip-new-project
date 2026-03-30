@@ -147,11 +147,13 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
     winred: string
     anedot: string
     actblue: string
+    psqimpact: string
     substack: string
   }>({
     winred: "",
     anedot: "",
     actblue: "",
+    psqimpact: "",
     substack: "",
   })
 
@@ -440,6 +442,9 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
       actblue: donationIdentifierInputs.actblue
         ? donationIdentifierInputs.actblue.split(",").map((id) => id.trim().toLowerCase()).filter(Boolean)
         : newEntityDonationIdentifiers.actblue,
+      psqimpact: donationIdentifierInputs.psqimpact
+        ? donationIdentifierInputs.psqimpact.split(",").map((id) => id.trim().toLowerCase()).filter(Boolean)
+        : newEntityDonationIdentifiers.psqimpact,
       substack: donationIdentifierInputs.substack.trim() || newEntityDonationIdentifiers.substack,
     }
 
@@ -472,7 +477,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setNewEntityState("")
           setNewEntityNationwide(false)
           setNewEntityDonationIdentifiers({})
-    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", substack: "" }) // Reset raw inputs too
+    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", substack: "" }) // Reset raw inputs too
     fetchData()
     toast.success("Entity updated successfully!")
         } else {
@@ -505,7 +510,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setNewEntityState("")
           setNewEntityNationwide(false)
           setNewEntityDonationIdentifiers({})
-    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", substack: "" }) // Reset raw inputs too
+    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", substack: "" }) // Reset raw inputs too
     fetchData()
     toast.success("Entity created successfully!")
         } else {
@@ -583,7 +588,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setAssignEntityState("")
           setAssignEntityNationwide(false)
           setAssignEntityDonationIdentifiers({}) // Clear donation identifiers
-          setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", substack: "" }) // Clear raw inputs
+          setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", substack: "" }) // Clear raw inputs
           setCreateMapping(true)
           fetchData()
           toast.success("Campaigns assigned to new entity!")
@@ -673,6 +678,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
       winred: entity.donationIdentifiers?.winred?.join(", ") || "",
       anedot: entity.donationIdentifiers?.anedot?.join(", ") || "",
       actblue: entity.donationIdentifiers?.actblue?.join(", ") || "",
+      psqimpact: entity.donationIdentifiers?.psqimpact?.join(", ") || "",
       substack: entity.donationIdentifiers?.substack || "",
     })
 
@@ -764,7 +770,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
       // Reset donation identifiers on close
       setNewEntityDonationIdentifiers({})
       // Reset raw inputs when closing the dialog
-    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", substack: "" })
+    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", substack: "" })
   }
 }
 
@@ -1260,11 +1266,13 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                                 ? "bg-green-600"
                                 : assignment.assignmentMethod === "auto_actblue"
                                   ? "bg-blue-500"
-                                  : assignment.assignmentMethod === "auto_substack"
-                                    ? "bg-orange-500"
-                                    : assignment.assignmentMethod === "auto_domain"
-                                      ? "bg-blue-600"
-                                      : "bg-purple-600"
+                                  : assignment.assignmentMethod === "auto_psqimpact"
+                                    ? "bg-yellow-600"
+                                    : assignment.assignmentMethod === "auto_substack"
+                                      ? "bg-orange-500"
+                                      : assignment.assignmentMethod === "auto_domain"
+                                        ? "bg-blue-600"
+                                        : "bg-purple-600"
                                   }
                                 >
                           {assignment.assignmentMethod === "manual"
@@ -1275,11 +1283,13 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                                 ? "Auto: Anedot"
                                 : assignment.assignmentMethod === "auto_actblue"
                                   ? "Auto: ActBlue"
-                                  : assignment.assignmentMethod === "auto_substack"
-                                    ? "Auto: Substack"
-                                    : assignment.assignmentMethod === "auto_domain"
-                                      ? "Auto: Domain"
-                                      : "Auto: Phone"}
+                                  : assignment.assignmentMethod === "auto_psqimpact"
+                                    ? "Auto: PSQ"
+                                    : assignment.assignmentMethod === "auto_substack"
+                                      ? "Auto: Substack"
+                                      : assignment.assignmentMethod === "auto_domain"
+                                        ? "Auto: Domain"
+                                        : "Auto: Phone"}
                                 </Badge>
                               )}
                             </div>
@@ -1817,6 +1827,36 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                     </div>
 
                     <div>
+                      <Label htmlFor="entity-psqimpact-identifiers" className="text-sm font-normal">
+                        PSQ Impact
+                      </Label>
+                      <Input
+                        id="entity-psqimpact-identifiers"
+                        placeholder="e.g., conservative-battleground-fund, trump-save-america-jfc (comma-separated)"
+                        value={donationIdentifierInputs.psqimpact}
+                        onChange={(e) => {
+                          setDonationIdentifierInputs((prev) => ({
+                            ...prev,
+                            psqimpact: e.target.value,
+                          }))
+                        }}
+                        onBlur={(e) => {
+                          const value = e.target.value
+                          setNewEntityDonationIdentifiers((prev) => ({
+                            ...prev,
+                            psqimpact: value
+                              .split(",")
+                              .map((id) => id.trim().toLowerCase())
+                              .filter((id) => id.length > 0),
+                          }))
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        From URLs like: secure.psqimpact.com/donate/<span className="font-mono">conservative-battleground-fund</span>/...
+                      </p>
+                    </div>
+
+                    <div>
                       <Label htmlFor="entity-substack-identifier" className="text-sm font-normal">
                         Substack
                       </Label>
@@ -2178,6 +2218,30 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                     From URLs like: secure.actblue.com/donate/<span className="font-mono">elizabethwarren</span> or /contribute/page/<span className="font-mono">amy-for-america</span>
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="assign-entity-psqimpact-identifiers" className="text-sm font-normal">
+                    PSQ Impact
+                  </Label>
+                  <Input
+                    id="assign-entity-psqimpact-identifiers"
+                    placeholder="e.g., conservative-battleground-fund, trump-save-america-jfc (comma-separated)"
+                    value={assignEntityDonationIdentifiers.psqimpact?.join(", ") || ""}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setAssignEntityDonationIdentifiers((prev) => ({
+                        ...prev,
+                        psqimpact: value
+                          .split(",")
+                          .map((id) => id.trim().toLowerCase())
+                          .filter((id) => id.length > 0),
+                      }))
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    From URLs like: secure.psqimpact.com/donate/<span className="font-mono">conservative-battleground-fund</span>/...
                   </p>
                 </div>
 

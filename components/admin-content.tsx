@@ -241,6 +241,20 @@ export function AdminContent({ user }: AdminContentProps) {
   } | null>(null)
   const [totalBatchesRun, setTotalBatchesRun] = useState(0)
 
+  // Donation platform backfill state
+  const [isBackfillingPlatform, setIsBackfillingPlatform] = useState(false)
+  const [platformBackfillResults, setPlatformBackfillResults] = useState<{
+    dryRun: boolean
+    summary: {
+      processed: number
+      updated: number
+      alreadySet: number
+      noMatch: number
+      byPlatform: Record<string, number>
+    }
+    samples: Array<{ id: string; subject: string; platform: string }>
+  } | null>(null)
+
   // Fetch message stats on component mount and when date range changes
   useEffect(() => {
     const fetchMessageStats = async () => {
@@ -1290,6 +1304,34 @@ export function AdminContent({ user }: AdminContentProps) {
       toast.error("Failed to unwrap campaign")
     } finally {
       setIsUnwrappingSingle(false)
+    }
+  }
+
+  const handleBackfillDonationPlatform = async (dryRun = false) => {
+    setIsBackfillingPlatform(true)
+    setPlatformBackfillResults(null)
+    try {
+      const response = await fetch("/api/admin/backfill-donation-platform", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dryRun }),
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setPlatformBackfillResults(data)
+        toast.success(
+          dryRun
+            ? `Dry run: would update ${data.summary.updated} of ${data.summary.processed} campaigns`
+            : `Done: ${data.summary.updated} campaigns updated (${data.summary.processed} processed)`
+        )
+      } else {
+        toast.error(data.error || "Backfill failed")
+      }
+    } catch {
+      toast.error("Backfill failed")
+    } finally {
+      setIsBackfillingPlatform(false)
     }
   }
 
@@ -2543,6 +2585,80 @@ export function AdminContent({ user }: AdminContentProps) {
                     {batchUnwrapResults.sms.errors.map((err, i) => (
                       <div key={`sms-${i}`} className="text-red-700">
                         <span className="font-medium">SMS {err.id}:</span> {err.phone} - {err.error}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Donation Platform Backfill */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Backfill Donation Platform</CardTitle>
+          <CardDescription>
+            Scans all email campaigns and sets the <code>donationPlatform</code> column based on links found in{" "}
+            <code>ctaLinks</code>. Detection order: PSQ &rarr; ActBlue &rarr; Anedot &rarr; WinRed (PSQ takes priority
+            because PSQ emails frequently contain WinRed store/merch links that are not donation links).
+            Run a dry run first to preview counts before writing.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => handleBackfillDonationPlatform(true)}
+              disabled={isBackfillingPlatform}
+            >
+              {isBackfillingPlatform ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Dry Run
+            </Button>
+            <Button
+              onClick={() => handleBackfillDonationPlatform(false)}
+              disabled={isBackfillingPlatform}
+            >
+              {isBackfillingPlatform ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Run Backfill
+            </Button>
+          </div>
+
+          {platformBackfillResults && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: "Processed", value: platformBackfillResults.summary.processed },
+                  { label: platformBackfillResults.dryRun ? "Would Update" : "Updated", value: platformBackfillResults.summary.updated, highlight: "green" },
+                  { label: "Already Set", value: platformBackfillResults.summary.alreadySet },
+                  { label: "No Match", value: platformBackfillResults.summary.noMatch },
+                ].map(({ label, value, highlight }) => (
+                  <div key={label} className="rounded-lg border p-3 text-center">
+                    <div className={`text-2xl font-bold ${highlight === "green" ? "text-green-600" : ""}`}>{value}</div>
+                    <div className="text-xs text-muted-foreground mt-1">{label}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-lg border p-3 space-y-1">
+                <h4 className="text-sm font-semibold mb-2">By Platform</h4>
+                {Object.entries(platformBackfillResults.summary.byPlatform).map(([platform, count]) => (
+                  <div key={platform} className="flex justify-between text-sm">
+                    <span className="capitalize font-medium">{platform}</span>
+                    <span>{count as number}</span>
+                  </div>
+                ))}
+              </div>
+
+              {platformBackfillResults.samples.length > 0 && (
+                <div className="rounded-lg border p-3 space-y-1">
+                  <h4 className="text-sm font-semibold mb-2">Sample Matches (first 20)</h4>
+                  <div className="max-h-48 overflow-y-auto space-y-1">
+                    {platformBackfillResults.samples.map((s) => (
+                      <div key={s.id} className="flex gap-2 text-xs">
+                        <span className="capitalize shrink-0 font-medium w-16">{s.platform}</span>
+                        <span className="text-muted-foreground truncate">{s.subject}</span>
                       </div>
                     ))}
                   </div>

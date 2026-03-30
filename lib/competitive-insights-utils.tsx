@@ -6,6 +6,7 @@ import https from "https"
 import http from "http"
 import { URL } from "url"
 import { getRedactedNames, applyRedaction, clearRedactionCache, findUniqueRedactedSubject } from "@/lib/redaction-utils"
+import { detectDonationPlatform } from "@/lib/detect-donation-platform"
 
 // Custom fetch using Node's http/https modules to properly handle SSL
 async function customFetch(
@@ -1522,6 +1523,7 @@ export async function processCompetitiveInsights(
             inboxRate,
             seenBySeedEmails: ripResults.map((r) => r.seedEmail),
             ctaLinks: ctaLinks.length > 0 ? JSON.stringify(ctaLinks) : null,
+            donationPlatform: ctaLinks.length > 0 ? detectDonationPlatform(ctaLinks) : null,
             tags: JSON.stringify(tags),
             emailPreview: redactedEmailPreview,
             emailContent: redactedEmailContent,

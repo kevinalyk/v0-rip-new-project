@@ -3,6 +3,7 @@ import prisma, { ensureDatabaseConnection } from "@/lib/prisma"
 import https from "https"
 import http from "http"
 import { URL } from "url"
+import { detectDonationPlatform } from "@/lib/detect-donation-platform"
 
 export const runtime = "nodejs"
 export const maxDuration = 300 // 5 minutes
@@ -555,7 +556,11 @@ export async function GET(request: Request) {
         if (updated) {
           await prisma.competitiveInsightCampaign.update({
             where: { id: campaign.id },
-            data: { ctaLinks: updatedCtaLinks },
+            data: {
+              ctaLinks: updatedCtaLinks,
+              // Re-detect platform now that finalUrls are resolved
+              donationPlatform: detectDonationPlatform(updatedCtaLinks) ?? undefined,
+            },
           })
         } else {
           stats.emailCampaigns.skipped++

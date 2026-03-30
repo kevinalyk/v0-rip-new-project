@@ -557,6 +557,13 @@ export async function GET(request: NextRequest) {
       platformCursor.setDate(platformCursor.getDate() + 1)
     }
 
+    // Aggregate totals per platform for debug
+    const platformTotals: Record<string, { inbox: number; spam: number; campaigns: number }> = {
+      winred: { inbox: 0, spam: 0, campaigns: 0 },
+      actblue: { inbox: 0, spam: 0, campaigns: 0 },
+      anedot: { inbox: 0, spam: 0, campaigns: 0 },
+      psq: { inbox: 0, spam: 0, campaigns: 0 },
+    }
     for (const c of emailsWithPlacement) {
       const platforms = getCampaignPlatforms(c)
       if (platforms.length === 0) continue
@@ -567,7 +574,15 @@ export async function GET(request: NextRequest) {
       for (const p of platforms) {
         entry[p].inboxCount += c.inboxCount ?? 0
         entry[p].spamCount += c.spamCount ?? 0
+        platformTotals[p].inbox += c.inboxCount ?? 0
+        platformTotals[p].spam += c.spamCount ?? 0
+        platformTotals[p].campaigns++
       }
+    }
+    for (const p of INBOXING_PLATFORMS) {
+      const t = platformTotals[p]
+      const total = t.inbox + t.spam
+      console.log(`[v0] Platform ${p}: campaigns=${t.campaigns} inbox=${t.inbox} spam=${t.spam} rate=${total > 0 ? Math.round(t.inbox / total * 100) : "N/A"}%`)
     }
 
     const platformDailyArray = Array.from(platformDailyMap.entries())

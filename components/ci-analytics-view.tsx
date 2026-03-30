@@ -117,20 +117,34 @@ export function CiAnalyticsView({
   return (
     <div className="space-y-6">
       {/* Stat cards — always visible when data exists */}
-      {data && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <StatCard
-            label="Most Active Day"
-            value={data.mostActiveDay ?? "—"}
-            sub={`${data.dayOfWeekData.find((d) => d.day === data.mostActiveDay)?.count ?? 0} sends on this day`}
-          />
-          <StatCard
-            label="Most Active Hour"
-            value={data.mostActiveHour ?? "—"}
-            sub="Hour of day with the most sends"
-          />
-        </div>
-      )}
+      {data && (() => {
+        const peakDayCount = data.dayOfWeekData.find((d) => d.day === data.mostActiveDay)?.count ?? 0
+        const otherDays = data.dayOfWeekData.filter((d) => d.day !== data.mostActiveDay)
+        const otherDayAvg = otherDays.length > 0
+          ? Math.round(otherDays.reduce((sum, d) => sum + d.count, 0) / otherDays.length)
+          : 0
+
+        const peakHourCount = Math.max(...data.hourOfDayData.map((h) => h.count), 0)
+        const otherHours = data.hourOfDayData.filter((h) => h.label !== data.mostActiveHour)
+        const otherHourAvg = otherHours.length > 0
+          ? Math.round(otherHours.reduce((sum, h) => sum + h.count, 0) / otherHours.length)
+          : 0
+
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <StatCard
+              label="Most Active Day"
+              value={data.mostActiveDay ?? "—"}
+              sub={`${peakDayCount.toLocaleString()} sends · Other days avg: ${otherDayAvg.toLocaleString()}`}
+            />
+            <StatCard
+              label="Most Active Hour"
+              value={data.mostActiveHour ?? "—"}
+              sub={`${peakHourCount.toLocaleString()} sends · Other hours avg: ${otherHourAvg.toLocaleString()}`}
+            />
+          </div>
+        )
+      })()}
 
       {/* Paywall overlay for non-enterprise/CI users */}
       {shouldShowPreview ? (

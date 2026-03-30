@@ -127,13 +127,15 @@ export async function POST(req: Request) {
             results.assignedViaWinRed++
           } else if (match.assignmentMethod === "auto_anedot") {
             results.assignedViaAnedot++
+          } else if (match.assignmentMethod === "auto_actblue") {
+            results.assignedViaActBlue = (results.assignedViaActBlue ?? 0) + 1
           }
 
           results.assignments.push({
             campaignId: campaign.id,
             senderEmail: campaign.senderEmail,
             assignedTo: match.entityName,
-            method: match.assignmentMethod === "auto_winred" ? "WinRed Identifier" : "Anedot Identifier",
+            method: match.assignmentMethod === "auto_winred" ? "WinRed Identifier" : match.assignmentMethod === "auto_actblue" ? "ActBlue Identifier" : "Anedot Identifier",
           })
         } else {
           results.noMatch++
@@ -154,77 +156,48 @@ export async function POST(req: Request) {
 async function checkDonationIdentifiers(
   urls: string[],
   entities: Array<{ id: string; name: string; donationIdentifiers: any }>,
-): Promise<{ entityId: string; entityName: string; assignmentMethod: "auto_winred" | "auto_anedot" } | null> {
-  // Extract WinRed identifiers
+): Promise<{ entityId: string; entityName: string; assignmentMethod: "auto_winred" | "auto_anedot" | "auto_actblue" } | null> {
   const winredIds = new Set<string>()
-  for (const url of urls) {
-    try {
-      const urlObj = new URL(url)
-      if (urlObj.hostname.includes("winred.com")) {
-        const pathParts = urlObj.pathname.split("/").filter(Boolean)
-        if (pathParts.length > 0 && pathParts[0]) {
-          winredIds.add(pathParts[0].toLowerCase())
-        }
-      }
-    } catch {
-      // Invalid URL, skip
-    }
-  }
-
-  // Extract Anedot identifiers
   const anedotIds = new Set<string>()
+  const actblueIds = new Set<string>()
+
   for (const url of urls) {
     try {
       const urlObj = new URL(url)
-      if (urlObj.hostname.includes("anedot.com")) {
-        const pathParts = urlObj.pathname.split("/").filter(Boolean)
-        if (pathParts.length > 0 && pathParts[0]) {
-          anedotIds.add(pathParts[0].toLowerCase())
-        }
+      const parts = urlObj.pathname.split("/").filter(Boolean)
+      if (urlObj.hostname.includes("winred.com") && parts[0]) {
+        winredIds.add(parts[0].toLowerCase())
+      } else if (urlObj.hostname.includes("anedot.com") && parts[0]) {
+        anedotIds.add(parts[0].toLowerCase())
+      } else if (urlObj.hostname.includes("actblue.com")) {
+        if (parts[0] === "donate" && parts[1]) actblueIds.add(parts[1].toLowerCase())
+        if (parts[0] === "contribute" && parts[1] === "page" && parts[2]) actblueIds.add(parts[2].toLowerCase())
       }
     } catch {
       // Invalid URL, skip
     }
   }
 
-  // Check each entity's identifiers
   for (const entity of entities) {
     if (!entity.donationIdentifiers) continue
-
     let identifiers: any
-    if (typeof entity.donationIdentifiers === "string") {
-      try {
-        identifiers = JSON.parse(entity.donationIdentifiers)
-      } catch {
-        continue
-      }
-    } else {
-      identifiers = entity.donationIdentifiers
-    }
+    try {
+      identifiers = typeof entity.donationIdentifiers === "string" ? JSON.parse(entity.donationIdentifiers) : entity.donationIdentifiers
+    } catch { continue }
 
-    // Check WinRed first
     if (identifiers.winred && Array.isArray(identifiers.winred)) {
       for (const id of winredIds) {
-        if (identifiers.winred.includes(id)) {
-          return {
-            entityId: entity.id,
-            entityName: entity.name,
-            assignmentMethod: "auto_winred",
-          }
-        }
+        if (identifiers.winred.includes(id)) return { entityId: entity.id, entityName: entity.name, assignmentMethod: "auto_winred" }
       }
     }
-
-    // Check Anedot
     if (identifiers.anedot && Array.isArray(identifiers.anedot)) {
       for (const id of anedotIds) {
-        if (identifiers.anedot.includes(id)) {
-          return {
-            entityId: entity.id,
-            entityName: entity.name,
-            assignmentMethod: "auto_anedot",
-          }
-        }
+        if (identifiers.anedot.includes(id)) return { entityId: entity.id, entityName: entity.name, assignmentMethod: "auto_anedot" }
+      }
+    }
+    if (identifiers.actblue && Array.isArray(identifiers.actblue)) {
+      for (const id of actblueIds) {
+        if (identifiers.actblue.includes(id)) return { entityId: entity.id, entityName: entity.name, assignmentMethod: "auto_actblue" }
       }
     }
   }

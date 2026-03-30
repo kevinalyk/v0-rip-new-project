@@ -281,7 +281,7 @@ model CompetitiveInsightCampaign {
   seenBySeedEmails    Json     @default("[]") // Array of seed email addresses that have already contributed counts
   entityId            String?  // Link to assigned entity
   entity              CiEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
-  assignmentMethod    String?  // "auto_winred", "auto_anedot", "auto_domain", "auto_phone", "manual"
+  assignmentMethod    String?  // "auto_winred", "auto_anedot", "auto_actblue", "auto_domain", "auto_phone", "manual"
   assignedAt          DateTime? // When the campaign was assigned to an entity
   clientId            String?  // Client who subscribed via personal email
   source              String   @default("seed") // "seed" or "personal"
@@ -321,7 +321,7 @@ model CiEntity {
   description        String?
   party              String?  // "republican", "democrat", "independent"
   state              String?  // State abbreviation (e.g., "CA", "NY") or "Nationwide"
-  donationIdentifiers Json?   // Platform-specific donation identifiers: {"winred": ["nrcc"], "anedot": ["jeff-hurd-for-congress"]}
+  donationIdentifiers Json?   // Platform-specific donation identifiers: {"winred": ["nrcc"], "anedot": ["jeff-hurd"], "actblue": ["elizabethwarren", "amy-for-america"]}
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -376,7 +376,7 @@ model SmsQueue {
   companyId          Int?      // Company ID from FullStack
   entityId           String?   // Link to assigned entity
   entity             CiEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
-  assignmentMethod   String?  // "auto_winred", "auto_anedot", "auto_phone", "manual"
+  assignmentMethod   String?  // "auto_winred", "auto_anedot", "auto_actblue", "auto_phone", "manual"
   assignedAt         DateTime? // When the SMS was assigned to an entity
   ctaLinks           String?   @db.Text // JSON array of CTA links extracted from message
   shareToken          String?  @unique // Unique token for sharing

@@ -1241,11 +1241,13 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                               ? "bg-red-600"
                               : assignment.assignmentMethod === "auto_anedot"
                                 ? "bg-green-600"
-                                : assignment.assignmentMethod === "auto_substack"
-                                  ? "bg-orange-500"
-                                  : assignment.assignmentMethod === "auto_domain"
-                                    ? "bg-blue-600"
-                                    : "bg-purple-600"
+                                : assignment.assignmentMethod === "auto_actblue"
+                                  ? "bg-blue-500"
+                                  : assignment.assignmentMethod === "auto_substack"
+                                    ? "bg-orange-500"
+                                    : assignment.assignmentMethod === "auto_domain"
+                                      ? "bg-blue-600"
+                                      : "bg-purple-600"
                                   }
                                 >
                           {assignment.assignmentMethod === "manual"
@@ -1254,11 +1256,13 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                               ? "Auto: WinRed"
                               : assignment.assignmentMethod === "auto_anedot"
                                 ? "Auto: Anedot"
-                                : assignment.assignmentMethod === "auto_substack"
-                                  ? "Auto: Substack"
-                                  : assignment.assignmentMethod === "auto_domain"
-                                    ? "Auto: Domain"
-                                    : "Auto: Phone"}
+                                : assignment.assignmentMethod === "auto_actblue"
+                                  ? "Auto: ActBlue"
+                                  : assignment.assignmentMethod === "auto_substack"
+                                    ? "Auto: Substack"
+                                    : assignment.assignmentMethod === "auto_domain"
+                                      ? "Auto: Domain"
+                                      : "Auto: Phone"}
                                 </Badge>
                               )}
                             </div>

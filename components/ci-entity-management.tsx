@@ -146,10 +146,12 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
   const [donationIdentifierInputs, setDonationIdentifierInputs] = useState<{
     winred: string
     anedot: string
+    actblue: string
     substack: string
   }>({
     winred: "",
     anedot: "",
+    actblue: "",
     substack: "",
   })
 
@@ -454,7 +456,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setNewEntityState("")
           setNewEntityNationwide(false)
           setNewEntityDonationIdentifiers({})
-    setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" }) // Reset raw inputs too
+    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", substack: "" }) // Reset raw inputs too
     fetchData()
     toast.success("Entity updated successfully!")
         } else {
@@ -487,7 +489,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setNewEntityState("")
           setNewEntityNationwide(false)
           setNewEntityDonationIdentifiers({})
-    setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" }) // Reset raw inputs too
+    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", substack: "" }) // Reset raw inputs too
     fetchData()
     toast.success("Entity created successfully!")
         } else {
@@ -565,7 +567,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setAssignEntityState("")
           setAssignEntityNationwide(false)
           setAssignEntityDonationIdentifiers({}) // Clear donation identifiers
-          setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" }) // Clear raw inputs
+          setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", substack: "" }) // Clear raw inputs
           setCreateMapping(true)
           fetchData()
           toast.success("Campaigns assigned to new entity!")
@@ -1764,6 +1766,36 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                     </div>
 
                     <div>
+                      <Label htmlFor="entity-actblue-identifiers" className="text-sm font-normal">
+                        ActBlue
+                      </Label>
+                      <Input
+                        id="entity-actblue-identifiers"
+                        placeholder="e.g., elizabethwarren, amy-for-america (comma-separated)"
+                        value={donationIdentifierInputs.actblue}
+                        onChange={(e) => {
+                          setDonationIdentifierInputs((prev) => ({
+                            ...prev,
+                            actblue: e.target.value,
+                          }))
+                        }}
+                        onBlur={(e) => {
+                          const value = e.target.value
+                          setNewEntityDonationIdentifiers((prev) => ({
+                            ...prev,
+                            actblue: value
+                              .split(",")
+                              .map((id) => id.trim().toLowerCase())
+                              .filter((id) => id.length > 0),
+                          }))
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        From URLs like: secure.actblue.com/donate/<span className="font-mono">elizabethwarren</span> or /contribute/page/<span className="font-mono">amy-for-america</span>
+                      </p>
+                    </div>
+
+                    <div>
                       <Label htmlFor="entity-substack-identifier" className="text-sm font-normal">
                         Substack
                       </Label>
@@ -2101,6 +2133,30 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                     From URLs like: anedot.com/<span className="font-mono">jeff-hurd-for-congress</span>/donate
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="assign-entity-actblue-identifiers" className="text-sm font-normal">
+                    ActBlue
+                  </Label>
+                  <Input
+                    id="assign-entity-actblue-identifiers"
+                    placeholder="e.g., elizabethwarren, amy-for-america (comma-separated)"
+                    value={assignEntityDonationIdentifiers.actblue?.join(", ") || ""}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setAssignEntityDonationIdentifiers((prev) => ({
+                        ...prev,
+                        actblue: value
+                          .split(",")
+                          .map((id) => id.trim().toLowerCase())
+                          .filter((id) => id.length > 0),
+                      }))
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    From URLs like: secure.actblue.com/donate/<span className="font-mono">elizabethwarren</span> or /contribute/page/<span className="font-mono">amy-for-america</span>
                   </p>
                 </div>
 

@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyAuth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { extractWinRedIdentifiers, extractAnedotIdentifiers, extractPSQIdentifiers } from "@/lib/ci-entity-utils"
+import { extractWinRedIdentifiers, extractAnedotIdentifiers, extractActBlueIdentifiers, extractPSQIdentifiers } from "@/lib/ci-entity-utils"
 
 export const maxDuration = 300 // 5 minutes
 
@@ -292,24 +292,12 @@ async function matchCampaignToEntity(
     actblue: new Set<string>(),
   }
 
-  for (const link of links) {
-    const urlToCheck = (link?.finalUrl || link?.url || link).toLowerCase()
-
-    // Extract WinRed identifiers
-    extractWinRedIdentifiers(urlToCheck, donationIdentifiers.winred)
-
-    // Extract Anedot identifiers
-    extractAnedotIdentifiers(urlToCheck, donationIdentifiers.anedot)
-
-    // Extract PSQ identifiers
-    extractPSQIdentifiers(urlToCheck, donationIdentifiers.psq)
-
-    // Extract ActBlue identifiers
-    const actblueMatch = urlToCheck.match(/secure\.actblue\.com\/donate\/([^/?]+)/i)
-    if (actblueMatch) {
-      donationIdentifiers.actblue.add(actblueMatch[1].toLowerCase())
-    }
-  }
+  // Use shared extract functions — pass the full links array so they handle
+  // both direct and decoded tracking URLs correctly, then merge into our sets.
+  for (const id of extractWinRedIdentifiers(links)) donationIdentifiers.winred.add(id)
+  for (const id of extractAnedotIdentifiers(links)) donationIdentifiers.anedot.add(id)
+  for (const id of extractActBlueIdentifiers(links)) donationIdentifiers.actblue.add(id)
+  for (const id of extractPSQIdentifiers(links)) donationIdentifiers.psq.add(id)
 
   // If no identifiers found, return null
   if (

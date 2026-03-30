@@ -17,7 +17,7 @@ export type DonationIdentifiers = {
 // Type for entity assignment
 type EntityAssignment = {
   entityId: string
-  assignmentMethod: "auto_domain" | "auto_winred" | "auto_anedot" | "auto_phone" | "auto_substack"
+  assignmentMethod: "auto_domain" | "auto_winred" | "auto_anedot" | "auto_actblue" | "auto_phone" | "auto_substack"
 } | null
 
 function stripHtmlAndExtract(html: string): string {
@@ -183,7 +183,7 @@ export async function findEntityForSender(
 
           const donationMatch = await findEntityByDonationIdentifier(ctaLinks, true)
           if (donationMatch) {
-            const method = `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot"
+            const method = `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" | "auto_actblue"
             console.log(`[Data Broker] ✓ Assigned via donation identifier: ${method} (${donationMatch.matchedIdentifier})`)
             return { entityId: donationMatch.entity.id, assignmentMethod: method }
           }
@@ -200,7 +200,7 @@ export async function findEntityForSender(
     if (ctaLinks) {
       const donationMatch = await findEntityByDonationIdentifier(ctaLinks)
       if (donationMatch) {
-        return { entityId: donationMatch.entity.id, assignmentMethod: `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" }
+        return { entityId: donationMatch.entity.id, assignmentMethod: `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" | "auto_actblue" }
       }
     }
 
@@ -230,7 +230,7 @@ export async function findEntityForPhone(phoneNumber: string, ctaLinks?: any): P
     if (ctaLinks) {
       const donationMatch = await findEntityByDonationIdentifier(ctaLinks)
       if (donationMatch) {
-        return { entityId: donationMatch.entity.id, assignmentMethod: `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" }
+        return { entityId: donationMatch.entity.id, assignmentMethod: `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" | "auto_actblue" }
       }
     }
 
@@ -888,6 +888,52 @@ export function extractAnedotIdentifiers(ctaLinks: any): Set<string> {
 }
 
 /**
+ * Extract ActBlue identifiers from CTA links.
+ * Handles two URL patterns:
+ *   secure.actblue.com/donate/{identifier}
+ *   secure.actblue.com/contribute/page/{identifier}
+ */
+export function extractActBlueIdentifiers(ctaLinks: any): Set<string> {
+  const identifiers = new Set<string>()
+  if (!ctaLinks) return identifiers
+
+  const links = Array.isArray(ctaLinks) ? ctaLinks : []
+
+  for (const link of links) {
+    const url = typeof link === "string" ? link : link.finalUrl || link.url
+    if (!url) continue
+
+    const tryExtract = (u: string) => {
+      try {
+        const urlObj = new URL(u)
+        if (!urlObj.hostname.includes("actblue.com")) return
+        const parts = urlObj.pathname.split("/").filter(Boolean)
+        // Pattern 1: /donate/{identifier}
+        if (parts[0] === "donate" && parts[1]) {
+          identifiers.add(parts[1].toLowerCase())
+        }
+        // Pattern 2: /contribute/page/{identifier}
+        if (parts[0] === "contribute" && parts[1] === "page" && parts[2]) {
+          identifiers.add(parts[2].toLowerCase())
+        }
+      } catch {
+        // invalid URL
+      }
+    }
+
+    tryExtract(url)
+
+    // Also try decoded tracking URL if finalUrl is absent
+    if ((typeof link !== "string" && !link.finalUrl) || url.includes("trk.") || url.includes("tracking") || url.includes("click.")) {
+      const decoded = tryDecodeTrackingUrl(url)
+      if (decoded) tryExtract(decoded)
+    }
+  }
+
+  return identifiers
+}
+
+/**
  * Extract PSQ identifiers from CTA links
  */
 export function extractPSQIdentifiers(ctaLinks: any): Set<string> {
@@ -999,6 +1045,7 @@ function extractDonationIdentifiers(ctaLinks: any): Array<{ platform: string; id
   const identifiers: Array<{ platform: string; identifier: string }> = []
   const winredIdentifiers = extractWinRedIdentifiers(ctaLinks)
   const anedotIdentifiers = extractAnedotIdentifiers(ctaLinks)
+  const actblueIdentifiers = extractActBlueIdentifiers(ctaLinks)
   const psqIdentifiers = extractPSQIdentifiers(ctaLinks)
   const ngpvanIdentifiers = extractNGPVANIdentifiers(ctaLinks)
 
@@ -1008,6 +1055,10 @@ function extractDonationIdentifiers(ctaLinks: any): Array<{ platform: string; id
 
   for (const identifier of anedotIdentifiers) {
     identifiers.push({ platform: "anedot", identifier })
+  }
+
+  for (const identifier of actblueIdentifiers) {
+    identifiers.push({ platform: "actblue", identifier })
   }
 
   for (const identifier of psqIdentifiers) {

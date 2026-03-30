@@ -295,6 +295,7 @@ model CompetitiveInsightCampaign {
   isDeleted           Boolean  @default(false) // Soft delete flag
   deletedAt           DateTime? // When it was deleted
   deletedBy           String?  // Which admin deleted it
+  donationPlatform    String?  // Detected donation platform: "winred" | "actblue" | "anedot" | "psq"
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   
@@ -310,6 +311,7 @@ model CompetitiveInsightCampaign {
   @@index([isHidden])
   @@index([assignedAt])
   @@index([isDeleted])
+  @@index([donationPlatform])
 }
 
 model CiEntity {

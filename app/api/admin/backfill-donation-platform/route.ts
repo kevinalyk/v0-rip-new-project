@@ -1,40 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireSuperAdmin } from "@/lib/auth"
-
-// Platform detection rules — ORDER MATTERS.
-// PSQ must come before WinRed because PSQ emails frequently contain
-// WinRed store/merch links that are NOT donation links.
-const PLATFORM_RULES: Array<{ platform: string; domains: string[] }> = [
-  { platform: "psq",     domains: ["psqimpact.com", "politicalsurveyquestions.com", "psqsurveys.com"] },
-  { platform: "actblue", domains: ["actblue.com"] },
-  { platform: "anedot",  domains: ["anedot.com"] },
-  { platform: "winred",  domains: ["winred.com"] },
-]
-
-function detectPlatform(ctaLinks: unknown): string | null {
-  let links: unknown[] = []
-  if (Array.isArray(ctaLinks)) {
-    links = ctaLinks
-  } else if (typeof ctaLinks === "string") {
-    try { links = JSON.parse(ctaLinks) } catch { return null }
-  } else {
-    return null
-  }
-
-  const urls = links.map((link) => {
-    if (typeof link === "string") return link.toLowerCase()
-    const l = link as Record<string, unknown>
-    return ((l.finalUrl ?? l.url ?? "") as string).toLowerCase()
-  })
-
-  for (const rule of PLATFORM_RULES) {
-    if (urls.some((url) => rule.domains.some((d) => url.includes(d)))) {
-      return rule.platform
-    }
-  }
-  return null
-}
+import { detectDonationPlatform } from "@/lib/detect-donation-platform"
 
 export async function POST(request: Request) {
   const authResult = await requireSuperAdmin(request)
@@ -79,7 +46,7 @@ export async function POST(request: Request) {
           continue
         }
 
-        const platform = detectPlatform(campaign.ctaLinks)
+        const platform = detectDonationPlatform(campaign.ctaLinks)
         if (!platform) {
           summary.noMatch++
           continue

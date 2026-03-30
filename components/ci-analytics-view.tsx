@@ -302,7 +302,10 @@ export function CiAnalyticsView({
             <Card>
               <CardHeader>
                 <CardTitle>Content by Hour of Day</CardTitle>
-                <CardDescription>Send volume by hour — darker cells indicate busier hours</CardDescription>
+                <CardDescription>
+                  Send volume by hour — darker cells indicate busier hours
+                  <span className="ml-2 text-xs text-muted-foreground">(EST)</span>
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 {/* Bar chart — fixed pixel height container with absolute-positioned bars */}

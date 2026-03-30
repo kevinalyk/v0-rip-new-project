@@ -93,6 +93,15 @@ export default function InboxingPage() {
   const params = useParams()
   const clientSlug = params.clientSlug as string
 
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+
+  useEffect(() => {
+    fetch("/api/auth/me", { credentials: "include" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((u) => { if (u?.role === "super_admin") setIsSuperAdmin(true) })
+      .catch(() => {})
+  }, [])
+
   const [inboxingData, setInboxingData] = useState<InboxingData[]>([])
   const [inboxingTimeData, setInboxingTimeData] = useState<InboxingTimeDataPoint[]>([])
   const [inboxingByPartyData, setInboxingByPartyData] = useState<InboxingByPartyDataPoint[]>([])
@@ -302,7 +311,63 @@ export default function InboxingPage() {
           </div>
         </div>
 
-        {/* Inbox Rate Over Time — full width, on top */}
+        {/* Overall Deliverability pie — at top */}
+        <Card className="max-w-sm">
+          <CardHeader>
+            <CardTitle>Overall Deliverability</CardTitle>
+            <CardDescription>
+              {dateRange.from || dateRange.to
+                ? `Inbox vs spam rate${dateRange.from ? ` from ${format(dateRange.from, "MMM d, yyyy")}` : ""}${dateRange.to ? ` to ${format(dateRange.to, "MMM d, yyyy")}` : ""}`
+                : `Inbox vs spam rate (last ${chartDays === 365 ? "year" : `${chartDays} days`})`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="h-[280px] flex items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : inboxingData.length > 0 ? (
+              <div className="flex flex-col items-center gap-4">
+                <div className="h-[280px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart margin={{ top: 30, right: 30, bottom: 30, left: 30 }}>
+                      <Pie
+                        data={inboxingData}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        innerRadius={48}
+                        dataKey="value"
+                        label={({ name, value }) => `${name}: ${value}%`}
+                        labelLine={true}
+                      >
+                        {inboxingData.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={INBOX_COLORS[index % INBOX_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => [`${value}%`]} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex items-center gap-6 text-sm">
+                  {inboxingData.map((item, i) => (
+                    <div key={item.name} className="flex items-center gap-2">
+                      <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: INBOX_COLORS[i] }} />
+                      <span className="font-medium">{item.name}</span>
+                      <span className="text-muted-foreground">{item.value}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
+                No placement data available
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Inbox Rate Over Time — full width */}
         <Card>
           <CardHeader>
             <CardTitle>Inbox Rate Over Time</CardTitle>
@@ -450,8 +515,8 @@ export default function InboxingPage() {
           </CardContent>
         </Card>
 
-        {/* Inbox Rate by Platform */}
-        <Card>
+        {/* Inbox Rate by Platform — super admins only */}
+        {isSuperAdmin && <Card>
           <CardHeader>
             <CardTitle>Inbox Rate by Platform</CardTitle>
             <CardDescription>
@@ -527,7 +592,7 @@ export default function InboxingPage() {
               </div>
             )}
           </CardContent>
-        </Card>
+        </Card>}
 
         {/* House File vs Third-Party Inbox Rate */}
         <Card>
@@ -587,64 +652,7 @@ export default function InboxingPage() {
           </CardContent>
         </Card>
 
-        {/* Overall Deliverability — below, max-width for the pie */}
-        <Card className="max-w-sm">
-          <CardHeader>
-            <CardTitle>Overall Deliverability</CardTitle>
-            <CardDescription>
-              {dateRange.from || dateRange.to
-                ? `Inbox vs spam rate${dateRange.from ? ` from ${format(dateRange.from, "MMM d, yyyy")}` : ""}${dateRange.to ? ` to ${format(dateRange.to, "MMM d, yyyy")}` : ""}`
-                : `Inbox vs spam rate (last ${chartDays === 365 ? "year" : `${chartDays} days`})`}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="h-[280px] flex items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : inboxingData.length > 0 ? (
-              <div className="flex flex-col items-center gap-4">
-                <div className="h-[280px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart margin={{ top: 30, right: 30, bottom: 30, left: 30 }}>
-                      <Pie
-                        data={inboxingData}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={80}
-                        innerRadius={48}
-                        dataKey="value"
-                        label={({ name, value }) => `${name}: ${value}%`}
-                        labelLine={true}
-                      >
-                        {inboxingData.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={INBOX_COLORS[index % INBOX_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value: number) => [`${value}%`]} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex items-center gap-6 text-sm">
-                  {inboxingData.map((item, i) => (
-                    <div key={item.name} className="flex items-center gap-2">
-                      <span
-                        className="inline-block w-3 h-3 rounded-full"
-                        style={{ backgroundColor: INBOX_COLORS[i] }}
-                      />
-                      <span className="font-medium">{item.name}</span>
-                      <span className="text-muted-foreground">{item.value}%</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
-                No placement data available
-              </div>
-            )}
-          </CardContent>
-        </Card>
+
       </div>
     </AppLayout>
   )

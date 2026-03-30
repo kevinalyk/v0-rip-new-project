@@ -427,6 +427,22 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
   const handleCreateEntity = async () => {
     if (!newEntityName.trim()) return
 
+    // Build final donationIdentifiers from the raw input state at submit time,
+    // so we don't depend on onBlur having fired before the button is clicked.
+    const finalDonationIdentifiers: DonationIdentifiers = {
+      ...newEntityDonationIdentifiers,
+      winred: donationIdentifierInputs.winred
+        ? donationIdentifierInputs.winred.split(",").map((id) => id.trim()).filter(Boolean)
+        : newEntityDonationIdentifiers.winred,
+      anedot: donationIdentifierInputs.anedot
+        ? donationIdentifierInputs.anedot.split(",").map((id) => id.trim()).filter(Boolean)
+        : newEntityDonationIdentifiers.anedot,
+      actblue: donationIdentifierInputs.actblue
+        ? donationIdentifierInputs.actblue.split(",").map((id) => id.trim().toLowerCase()).filter(Boolean)
+        : newEntityDonationIdentifiers.actblue,
+      substack: donationIdentifierInputs.substack.trim() || newEntityDonationIdentifiers.substack,
+    }
+
     try {
       if (editingEntityId) {
         // Update existing entity
@@ -441,7 +457,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
             party: newEntityParty || undefined,
             state: newEntityState || undefined,
             tag: newEntityTag || undefined,
-            donationIdentifiers: newEntityDonationIdentifiers,
+            donationIdentifiers: finalDonationIdentifiers,
           }),
         })
 
@@ -475,7 +491,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
             party: newEntityParty || undefined,
             state: newEntityState || undefined,
             tag: newEntityTag || undefined,
-            donationIdentifiers: newEntityDonationIdentifiers,
+            donationIdentifiers: finalDonationIdentifiers,
           }),
         })
 
@@ -656,6 +672,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
     setDonationIdentifierInputs({
       winred: entity.donationIdentifiers?.winred?.join(", ") || "",
       anedot: entity.donationIdentifiers?.anedot?.join(", ") || "",
+      actblue: entity.donationIdentifiers?.actblue?.join(", ") || "",
       substack: entity.donationIdentifiers?.substack || "",
     })
 
@@ -747,7 +764,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
       // Reset donation identifiers on close
       setNewEntityDonationIdentifiers({})
       // Reset raw inputs when closing the dialog
-    setDonationIdentifierInputs({ winred: "", anedot: "", substack: "" })
+    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", substack: "" })
   }
 }
 

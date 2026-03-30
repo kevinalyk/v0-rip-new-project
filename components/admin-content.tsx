@@ -61,6 +61,7 @@ export function AdminContent({ user }: AdminContentProps) {
   const [isAutoPopulatingWinRed, setIsAutoPopulatingWinRed] = useState(false)
   const [isAutoPopulatingAnedot, setIsAutoPopulatingAnedot] = useState(false)
   const [isAutoPopulatingActBlue, setIsAutoPopulatingActBlue] = useState(false)
+  const [isAutoPopulatingPSQ, setIsAutoPopulatingPSQ] = useState(false)
   const [isAnalyzingActBlue, setIsAnalyzingActBlue] = useState(false)
   const [actBluePatterns, setActBluePatterns] = useState<any>(null)
   const [isReassigning, setIsReassigning] = useState(false)
@@ -579,27 +580,49 @@ export function AdminContent({ user }: AdminContentProps) {
     }
   }
 
-  const handleAutoPopulateActBlue = async () => {
-    setIsAutoPopulatingActBlue(true)
-    try {
-      const response = await fetch("/api/admin/auto-populate-actblue", {
-        method: "POST",
-        credentials: "include",
-      })
-      const data = await response.json()
-      if (response.ok) {
-        toast.success(
-          `ActBlue identifier auto-population completed: ${data.summary.updated} updated, ${data.summary.skipped} skipped, ${data.summary.errors} errors`,
-        )
-      } else {
-        toast.error(data.error || "Failed to auto-populate ActBlue identifiers")
-      }
-    } catch {
-      toast.error("Failed to auto-populate ActBlue identifiers")
-    } finally {
-      setIsAutoPopulatingActBlue(false)
+const handleAutoPopulateActBlue = async () => {
+  setIsAutoPopulatingActBlue(true)
+  try {
+    const response = await fetch("/api/admin/auto-populate-actblue", {
+      method: "POST",
+      credentials: "include",
+    })
+    const data = await response.json()
+    if (response.ok) {
+      toast.success(
+        `ActBlue identifier auto-population completed: ${data.summary.updated} updated, ${data.summary.skipped} skipped, ${data.summary.errors} errors`,
+      )
+    } else {
+      toast.error(data.error || "Failed to auto-populate ActBlue identifiers")
     }
+  } catch {
+    toast.error("Failed to auto-populate ActBlue identifiers")
+  } finally {
+    setIsAutoPopulatingActBlue(false)
   }
+}
+
+const handleAutoPopulatePSQ = async () => {
+  setIsAutoPopulatingPSQ(true)
+  try {
+    const response = await fetch("/api/admin/auto-populate-psq", {
+      method: "POST",
+      credentials: "include",
+    })
+    const data = await response.json()
+    if (response.ok) {
+      toast.success(
+        `PSQ identifier auto-population completed: ${data.summary.updated} updated, ${data.summary.skipped} skipped, ${data.summary.errors} errors`,
+      )
+    } else {
+      toast.error(data.error || "Failed to auto-populate PSQ identifiers")
+    }
+  } catch {
+    toast.error("Failed to auto-populate PSQ identifiers")
+  } finally {
+    setIsAutoPopulatingPSQ(false)
+  }
+}
 
   const handleAnalyzeActBlue = async () => {
     setIsAnalyzingActBlue(true)
@@ -1927,6 +1950,32 @@ export function AdminContent({ user }: AdminContentProps) {
               <>
                 <Play size={16} />
                 Auto-Populate ActBlue Identifiers
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Auto-Populate PSQ Impact Identifiers</CardTitle>
+          <CardDescription>
+            Automatically extract and populate PSQ Impact donation identifiers from existing campaigns for ALL entities.
+            Scans campaigns and SMS messages for <code>secure.psqimpact.com/donate/</code> URL patterns and stores the
+            entity-slug identifiers for future auto-assignment. Safe to re-run — only adds new identifiers, never removes existing ones.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={handleAutoPopulatePSQ} disabled={isAutoPopulatingPSQ} className="gap-2">
+            {isAutoPopulatingPSQ ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Auto-Populating...
+              </>
+            ) : (
+              <>
+                <Play size={16} />
+                Auto-Populate PSQ Impact Identifiers
               </>
             )}
           </Button>

@@ -93,14 +93,8 @@ export default function InboxingPage() {
   const params = useParams()
   const clientSlug = params.clientSlug as string
 
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
-
-  useEffect(() => {
-    fetch("/api/auth/me", { credentials: "include" })
-      .then((r) => r.ok ? r.json() : null)
-      .then((u) => { if (u?.role === "super_admin") setIsSuperAdmin(true) })
-      .catch(() => {})
-  }, [])
+  // Platform Report is only visible for RIP client
+  const isRipClient = clientSlug === "rip"
 
   const [inboxingData, setInboxingData] = useState<InboxingData[]>([])
   const [inboxingTimeData, setInboxingTimeData] = useState<InboxingTimeDataPoint[]>([])
@@ -515,8 +509,8 @@ export default function InboxingPage() {
           </CardContent>
         </Card>
 
-        {/* Inbox Rate by Platform — super admins only */}
-        {isSuperAdmin && <Card>
+        {/* Inbox Rate by Platform — RIP client only */}
+        {isRipClient && <Card>
           <CardHeader>
             <CardTitle>Inbox Rate by Platform</CardTitle>
             <CardDescription>

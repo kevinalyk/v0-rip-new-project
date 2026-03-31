@@ -509,7 +509,7 @@ export default function InboxingPage() {
           </CardContent>
         </Card>
 
-        {/* Inbox Rate by Platform — RIP client only */}
+        {/* Inbox Rate by Platform — commented out, preserved for future use
         {isRipClient && <Card>
           <CardHeader>
             <CardTitle>Inbox Rate by Platform</CardTitle>
@@ -587,6 +587,7 @@ export default function InboxingPage() {
             )}
           </CardContent>
         </Card>}
+        */}
 
         {/* House File vs Third-Party Inbox Rate */}
         <Card>

@@ -34,6 +34,7 @@ import {
   Megaphone,
   AlertCircle,
   ScanSearch,
+  MailCheck,
 } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { useTheme } from "next-themes"
@@ -399,7 +400,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                   />
                   {getClientSlug() === "rip" && (
                     <NavItem
-                      icon={<Inbox size={18} />}
+                      icon={<MailCheck size={18} />}
                       label="Inboxing"
                       active={pathname.includes("/reports/inboxing")}
                       collapsed={false}

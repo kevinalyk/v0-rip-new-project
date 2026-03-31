@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
-import { CalendarIcon, Loader2, Lock, RefreshCw, RotateCcw, X } from "lucide-react"
+import { CalendarIcon, Loader2, Lock, RefreshCw, RotateCcw, TrendingUp, X } from "lucide-react"
 import { format } from "date-fns"
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
@@ -191,11 +191,15 @@ export default function InboxingPage() {
     return (
       <AppLayout clientSlug={clientSlug} isAdminView={clientSlug === "admin"}>
         <div className="relative overflow-hidden">
-          <div className="container mx-auto px-4 py-6 space-y-6 opacity-40 pointer-events-none select-none">
-            <h1 className="text-3xl font-bold">Inboxing Report</h1>
+          {/* Blurred static content in background */}
+          <div className="blur-md opacity-60 pointer-events-none select-none px-4 py-6">
+            <div className="mb-6">
+              <h1 className="text-3xl font-bold">Inboxing Report</h1>
+            </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="rounded-lg border bg-card p-6"><p className="text-sm text-muted-foreground">Inbox Rate</p></div>
-              <div className="rounded-lg border bg-card p-6"><p className="text-sm text-muted-foreground">Placement Rate</p></div>
+              <div className="rounded-lg border bg-card p-6 h-48" />
+              <div className="rounded-lg border bg-card p-6 h-48" />
+              <div className="rounded-lg border bg-card p-6 h-48 col-span-2" />
             </div>
           </div>
 
@@ -209,16 +213,37 @@ export default function InboxingPage() {
               <div className="space-y-2">
                 <h2 className="text-2xl font-bold">Inboxing Reports is a Paid Feature</h2>
                 <p className="text-muted-foreground text-sm">
-                  Upgrade to access detailed email placement and deliverability analytics across all platforms.
+                  Upgrade your plan to access email placement analytics, deliverability trends, and inbox rate tracking across all platforms.
                 </p>
               </div>
 
+              <ul className="text-sm text-left space-y-2">
+                {[
+                  "Inbox vs. spam placement rates",
+                  "Daily and weekly inbox trends",
+                  "Platform-specific deliverability",
+                  "Party and file type breakdown",
+                  "Historical placement analysis",
+                ].map((f) => (
+                  <li key={f} className="flex items-start gap-2">
+                    <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#dc2a28]" />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+
               <Button
-                onClick={() => window.location.href = `/${clientSlug}/billing`}
+                size="lg"
                 className="w-full bg-[#dc2a28] hover:bg-[#dc2a28]/90 text-white"
+                onClick={() => window.location.href = `/${clientSlug}/billing`}
               >
-                View Upgrade Options
+                <TrendingUp className="mr-2 h-4 w-4" />
+                Upgrade Now
               </Button>
+
+              <p className="text-xs text-muted-foreground">
+                Contact your account manager for enterprise pricing.
+              </p>
             </div>
           </div>
         </div>

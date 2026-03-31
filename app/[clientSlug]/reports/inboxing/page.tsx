@@ -190,7 +190,7 @@ export default function InboxingPage() {
   if (isFree) {
     return (
       <AppLayout clientSlug={clientSlug} isAdminView={clientSlug === "admin"}>
-        <div className="relative overflow-hidden">
+        <div className="relative overflow-hidden min-h-screen">
           {/* Blurred static content in background */}
           <div className="blur-md opacity-60 pointer-events-none select-none px-4 py-6">
             <div className="mb-6">

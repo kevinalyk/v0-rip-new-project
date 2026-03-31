@@ -398,15 +398,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                     collapsed={false}
                     onClick={() => navigate(`/${getClientSlug()}/reports/trends`)}
                   />
-                  {getClientSlug() === "rip" && (
-                    <NavItem
-                      icon={<MailCheck size={18} />}
-                      label="Inboxing"
-                      active={pathname.includes("/reports/inboxing")}
-                      collapsed={false}
-                      onClick={() => navigate(`/${getClientSlug()}/reports/inboxing`)}
-                    />
-                  )}
+                  <NavItem
+                    icon={<MailCheck size={18} />}
+                    label="Inboxing"
+                    active={pathname.includes("/reports/inboxing")}
+                    collapsed={false}
+                    onClick={() => navigate(`/${getClientSlug()}/reports/inboxing`)}
+                  />
                 </div>
               )}
             </>

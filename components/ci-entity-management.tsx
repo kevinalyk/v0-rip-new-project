@@ -1274,11 +1274,13 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                                   ? "bg-blue-500"
                                   : assignment.assignmentMethod === "auto_psqimpact"
                                     ? "bg-yellow-600"
-                                    : assignment.assignmentMethod === "auto_substack"
-                                      ? "bg-orange-500"
-                                      : assignment.assignmentMethod === "auto_domain"
-                                        ? "bg-blue-600"
-                                        : "bg-purple-600"
+                                    : assignment.assignmentMethod === "auto_engage"
+                                      ? "bg-indigo-600"
+                                      : assignment.assignmentMethod === "auto_substack"
+                                        ? "bg-orange-500"
+                                        : assignment.assignmentMethod === "auto_domain"
+                                          ? "bg-blue-600"
+                                          : "bg-purple-600"
                                   }
                                 >
                           {assignment.assignmentMethod === "manual"
@@ -1291,7 +1293,9 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                                   ? "Auto: ActBlue"
                                   : assignment.assignmentMethod === "auto_psqimpact"
                                     ? "Auto: PSQ"
-                                    : assignment.assignmentMethod === "auto_substack"
+                                    : assignment.assignmentMethod === "auto_engage"
+                                      ? "Auto: Engage"
+                                      : assignment.assignmentMethod === "auto_substack"
                                       ? "Auto: Substack"
                                       : assignment.assignmentMethod === "auto_domain"
                                         ? "Auto: Domain"
@@ -2278,6 +2282,30 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                     From URLs like: secure.psqimpact.com/donate/<span className="font-mono">conservative-battleground-fund</span>/...
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="assign-entity-engage-identifiers" className="text-sm font-normal">
+                    Engage
+                  </Label>
+                  <Input
+                    id="assign-entity-engage-identifiers"
+                    placeholder="e.g., tomemmer, annwagner, thenrcc (comma-separated)"
+                    value={assignEntityDonationIdentifiers.engage?.join(", ") || ""}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setAssignEntityDonationIdentifiers((prev) => ({
+                        ...prev,
+                        engage: value
+                          .split(",")
+                          .map((id) => id.trim().toLowerCase())
+                          .filter((id) => id.length > 0),
+                      }))
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    From URLs like: engage.<span className="font-mono">tomemmer</span>.com/...
                   </p>
                 </div>
 

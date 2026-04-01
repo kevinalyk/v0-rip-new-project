@@ -62,6 +62,7 @@ export function AdminContent({ user }: AdminContentProps) {
   const [isAutoPopulatingAnedot, setIsAutoPopulatingAnedot] = useState(false)
   const [isAutoPopulatingActBlue, setIsAutoPopulatingActBlue] = useState(false)
   const [isAutoPopulatingPSQ, setIsAutoPopulatingPSQ] = useState(false)
+  const [isAutoPopulatingEngage, setIsAutoPopulatingEngage] = useState(false)
   const [isAnalyzingActBlue, setIsAnalyzingActBlue] = useState(false)
   const [actBluePatterns, setActBluePatterns] = useState<any>(null)
   const [urlKeyword, setUrlKeyword] = useState("")
@@ -624,6 +625,28 @@ const handleAutoPopulatePSQ = async () => {
     toast.error("Failed to auto-populate PSQ identifiers")
   } finally {
     setIsAutoPopulatingPSQ(false)
+  }
+}
+
+const handleAutoPopulateEngage = async () => {
+  setIsAutoPopulatingEngage(true)
+  try {
+    const response = await fetch("/api/admin/auto-populate-engage", {
+      method: "POST",
+      credentials: "include",
+    })
+
+    const data = await response.json()
+
+    if (response.ok) {
+      toast.success(`Engage auto-population completed: Updated ${data.updated} entities with ${data.totalIdentifiers} identifiers found`)
+    } else {
+      toast.error(data.error || "Failed to auto-populate Engage identifiers")
+    }
+  } catch {
+    toast.error("Failed to auto-populate Engage identifiers")
+  } finally {
+    setIsAutoPopulatingEngage(false)
   }
 }
 
@@ -2026,6 +2049,30 @@ const downloadActBluePatterns = () => {
               <>
                 <Play size={16} />
                 Auto-Populate PSQ Impact Identifiers
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Auto-Populate Engage Identifiers</CardTitle>
+          <CardDescription>
+            Automatically extract and populate Engage donation identifiers from existing campaigns for ALL entities. Scans campaigns and SMS messages for <code>engage.{"{identifier}"}.com</code> URL patterns and stores the domain identifiers for future auto-assignment.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={handleAutoPopulateEngage} disabled={isAutoPopulatingEngage} className="gap-2">
+            {isAutoPopulatingEngage ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Auto-Populating...
+              </>
+            ) : (
+              <>
+                <Play size={16} />
+                Auto-Populate Engage Identifiers
               </>
             )}
           </Button>

@@ -2234,17 +2234,22 @@ const downloadActBluePatterns = () => {
                 <table className="w-full text-sm">
                   <thead className="bg-muted sticky top-0">
                     <tr className="border-b">
-                      <th className="text-left p-2 font-medium">Hostname</th>
-                      <th className="text-left p-2 font-medium">Path</th>
+                      <th className="text-left p-2 font-medium">Full URL</th>
                       <th className="text-right p-2 font-medium">Count</th>
                     </tr>
                   </thead>
                   <tbody>
                     {urlKeywordResults.matches.map((match: any, index: number) => (
                       <tr key={index} className="border-b last:border-b-0">
-                        <td className="p-2 font-mono text-xs">{match.hostname}</td>
-                        <td className="p-2 font-mono text-xs truncate max-w-md" title={match.pathname}>
-                          {match.pathname}
+                        <td className="p-2 font-mono text-xs break-all">
+                          <a 
+                            href={match.fullUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-blue-500 hover:underline"
+                          >
+                            {match.fullUrl}
+                          </a>
                         </td>
                         <td className="p-2 text-right">{match.count}</td>
                       </tr>

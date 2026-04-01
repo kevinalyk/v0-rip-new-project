@@ -11,13 +11,14 @@ export type DonationIdentifiers = {
   actblue?: string[]
   psqimpact?: string[]
   ngpvan?: string[]
+  engage?: string[] // Engage subdomain e.g. "tomemmer" from engage.tomemmer.com
   substack?: string // Substack handle e.g. "kirstengillibrand"
 }
 
 // Type for entity assignment
 type EntityAssignment = {
   entityId: string
-  assignmentMethod: "auto_domain" | "auto_winred" | "auto_anedot" | "auto_actblue" | "auto_psqimpact" | "auto_phone" | "auto_substack"
+  assignmentMethod: "auto_domain" | "auto_winred" | "auto_anedot" | "auto_actblue" | "auto_psqimpact" | "auto_engage" | "auto_phone" | "auto_substack"
 } | null
 
 function stripHtmlAndExtract(html: string): string {
@@ -183,7 +184,7 @@ export async function findEntityForSender(
 
           const donationMatch = await findEntityByDonationIdentifier(ctaLinks, true)
           if (donationMatch) {
-            const method = `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" | "auto_actblue" | "auto_psqimpact"
+            const method = `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" | "auto_actblue" | "auto_psqimpact" | "auto_engage"
             console.log(`[Data Broker] ✓ Assigned via donation identifier: ${method} (${donationMatch.matchedIdentifier})`)
             return { entityId: donationMatch.entity.id, assignmentMethod: method }
           }
@@ -200,7 +201,7 @@ export async function findEntityForSender(
     if (ctaLinks) {
       const donationMatch = await findEntityByDonationIdentifier(ctaLinks)
       if (donationMatch) {
-        return { entityId: donationMatch.entity.id, assignmentMethod: `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" | "auto_actblue" | "auto_psqimpact" }
+        return { entityId: donationMatch.entity.id, assignmentMethod: `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" | "auto_actblue" | "auto_psqimpact" | "auto_engage" }
       }
     }
 
@@ -230,7 +231,7 @@ export async function findEntityForPhone(phoneNumber: string, ctaLinks?: any): P
     if (ctaLinks) {
       const donationMatch = await findEntityByDonationIdentifier(ctaLinks)
       if (donationMatch) {
-        return { entityId: donationMatch.entity.id, assignmentMethod: `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" | "auto_actblue" | "auto_psqimpact" }
+        return { entityId: donationMatch.entity.id, assignmentMethod: `auto_${donationMatch.platform}` as "auto_winred" | "auto_anedot" | "auto_actblue" | "auto_psqimpact" | "auto_engage" }
       }
     }
 
@@ -1038,8 +1039,63 @@ export function extractNGPVANIdentifiers(ctaLinks: any): Set<string> {
 }
 
 /**
+ * Extract Engage identifiers from CTA links
+ * Pattern: engage.{identifier}.com or engage.{identifier}.gop or engage.{identifier}.org
+ * e.g., engage.tomemmer.com -> "tomemmer"
+ */
+export function extractEngageIdentifiers(ctaLinks: any): Set<string> {
+  const identifiers = new Set<string>()
+  if (!ctaLinks) return identifiers
+
+  const links = Array.isArray(ctaLinks) ? ctaLinks : []
+
+  for (const link of links) {
+    let url = typeof link === "string" ? link : link.finalUrl || link.url
+    if (!url) continue
+
+    // Try the URL directly first
+    try {
+      const urlObj = new URL(url)
+      // Check if hostname starts with "engage." and has a subdomain identifier
+      const hostParts = urlObj.hostname.toLowerCase().split(".")
+      if (hostParts[0] === "engage" && hostParts.length >= 2) {
+        // The identifier is the second part (e.g., "tomemmer" from "engage.tomemmer.com")
+        const identifier = hostParts[1]
+        if (identifier && identifier !== "com" && identifier !== "org" && identifier !== "gop" && identifier !== "net") {
+          identifiers.add(identifier)
+          continue
+        }
+      }
+    } catch {
+      // Invalid URL, skip
+    }
+    
+    // If finalUrl is undefined, try decoding the tracking URL
+    if ((typeof link !== "string" && !link.finalUrl) || url.includes("trk.") || url.includes("tracking") || url.includes("click.")) {
+      const decodedUrl = tryDecodeTrackingUrl(url)
+      if (decodedUrl) {
+        try {
+          const urlObj = new URL(decodedUrl)
+          const hostParts = urlObj.hostname.toLowerCase().split(".")
+          if (hostParts[0] === "engage" && hostParts.length >= 2) {
+            const identifier = hostParts[1]
+            if (identifier && identifier !== "com" && identifier !== "org" && identifier !== "gop" && identifier !== "net") {
+              identifiers.add(identifier)
+            }
+          }
+        } catch {
+          // Invalid decoded URL, skip
+        }
+      }
+    }
+  }
+
+  return identifiers
+}
+
+/**
  * Extract donation platform identifiers from CTA links
- * Returns: { platform: "winred" | "anedot" | "psqimpact" | "ngpvan", identifier: "nrcc" }
+ * Returns: { platform: "winred" | "anedot" | "psqimpact" | "ngpvan" | "engage", identifier: "nrcc" }
  */
 function extractDonationIdentifiers(ctaLinks: any): Array<{ platform: string; identifier: string }> {
   const identifiers: Array<{ platform: string; identifier: string }> = []
@@ -1048,6 +1104,7 @@ function extractDonationIdentifiers(ctaLinks: any): Array<{ platform: string; id
   const actblueIdentifiers = extractActBlueIdentifiers(ctaLinks)
   const psqIdentifiers = extractPSQIdentifiers(ctaLinks)
   const ngpvanIdentifiers = extractNGPVANIdentifiers(ctaLinks)
+  const engageIdentifiers = extractEngageIdentifiers(ctaLinks)
 
   for (const identifier of winredIdentifiers) {
     identifiers.push({ platform: "winred", identifier })
@@ -1067,6 +1124,10 @@ function extractDonationIdentifiers(ctaLinks: any): Array<{ platform: string; id
 
   for (const identifier of ngpvanIdentifiers) {
     identifiers.push({ platform: "ngpvan", identifier })
+  }
+
+  for (const identifier of engageIdentifiers) {
+    identifiers.push({ platform: "engage", identifier })
   }
 
   return identifiers

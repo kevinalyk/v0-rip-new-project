@@ -148,12 +148,14 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
     anedot: string
     actblue: string
     psqimpact: string
+    engage: string
     substack: string
   }>({
     winred: "",
     anedot: "",
     actblue: "",
     psqimpact: "",
+    engage: "",
     substack: "",
   })
 
@@ -445,6 +447,9 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
       psqimpact: donationIdentifierInputs.psqimpact
         ? donationIdentifierInputs.psqimpact.split(",").map((id) => id.trim().toLowerCase()).filter(Boolean)
         : newEntityDonationIdentifiers.psqimpact,
+      engage: donationIdentifierInputs.engage
+        ? donationIdentifierInputs.engage.split(",").map((id) => id.trim().toLowerCase()).filter(Boolean)
+        : newEntityDonationIdentifiers.engage,
       substack: donationIdentifierInputs.substack.trim() || newEntityDonationIdentifiers.substack,
     }
 
@@ -477,7 +482,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setNewEntityState("")
           setNewEntityNationwide(false)
           setNewEntityDonationIdentifiers({})
-    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", substack: "" }) // Reset raw inputs too
+    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", engage: "", substack: "" }) // Reset raw inputs too
     fetchData()
     toast.success("Entity updated successfully!")
         } else {
@@ -510,7 +515,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setNewEntityState("")
           setNewEntityNationwide(false)
           setNewEntityDonationIdentifiers({})
-    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", substack: "" }) // Reset raw inputs too
+    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", engage: "", substack: "" }) // Reset raw inputs too
     fetchData()
     toast.success("Entity created successfully!")
         } else {
@@ -588,7 +593,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setAssignEntityState("")
           setAssignEntityNationwide(false)
           setAssignEntityDonationIdentifiers({}) // Clear donation identifiers
-          setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", substack: "" }) // Clear raw inputs
+          setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", engage: "", substack: "" }) // Clear raw inputs
           setCreateMapping(true)
           fetchData()
           toast.success("Campaigns assigned to new entity!")
@@ -673,14 +678,15 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
     setNewEntityState(isNationwide ? "" : entity.state || "")
     setNewEntityDonationIdentifiers(entity.donationIdentifiers || {}) // Set donation identifiers
 
-    // Initialize raw input state based on existing donation identifiers
-    setDonationIdentifierInputs({
-      winred: entity.donationIdentifiers?.winred?.join(", ") || "",
-      anedot: entity.donationIdentifiers?.anedot?.join(", ") || "",
-      actblue: entity.donationIdentifiers?.actblue?.join(", ") || "",
-      psqimpact: entity.donationIdentifiers?.psqimpact?.join(", ") || "",
-      substack: entity.donationIdentifiers?.substack || "",
-    })
+  // Initialize raw input state based on existing donation identifiers
+  setDonationIdentifierInputs({
+  winred: entity.donationIdentifiers?.winred?.join(", ") || "",
+  anedot: entity.donationIdentifiers?.anedot?.join(", ") || "",
+  actblue: entity.donationIdentifiers?.actblue?.join(", ") || "",
+  psqimpact: entity.donationIdentifiers?.psqimpact?.join(", ") || "",
+  engage: entity.donationIdentifiers?.engage?.join(", ") || "",
+  substack: entity.donationIdentifiers?.substack || "",
+  })
 
     // position is removed
     setShowCreateDialog(true)
@@ -770,7 +776,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
       // Reset donation identifiers on close
       setNewEntityDonationIdentifiers({})
       // Reset raw inputs when closing the dialog
-    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", substack: "" })
+    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", engage: "", substack: "" })
   }
 }
 
@@ -1853,6 +1859,36 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         From URLs like: secure.psqimpact.com/donate/<span className="font-mono">conservative-battleground-fund</span>/...
+                      </p>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="entity-engage-identifiers" className="text-sm font-normal">
+                        Engage
+                      </Label>
+                      <Input
+                        id="entity-engage-identifiers"
+                        placeholder="e.g., tomemmer, annwagner, thenrcc (comma-separated)"
+                        value={donationIdentifierInputs.engage}
+                        onChange={(e) => {
+                          setDonationIdentifierInputs((prev) => ({
+                            ...prev,
+                            engage: e.target.value,
+                          }))
+                        }}
+                        onBlur={(e) => {
+                          const value = e.target.value
+                          setNewEntityDonationIdentifiers((prev) => ({
+                            ...prev,
+                            engage: value
+                              .split(",")
+                              .map((id) => id.trim().toLowerCase())
+                              .filter((id) => id.length > 0),
+                          }))
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        From URLs like: engage.<span className="font-mono">tomemmer</span>.com/...
                       </p>
                     </div>
 

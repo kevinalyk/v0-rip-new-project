@@ -56,14 +56,27 @@ export async function GET(request: NextRequest) {
 
     // Build date filters — fetch chartDays + 6 extra days so the 7-day moving average
     // has a full warm-up window. The response is then trimmed to chartDays for display.
+    // IMPORTANT: Calculate date range in user's timezone to avoid UTC boundary issues.
+    // E.g., 11pm EST on 3/31 = 4am UTC on 4/1. Without timezone-aware filtering,
+    // those records would be excluded when filtering for "3/31 midnight to 4/1 midnight" in server time.
     const dateFilter: { gte?: Date; lte?: Date } = {}
     if (fromDate) {
       dateFilter.gte = new Date(fromDate)
     } else {
-      const defaultStart = new Date()
-      defaultStart.setDate(defaultStart.getDate() - (chartDays + 6))
-      defaultStart.setHours(0, 0, 0, 0)
-      dateFilter.gte = defaultStart
+      // Calculate "today" in user's timezone, then subtract chartDays + 6
+      const nowInUserTz = new Date(Date.now() + tzOffsetMs)
+      // Get start of today in user's timezone (midnight), converted back to UTC for DB query
+      const todayUserTzMidnight = new Date(Date.UTC(
+        nowInUserTz.getUTCFullYear(),
+        nowInUserTz.getUTCMonth(),
+        nowInUserTz.getUTCDate(),
+        0, 0, 0, 0
+      ))
+      // Convert back to UTC by subtracting the offset
+      const todayMidnightUtc = new Date(todayUserTzMidnight.getTime() - tzOffsetMs)
+      // Go back chartDays + 6 days
+      todayMidnightUtc.setDate(todayMidnightUtc.getDate() - (chartDays + 6))
+      dateFilter.gte = todayMidnightUtc
     }
     if (toDate) dateFilter.lte = new Date(toDate)
 
@@ -300,9 +313,21 @@ export async function GET(request: NextRequest) {
 
     // For day-of-week and hour-of-day, only count records within the actual display window
     // (not the 6 warm-up days). This ensures stats match what's shown on the chart.
+    // Calculate in user's timezone to match the DB query filter.
     const displayWindowStart = fromDate
       ? new Date(fromDate)
-      : (() => { const d = new Date(); d.setDate(d.getDate() - chartDays); d.setHours(0,0,0,0); return d })()
+      : (() => {
+          const nowInUserTz = new Date(Date.now() + tzOffsetMs)
+          const todayUserTzMidnight = new Date(Date.UTC(
+            nowInUserTz.getUTCFullYear(),
+            nowInUserTz.getUTCMonth(),
+            nowInUserTz.getUTCDate(),
+            0, 0, 0, 0
+          ))
+          const todayMidnightUtc = new Date(todayUserTzMidnight.getTime() - tzOffsetMs)
+          todayMidnightUtc.setDate(todayMidnightUtc.getDate() - chartDays)
+          return todayMidnightUtc
+        })()
     const displayDates = allDates.filter(({ date }) => date >= displayWindowStart)
 
     // --- Day of Week aggregation (local timezone, display window only) ---

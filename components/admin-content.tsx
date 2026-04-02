@@ -62,8 +62,12 @@ export function AdminContent({ user }: AdminContentProps) {
   const [isAutoPopulatingAnedot, setIsAutoPopulatingAnedot] = useState(false)
   const [isAutoPopulatingActBlue, setIsAutoPopulatingActBlue] = useState(false)
   const [isAutoPopulatingPSQ, setIsAutoPopulatingPSQ] = useState(false)
+  const [isAutoPopulatingEngage, setIsAutoPopulatingEngage] = useState(false)
   const [isAnalyzingActBlue, setIsAnalyzingActBlue] = useState(false)
   const [actBluePatterns, setActBluePatterns] = useState<any>(null)
+  const [urlKeyword, setUrlKeyword] = useState("")
+  const [isScanningUrlKeyword, setIsScanningUrlKeyword] = useState(false)
+  const [urlKeywordResults, setUrlKeywordResults] = useState<any>(null)
   const [isReassigning, setIsReassigning] = useState(false)
   const [reassignmentResults, setReassignmentResults] = useState<any>(null)
   const [isUnassigning, setIsUnassigning] = useState(false)
@@ -624,6 +628,28 @@ const handleAutoPopulatePSQ = async () => {
   }
 }
 
+const handleAutoPopulateEngage = async () => {
+  setIsAutoPopulatingEngage(true)
+  try {
+    const response = await fetch("/api/admin/auto-populate-engage", {
+      method: "POST",
+      credentials: "include",
+    })
+
+    const data = await response.json()
+
+    if (response.ok) {
+      toast.success(`Engage auto-population completed: Updated ${data.updated} entities with ${data.totalIdentifiers} identifiers found`)
+    } else {
+      toast.error(data.error || "Failed to auto-populate Engage identifiers")
+    }
+  } catch {
+    toast.error("Failed to auto-populate Engage identifiers")
+  } finally {
+    setIsAutoPopulatingEngage(false)
+  }
+}
+
   const handleAnalyzeActBlue = async () => {
     setIsAnalyzingActBlue(true)
     setActBluePatterns(null)
@@ -650,8 +676,55 @@ const handleAutoPopulatePSQ = async () => {
     }
   }
 
-  const downloadActBluePatterns = () => {
-    if (!actBluePatterns) return
+const handleScanUrlKeyword = async () => {
+  if (!urlKeyword.trim() || urlKeyword.length < 2) {
+    toast.error("Please enter a keyword with at least 2 characters")
+    return
+  }
+  setIsScanningUrlKeyword(true)
+  setUrlKeywordResults(null)
+  try {
+    const response = await fetch("/api/admin/scan-url-keyword", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ keyword: urlKeyword.trim() }),
+    })
+    const data = await response.json()
+    if (response.ok) {
+      setUrlKeywordResults(data)
+      toast.success(`Found ${data.summary.uniqueUrls} unique URLs containing "${urlKeyword}"`)
+    } else {
+      toast.error(data.error || "Failed to scan URLs")
+    }
+  } catch {
+    toast.error("Failed to scan URLs")
+  } finally {
+    setIsScanningUrlKeyword(false)
+  }
+}
+
+const downloadUrlKeywordResults = () => {
+  if (!urlKeywordResults) return
+  
+  const csv = [
+    ["Hostname", "Pathname", "Count", "Full URL"],
+    ...urlKeywordResults.matches.map((m: any) => [m.hostname, m.pathname, m.count, m.fullUrl]),
+  ]
+  .map((row) => row.map((cell) => `"${cell}"`).join(","))
+  .join("\n")
+
+  const blob = new Blob([csv], { type: "text/csv" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = `url-keyword-${urlKeywordResults.keyword}-${new Date().toISOString().split("T")[0]}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const downloadActBluePatterns = () => {
+  if (!actBluePatterns) return
 
     const csv = [
       ["Pattern", "Identifier", "Count", "Example URL"],
@@ -1984,6 +2057,30 @@ const handleAutoPopulatePSQ = async () => {
 
       <Card>
         <CardHeader>
+          <CardTitle>Auto-Populate Engage Identifiers</CardTitle>
+          <CardDescription>
+            Automatically extract and populate Engage donation identifiers from existing campaigns for ALL entities. Scans campaigns and SMS messages for <code>engage.{"{identifier}"}.com</code> URL patterns and stores the domain identifiers for future auto-assignment.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={handleAutoPopulateEngage} disabled={isAutoPopulatingEngage} className="gap-2">
+            {isAutoPopulatingEngage ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Auto-Populating...
+              </>
+            ) : (
+              <>
+                <Play size={16} />
+                Auto-Populate Engage Identifiers
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Analyze ActBlue URL Patterns</CardTitle>
           <CardDescription>
             Scan all campaigns and SMS messages to identify ActBlue URL patterns. This helps understand the different
@@ -2065,6 +2162,106 @@ const handleAutoPopulatePSQ = async () => {
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Scan URLs by Keyword</CardTitle>
+          <CardDescription>
+            Search all campaigns and SMS messages for URLs containing a specific keyword. Useful for discovering
+            new donation platforms or URL patterns (e.g., &quot;engage&quot;, &quot;contribute&quot;, &quot;donate&quot;).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Enter keyword (e.g., engage, contribute, revv)"
+              value={urlKeyword}
+              onChange={(e) => setUrlKeyword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleScanUrlKeyword()}
+              className="max-w-sm"
+            />
+            <Button onClick={handleScanUrlKeyword} disabled={isScanningUrlKeyword} className="gap-2">
+              {isScanningUrlKeyword ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Scanning...
+                </>
+              ) : (
+                <>
+                  <Play size={16} />
+                  Scan URLs
+                </>
+              )}
+            </Button>
+          </div>
+
+          {urlKeywordResults && (
+            <div className="space-y-4">
+              <div className="rounded-lg border p-4 space-y-2">
+                <p className="text-sm font-medium">Results for &quot;{urlKeywordResults.keyword}&quot;</p>
+                <div>
+                  <span className="text-muted-foreground">Unique URLs:</span>
+                  <span className="ml-2 font-medium">{urlKeywordResults.summary.uniqueUrls}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Total Occurrences:</span>
+                  <span className="ml-2 font-medium">{urlKeywordResults.summary.totalOccurrences}</span>
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-4">
+                <p className="text-sm text-muted-foreground mb-2">By Hostname:</p>
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {Object.entries(urlKeywordResults.summary.hostnames).map(([hostname, data]: [string, any]) => (
+                    <div key={hostname} className="text-sm flex justify-between">
+                      <span className="font-mono">{hostname}</span>
+                      <span className="text-muted-foreground">{data.count} occurrences ({data.urls} unique)</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-muted-foreground">
+                  Showing {Math.min(urlKeywordResults.matches.length, 100)} of {urlKeywordResults.summary.uniqueUrls} URLs
+                </p>
+                <Button variant="outline" size="sm" onClick={downloadUrlKeywordResults}>
+                  Download CSV
+                </Button>
+              </div>
+
+              <div className="border rounded-lg overflow-hidden max-h-80 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted sticky top-0">
+                    <tr className="border-b">
+                      <th className="text-left p-2 font-medium">Full URL</th>
+                      <th className="text-right p-2 font-medium">Count</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {urlKeywordResults.matches.map((match: any, index: number) => (
+                      <tr key={index} className="border-b last:border-b-0">
+                        <td className="p-2 font-mono text-xs break-all">
+                          <a 
+                            href={match.fullUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-blue-500 hover:underline"
+                          >
+                            {match.fullUrl}
+                          </a>
+                        </td>
+                        <td className="p-2 text-right">{match.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Auto-Assign All Unassigned Campaigns</CardTitle>

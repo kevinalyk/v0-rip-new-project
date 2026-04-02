@@ -229,8 +229,10 @@ export function CiAnalyticsView({
                         dataKey="date"
                         tick={{ fontSize: 12 }}
                         tickFormatter={(v) => {
-                          const d = new Date(v)
-                          return `${d.getMonth() + 1}/${d.getDate()}`
+                          // Parse YYYY-MM-DD directly to avoid timezone shift
+                          // new Date("2026-03-31") parses as UTC, which shifts to previous day in local TZ
+                          const [, month, day] = (v as string).split("-").map(Number)
+                          return `${month}/${day}`
                         }}
                       />
                       <YAxis tick={{ fontSize: 12 }} />
@@ -239,7 +241,11 @@ export function CiAnalyticsView({
                           backgroundColor: "hsl(var(--background))",
                           border: "1px solid hsl(var(--border))",
                         }}
-                        labelFormatter={(v) => new Date(v as string).toLocaleDateString()}
+                        labelFormatter={(v) => {
+                          // Parse YYYY-MM-DD directly to avoid timezone shift
+                          const [year, month, day] = (v as string).split("-").map(Number)
+                          return new Date(year, month - 1, day).toLocaleDateString()
+                        }}
                       />
                       <Legend />
                       <Line

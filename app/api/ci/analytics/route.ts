@@ -56,14 +56,27 @@ export async function GET(request: NextRequest) {
 
     // Build date filters — fetch chartDays + 6 extra days so the 7-day moving average
     // has a full warm-up window. The response is then trimmed to chartDays for display.
+    // IMPORTANT: Calculate date range in user's timezone to avoid UTC boundary issues.
+    // E.g., 11pm EST on 3/31 = 4am UTC on 4/1. Without timezone-aware filtering,
+    // those records would be excluded when filtering for "3/31 midnight to 4/1 midnight" in server time.
     const dateFilter: { gte?: Date; lte?: Date } = {}
     if (fromDate) {
       dateFilter.gte = new Date(fromDate)
     } else {
-      const defaultStart = new Date()
-      defaultStart.setDate(defaultStart.getDate() - (chartDays + 6))
-      defaultStart.setHours(0, 0, 0, 0)
-      dateFilter.gte = defaultStart
+      // Calculate "today" in user's timezone, then subtract chartDays + 6
+      const nowInUserTz = new Date(Date.now() + tzOffsetMs)
+      // Get start of today in user's timezone (midnight), converted back to UTC for DB query
+      const todayUserTzMidnight = new Date(Date.UTC(
+        nowInUserTz.getUTCFullYear(),
+        nowInUserTz.getUTCMonth(),
+        nowInUserTz.getUTCDate(),
+        0, 0, 0, 0
+      ))
+      // Convert back to UTC by subtracting the offset
+      const todayMidnightUtc = new Date(todayUserTzMidnight.getTime() - tzOffsetMs)
+      // Go back chartDays + 6 days
+      todayMidnightUtc.setDate(todayMidnightUtc.getDate() - (chartDays + 6))
+      dateFilter.gte = todayMidnightUtc
     }
     if (toDate) dateFilter.lte = new Date(toDate)
 
@@ -300,9 +313,21 @@ export async function GET(request: NextRequest) {
 
     // For day-of-week and hour-of-day, only count records within the actual display window
     // (not the 6 warm-up days). This ensures stats match what's shown on the chart.
+    // Calculate in user's timezone to match the DB query filter.
     const displayWindowStart = fromDate
       ? new Date(fromDate)
-      : (() => { const d = new Date(); d.setDate(d.getDate() - chartDays); d.setHours(0,0,0,0); return d })()
+      : (() => {
+          const nowInUserTz = new Date(Date.now() + tzOffsetMs)
+          const todayUserTzMidnight = new Date(Date.UTC(
+            nowInUserTz.getUTCFullYear(),
+            nowInUserTz.getUTCMonth(),
+            nowInUserTz.getUTCDate(),
+            0, 0, 0, 0
+          ))
+          const todayMidnightUtc = new Date(todayUserTzMidnight.getTime() - tzOffsetMs)
+          todayMidnightUtc.setDate(todayMidnightUtc.getDate() - chartDays)
+          return todayMidnightUtc
+        })()
     const displayDates = allDates.filter(({ date }) => date >= displayWindowStart)
 
     // --- Day of Week aggregation (local timezone, display window only) ---
@@ -346,16 +371,22 @@ export async function GET(request: NextRequest) {
 
     // --- Volume over time with 7-day moving average ---
     const allTimestamps = allDates.map(({ date }) => date.getTime())
-    const minDateKey = allDates.map(({ date }) => getLocalDateKey(date)).sort()[0]
-    const maxDateKey = allDates.map(({ date }) => getLocalDateKey(date)).sort().at(-1)!
+    const allLocalDateKeys = allDates.map(({ date }) => getLocalDateKey(date)).sort()
+    const minDateKey = allLocalDateKeys[0]
+    const maxDateKey = allLocalDateKeys.at(-1)!
 
     const dailyMap = new Map<string, { emails: number; sms: number }>()
-    const cursor = new Date(minDateKey + "T00:00:00")
-    const endDate = new Date(maxDateKey + "T00:00:00")
-    while (cursor <= endDate) {
-      const key = cursor.toISOString().split("T")[0]
+    // Generate all date keys between min and max using simple string-based date math
+    // to avoid timezone conversion issues with Date objects
+    const [minYear, minMonth, minDay] = minDateKey.split("-").map(Number)
+    const [maxYear, maxMonth, maxDay] = maxDateKey.split("-").map(Number)
+    const minDateNum = new Date(Date.UTC(minYear, minMonth - 1, minDay))
+    const maxDateNum = new Date(Date.UTC(maxYear, maxMonth - 1, maxDay))
+    const cursor = new Date(minDateNum)
+    while (cursor <= maxDateNum) {
+      const key = `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, "0")}-${String(cursor.getUTCDate()).padStart(2, "0")}`
       dailyMap.set(key, { emails: 0, sms: 0 })
-      cursor.setDate(cursor.getDate() + 1)
+      cursor.setUTCDate(cursor.getUTCDate() + 1)
     }
 
     allDates.forEach(({ date, type }) => {
@@ -694,9 +725,25 @@ export async function GET(request: NextRequest) {
 
     // Trim volumeData to the requested chartDays window for display.
     // The extra 6 days fetched were only needed for moving average warm-up.
-    const trimmedVolumeData = !fromDate ? volumeData.slice(-chartDays) : volumeData
+    // Important: trim by date, not array index, to ensure we get the correct calendar days.
+    const displayWindowDateStart = fromDate
+      ? new Date(fromDate)
+      : (() => {
+          const nowInUserTz = new Date(Date.now() + tzOffsetMs)
+          const todayUserTzMidnight = new Date(Date.UTC(
+            nowInUserTz.getUTCFullYear(),
+            nowInUserTz.getUTCMonth(),
+            nowInUserTz.getUTCDate(),
+            0, 0, 0, 0
+          ))
+          const todayMidnightUtc = new Date(todayUserTzMidnight.getTime() - tzOffsetMs)
+          todayMidnightUtc.setDate(todayMidnightUtc.getDate() - chartDays + 1)
+          return todayMidnightUtc
+        })()
+    const displayWindowDateStartStr = displayWindowDateStart.toISOString().split("T")[0]
+    const trimmedVolumeData = volumeData.filter(d => d.date >= displayWindowDateStartStr)
 
-    const trimmedInboxingTimeData = !fromDate ? inboxingTimeData.slice(-chartDays) : inboxingTimeData
+    const trimmedInboxingTimeData = inboxingTimeData.filter(d => d.date >= displayWindowDateStartStr)
 
     return NextResponse.json({
       totalEmails,

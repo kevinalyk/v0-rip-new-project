@@ -333,9 +333,19 @@ export async function GET(request: NextRequest) {
     // --- Day of Week aggregation (local timezone, display window only) ---
     const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     const dayOfWeekCounts = [0, 0, 0, 0, 0, 0, 0]
+    // Debug: track which dates contribute to which day of week
+    const debugDayOfWeekByDate: Record<string, { day: string; count: number }> = {}
     displayDates.forEach(({ date }) => {
-      dayOfWeekCounts[getLocalDay(date)]++
+      const dayIndex = getLocalDay(date)
+      const dateKey = getLocalDateKey(date)
+      dayOfWeekCounts[dayIndex]++
+      if (!debugDayOfWeekByDate[dateKey]) {
+        debugDayOfWeekByDate[dateKey] = { day: dayNames[dayIndex], count: 0 }
+      }
+      debugDayOfWeekByDate[dateKey].count++
     })
+    console.log("[v0] Day of Week debug - each date's day and count:", JSON.stringify(debugDayOfWeekByDate, null, 2))
+    console.log("[v0] Day of Week totals:", dayNames.map((d, i) => `${d}: ${dayOfWeekCounts[i]}`).join(", "))
     const maxDayCount = Math.max(...dayOfWeekCounts, 1)
     const dayOfWeekData = dayOfWeekCounts.map((count, i) => ({
       day: dayNames[i],
@@ -401,6 +411,8 @@ export async function GET(request: NextRequest) {
     const dailyArray = Array.from(dailyMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, counts]) => ({ date, ...counts }))
+
+    console.log("[v0] Volume dailyArray (date -> emails, sms):", dailyArray.map(d => `${d.date}: emails=${d.emails}, sms=${d.sms}`).join(" | "))
 
     const volumeData = dailyArray.map((day, index) => {
       const start = Math.max(0, index - 6)

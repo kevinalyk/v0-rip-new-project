@@ -333,19 +333,9 @@ export async function GET(request: NextRequest) {
     // --- Day of Week aggregation (local timezone, display window only) ---
     const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     const dayOfWeekCounts = [0, 0, 0, 0, 0, 0, 0]
-    // Debug: track which dates contribute to which day of week
-    const debugDayOfWeekByDate: Record<string, { day: string; count: number }> = {}
     displayDates.forEach(({ date }) => {
-      const dayIndex = getLocalDay(date)
-      const dateKey = getLocalDateKey(date)
-      dayOfWeekCounts[dayIndex]++
-      if (!debugDayOfWeekByDate[dateKey]) {
-        debugDayOfWeekByDate[dateKey] = { day: dayNames[dayIndex], count: 0 }
-      }
-      debugDayOfWeekByDate[dateKey].count++
+      dayOfWeekCounts[getLocalDay(date)]++
     })
-    console.log("[v0] Day of Week debug - each date's day and count:", JSON.stringify(debugDayOfWeekByDate, null, 2))
-    console.log("[v0] Day of Week totals:", dayNames.map((d, i) => `${d}: ${dayOfWeekCounts[i]}`).join(", "))
     const maxDayCount = Math.max(...dayOfWeekCounts, 1)
     const dayOfWeekData = dayOfWeekCounts.map((count, i) => ({
       day: dayNames[i],
@@ -411,8 +401,6 @@ export async function GET(request: NextRequest) {
     const dailyArray = Array.from(dailyMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, counts]) => ({ date, ...counts }))
-
-    console.log("[v0] Volume dailyArray (date -> emails, sms):", dailyArray.map(d => `${d.date}: emails=${d.emails}, sms=${d.sms}`).join(" | "))
 
     const volumeData = dailyArray.map((day, index) => {
       const start = Math.max(0, index - 6)
@@ -737,9 +725,25 @@ export async function GET(request: NextRequest) {
 
     // Trim volumeData to the requested chartDays window for display.
     // The extra 6 days fetched were only needed for moving average warm-up.
-    const trimmedVolumeData = !fromDate ? volumeData.slice(-chartDays) : volumeData
+    // Important: trim by date, not array index, to ensure we get the correct calendar days.
+    const displayWindowDateStart = fromDate
+      ? new Date(fromDate)
+      : (() => {
+          const nowInUserTz = new Date(Date.now() + tzOffsetMs)
+          const todayUserTzMidnight = new Date(Date.UTC(
+            nowInUserTz.getUTCFullYear(),
+            nowInUserTz.getUTCMonth(),
+            nowInUserTz.getUTCDate(),
+            0, 0, 0, 0
+          ))
+          const todayMidnightUtc = new Date(todayUserTzMidnight.getTime() - tzOffsetMs)
+          todayMidnightUtc.setDate(todayMidnightUtc.getDate() - chartDays + 1)
+          return todayMidnightUtc
+        })()
+    const displayWindowDateStartStr = displayWindowDateStart.toISOString().split("T")[0]
+    const trimmedVolumeData = volumeData.filter(d => d.date >= displayWindowDateStartStr)
 
-    const trimmedInboxingTimeData = !fromDate ? inboxingTimeData.slice(-chartDays) : inboxingTimeData
+    const trimmedInboxingTimeData = inboxingTimeData.filter(d => d.date >= displayWindowDateStartStr)
 
     return NextResponse.json({
       totalEmails,

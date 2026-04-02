@@ -1,0 +1,107 @@
+
+
+Gmail Inboxing Checklist 
+Source: support.google.com/a/answer/81126  ·  Google Email Sender Guidelines  ·  Effective Feb 
+1, 2024 
+SECTION 1 — ALL SENDERS 
+Required at any volume 
+  
+☐ 
+SPF or DKIM email authentication is set up for the sending domain. 
+☐ 
+Sending domain or IP has a valid PTR (reverse DNS) record that resolves to a 
+hostname. 
+The hostname must also have an A or AAAA record resolving back to the same 
+sending IP. 
+☐ 
+Email is transmitted over a TLS connection. 
+☐ 
+Spam rate in Postmaster Tools is below 0.10% and never reaches 0.30%. 
+Requirement threshold is 0.30%; best-practice target is below 0.10%. 
+☐ 
+Messages are formatted per Internet Message Format standard RFC 5322. 
+Includes a valid Message-ID. Single-instance headers (From, To, Subject, Date) 
+appear only once. 
+☐ 
+The From: header does not impersonate a Gmail address (@gmail.com or 
+@googlemail.com). 
+☐ 
+If forwarding / operating a mailing list or inbound gateway: ARC headers are added to 
+outgoing email. 
+
+Mailing list senders must also add a List-id: header specifying the mailing list. 
+  
+SECTION 2 — BULK SENDERS ONLY 
+Required if sending 5,000+/day to 
+Gmail 
+  
+☐ 
+Both SPF and DKIM are set up for the sending domain (both required, not just one). 
+☐ 
+DMARC is set up for the sending domain. Policy can be set to "none." 
+☐ 
+For direct email: the domain in the From: header is aligned with the SPF domain or 
+the DKIM domain (DMARC alignment). 
+☐ 
+Marketing and subscribed messages include both one-click unsubscribe headers. 
+List-Unsubscribe-Post: List-Unsubscribe=One-Click List-Unsubscribe: 
+<https://yourdomain.com/unsubscribe/...> 
+☐ 
+A clearly visible unsubscribe link is in the body of every marketing or subscribed 
+message. 
+  
+SECTION 3 — MESSAGE CONTENT & FORMATTING 
+All senders 
+  
+
+☐ 
+HTML messages are formatted per the HTML Living Standard 
+(html.spec.whatwg.org). 
+☐ 
+From: header includes only one email address. 
+Example: From: notifications@yourdomain.com — no multiple addresses. 
+☐ 
+Message subject, headers, display names, and body are accurate and not misleading 
+or deceptive. 
+☐ 
+Subject line does not start with "Re:" or "Fwd:" unless the message is an actual reply 
+or forward. 
+☐ 
+From: and To: headers include only actual senders and recipients. 
+☐ 
+Emojis or non-standard characters are not used to imitate graphic elements 
+(checkmarks, badges, verification symbols) with intent to deceive. 
+☐ 
+No HTML or CSS is used to hide content in the message. 
+☐ 
+All web links in the message body are visible and clearly indicate where they lead. 
+☐ 
+Sender information is clear and visible in the message. 
+☐ 
+Message does not mix different types of content (e.g., no promotions in transactional 
+receipts). 
+  
+
+SECTION 4 — DISPLAY NAME RULES 
+All senders 
+  
+☐ 
+Display name identifies the sender only — does not include subject line text or 
+message content. 
+Prohibited: "Important Update — From [Company]", "TIME IS RUNNING OUT (SALE)", 
+"Last Chance", "URGENT REQUEST" 
+☐ 
+Display name does not include the recipient's name. 
+☐ 
+Display name does not imply a message reply or threaded conversation. 
+Prohibited: "User (2)", "[recipient name] <info@org.com>" 
+☐ 
+Display name does not use emojis or non-standard characters to imitate graphic 
+elements. 
+Prohibited: "✔ LATEST UPDATE", "MAIL, ME ", "[1] New Message" 
+☐ 
+Display name does not use an @gmail.com domain as the display name for bulk 
+email. 
+  
+Source: support.google.com/a/answer/81126  ·  Compiled March 2026 
+ 

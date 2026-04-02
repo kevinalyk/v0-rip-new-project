@@ -5,6 +5,7 @@ import { CompetitiveInsights } from "@/components/competitive-insights"
 import { AppLayout } from "@/components/app-layout"
 import { useEffect, useState } from "react"
 import { Loader2 } from "lucide-react"
+import Script from "next/script"
 
 export default function CICampaignsPage() {
   const params = useParams()
@@ -43,6 +44,12 @@ export default function CICampaignsPage() {
 
   return (
     <AppLayout clientSlug={clientSlug} isAdminView={clientSlug === "admin"}>
+      <Script
+        async
+        src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5715074898343065"
+        crossOrigin="anonymous"
+        strategy="afterInteractive"
+      />
       <CompetitiveInsights clientSlug={clientSlug} subscriptionPlan={subscriptionPlan as any} />
     </AppLayout>
   )

@@ -371,16 +371,22 @@ export async function GET(request: NextRequest) {
 
     // --- Volume over time with 7-day moving average ---
     const allTimestamps = allDates.map(({ date }) => date.getTime())
-    const minDateKey = allDates.map(({ date }) => getLocalDateKey(date)).sort()[0]
-    const maxDateKey = allDates.map(({ date }) => getLocalDateKey(date)).sort().at(-1)!
+    const allLocalDateKeys = allDates.map(({ date }) => getLocalDateKey(date)).sort()
+    const minDateKey = allLocalDateKeys[0]
+    const maxDateKey = allLocalDateKeys.at(-1)!
 
     const dailyMap = new Map<string, { emails: number; sms: number }>()
-    const cursor = new Date(minDateKey + "T00:00:00")
-    const endDate = new Date(maxDateKey + "T00:00:00")
-    while (cursor <= endDate) {
-      const key = cursor.toISOString().split("T")[0]
+    // Generate all date keys between min and max using simple string-based date math
+    // to avoid timezone conversion issues with Date objects
+    const [minYear, minMonth, minDay] = minDateKey.split("-").map(Number)
+    const [maxYear, maxMonth, maxDay] = maxDateKey.split("-").map(Number)
+    const minDateNum = new Date(Date.UTC(minYear, minMonth - 1, minDay))
+    const maxDateNum = new Date(Date.UTC(maxYear, maxMonth - 1, maxDay))
+    const cursor = new Date(minDateNum)
+    while (cursor <= maxDateNum) {
+      const key = `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, "0")}-${String(cursor.getUTCDate()).padStart(2, "0")}`
       dailyMap.set(key, { emails: 0, sms: 0 })
-      cursor.setDate(cursor.getDate() + 1)
+      cursor.setUTCDate(cursor.getUTCDate() + 1)
     }
 
     allDates.forEach(({ date, type }) => {

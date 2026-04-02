@@ -296,8 +296,11 @@ model CompetitiveInsightCampaign {
   deletedAt           DateTime? // When it was deleted
   deletedBy           String?  // Which admin deleted it
   donationPlatform    String?  // Detected donation platform: "winred" | "actblue" | "anedot" | "psq"
+  rawHeaders          String?  @db.Text // Raw email headers for compliance checking
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+
+  compliance          CIEmailCompliance?
   
   @@unique([senderEmail, subject]) // Prevent duplicate campaigns
   @@index([senderEmail])
@@ -312,6 +315,53 @@ model CompetitiveInsightCampaign {
   @@index([assignedAt])
   @@index([isDeleted])
   @@index([donationPlatform])
+}
+
+model CIEmailCompliance {
+  id         String   @id @default(cuid())
+  campaignId String   @unique
+  campaign   CompetitiveInsightCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  
+  // Section 1: All Senders
+  hasSpf                 Boolean?
+  hasDkim                Boolean?
+  hasTls                 Boolean?
+  hasValidMessageId      Boolean?
+  notImpersonatingGmail  Boolean?
+  hasArcHeaders          Boolean?
+  
+  // Section 2: Bulk Senders
+  hasBothSpfAndDkim             Boolean?
+  hasDmarc                      Boolean?
+  hasDmarcAlignment             Boolean?
+  hasOneClickUnsubscribeHeaders Boolean?
+  hasUnsubscribeLinkInBody      Boolean?
+  
+  // Section 3: Content
+  hasSingleFromAddress       Boolean?
+  noFakeReplyPrefix          Boolean?
+  hasValidFromTo             Boolean?
+  noDeceptiveEmojisInSubject Boolean?
+  noHiddenContent            Boolean?
+  
+  // Section 4: Display Name
+  displayNameClean             Boolean?
+  displayNameNoRecipient       Boolean?
+  displayNameNoReplyPattern    Boolean?
+  displayNameNoDeceptiveEmojis Boolean?
+  displayNameNotGmail          Boolean?
+  
+  // Scores (0.0 - 1.0)
+  section1Score Float?
+  section2Score Float?
+  section3Score Float?
+  section4Score Float?
+  totalScore    Float?
+  
+  checkedAt  DateTime @default(now())
+  
+  @@index([campaignId])
+  @@index([totalScore])
 }
 
 model CiEntity {

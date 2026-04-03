@@ -35,6 +35,8 @@ import {
   AlertCircle,
   ScanSearch,
   MailCheck,
+  Code,
+  Key,
 } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { useTheme } from "next-themes"
@@ -74,6 +76,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
     reports: false,
     inbox: false,
     admin: false,
+    developers: false,
     account: false,
   })
 
@@ -163,6 +166,8 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
       setExpandedSections((prev) => ({ ...prev, inbox: true }))
     } else if (pathname.includes("/admin/")) {
       setExpandedSections((prev) => ({ ...prev, admin: true }))
+    } else if (pathname.includes("/developers/")) {
+      setExpandedSections((prev) => ({ ...prev, developers: true }))
     }
   }, [pathname])
 
@@ -505,6 +510,29 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                       active={pathname === "/rip/admin/seed-insights"}
                       collapsed={false}
                       onClick={() => navigate("/rip/admin/seed-insights")}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+
+            {userRole === "super_admin" && (selectedClientSlug === "rip" || !selectedClientSlug) && (
+              <>
+                <NavSection
+                  icon={<Code size={20} />}
+                  label="Developers"
+                  collapsed={collapsed}
+                  expanded={expandedSections.developers}
+                  onToggle={() => toggleSection("developers")}
+                />
+                {expandedSections.developers && !collapsed && (
+                  <div className="ml-4 space-y-1">
+                    <NavItem
+                      icon={<Key size={18} />}
+                      label="API Keys"
+                      active={pathname === "/rip/developers/api-keys"}
+                      collapsed={false}
+                      onClick={() => navigate("/rip/developers/api-keys")}
                     />
                   </div>
                 )}

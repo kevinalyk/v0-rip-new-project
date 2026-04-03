@@ -557,3 +557,28 @@ model PersonalEmailDomain {
   @@index([domain])
   @@index([clientId])
 }
+
+model ApiKey {
+  id             String    @id @default(cuid())
+  name           String    // Friendly name for the key (e.g., "Production Key", "Dev Key")
+  keyHash        String    @unique // SHA-256 hash of the API key (never store raw key)
+  keyPrefix      String    // First 8 chars of key for identification (e.g., "rip_pk_a1b2...")
+  clientId       String?   // Optional: restrict key to a specific client's data
+  scopes         Json      @default("[\"campaigns:read\", \"sms:read\", \"entities:read\"]") // Array of allowed scopes
+  rateLimit      Int       @default(100) // Requests per minute
+  expiresAt      DateTime? // Optional expiration date
+  lastUsedAt     DateTime? // Track last usage
+  requestCount   Int       @default(0) // Total requests made with this key
+  isActive       Boolean   @default(true) // Enable/disable key
+  createdBy      String    // User ID who created this key
+  revokedAt      DateTime? // When the key was revoked
+  revokedBy      String?   // User ID who revoked this key
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([keyHash])
+  @@index([keyPrefix])
+  @@index([clientId])
+  @@index([isActive])
+  @@index([expiresAt])
+}

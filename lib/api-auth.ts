@@ -14,6 +14,8 @@ interface ApiAuthContext {
   rateLimit: number;
 }
 
+export type { ApiAuthContext };
+
 interface RateLimitStore {
   [keyHash: string]: {
     count: number;
@@ -48,14 +50,18 @@ export async function validateApiKey(
 ): Promise<ApiAuthContext | null> {
   try {
     const token = extractBearerToken(authHeader);
+    console.log("[v0] Token extraction result:", token ? "success" : "no token");
     if (!token) return null;
 
     const keyHash = hashApiKey(token);
+    console.log("[v0] Key hash computed, searching database...");
 
     // Find the API key in database
     const apiKey = await prisma.apiKey.findUnique({
       where: { keyHash },
     });
+
+    console.log("[v0] API key lookup result:", apiKey ? "found" : "not found");
 
     if (!apiKey) {
       console.log("[v0] Invalid API key attempt");

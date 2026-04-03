@@ -222,16 +222,25 @@ export function hasScope(authContext: ApiAuthContext, scope: string): boolean {
 /**
  * Generate a new API key
  * Returns the raw key (only shown once to user)
+ * Key format: rip_pk_{48 random chars} = ~64 chars total
  */
 export function generateApiKey(prefix: string = "rip_pk"): {
   key: string;
   keyHash: string;
   keyPrefix: string;
 } {
-  const randomPart = Math.random().toString(36).substring(2, 18);
+  // Generate 48 random characters using crypto for better randomness
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let randomPart = '';
+  const randomBytes = new Uint8Array(48);
+  crypto.getRandomValues(randomBytes);
+  for (let i = 0; i < 48; i++) {
+    randomPart += chars[randomBytes[i] % chars.length];
+  }
+  
   const key = `${prefix}_${randomPart}`;
   const keyHash = hashApiKey(key);
-  const keyPrefix = key.substring(0, 8);
+  const keyPrefix = key.substring(0, 12); // Show first 12 chars for identification
 
   return {
     key,

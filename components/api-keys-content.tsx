@@ -47,7 +47,6 @@ export function ApiKeysContent() {
   const [loading, setLoading] = useState(true)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [newKeyName, setNewKeyName] = useState("")
-  const [newKeyRateLimit, setNewKeyRateLimit] = useState(100)
   const [creating, setCreating] = useState(false)
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null)
   const [showNewKey, setShowNewKey] = useState(false)
@@ -103,7 +102,6 @@ export function ApiKeysContent() {
         credentials: "include",
         body: JSON.stringify({
           name: newKeyName,
-          rateLimit: newKeyRateLimit,
           scopes: ["campaigns:read", "sms:read", "entities:read"],
         }),
       })
@@ -113,7 +111,6 @@ export function ApiKeysContent() {
         setNewlyCreatedKey(data.key)
         setShowNewKey(true)
         setNewKeyName("")
-        setNewKeyRateLimit(100)
         fetchKeys()
         toast({
           title: "API Key Created",
@@ -307,17 +304,6 @@ export function ApiKeysContent() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="rateLimit">Rate Limit (requests/minute)</Label>
-                    <Input
-                      id="rateLimit"
-                      type="number"
-                      min={1}
-                      max={1000}
-                      value={newKeyRateLimit}
-                      onChange={(e) => setNewKeyRateLimit(parseInt(e.target.value) || 100)}
-                    />
-                  </div>
-                  <div className="space-y-2">
                     <Label>Scopes</Label>
                     <div className="flex flex-wrap gap-2">
                       <Badge variant="secondary">campaigns:read</Badge>
@@ -448,11 +434,47 @@ export function ApiKeysContent() {
             </ul>
           </div>
           <div>
-            <h4 className="font-medium mb-2">Example Request</h4>
-            <pre className="bg-muted p-3 rounded-md text-sm font-mono overflow-x-auto whitespace-pre-wrap">
-{`curl -X GET "https://your-domain.com/api/v1/campaigns?limit=10" \\
-  -H "Authorization: Bearer rip_pk_your_api_key_here"`}
-            </pre>
+            <h4 className="font-medium mb-2">Query Parameters</h4>
+            <ul className="text-sm text-muted-foreground space-y-1">
+              <li><code className="bg-muted px-1 rounded">limit</code> - Number of results (default: 20, max: 100)</li>
+              <li><code className="bg-muted px-1 rounded">offset</code> - Skip results for pagination</li>
+              <li><code className="bg-muted px-1 rounded">from</code> - Filter by start date (ISO format: 2026-01-01)</li>
+              <li><code className="bg-muted px-1 rounded">to</code> - Filter by end date (ISO format: 2026-03-31)</li>
+              <li><code className="bg-muted px-1 rounded">entityId</code> - Filter by entity ID</li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="font-medium mb-2">Example Requests</h4>
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Get all campaigns:</p>
+                <pre className="bg-muted p-3 rounded-md text-sm font-mono overflow-x-auto whitespace-pre-wrap">
+{`curl "https://app.rip-tool.com/api/v1/campaigns" \\
+  -H "Authorization: Bearer YOUR_API_KEY"`}
+                </pre>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Filter campaigns by date range:</p>
+                <pre className="bg-muted p-3 rounded-md text-sm font-mono overflow-x-auto whitespace-pre-wrap">
+{`curl "https://app.rip-tool.com/api/v1/campaigns?from=2026-03-01&to=2026-03-31" \\
+  -H "Authorization: Bearer YOUR_API_KEY"`}
+                </pre>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Get SMS messages with pagination:</p>
+                <pre className="bg-muted p-3 rounded-md text-sm font-mono overflow-x-auto whitespace-pre-wrap">
+{`curl "https://app.rip-tool.com/api/v1/sms?limit=50&offset=100" \\
+  -H "Authorization: Bearer YOUR_API_KEY"`}
+                </pre>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Filter by entity:</p>
+                <pre className="bg-muted p-3 rounded-md text-sm font-mono overflow-x-auto whitespace-pre-wrap">
+{`curl "https://app.rip-tool.com/api/v1/campaigns?entityId=abc123" \\
+  -H "Authorization: Bearer YOUR_API_KEY"`}
+                </pre>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>

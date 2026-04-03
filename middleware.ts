@@ -51,6 +51,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Skip cookie auth for public API v1 routes - they use Bearer token auth
+  if (request.nextUrl.pathname.startsWith("/api/v1/")) {
+    return NextResponse.next()
+  }
+
   // Check for auth cookie
   const token = request.cookies.get("auth_token")?.value
 

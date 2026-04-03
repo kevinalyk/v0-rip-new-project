@@ -66,8 +66,8 @@ export function ApiKeysContent() {
         credentials: "include",
       })
       if (response.ok) {
-        const data = await response.json()
-        setKeys(data.keys || [])
+        const result = await response.json()
+        setKeys(result.data || [])
       } else {
         // API returned error - could be due to Prisma not being generated yet
         setKeys([])

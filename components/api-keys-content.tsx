@@ -67,13 +67,17 @@ export function ApiKeysContent() {
       })
       if (response.ok) {
         const data = await response.json()
-        setKeys(data.keys)
+        setKeys(data.keys || [])
+      } else {
+        // API returned error - could be due to Prisma not being generated yet
+        setKeys([])
       }
     } catch (error) {
       console.error("Error fetching API keys:", error)
+      setKeys([])
       toast({
         title: "Error",
-        description: "Failed to fetch API keys",
+        description: "Failed to fetch API keys. Make sure the database migration has been run.",
         variant: "destructive",
       })
     } finally {

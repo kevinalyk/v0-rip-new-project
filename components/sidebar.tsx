@@ -516,7 +516,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
               </>
             )}
 
-            {userRole === "super_admin" && (selectedClientSlug === "rip" || !selectedClientSlug) && (
+            {(selectedClientSlug === "rip" || selectedClientSlug === "m2x") && (
               <>
                 <NavSection
                   icon={<Code size={20} />}
@@ -530,9 +530,9 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                     <NavItem
                       icon={<Key size={18} />}
                       label="API Keys"
-                      active={pathname === "/rip/developers/api-keys"}
+                      active={pathname === `/${selectedClientSlug}/developers/api-keys`}
                       collapsed={false}
-                      onClick={() => navigate("/rip/developers/api-keys")}
+                      onClick={() => navigate(`/${selectedClientSlug}/developers/api-keys`)}
                     />
                   </div>
                 )}

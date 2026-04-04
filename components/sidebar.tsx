@@ -37,6 +37,7 @@ import {
   MailCheck,
   Code,
   Key,
+  Activity,
 } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { useTheme } from "next-themes"
@@ -510,6 +511,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                       active={pathname === "/rip/admin/seed-insights"}
                       collapsed={false}
                       onClick={() => navigate("/rip/admin/seed-insights")}
+                    />
+                    <NavItem
+                      icon={<Activity size={18} />}
+                      label="Site Traffic"
+                      active={pathname === "/rip/admin/site-traffic"}
+                      collapsed={false}
+                      onClick={() => navigate("/rip/admin/site-traffic")}
                     />
                   </div>
                 )}

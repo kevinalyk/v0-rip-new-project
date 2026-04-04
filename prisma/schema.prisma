@@ -582,3 +582,25 @@ model ApiKey {
   @@index([isActive])
   @@index([expiresAt])
 }
+
+model SiteVisit {
+  id            String    @id @default(cuid())
+  ip            String    // IP address of visitor
+  userAgent     String?   // Browser/client user agent
+  referer       String?   // Where they came from
+  path          String    // Which page/endpoint was accessed
+  method        String    @default("GET") // HTTP method
+  statusCode    Int?      // Response status code
+  userId        String?   // If authenticated, link to user
+  userEmail     String?   // If authenticated, store email for quick reference
+  isAuthenticated Boolean @default(false) // Quick flag to filter auth vs anon
+  country       String?   // Geo lookup (from Vercel headers)
+  city          String?   // Geo lookup (from Vercel headers)
+  createdAt     DateTime  @default(now())
+
+  @@index([ip])
+  @@index([userId])
+  @@index([isAuthenticated])
+  @@index([createdAt])
+  @@index([path])
+}

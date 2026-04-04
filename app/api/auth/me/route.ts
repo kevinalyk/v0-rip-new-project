@@ -4,17 +4,19 @@ import { getCurrentUser } from "@/lib/auth"
 
 export async function GET(request: Request) {
   try {
-    console.log("[v0] GET /api/auth/me called")
-    
-    // Log cookies for debugging
+    // Extract request metadata for logging
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() 
+      || request.headers.get("x-real-ip") 
+      || "unknown"
+    const userAgent = request.headers.get("user-agent") || "unknown"
+    const referer = request.headers.get("referer") || "direct"
     const cookieHeader = request.headers.get("cookie")
-    console.log("[v0] Cookie header:", cookieHeader)
+    const hasAuthCookie = cookieHeader?.includes("auth_token") || false
 
     const currentUser = (await getCurrentUser()) as any
-    console.log("[v0] Current user from token:", currentUser)
 
     if (!currentUser || !currentUser.userId) {
-      console.log("No authenticated user found")
+      console.log(`[auth/me] 401 | IP: ${ip} | UA: ${userAgent.substring(0, 80)} | Referer: ${referer} | Has Cookie: ${hasAuthCookie}`)
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
@@ -38,11 +40,11 @@ export async function GET(request: Request) {
     })
 
     if (!user) {
-      console.log("User not found in database:", currentUser.userId)
+      console.log(`[auth/me] 404 | User ID not in DB: ${currentUser.userId} | IP: ${ip}`)
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    console.log("User found:", user.email)
+    console.log(`[auth/me] 200 | User: ${user.email} | IP: ${ip}`)
     return NextResponse.json(user)
   } catch (error) {
     console.error("Error fetching current user:", error)

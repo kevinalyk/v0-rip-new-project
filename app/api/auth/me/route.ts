@@ -2,21 +2,56 @@ import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
 
+// Helper to log visit asynchronously (non-blocking)
+async function logVisit(data: {
+  ip: string
+  userAgent: string | null
+  referer: string | null
+  path: string
+  statusCode: number
+  userId?: string
+  userEmail?: string
+  isAuthenticated: boolean
+  country?: string | null
+  city?: string | null
+}) {
+  try {
+    await prisma.siteVisit.create({ data })
+  } catch (e) {
+    // Silently fail - don't let tracking break the app
+    console.error("[SiteVisit] Failed to log visit:", e)
+  }
+}
+
 export async function GET(request: Request) {
   try {
     // Extract request metadata for logging
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() 
       || request.headers.get("x-real-ip") 
       || "unknown"
-    const userAgent = request.headers.get("user-agent") || "unknown"
-    const referer = request.headers.get("referer") || "direct"
-    const cookieHeader = request.headers.get("cookie")
-    const hasAuthCookie = cookieHeader?.includes("auth_token") || false
+    const userAgent = request.headers.get("user-agent") || null
+    const referer = request.headers.get("referer") || null
+    // Vercel provides geo headers
+    const country = request.headers.get("x-vercel-ip-country") || null
+    const city = request.headers.get("x-vercel-ip-city") || null
 
     const currentUser = (await getCurrentUser()) as any
 
     if (!currentUser || !currentUser.userId) {
-      console.log(`[auth/me] 401 | IP: ${ip} | UA: ${userAgent.substring(0, 80)} | Referer: ${referer} | Has Cookie: ${hasAuthCookie}`)
+      console.log(`[auth/me] 401 | IP: ${ip} | Country: ${country} | City: ${city}`)
+      
+      // Log anonymous visit (fire and forget)
+      logVisit({
+        ip,
+        userAgent,
+        referer,
+        path: "/api/auth/me",
+        statusCode: 401,
+        isAuthenticated: false,
+        country,
+        city,
+      })
+      
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
@@ -44,7 +79,22 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    console.log(`[auth/me] 200 | User: ${user.email} | IP: ${ip}`)
+    console.log(`[auth/me] 200 | User: ${user.email} | IP: ${ip} | Country: ${country}`)
+    
+    // Log authenticated visit (fire and forget)
+    logVisit({
+      ip,
+      userAgent,
+      referer,
+      path: "/api/auth/me",
+      statusCode: 200,
+      userId: user.id,
+      userEmail: user.email,
+      isAuthenticated: true,
+      country,
+      city,
+    })
+    
     return NextResponse.json(user)
   } catch (error) {
     console.error("Error fetching current user:", error)

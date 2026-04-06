@@ -39,6 +39,20 @@ export async function getEntityBySlug(slug: string) {
     const entity = entities.find((e) => nameToSlug(e.name) === slug)
     if (!entity) return null
 
+    const recentCampaigns = await prisma.ciCampaign.findMany({
+      where: { entityId: entity.id },
+      orderBy: { sentAt: "desc" },
+      take: 10,
+      select: { id: true, subject: true, sentAt: true, fromEmail: true },
+    })
+
+    const recentSms = await prisma.ciSmsMessage.findMany({
+      where: { entityId: entity.id },
+      orderBy: { receivedAt: "desc" },
+      take: 5,
+      select: { id: true, body: true, receivedAt: true, shortCode: true },
+    })
+
     return {
       entity: {
         id: entity.id,
@@ -55,6 +69,14 @@ export async function getEntityBySlug(slug: string) {
           total: entity._count.campaigns + entity._count.smsMessages,
         },
       },
+      recentCampaigns: recentCampaigns.map((c) => ({
+        ...c,
+        sentAt: c.sentAt ? c.sentAt.toISOString() : null,
+      })),
+      recentSms: recentSms.map((s) => ({
+        ...s,
+        receivedAt: s.receivedAt ? s.receivedAt.toISOString() : null,
+      })),
     }
   } catch (error) {
     console.error("[directory] Error fetching entity by slug:", error)

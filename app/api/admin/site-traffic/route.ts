@@ -16,20 +16,28 @@ export async function GET(request: Request) {
     const startDate = new Date()
     startDate.setDate(startDate.getDate() - days)
 
-    // Get total visits
-    const totalVisits = await prisma.siteVisit.count({
-      where: { createdAt: { gte: startDate } }
-    })
+    // Deduplicated counts: one session per ip+user per hour
+    const dedupedCounts = await prisma.$queryRaw`
+      SELECT
+        "isAuthenticated",
+        COUNT(*) as count
+      FROM (
+        SELECT DISTINCT ON (
+          ip,
+          COALESCE("userId", ip),
+          DATE_TRUNC('hour', "createdAt")
+        )
+          "isAuthenticated"
+        FROM "SiteVisit"
+        WHERE "createdAt" >= ${startDate}
+        ORDER BY ip, COALESCE("userId", ip), DATE_TRUNC('hour', "createdAt"), "createdAt" DESC
+      ) deduped
+      GROUP BY "isAuthenticated"
+    ` as Array<{ isAuthenticated: boolean; count: bigint }>
 
-    // Get authenticated vs anonymous counts
-    const authCounts = await prisma.siteVisit.groupBy({
-      by: ["isAuthenticated"],
-      where: { createdAt: { gte: startDate } },
-      _count: true
-    })
-
-    const authenticatedVisits = authCounts.find(c => c.isAuthenticated)?._count || 0
-    const anonymousVisits = authCounts.find(c => !c.isAuthenticated)?._count || 0
+    const authenticatedVisits = Number(dedupedCounts.find(c => c.isAuthenticated)?.count || 0)
+    const anonymousVisits = Number(dedupedCounts.find(c => !c.isAuthenticated)?.count || 0)
+    const totalVisits = authenticatedVisits + anonymousVisits
 
     // Get unique IPs
     const uniqueIps = await prisma.siteVisit.groupBy({
@@ -96,25 +104,40 @@ export async function GET(request: Request) {
       ORDER BY date ASC
     ` as Array<{ date: Date, authenticated: bigint, anonymous: bigint }>
 
-    // Get recent visits
-    const recentVisits = await prisma.siteVisit.findMany({
-      where: { createdAt: { gte: startDate } },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-      select: {
-        id: true,
-        ip: true,
-        userAgent: true,
-        referer: true,
-        path: true,
-        statusCode: true,
-        userEmail: true,
-        isAuthenticated: true,
-        country: true,
-        city: true,
-        createdAt: true
-      }
-    })
+    // Get recent visits - deduplicated: one row per unique ip+user combo per hour
+    const recentVisitsRaw = await prisma.$queryRaw`
+      SELECT DISTINCT ON (
+        ip,
+        COALESCE("userId", ip),
+        DATE_TRUNC('hour', "createdAt")
+      )
+        id, ip, "userAgent", referer, path, "statusCode",
+        "userEmail", "isAuthenticated", country, city, "createdAt"
+      FROM "SiteVisit"
+      WHERE "createdAt" >= ${startDate}
+      ORDER BY
+        ip,
+        COALESCE("userId", ip),
+        DATE_TRUNC('hour', "createdAt"),
+        "createdAt" DESC
+    ` as Array<{
+      id: string
+      ip: string
+      userAgent: string | null
+      referer: string | null
+      path: string
+      statusCode: number | null
+      userEmail: string | null
+      isAuthenticated: boolean
+      country: string | null
+      city: string | null
+      createdAt: Date
+    }>
+
+    // Sort by most recent and limit to 50
+    const recentVisits = recentVisitsRaw
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 50)
 
     return NextResponse.json({
       summary: {

@@ -270,9 +270,21 @@ export async function GET(request: NextRequest) {
   }
 
     if (party && party !== "all") {
-      emailWhere.entity = {
-        ...emailWhere.entity,
-        party: { equals: party, mode: "insensitive" },
+      // "third party" dropdown value should match both "third party" and "independent" in DB
+      if (party.toLowerCase() === "third party") {
+        emailWhere.entity = {
+          ...emailWhere.entity,
+          OR: [
+            { party: { equals: "third party", mode: "insensitive" } },
+            { party: { equals: "independent", mode: "insensitive" } },
+            { party: { equals: "ind", mode: "insensitive" } },
+          ],
+        }
+      } else {
+        emailWhere.entity = {
+          ...emailWhere.entity,
+          party: { equals: party, mode: "insensitive" },
+        }
       }
     }
 
@@ -312,9 +324,21 @@ export async function GET(request: NextRequest) {
   }
 
     if (party && party !== "all") {
-      smsWhere.entity = {
-        ...smsWhere.entity,
-        party: { equals: party, mode: "insensitive" },
+      // "third party" dropdown value should match both "third party" and "independent" in DB
+      if (party.toLowerCase() === "third party") {
+        smsWhere.entity = {
+          ...smsWhere.entity,
+          OR: [
+            { party: { equals: "third party", mode: "insensitive" } },
+            { party: { equals: "independent", mode: "insensitive" } },
+            { party: { equals: "ind", mode: "insensitive" } },
+          ],
+        }
+      } else {
+        smsWhere.entity = {
+          ...smsWhere.entity,
+          party: { equals: party, mode: "insensitive" },
+        }
       }
     }
 

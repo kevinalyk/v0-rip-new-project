@@ -33,7 +33,7 @@ import {
   Phone,
   Info,
 } from "lucide-react"
-import { useRouter, usePathname } from "next/navigation"
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -273,6 +273,7 @@ export function CompetitiveInsights({
 }: CompetitiveInsightsProps) {
   const router = useRouter()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
   const [activeView, setActiveView] = useState<"emails" | "reporting">(defaultView)
   const [searchTerm, setSearchTerm] = useState("")
@@ -326,7 +327,42 @@ export function CompetitiveInsights({
   const [chartDays, setChartDays] = useState<7 | 30 | 90 | 365>(30)
   const resolvedUser = currentUser ?? fetchedUser
   const [subscribedEntityIds, setSubscribedEntityIds] = useState<string[]>([])
-  const [allEntities, setAllEntities] = useState<{ id: string; name: string }[]>([])
+  const [allEntities, setAllEntities] = useState<{ id: string; name: string; party?: string | null; state?: string | null }[]>([])
+
+  // Pre-select entity from URL ?sender= param (e.g. navigating from Directory)
+  useEffect(() => {
+    const senderParam = searchParams.get("sender")
+    if (senderParam && allSenders.length > 0) {
+      const decoded = decodeURIComponent(senderParam)
+      if (allSenders.includes(decoded)) {
+        setSelectedSender([decoded])
+        // Clean the URL param without triggering a navigation
+        const url = new URL(window.location.href)
+        url.searchParams.delete("sender")
+        window.history.replaceState({}, "", url.toString())
+      }
+    }
+  }, [searchParams, allSenders])
+
+  // When party or state filter changes, clear selected senders that no longer match
+  useEffect(() => {
+    if (selectedPartyFilter === "all" && selectedStateFilter === "all") return
+    setSelectedSender((prev) =>
+      prev.filter((sender) => {
+        const entity = allEntities.find((e) => e.name === sender)
+        const entityParty = (entity?.party || "").toLowerCase().trim()
+        const matchesParty =
+          selectedPartyFilter === "all" ||
+          (selectedPartyFilter === "third party"
+            ? entityParty.includes("independent") || entityParty.includes("third") || entityParty === "ind" || entityParty === "i"
+            : entityParty.includes(selectedPartyFilter.toLowerCase()))
+        const matchesState =
+          selectedStateFilter === "all" ||
+          entity?.state?.toUpperCase() === selectedStateFilter.toUpperCase()
+        return matchesParty && matchesState
+      })
+    )
+  }, [selectedPartyFilter, selectedStateFilter, allEntities])
 
   const [entityMappings, setEntityMappings] = useState<
     Record<string, { emails: string[]; domains: string[]; phones: string[] }>
@@ -369,7 +405,27 @@ export function CompetitiveInsights({
   }
 
   const filteredSenders = useMemo(() => {
-    const filtered = allSenders.filter((sender) => sender.toLowerCase().includes(senderSearchTerm.toLowerCase()))
+    let filtered = allSenders.filter((sender) => sender.toLowerCase().includes(senderSearchTerm.toLowerCase()))
+
+    // Cascade party filter: only show entities matching the selected party
+    if (selectedPartyFilter !== "all") {
+      filtered = filtered.filter((sender) => {
+        const entity = allEntities.find((e) => e.name === sender)
+        const entityParty = (entity?.party || "").toLowerCase().trim()
+        const matches = selectedPartyFilter === "third party" 
+          ? entityParty.includes("independent") || entityParty.includes("third") || entityParty === "ind" || entityParty === "i"
+          : entityParty.includes(selectedPartyFilter.toLowerCase())
+        return matches
+      })
+    }
+
+    // Cascade state filter: only show entities matching the selected state
+    if (selectedStateFilter !== "all") {
+      filtered = filtered.filter((sender) => {
+        const entity = allEntities.find((e) => e.name === sender)
+        return entity?.state?.toUpperCase() === selectedStateFilter.toUpperCase()
+      })
+    }
 
     // On the Following page (/ci/subscriptions), only show entities the client is subscribed to
     if (pathname?.includes("/ci/subscriptions")) {
@@ -386,7 +442,7 @@ export function CompetitiveInsights({
 
     // Return followed first, then the rest
     return [...followed, ...notFollowed]
-  }, [allSenders, senderSearchTerm, allEntities, subscribedEntityIds, pathname])
+  }, [allSenders, senderSearchTerm, allEntities, subscribedEntityIds, pathname, selectedPartyFilter, selectedStateFilter])
 
   // Modify useEffect to fetch user and then campaigns
   useEffect(() => {
@@ -482,10 +538,11 @@ export function CompetitiveInsights({
         const response = await fetch(`/api/competitive-insights/senders`)
         const data = await response.json()
 
-        // Store entities with IDs
+        // Store entities with IDs, party, and state for cascading filters
         if (data.entities) {
+          console.log("[v0] All entities from API:", data.entities.slice(0, 5))
           setAllEntities(data.entities)
-          setAllSenders(data.entities.map((e: { id: string; name: string }) => e.name))
+          setAllSenders(data.entities.map((e: { id: string; name: string; party?: string | null; state?: string | null }) => e.name))
         }
       } catch (error) {
         console.error("Error fetching senders:", error)

@@ -22,9 +22,9 @@ export async function getEntityBySlug(slug: string) {
         mappings: {
           select: {
             id: true,
-            emailDomain: true,
-            shortCode: true,
-            platform: true,
+            senderEmail: true,
+            senderDomain: true,
+            senderPhone: true,
           },
         },
         _count: {
@@ -39,18 +39,18 @@ export async function getEntityBySlug(slug: string) {
     const entity = entities.find((e) => nameToSlug(e.name) === slug)
     if (!entity) return null
 
-    const recentCampaigns = await prisma.ciCampaign.findMany({
+    const recentCampaigns = await prisma.competitiveInsightCampaign.findMany({
       where: { entityId: entity.id },
-      orderBy: { sentAt: "desc" },
+      orderBy: { dateReceived: "desc" },
       take: 10,
-      select: { id: true, subject: true, sentAt: true, fromEmail: true },
+      select: { id: true, subject: true, dateReceived: true, senderEmail: true },
     })
 
-    const recentSms = await prisma.ciSmsMessage.findMany({
+    const recentSms = await prisma.smsQueue.findMany({
       where: { entityId: entity.id },
-      orderBy: { receivedAt: "desc" },
+      orderBy: { createdAt: "desc" },
       take: 5,
-      select: { id: true, body: true, receivedAt: true, shortCode: true },
+      select: { id: true, message: true, createdAt: true, phoneNumber: true },
     })
 
     return {
@@ -70,12 +70,16 @@ export async function getEntityBySlug(slug: string) {
         },
       },
       recentCampaigns: recentCampaigns.map((c) => ({
-        ...c,
-        sentAt: c.sentAt ? c.sentAt.toISOString() : null,
+        id: c.id,
+        subject: c.subject,
+        senderEmail: c.senderEmail,
+        dateReceived: c.dateReceived ? c.dateReceived.toISOString() : null,
       })),
       recentSms: recentSms.map((s) => ({
-        ...s,
-        receivedAt: s.receivedAt ? s.receivedAt.toISOString() : null,
+        id: s.id,
+        message: s.message,
+        phoneNumber: s.phoneNumber,
+        createdAt: s.createdAt ? s.createdAt.toISOString() : null,
       })),
     }
   } catch (error) {

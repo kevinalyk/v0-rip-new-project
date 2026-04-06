@@ -4,7 +4,7 @@ import { verifyToken } from "./lib/auth"
 
 // This function must be marked `async` since we're using async JWT verification
 export async function middleware(request: NextRequest) {
-  // Skip middleware for static assets, API routes, and health check
+  // Skip middleware for static assets, public API routes, and other no-auth endpoints
   if (
     request.nextUrl.pathname.startsWith("/_next") ||
     request.nextUrl.pathname.startsWith("/images") ||
@@ -21,12 +21,15 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/api/auth/set-password") ||
     request.nextUrl.pathname.startsWith("/api/share/") ||
     request.nextUrl.pathname.startsWith("/api/og/") ||
-    request.nextUrl.pathname.startsWith("/api/announcements")
+    request.nextUrl.pathname.startsWith("/api/announcements") ||
+    request.nextUrl.pathname.startsWith("/api/public/") ||
+    request.nextUrl.pathname === "/directory" ||
+    request.nextUrl.pathname.startsWith("/directory/")
   ) {
     return NextResponse.next()
   }
 
-  // Skip auth check for login, signup, reset-password, set-password, share pages, public news, and public directory
+  // Skip auth check for login, signup, reset-password, set-password, share pages, public news
   if (
     request.nextUrl.pathname === "/login" ||
     request.nextUrl.pathname === "/signup" ||
@@ -35,10 +38,7 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname === "/testpage" ||
     request.nextUrl.pathname.startsWith("/share/") ||
     request.nextUrl.pathname === "/news" ||
-    request.nextUrl.pathname.startsWith("/news/") ||
-    request.nextUrl.pathname === "/directory" ||
-    request.nextUrl.pathname.startsWith("/directory/") ||
-    request.nextUrl.pathname.startsWith("/api/public/")
+    request.nextUrl.pathname.startsWith("/news/")
   ) {
     return NextResponse.next()
   }

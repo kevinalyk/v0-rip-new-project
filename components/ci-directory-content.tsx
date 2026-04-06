@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, User, Users, Building2, Database, Mail, ExternalLink } from "lucide-react"
+import { Search, User, Users, Building2, Database, Mail } from "lucide-react"
 import { toast } from "sonner"
 import { CiEntitySubscribeButton } from "@/components/ci-entity-subscribe-button"
 import {
@@ -366,10 +366,10 @@ export function CiDirectoryContent({ clientSlug }: CiDirectoryContentProps) {
                   key={entity.id}
                   className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
                   onClick={(e) => {
-                    // Don't navigate if clicking the subscribe button or external link
+                    // Don't navigate if clicking the subscribe button or profile link
                     if ((e.target as HTMLElement).closest("[data-subscribe-button]")) return
                     if ((e.target as HTMLElement).closest("[data-profile-link]")) return
-                    router.push(`/${clientSlug}/ci/campaigns?sender=${encodeURIComponent(entity.name)}`)
+                    router.push(`/directory/${nameToSlug(entity.name)}`)
                   }}
                 >
                   <div className="flex items-center gap-4 flex-1">
@@ -386,17 +386,6 @@ export function CiDirectoryContent({ clientSlug }: CiDirectoryContentProps) {
                     {entity.party && <Badge className={getPartyBadgeClassName(entity.party)}>{entity.party}</Badge>}
                     {entity.state && <Badge variant="outline">{entity.state}</Badge>}
                     <Badge variant="secondary">{entity._count.totalCommunications} communications</Badge>
-                    <div data-profile-link>
-                      <a
-                        href={`/directory/${nameToSlug(entity.name)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                        title="View public profile"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    </div>
                     <div data-subscribe-button>
                       <CiEntitySubscribeButton entityId={entity.id} entityName={entity.name} />
                     </div>

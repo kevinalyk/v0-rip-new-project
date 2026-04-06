@@ -334,12 +334,12 @@ export function CompetitiveInsights({
     setSelectedSender((prev) =>
       prev.filter((sender) => {
         const entity = allEntities.find((e) => e.name === sender)
-        const entityParty = entity?.party?.toLowerCase() || ""
+        const entityParty = (entity?.party || "").toLowerCase().trim()
         const matchesParty =
           selectedPartyFilter === "all" ||
           (selectedPartyFilter === "third party"
-            ? entityParty === "third party" || entityParty === "independent"
-            : entityParty === selectedPartyFilter.toLowerCase())
+            ? entityParty.includes("independent") || entityParty.includes("third") || entityParty === "ind" || entityParty === "i"
+            : entityParty.includes(selectedPartyFilter.toLowerCase()))
         const matchesState =
           selectedStateFilter === "all" ||
           entity?.state?.toUpperCase() === selectedStateFilter.toUpperCase()
@@ -395,12 +395,12 @@ export function CompetitiveInsights({
     if (selectedPartyFilter !== "all") {
       filtered = filtered.filter((sender) => {
         const entity = allEntities.find((e) => e.name === sender)
-        const entityParty = entity?.party?.toLowerCase() || ""
-        // "independent" maps to "third party" in the filter value, and vice versa
+        const entityParty = (entity?.party || "").toLowerCase().trim()
+        // "third party" dropdown value matches Independent, Third Party, Ind, etc.
         if (selectedPartyFilter === "third party") {
-          return entityParty === "third party" || entityParty === "independent"
+          return entityParty.includes("independent") || entityParty.includes("third") || entityParty === "ind" || entityParty === "i"
         }
-        return entityParty === selectedPartyFilter.toLowerCase()
+        return entityParty.includes(selectedPartyFilter.toLowerCase())
       })
     }
 

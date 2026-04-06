@@ -399,9 +399,6 @@ export function CompetitiveInsights({
         const matches = selectedPartyFilter === "third party" 
           ? entityParty.includes("independent") || entityParty.includes("third") || entityParty === "ind" || entityParty === "i"
           : entityParty.includes(selectedPartyFilter.toLowerCase())
-        if (sender === "Bernie Sanders") {
-          console.log("[v0] Bernie filter check - party:", entity?.party, "lowercased:", entityParty, "selectedFilter:", selectedPartyFilter, "matches:", matches)
-        }
         return matches
       })
     }

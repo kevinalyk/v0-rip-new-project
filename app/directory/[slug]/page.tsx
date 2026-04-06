@@ -1,17 +1,12 @@
 import type { Metadata } from "next"
-import { notFound } from "next/navigation"
 import { DirectoryProfileContent } from "@/components/directory-profile-content"
 import { getEntityBySlug } from "@/lib/directory"
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
-async function getEntity(slug: string) {
-  return getEntityBySlug(slug)
-}
-
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params
-  const data = await getEntity(slug)
+  const data = await getEntityBySlug(slug)
 
   if (!data) {
     return {
@@ -51,11 +46,5 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function DirectoryProfilePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const data = await getEntity(slug)
-
-  if (!data) {
-    notFound()
-  }
-
-  return <DirectoryProfileContent data={data} slug={slug} />
+  return <DirectoryProfileContent slug={slug} />
 }

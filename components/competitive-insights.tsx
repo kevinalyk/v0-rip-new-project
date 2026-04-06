@@ -328,16 +328,25 @@ export function CompetitiveInsights({
   const [subscribedEntityIds, setSubscribedEntityIds] = useState<string[]>([])
   const [allEntities, setAllEntities] = useState<{ id: string; name: string; party?: string | null; state?: string | null }[]>([])
 
-  // When party filter changes, clear any selected senders that don't belong to that party
+  // When party or state filter changes, clear selected senders that no longer match
   useEffect(() => {
-    if (selectedPartyFilter === "all") return
+    if (selectedPartyFilter === "all" && selectedStateFilter === "all") return
     setSelectedSender((prev) =>
       prev.filter((sender) => {
         const entity = allEntities.find((e) => e.name === sender)
-        return entity?.party?.toLowerCase() === selectedPartyFilter.toLowerCase()
+        const entityParty = entity?.party?.toLowerCase() || ""
+        const matchesParty =
+          selectedPartyFilter === "all" ||
+          (selectedPartyFilter === "third party"
+            ? entityParty === "third party" || entityParty === "independent"
+            : entityParty === selectedPartyFilter.toLowerCase())
+        const matchesState =
+          selectedStateFilter === "all" ||
+          entity?.state?.toUpperCase() === selectedStateFilter.toUpperCase()
+        return matchesParty && matchesState
       })
     )
-  }, [selectedPartyFilter, allEntities])
+  }, [selectedPartyFilter, selectedStateFilter, allEntities])
 
   const [entityMappings, setEntityMappings] = useState<
     Record<string, { emails: string[]; domains: string[]; phones: string[] }>
@@ -382,11 +391,24 @@ export function CompetitiveInsights({
   const filteredSenders = useMemo(() => {
     let filtered = allSenders.filter((sender) => sender.toLowerCase().includes(senderSearchTerm.toLowerCase()))
 
-    // Cascade: if a party filter is active, only show entities matching that party
+    // Cascade party filter: only show entities matching the selected party
     if (selectedPartyFilter !== "all") {
       filtered = filtered.filter((sender) => {
         const entity = allEntities.find((e) => e.name === sender)
-        return entity?.party?.toLowerCase() === selectedPartyFilter.toLowerCase()
+        const entityParty = entity?.party?.toLowerCase() || ""
+        // "independent" maps to "third party" in the filter value, and vice versa
+        if (selectedPartyFilter === "third party") {
+          return entityParty === "third party" || entityParty === "independent"
+        }
+        return entityParty === selectedPartyFilter.toLowerCase()
+      })
+    }
+
+    // Cascade state filter: only show entities matching the selected state
+    if (selectedStateFilter !== "all") {
+      filtered = filtered.filter((sender) => {
+        const entity = allEntities.find((e) => e.name === sender)
+        return entity?.state?.toUpperCase() === selectedStateFilter.toUpperCase()
       })
     }
 
@@ -405,7 +427,7 @@ export function CompetitiveInsights({
 
     // Return followed first, then the rest
     return [...followed, ...notFollowed]
-  }, [allSenders, senderSearchTerm, allEntities, subscribedEntityIds, pathname, selectedPartyFilter])
+  }, [allSenders, senderSearchTerm, allEntities, subscribedEntityIds, pathname, selectedPartyFilter, selectedStateFilter])
 
   // Modify useEffect to fetch user and then campaigns
   useEffect(() => {

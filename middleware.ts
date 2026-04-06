@@ -26,7 +26,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Skip auth check for login, signup, reset-password, set-password, share pages, and public news
+  // Skip auth check for login, signup, reset-password, set-password, share pages, public news, and public directory
   if (
     request.nextUrl.pathname === "/login" ||
     request.nextUrl.pathname === "/signup" ||
@@ -35,7 +35,10 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname === "/testpage" ||
     request.nextUrl.pathname.startsWith("/share/") ||
     request.nextUrl.pathname === "/news" ||
-    request.nextUrl.pathname.startsWith("/news/")
+    request.nextUrl.pathname.startsWith("/news/") ||
+    request.nextUrl.pathname === "/directory" ||
+    request.nextUrl.pathname.startsWith("/directory/") ||
+    request.nextUrl.pathname.startsWith("/api/public/")
   ) {
     return NextResponse.next()
   }

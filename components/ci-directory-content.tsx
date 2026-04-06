@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -37,6 +38,7 @@ interface Entity {
 }
 
 export function CiDirectoryContent({ clientSlug }: CiDirectoryContentProps) {
+  const router = useRouter()
   const [entities, setEntities] = useState<Entity[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -354,7 +356,12 @@ export function CiDirectoryContent({ clientSlug }: CiDirectoryContentProps) {
               {entities.map((entity) => (
                 <div
                   key={entity.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
+                  onClick={(e) => {
+                    // Don't navigate if clicking the subscribe button
+                    if ((e.target as HTMLElement).closest("[data-subscribe-button]")) return
+                    router.push(`/${clientSlug}/ci/campaigns?sender=${encodeURIComponent(entity.name)}`)
+                  }}
                 >
                   <div className="flex items-center gap-4 flex-1">
                     <div className="flex-shrink-0">{getEntityIcon(entity.type)}</div>
@@ -370,7 +377,9 @@ export function CiDirectoryContent({ clientSlug }: CiDirectoryContentProps) {
                     {entity.party && <Badge className={getPartyBadgeClassName(entity.party)}>{entity.party}</Badge>}
                     {entity.state && <Badge variant="outline">{entity.state}</Badge>}
                     <Badge variant="secondary">{entity._count.totalCommunications} communications</Badge>
-                    <CiEntitySubscribeButton entityId={entity.id} entityName={entity.name} />
+                    <div data-subscribe-button>
+                      <CiEntitySubscribeButton entityId={entity.id} entityName={entity.name} />
+                    </div>
                   </div>
                 </div>
               ))}

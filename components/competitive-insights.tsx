@@ -33,7 +33,7 @@ import {
   Phone,
   Info,
 } from "lucide-react"
-import { useRouter, usePathname } from "next/navigation"
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -273,6 +273,7 @@ export function CompetitiveInsights({
 }: CompetitiveInsightsProps) {
   const router = useRouter()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
   const [activeView, setActiveView] = useState<"emails" | "reporting">(defaultView)
   const [searchTerm, setSearchTerm] = useState("")
@@ -327,6 +328,21 @@ export function CompetitiveInsights({
   const resolvedUser = currentUser ?? fetchedUser
   const [subscribedEntityIds, setSubscribedEntityIds] = useState<string[]>([])
   const [allEntities, setAllEntities] = useState<{ id: string; name: string; party?: string | null; state?: string | null }[]>([])
+
+  // Pre-select entity from URL ?sender= param (e.g. navigating from Directory)
+  useEffect(() => {
+    const senderParam = searchParams.get("sender")
+    if (senderParam && allSenders.length > 0) {
+      const decoded = decodeURIComponent(senderParam)
+      if (allSenders.includes(decoded)) {
+        setSelectedSender([decoded])
+        // Clean the URL param without triggering a navigation
+        const url = new URL(window.location.href)
+        url.searchParams.delete("sender")
+        window.history.replaceState({}, "", url.toString())
+      }
+    }
+  }, [searchParams, allSenders])
 
   // When party or state filter changes, clear selected senders that no longer match
   useEffect(() => {

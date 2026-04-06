@@ -308,17 +308,6 @@ export function CompetitiveInsights({
     }
   }, [searchTerm, activeSearchQuery])
 
-  // When party filter changes, clear any selected senders that don't belong to that party
-  useEffect(() => {
-    if (selectedPartyFilter === "all") return
-    setSelectedSender((prev) =>
-      prev.filter((sender) => {
-        const entity = allEntities.find((e) => e.name === sender)
-        return entity?.party?.toLowerCase() === selectedPartyFilter.toLowerCase()
-      })
-    )
-  }, [selectedPartyFilter, allEntities])
-
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
   const [totalCampaigns, setTotalCampaigns] = useState(0)
@@ -338,6 +327,17 @@ export function CompetitiveInsights({
   const resolvedUser = currentUser ?? fetchedUser
   const [subscribedEntityIds, setSubscribedEntityIds] = useState<string[]>([])
   const [allEntities, setAllEntities] = useState<{ id: string; name: string; party?: string | null; state?: string | null }[]>([])
+
+  // When party filter changes, clear any selected senders that don't belong to that party
+  useEffect(() => {
+    if (selectedPartyFilter === "all") return
+    setSelectedSender((prev) =>
+      prev.filter((sender) => {
+        const entity = allEntities.find((e) => e.name === sender)
+        return entity?.party?.toLowerCase() === selectedPartyFilter.toLowerCase()
+      })
+    )
+  }, [selectedPartyFilter, allEntities])
 
   const [entityMappings, setEntityMappings] = useState<
     Record<string, { emails: string[]; domains: string[]; phones: string[] }>

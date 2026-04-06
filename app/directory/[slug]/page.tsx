@@ -1,19 +1,12 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { DirectoryProfileContent } from "@/components/directory-profile-content"
+import { getEntityBySlug } from "@/lib/directory"
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
 async function getEntity(slug: string) {
-  try {
-    const res = await fetch(`${APP_URL}/api/public/directory/${slug}`, {
-      next: { revalidate: 3600 }, // Cache for 1 hour
-    })
-    if (!res.ok) return null
-    return res.json()
-  } catch {
-    return null
-  }
+  return getEntityBySlug(slug)
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {

@@ -308,6 +308,17 @@ export function CompetitiveInsights({
     }
   }, [searchTerm, activeSearchQuery])
 
+  // When party filter changes, clear any selected senders that don't belong to that party
+  useEffect(() => {
+    if (selectedPartyFilter === "all") return
+    setSelectedSender((prev) =>
+      prev.filter((sender) => {
+        const entity = allEntities.find((e) => e.name === sender)
+        return entity?.party?.toLowerCase() === selectedPartyFilter.toLowerCase()
+      })
+    )
+  }, [selectedPartyFilter, allEntities])
+
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
   const [totalCampaigns, setTotalCampaigns] = useState(0)
@@ -326,7 +337,7 @@ export function CompetitiveInsights({
   const [chartDays, setChartDays] = useState<7 | 30 | 90 | 365>(30)
   const resolvedUser = currentUser ?? fetchedUser
   const [subscribedEntityIds, setSubscribedEntityIds] = useState<string[]>([])
-  const [allEntities, setAllEntities] = useState<{ id: string; name: string }[]>([])
+  const [allEntities, setAllEntities] = useState<{ id: string; name: string; party?: string | null; state?: string | null }[]>([])
 
   const [entityMappings, setEntityMappings] = useState<
     Record<string, { emails: string[]; domains: string[]; phones: string[] }>
@@ -369,7 +380,15 @@ export function CompetitiveInsights({
   }
 
   const filteredSenders = useMemo(() => {
-    const filtered = allSenders.filter((sender) => sender.toLowerCase().includes(senderSearchTerm.toLowerCase()))
+    let filtered = allSenders.filter((sender) => sender.toLowerCase().includes(senderSearchTerm.toLowerCase()))
+
+    // Cascade: if a party filter is active, only show entities matching that party
+    if (selectedPartyFilter !== "all") {
+      filtered = filtered.filter((sender) => {
+        const entity = allEntities.find((e) => e.name === sender)
+        return entity?.party?.toLowerCase() === selectedPartyFilter.toLowerCase()
+      })
+    }
 
     // On the Following page (/ci/subscriptions), only show entities the client is subscribed to
     if (pathname?.includes("/ci/subscriptions")) {
@@ -386,7 +405,7 @@ export function CompetitiveInsights({
 
     // Return followed first, then the rest
     return [...followed, ...notFollowed]
-  }, [allSenders, senderSearchTerm, allEntities, subscribedEntityIds, pathname])
+  }, [allSenders, senderSearchTerm, allEntities, subscribedEntityIds, pathname, selectedPartyFilter])
 
   // Modify useEffect to fetch user and then campaigns
   useEffect(() => {
@@ -482,10 +501,10 @@ export function CompetitiveInsights({
         const response = await fetch(`/api/competitive-insights/senders`)
         const data = await response.json()
 
-        // Store entities with IDs
+        // Store entities with IDs, party, and state for cascading filters
         if (data.entities) {
           setAllEntities(data.entities)
-          setAllSenders(data.entities.map((e: { id: string; name: string }) => e.name))
+          setAllSenders(data.entities.map((e: { id: string; name: string; party?: string | null; state?: string | null }) => e.name))
         }
       } catch (error) {
         console.error("Error fetching senders:", error)

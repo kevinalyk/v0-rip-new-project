@@ -396,11 +396,13 @@ export function CompetitiveInsights({
       filtered = filtered.filter((sender) => {
         const entity = allEntities.find((e) => e.name === sender)
         const entityParty = (entity?.party || "").toLowerCase().trim()
-        // "third party" dropdown value matches Independent, Third Party, Ind, etc.
-        if (selectedPartyFilter === "third party") {
-          return entityParty.includes("independent") || entityParty.includes("third") || entityParty === "ind" || entityParty === "i"
+        const matches = selectedPartyFilter === "third party" 
+          ? entityParty.includes("independent") || entityParty.includes("third") || entityParty === "ind" || entityParty === "i"
+          : entityParty.includes(selectedPartyFilter.toLowerCase())
+        if (sender === "Bernie Sanders") {
+          console.log("[v0] Bernie filter check - party:", entity?.party, "lowercased:", entityParty, "selectedFilter:", selectedPartyFilter, "matches:", matches)
         }
-        return entityParty.includes(selectedPartyFilter.toLowerCase())
+        return matches
       })
     }
 
@@ -525,6 +527,7 @@ export function CompetitiveInsights({
 
         // Store entities with IDs, party, and state for cascading filters
         if (data.entities) {
+          console.log("[v0] All entities from API:", data.entities.slice(0, 5))
           setAllEntities(data.entities)
           setAllSenders(data.entities.map((e: { id: string; name: string; party?: string | null; state?: string | null }) => e.name))
         }

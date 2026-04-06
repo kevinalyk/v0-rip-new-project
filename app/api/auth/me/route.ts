@@ -2,7 +2,10 @@ import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
 
+const DEDUP_WINDOW_SECONDS = 30
+
 // Helper to log visit asynchronously (non-blocking)
+// Skips logging if the same IP + user combo was already logged within the dedup window
 async function logVisit(data: {
   ip: string
   userAgent: string | null
@@ -16,6 +19,20 @@ async function logVisit(data: {
   city?: string | null
 }) {
   try {
+    const dedupSince = new Date(Date.now() - DEDUP_WINDOW_SECONDS * 1000)
+
+    const existing = await prisma.siteVisit.findFirst({
+      where: {
+        ip: data.ip,
+        isAuthenticated: data.isAuthenticated,
+        userId: data.userId ?? null,
+        createdAt: { gte: dedupSince },
+      },
+      select: { id: true },
+    })
+
+    if (existing) return // Skip duplicate
+
     await prisma.siteVisit.create({ data })
   } catch (e) {
     // Silently fail - don't let tracking break the app

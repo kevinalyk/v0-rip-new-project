@@ -18,6 +18,7 @@ import {
   UserCog,
   Shield,
   ShieldAlert,
+  ShieldCheck,
   BarChart3,
   Lightbulb,
   CreditCard,
@@ -490,6 +491,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                       active={pathname === "/rip/admin/blocked-domains"}
                       collapsed={false}
                       onClick={() => navigate("/rip/admin/blocked-domains")}
+                    />
+                    <NavItem
+                      icon={<ShieldCheck size={18} />}
+                      label="Compliance"
+                      active={pathname === "/rip/admin/compliance"}
+                      collapsed={false}
+                      onClick={() => navigate("/rip/admin/compliance")}
                     />
                     <NavItem
                       icon={<ShieldAlert size={18} />}

@@ -376,9 +376,7 @@ export function CiDirectoryContent({ clientSlug }: CiDirectoryContentProps) {
                     <div className="flex-shrink-0">{getEntityIcon(entity.type)}</div>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-lg">{entity.name}</div>
-                      {entity.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-1">{entity.description}</p>
-                      )}
+
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">

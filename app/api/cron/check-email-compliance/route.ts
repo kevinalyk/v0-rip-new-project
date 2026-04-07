@@ -27,8 +27,8 @@ export async function GET(request: Request) {
     }
 
     // Only process campaigns that have rawHeaders AND either no compliance record
-    // or a stale one (re-check every 7 days in case checker logic is updated)
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    // or a stale one (re-check every 1 day in case checker logic is updated)
+    const sevenDaysAgo = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000)
 
     const campaigns = await prisma.competitiveInsightCampaign.findMany({
       where: {

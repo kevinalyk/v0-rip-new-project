@@ -79,9 +79,22 @@ export async function GET(request: Request) {
       return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0
     }
 
+    // Compute avgTotalScore from section scores directly — the stored totalScore
+    // column may have stale data from before the totalScore bug fix
+    const computedTotalScores = allScores.map((r) => {
+      const s1 = r.section1Score ?? 0
+      const s2 = r.section2Score ?? 0
+      const s3 = r.section3Score ?? 0
+      const s4 = r.section4Score ?? 0
+      return (s1 + s2 + s3 + s4) / 4
+    })
+    const avgTotalScore = computedTotalScores.length > 0
+      ? computedTotalScores.reduce((a, b) => a + b, 0) / computedTotalScores.length
+      : 0
+
     const stats = {
       total: count,
-      avgTotalScore: avgScore("totalScore"),
+      avgTotalScore,
       avgSection1: avgScore("section1Score"),
       avgSection2: avgScore("section2Score"),
       avgSection3: avgScore("section3Score"),
@@ -126,8 +139,11 @@ export async function GET(request: Request) {
       const n = subset.length
       if (n === 0) return { count: 0, avgCompliance: 0, avgInboxRate: 0, spamRate: 0, spfRate: 0, dkimRate: 0, dmarcRate: 0, oneClickRate: 0 }
 
-      const scoreVals = subset.map((r) => r.totalScore).filter((v) => v != null) as number[]
-      const avgCompliance = scoreVals.length > 0 ? scoreVals.reduce((a, b) => a + b, 0) / scoreVals.length : 0
+      // Compute compliance from section scores to avoid stale totalScore values
+      const computedScores = subset.map((r) =>
+        ((r.section1Score ?? 0) + (r.section2Score ?? 0) + (r.section3Score ?? 0) + (r.section4Score ?? 0)) / 4
+      )
+      const avgCompliance = computedScores.length > 0 ? computedScores.reduce((a, b) => a + b, 0) / computedScores.length : 0
 
       // inboxRate is stored as a percentage (e.g. 66.7), divide by 100 to get a fraction
       const inboxVals = subset.map((r) => r.campaign.inboxRate).filter((v) => v != null) as number[]

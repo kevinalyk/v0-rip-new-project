@@ -14,7 +14,11 @@ export const metadata: Metadata = {
   title: "Inbox.GOP",
   description: "Inbox.GOP — A tool dedicated to helping Republicans and conservatives inbox effectively.",
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/images/IconOnly_Transparent_NoBuffer.png", type: "image/png" },
+    ],
+    shortcut: "/images/IconOnly_Transparent_NoBuffer.png",
+    apple: "/images/IconOnly_Transparent_NoBuffer.png",
   },
   generator: "v0.app",
 }

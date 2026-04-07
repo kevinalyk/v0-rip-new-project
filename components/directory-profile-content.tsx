@@ -137,36 +137,27 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
     fetchEntity()
   }, [authLoading, slug])
 
-  const handlePreviewClick = async (id: string, type: "email" | "sms", entityName: string) => {
+  const handlePreviewClick = async (id: string, type: "email" | "sms") => {
     if (!isAuthenticated) return
     setPreviewLoading(true)
     setSelectedPreview(null)
     try {
-      const params = new URLSearchParams({
-        sender: entityName,
-        limit: "50",
-        page: "1",
-      })
-      if (type === "sms") params.set("messageType", "sms")
-      else params.set("messageType", "email")
-
-      const res = await fetch(`/api/competitive-insights?${params}`, { credentials: "include" })
+      const res = await fetch(
+        `/api/competitive-insights/preview?id=${encodeURIComponent(id)}&type=${type}`,
+        { credentials: "include" }
+      )
       if (res.ok) {
-        const resData = await res.json()
-        const campaigns: any[] = resData.campaigns || []
-        const item = campaigns.find((c: any) => String(c.id) === String(id))
-        if (item) {
-          setSelectedPreview({
-            id: item.id,
-            type: item.type,
-            subject: item.subject,
-            senderEmail: item.senderEmail,
-            phoneNumber: item.phoneNumber,
-            dateReceived: item.dateReceived,
-            emailContent: item.emailContent,
-            emailPreview: item.emailPreview,
-          })
-        }
+        const item = await res.json()
+        setSelectedPreview({
+          id: item.id,
+          type: item.type,
+          subject: item.subject,
+          senderEmail: item.senderEmail ?? null,
+          phoneNumber: item.phoneNumber ?? null,
+          dateReceived: item.dateReceived,
+          emailContent: item.emailContent,
+          emailPreview: item.emailPreview,
+        })
       }
     } catch {
       // silently fail
@@ -290,7 +281,7 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
               <div
                 key={campaign.id}
                 className={`px-4 py-3 flex items-center justify-between gap-4 ${isAuthenticated ? "cursor-pointer hover:bg-accent/50 transition-colors" : "blur-sm select-none pointer-events-none"}`}
-                onClick={() => isAuthenticated && handlePreviewClick(campaign.id, "email", entity.name)}
+                onClick={() => isAuthenticated && handlePreviewClick(campaign.id, "email")}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <Mail className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
@@ -303,7 +294,7 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
               <div
                 key={sms.id}
                 className={`px-4 py-3 flex items-center justify-between gap-4 ${isAuthenticated ? "cursor-pointer hover:bg-accent/50 transition-colors" : "blur-sm select-none pointer-events-none"}`}
-                onClick={() => isAuthenticated && handlePreviewClick(sms.id, "sms", entity.name)}
+                onClick={() => isAuthenticated && handlePreviewClick(sms.id, "sms")}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <MessageSquare className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />

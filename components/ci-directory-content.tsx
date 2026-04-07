@@ -386,9 +386,11 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
                     {entity.party && <Badge className={getPartyBadgeClassName(entity.party)}>{entity.party}</Badge>}
                     {entity.state && <Badge variant="outline">{entity.state}</Badge>}
                     <Badge variant="secondary">{entity._count.totalCommunications} communications</Badge>
-                    <div data-subscribe-button>
-                      <CiEntitySubscribeButton entityId={entity.id} entityName={entity.name} />
-                    </div>
+                    {!isPublic && (
+                      <div data-subscribe-button>
+                        <CiEntitySubscribeButton entityId={entity.id} entityName={entity.name} />
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

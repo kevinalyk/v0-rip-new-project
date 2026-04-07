@@ -84,6 +84,7 @@ export async function middleware(request: NextRequest) {
             !currentPath.startsWith("/set-password") &&
             !currentPath.startsWith("/share/") &&
             !currentPath.startsWith("/news") &&
+            !currentPath.startsWith("/directory") &&
             !currentPath.startsWith(`/${clientSlug}`)
 
           // Redirect to their client's page if accessing unauthorized routes

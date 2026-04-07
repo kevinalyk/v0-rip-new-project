@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, Lock, Mail, MessageSquare, Building2, User, Users, ArrowLeft, Calendar, Smartphone, ExternalLink } from "lucide-react"
+import { Loader2, Lock, Mail, MessageSquare, Building2, User, Users, ArrowLeft, Calendar, Smartphone, ExternalLink, Star } from "lucide-react"
+import { CiEntitySubscribeButton } from "@/components/ci-entity-subscribe-button"
 
 interface Mapping {
   id: string
@@ -225,7 +226,18 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
               {entity.state && <Badge variant="outline">{entity.state}</Badge>}
               <Badge variant="secondary" className="capitalize">{entity.type}</Badge>
             </div>
-
+          </div>
+          <div className="flex-shrink-0">
+            {isAuthenticated ? (
+              <CiEntitySubscribeButton entityId={entity.id} entityName={entity.name} />
+            ) : (
+              <Button asChild size="sm" variant="outline" className="gap-2">
+                <Link href="/login">
+                  <Star size={16} />
+                  Follow
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
 

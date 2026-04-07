@@ -23,7 +23,7 @@ export function CiEntitySubscribeButton({
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(true)
   const params = useParams()
-  const clientSlug = params.clientSlug as string
+  const clientSlug = (params.clientSlug as string) || ""
 
   useEffect(() => {
     const checkSubscriptionStatus = async () => {
@@ -64,7 +64,7 @@ export function CiEntitySubscribeButton({
           action: {
             label: "Upgrade",
             onClick: () => {
-              window.location.href = `/${clientSlug}/billing`
+              window.location.href = clientSlug ? `/${clientSlug}/billing` : "/login"
             },
           },
         })

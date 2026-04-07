@@ -803,7 +803,7 @@ export async function extractCTALinks(
     /email.*client/i,
   ]
 
-  // CTA keywords that indicate important links
+  // CTA keywords that indicate important links (URL or link text)
   const ctaKeywords = [
     /donate/i,
     /contribute/i,
@@ -816,6 +816,30 @@ export async function extractCTALinks(
     /volunteer/i,
     /event/i,
     /rsvp/i,
+    /confirm/i,
+    /affiliation/i,
+    /survey/i,
+    /vote/i,
+    /verify/i,
+    /learn/i,
+    /renew/i,
+    /register/i,
+    /get.*involved/i,
+    /take.*action/i,
+    /stand.*with/i,
+    /fight/i,
+    /defend/i,
+    /protect/i,
+    /stop/i,
+    /demand/i,
+    /tell.*congress/i,
+    /call.*on/i,
+    /win.*red/i,
+    /actblue/i,
+    /anedot/i,
+    /raise.*money/i,
+    /election/i,
+    /secure\.winred/i,
   ]
 
   $("a").each((_, element) => {
@@ -871,13 +895,12 @@ export async function extractCTALinks(
       return
     }
 
-    // Check if URL contains CTA keywords (prioritize these)
-    const hasCTAKeyword = ctaKeywords.some((keyword) => keyword.test(sanitizedUrl) || keyword.test(linkText || ""))
-
-    if (hasCTAKeyword || links.length < 20) {
-      // Increased from 10 to 20 to catch more links initially
-      links.push({ url: sanitizedUrl, text: linkText, context: contextText })
-    }
+    // Collect all links that pass the filters — dedup and the final slice(0,15)
+    // cap the output. The old `links.length < 20` gate was silently dropping
+    // CTA tracking URLs (e.g. trk.libertybreaking.news) when boilerplate links
+    // (social icons, image anchors) filled the first 20 slots before the CTAs
+    // appeared in the HTML.
+    links.push({ url: sanitizedUrl, text: linkText, context: contextText })
   })
 
   // Remove duplicates by URL

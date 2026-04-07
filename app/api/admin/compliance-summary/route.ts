@@ -95,7 +95,65 @@ export async function GET(request: Request) {
       noHiddenContentRate: avg("noHiddenContent"),
     }
 
-    return NextResponse.json({ rows, total, page, pageSize, stats })
+    // Party split — R vs D compliance scores and inbox/spam rates
+    const partyRows = await prisma.cIEmailCompliance.findMany({
+      select: {
+        totalScore: true,
+        section1Score: true,
+        section2Score: true,
+        section3Score: true,
+        section4Score: true,
+        hasSpf: true,
+        hasDkim: true,
+        hasDmarc: true,
+        hasOneClickUnsubscribeHeaders: true,
+        campaign: {
+          select: {
+            inboxCount: true,
+            spamCount: true,
+            notDeliveredCount: true,
+            inboxRate: true,
+            entity: { select: { party: true } },
+          },
+        },
+      },
+    })
+
+    const buildPartyStat = (party: string) => {
+      const subset = partyRows.filter(
+        (r) => r.campaign.entity?.party?.toLowerCase() === party
+      )
+      const n = subset.length
+      if (n === 0) return { count: 0, avgCompliance: 0, avgInboxRate: 0, spamRate: 0, spfRate: 0, dkimRate: 0, dmarcRate: 0, oneClickRate: 0 }
+
+      const scoreVals = subset.map((r) => r.totalScore).filter((v) => v != null) as number[]
+      const avgCompliance = scoreVals.length > 0 ? scoreVals.reduce((a, b) => a + b, 0) / scoreVals.length : 0
+
+      const inboxVals = subset.map((r) => r.campaign.inboxRate).filter((v) => v != null) as number[]
+      const avgInboxRate = inboxVals.length > 0 ? inboxVals.reduce((a, b) => a + b, 0) / inboxVals.length : 0
+
+      const totalDelivered = subset.reduce((acc, r) => acc + r.campaign.inboxCount + r.campaign.spamCount, 0)
+      const totalSpam = subset.reduce((acc, r) => acc + r.campaign.spamCount, 0)
+      const spamRate = totalDelivered > 0 ? totalSpam / totalDelivered : 0
+
+      return {
+        count: n,
+        avgCompliance,
+        avgInboxRate,
+        spamRate,
+        spfRate: subset.filter((r) => r.hasSpf).length / n,
+        dkimRate: subset.filter((r) => r.hasDkim).length / n,
+        dmarcRate: subset.filter((r) => r.hasDmarc).length / n,
+        oneClickRate: subset.filter((r) => r.hasOneClickUnsubscribeHeaders).length / n,
+      }
+    }
+
+    const partySplit = {
+      republican: buildPartyStat("republican"),
+      democrat: buildPartyStat("democrat"),
+    }
+
+    return NextResponse.json({ rows, total, page, pageSize, stats, partySplit })
   } catch (error) {
     console.error("[compliance-summary] Error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

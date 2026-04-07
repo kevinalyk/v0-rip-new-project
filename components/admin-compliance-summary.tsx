@@ -57,6 +57,22 @@ interface ComplianceRow {
   }
 }
 
+interface PartyStat {
+  count: number
+  avgCompliance: number
+  avgInboxRate: number
+  spamRate: number
+  spfRate: number
+  dkimRate: number
+  dmarcRate: number
+  oneClickRate: number
+}
+
+interface PartySplit {
+  republican: PartyStat
+  democrat: PartyStat
+}
+
 interface Stats {
   total: number
   avgTotalScore: number
@@ -109,6 +125,7 @@ function getPartyColor(party: string | null) {
 export function AdminComplianceSummary() {
   const [rows, setRows] = useState<ComplianceRow[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
+  const [partySplit, setPartySplit] = useState<PartySplit | null>(null)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
@@ -126,6 +143,7 @@ export function AdminComplianceSummary() {
       setRows(data.rows)
       setTotal(data.total)
       setStats(data.stats)
+      setPartySplit(data.partySplit ?? null)
     } finally {
       setLoading(false)
     }
@@ -151,6 +169,118 @@ export function AdminComplianceSummary() {
           Refresh
         </Button>
       </div>
+
+      {/* Republican vs Democrat Comparison */}
+      {partySplit && (partySplit.republican.count > 0 || partySplit.democrat.count > 0) && (
+        <Card className="border-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Republican vs. Democrat — Compliance &amp; Inbox Analysis</CardTitle>
+            <CardDescription>
+              Compares email compliance scores against actual inbox placement to surface potential Gmail bias. High compliance + high spam rate = potential bias signal.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {(["republican", "democrat"] as const).map((party) => {
+                const s = partySplit[party]
+                const isRep = party === "republican"
+                const color = isRep ? "red" : "blue"
+                const bias = s.avgCompliance >= 0.8 && s.spamRate >= 0.3
+                return (
+                  <div key={party} className={`rounded-lg border-2 p-5 ${isRep ? "border-red-200 bg-red-50/30" : "border-blue-200 bg-blue-50/30"}`}>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className={`font-bold text-lg capitalize ${isRep ? "text-red-700" : "text-blue-700"}`}>
+                        {party}
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">{s.count} campaigns</span>
+                        {bias && (
+                          <Badge className="bg-orange-100 text-orange-800 border-orange-300 text-xs font-semibold">
+                            Bias Signal
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {s.count === 0 ? (
+                      <p className="text-sm text-muted-foreground">No data yet.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {/* Key metrics side by side */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-background rounded-md p-3 border">
+                            <p className="text-xs text-muted-foreground mb-1">Avg Compliance Score</p>
+                            <p className={`text-2xl font-bold ${scoreColor(s.avgCompliance)}`}>{pct(s.avgCompliance)}</p>
+                          </div>
+                          <div className="bg-background rounded-md p-3 border">
+                            <p className="text-xs text-muted-foreground mb-1">Avg Inbox Rate</p>
+                            <p className={`text-2xl font-bold ${scoreColor(s.avgInboxRate)}`}>{pct(s.avgInboxRate)}</p>
+                          </div>
+                          <div className="bg-background rounded-md p-3 border">
+                            <p className="text-xs text-muted-foreground mb-1">Spam Rate</p>
+                            <p className={`text-2xl font-bold ${s.spamRate >= 0.3 ? "text-red-600" : s.spamRate >= 0.15 ? "text-yellow-600" : "text-green-600"}`}>
+                              {pct(s.spamRate)}
+                            </p>
+                          </div>
+                          <div className="bg-background rounded-md p-3 border">
+                            <p className="text-xs text-muted-foreground mb-1">Compliance vs Inbox Gap</p>
+                            <p className={`text-2xl font-bold ${(s.avgCompliance - s.avgInboxRate) >= 0.2 ? "text-red-600" : "text-green-600"}`}>
+                              {s.avgCompliance - s.avgInboxRate >= 0
+                                ? `+${pct(s.avgCompliance - s.avgInboxRate)}`
+                                : pct(s.avgCompliance - s.avgInboxRate)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Auth signals */}
+                        <div className="grid grid-cols-4 gap-2 pt-1">
+                          {[
+                            { label: "SPF", val: s.spfRate },
+                            { label: "DKIM", val: s.dkimRate },
+                            { label: "DMARC", val: s.dmarcRate },
+                            { label: "1-Click Unsub", val: s.oneClickRate },
+                          ].map((m) => (
+                            <div key={m.label} className="text-center">
+                              <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-1">
+                                <div
+                                  className={`h-full rounded-full ${m.val >= 0.85 ? `bg-${color}-500` : m.val >= 0.65 ? "bg-yellow-500" : "bg-red-400"}`}
+                                  style={{ width: `${Math.round(m.val * 100)}%` }}
+                                />
+                              </div>
+                              <p className="text-xs text-muted-foreground">{m.label}</p>
+                              <p className="text-xs font-semibold">{pct(m.val)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Delta summary row */}
+            {partySplit.republican.count > 0 && partySplit.democrat.count > 0 && (
+              <div className="mt-4 p-3 rounded-md bg-muted/40 border text-sm flex flex-wrap gap-6">
+                <div>
+                  <span className="text-muted-foreground">Compliance delta (R - D): </span>
+                  <span className="font-semibold">{(partySplit.republican.avgCompliance - partySplit.democrat.avgCompliance) >= 0 ? "+" : ""}{pct(partySplit.republican.avgCompliance - partySplit.democrat.avgCompliance)}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Inbox rate delta (R - D): </span>
+                  <span className="font-semibold">{(partySplit.republican.avgInboxRate - partySplit.democrat.avgInboxRate) >= 0 ? "+" : ""}{pct(partySplit.republican.avgInboxRate - partySplit.democrat.avgInboxRate)}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Spam rate delta (R - D): </span>
+                  <span className={`font-semibold ${(partySplit.republican.spamRate - partySplit.democrat.spamRate) >= 0.1 ? "text-red-600" : ""}`}>
+                    {(partySplit.republican.spamRate - partySplit.democrat.spamRate) >= 0 ? "+" : ""}{pct(partySplit.republican.spamRate - partySplit.democrat.spamRate)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Aggregate Stats */}
       {stats && (

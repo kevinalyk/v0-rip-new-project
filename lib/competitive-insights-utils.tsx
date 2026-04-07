@@ -371,6 +371,32 @@ export function stripQueryParams(url: string): string {
   }
 }
 
+// Strip only UTM/tracking query params, preserving meaningful path and params
+// (e.g. WinRed amount/recurring params that identify the specific donation page)
+const UTM_ONLY_PARAMS = new Set([
+  "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+  "utm_id", "utm_reader", "utm_name", "utm_place", "utm_pubreferrer",
+  "fbclid", "gclid", "msclkid", "ttclid", "twclid", "li_fat_id",
+  "mc_cid", "mc_eid", "_hsenc", "_hsmi", "hsCtaTracking",
+  "source_code", "ex_tid",
+])
+
+export function stripUtmParams(url: string): string {
+  try {
+    const urlObj = new URL(url)
+    for (const key of Array.from(urlObj.searchParams.keys())) {
+      if (UTM_ONLY_PARAMS.has(key)) {
+        urlObj.searchParams.delete(key)
+      }
+    }
+    return urlObj.searchParams.size === 0
+      ? `${urlObj.origin}${urlObj.pathname}`
+      : urlObj.toString()
+  } catch {
+    return url
+  }
+}
+
 /**
  * Sanitize URL by removing tracking/seed email parameters while preserving functional parameters
  * This is more selective than removing ALL query parameters
@@ -916,12 +942,15 @@ export async function extractCTALinks(
           ),
         ])
 
-        // Only strip query params if the link actually resolved to a different domain
+        // Only set finalUrl if the link actually resolved to a different domain
         const originalDomain = new URL(link.url).hostname
         const resolvedDomain = new URL(resolved).hostname
         const didResolve = resolvedDomain !== originalDomain
 
-        const finalUrl = didResolve ? stripQueryParams(resolved) : undefined
+        // Don't strip query params — preserve the full resolved URL so donation
+        // platform detection and display work correctly. The cron job can strip
+        // purely tracking params (utm_*, fbclid, etc.) in a later pass if needed.
+        const finalUrl = didResolve ? resolved : undefined
 
         return { url: link.url, finalUrl, text: link.text }
       } catch {

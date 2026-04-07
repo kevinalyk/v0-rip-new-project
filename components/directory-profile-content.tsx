@@ -5,7 +5,8 @@ import Link from "next/link"
 import AppLayout from "@/components/app-layout"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Loader2, Lock, Mail, MessageSquare, Building2, User, Users, ArrowLeft } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Loader2, Lock, Mail, MessageSquare, Building2, User, Users, ArrowLeft, Calendar, Smartphone } from "lucide-react"
 
 interface Mapping {
   id: string
@@ -72,6 +73,24 @@ function formatDate(dateStr: string | null) {
   return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
 }
 
+interface PreviewItem {
+  id: number
+  type: "email" | "sms"
+  subject: string | null
+  senderEmail: string | null
+  phoneNumber: string | null
+  dateReceived: string | null
+  emailContent: string | null
+  emailPreview: string | null
+}
+
+function prepareEmailHtml(html: string) {
+  const noLinkStyle = `<style>a { pointer-events: none !important; cursor: default !important; text-decoration: none !important; color: inherit !important; }</style>`
+  if (html.includes("<head>")) return html.replace("<head>", `<head><base target="_blank">${noLinkStyle}`)
+  if (html.includes("<html>")) return html.replace("<html>", `<html><head><base target="_blank">${noLinkStyle}</head>`)
+  return `<head><base target="_blank">${noLinkStyle}</head>${html}`
+}
+
 export function DirectoryProfileContent({ slug }: { slug: string }) {
   const [clientSlug, setClientSlug] = useState<string>("")
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -79,6 +98,8 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
   const [data, setData] = useState<EntityData | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [selectedPreview, setSelectedPreview] = useState<PreviewItem | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
 
   // Check auth — non-blocking, page works for unauthenticated visitors too
   useEffect(() => {
@@ -116,6 +137,44 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
     fetchEntity()
   }, [authLoading, slug])
 
+  const handlePreviewClick = async (id: string, type: "email" | "sms", entityName: string) => {
+    if (!isAuthenticated) return
+    setPreviewLoading(true)
+    setSelectedPreview(null)
+    try {
+      const params = new URLSearchParams({
+        sender: entityName,
+        limit: "50",
+        page: "1",
+      })
+      if (type === "sms") params.set("messageType", "sms")
+      else params.set("messageType", "email")
+
+      const res = await fetch(`/api/competitive-insights?${params}`, { credentials: "include" })
+      if (res.ok) {
+        const resData = await res.json()
+        const campaigns: any[] = resData.campaigns || []
+        const item = campaigns.find((c: any) => String(c.id) === String(id))
+        if (item) {
+          setSelectedPreview({
+            id: item.id,
+            type: item.type,
+            subject: item.subject,
+            senderEmail: item.senderEmail,
+            phoneNumber: item.phoneNumber,
+            dateReceived: item.dateReceived,
+            emailContent: item.emailContent,
+            emailPreview: item.emailPreview,
+          })
+        }
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
   if (authLoading || loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -145,6 +204,7 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
   const shortCodes = [...new Set(entity.mappings.filter((m) => m.senderPhone).map((m) => m.senderPhone!))]
 
   return (
+    <>
     <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
       <div className="container mx-auto py-8 px-4 max-w-3xl">
 
@@ -227,7 +287,11 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
 
           <div className="divide-y divide-border relative">
             {recentCampaigns.slice(0, 5).map((campaign) => (
-              <div key={campaign.id} className={`px-4 py-3 flex items-center justify-between gap-4 ${!isAuthenticated ? "blur-sm select-none pointer-events-none" : ""}`}>
+              <div
+                key={campaign.id}
+                className={`px-4 py-3 flex items-center justify-between gap-4 ${isAuthenticated ? "cursor-pointer hover:bg-accent/50 transition-colors" : "blur-sm select-none pointer-events-none"}`}
+                onClick={() => isAuthenticated && handlePreviewClick(campaign.id, "email", entity.name)}
+              >
                 <div className="flex items-center gap-3 min-w-0">
                   <Mail className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                   <span className="text-sm truncate">{campaign.subject || "No subject"}</span>
@@ -236,7 +300,11 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
               </div>
             ))}
             {recentSms.slice(0, 3).map((sms) => (
-              <div key={sms.id} className={`px-4 py-3 flex items-center justify-between gap-4 ${!isAuthenticated ? "blur-sm select-none pointer-events-none" : ""}`}>
+              <div
+                key={sms.id}
+                className={`px-4 py-3 flex items-center justify-between gap-4 ${isAuthenticated ? "cursor-pointer hover:bg-accent/50 transition-colors" : "blur-sm select-none pointer-events-none"}`}
+                onClick={() => isAuthenticated && handlePreviewClick(sms.id, "sms", entity.name)}
+              >
                 <div className="flex items-center gap-3 min-w-0">
                   <MessageSquare className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                   <span className="text-sm truncate">{sms.message?.substring(0, 80) || "SMS message"}</span>
@@ -270,7 +338,62 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
           </div>
         </div>
 
+        {/* Preview loading indicator */}
+        {previewLoading && (
+          <div className="flex items-center justify-center py-4 gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading preview...
+          </div>
+        )}
+
       </div>
     </AppLayout>
+
+      {/* Campaign/SMS Preview Dialog */}
+      <Dialog open={!!selectedPreview} onOpenChange={() => setSelectedPreview(null)}>
+        <DialogContent className="!max-w-[1000px] !w-[80vw] max-h-[85vh] overflow-y-auto">
+          {selectedPreview && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{selectedPreview.type === "sms" ? "SMS Message" : selectedPreview.subject || "Email Preview"}</DialogTitle>
+                <DialogDescription asChild>
+                  <div className="flex flex-col gap-1 mt-1">
+                    <div className="flex items-center gap-2 text-sm">
+                      {selectedPreview.type === "sms"
+                        ? <Smartphone className="h-3.5 w-3.5" />
+                        : <Mail className="h-3.5 w-3.5" />}
+                      <span>{selectedPreview.type === "sms" ? selectedPreview.phoneNumber : selectedPreview.senderEmail}</span>
+                    </div>
+                    {selectedPreview.dateReceived && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Calendar className="h-3.5 w-3.5" />
+                        <span>{new Date(selectedPreview.dateReceived).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
+                      </div>
+                    )}
+                  </div>
+                </DialogDescription>
+              </DialogHeader>
+              <div className="mt-4">
+                {selectedPreview.type === "sms" ? (
+                  <div className="rounded-md border border-border bg-muted/30 p-4 text-sm whitespace-pre-wrap">
+                    {selectedPreview.emailPreview || selectedPreview.emailContent || "No message content."}
+                  </div>
+                ) : selectedPreview.emailContent ? (
+                  <iframe
+                    srcDoc={prepareEmailHtml(selectedPreview.emailContent)}
+                    className="w-full rounded-md border border-border"
+                    style={{ height: "60vh" }}
+                    sandbox="allow-same-origin"
+                    title="Email preview"
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">No preview available.</p>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

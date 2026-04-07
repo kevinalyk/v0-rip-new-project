@@ -970,10 +970,7 @@ export async function extractCTALinks(
         const resolvedDomain = new URL(resolved).hostname
         const didResolve = resolvedDomain !== originalDomain
 
-        // Don't strip query params — preserve the full resolved URL so donation
-        // platform detection and display work correctly. The cron job can strip
-        // purely tracking params (utm_*, fbclid, etc.) in a later pass if needed.
-        const finalUrl = didResolve ? resolved : undefined
+        const finalUrl = didResolve ? stripQueryParams(resolved) : undefined
 
         return { url: link.url, finalUrl, text: link.text }
       } catch {

@@ -99,29 +99,7 @@ function stripQueryParams(url: string): string {
   }
 }
 
-const UTM_ONLY_PARAMS = new Set([
-  "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
-  "utm_id", "utm_reader", "utm_name", "utm_place", "utm_pubreferrer",
-  "fbclid", "gclid", "msclkid", "ttclid", "twclid", "li_fat_id",
-  "mc_cid", "mc_eid", "_hsenc", "_hsmi", "hsCtaTracking",
-  "source_code", "ex_tid",
-])
 
-function stripUtmParams(url: string): string {
-  try {
-    const urlObj = new URL(url)
-    for (const key of Array.from(urlObj.searchParams.keys())) {
-      if (UTM_ONLY_PARAMS.has(key)) {
-        urlObj.searchParams.delete(key)
-      }
-    }
-    return urlObj.searchParams.size === 0
-      ? `${urlObj.origin}${urlObj.pathname}`
-      : urlObj.toString()
-  } catch {
-    return url
-  }
-}
 
 export async function POST(request: Request) {
   try {
@@ -231,32 +209,30 @@ export async function POST(request: Request) {
 
       const resolvedUrl = await resolveRedirects(link.url)
 
-      const originalDomain = (() => { try { return new URL(link.url).hostname } catch { return "" } })()
-      const resolvedDomain = (() => { try { return new URL(resolvedUrl).hostname } catch { return "" } })()
-      const didResolve = resolvedDomain !== originalDomain
+      const cleanedUrl = stripQueryParams(link.url)
+      const cleanedFinalUrl = stripQueryParams(resolvedUrl)
 
-      if (didResolve) {
-        const strippedFinalUrl = stripUtmParams(resolvedUrl)
+      if (cleanedFinalUrl !== cleanedUrl) {
         updatedLinks.push({
           ...link,
-          finalUrl: resolvedUrl,
-          strippedFinalUrl,
+          url: cleanedUrl,
+          finalUrl: cleanedFinalUrl,
         })
         linksUpdated++
         unwrapDetails.push({
-          original: link.url,
-          final: resolvedUrl,
+          original: cleanedUrl,
+          final: cleanedFinalUrl,
           changed: true,
         })
       } else {
         updatedLinks.push({
           ...link,
-          finalUrl: resolvedUrl,
-          strippedFinalUrl: resolvedUrl,
+          url: cleanedUrl,
+          finalUrl: cleanedUrl,
         })
         unwrapDetails.push({
-          original: link.url,
-          final: resolvedUrl,
+          original: cleanedUrl,
+          final: cleanedUrl,
           changed: false,
         })
       }

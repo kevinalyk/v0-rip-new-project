@@ -6,7 +6,8 @@ import AppLayout from "@/components/app-layout"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Loader2, Lock, Mail, MessageSquare, Building2, User, Users, ArrowLeft, Calendar, Smartphone } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Loader2, Lock, Mail, MessageSquare, Building2, User, Users, ArrowLeft, Calendar, Smartphone, ExternalLink } from "lucide-react"
 
 interface Mapping {
   id: string
@@ -73,8 +74,15 @@ function formatDate(dateStr: string | null) {
   return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
 }
 
+interface CtaLink {
+  url: string
+  finalUrl?: string
+  strippedFinalUrl?: string
+  type?: string
+}
+
 interface PreviewItem {
-  id: number
+  id: string
   type: "email" | "sms"
   subject: string | null
   senderEmail: string | null
@@ -82,6 +90,7 @@ interface PreviewItem {
   dateReceived: string | null
   emailContent: string | null
   emailPreview: string | null
+  ctaLinks: CtaLink[]
 }
 
 function prepareEmailHtml(html: string) {
@@ -157,6 +166,7 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
           dateReceived: item.dateReceived,
           emailContent: item.emailContent,
           emailPreview: item.emailPreview,
+          ctaLinks: Array.isArray(item.ctaLinks) ? item.ctaLinks : [],
         })
       }
     } catch {
@@ -342,11 +352,11 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
 
       {/* Campaign/SMS Preview Dialog */}
       <Dialog open={!!selectedPreview} onOpenChange={() => setSelectedPreview(null)}>
-        <DialogContent className="!max-w-[1000px] !w-[80vw] max-h-[85vh] overflow-y-auto">
+        <DialogContent className="!max-w-[1100px] !w-[85vw] max-h-[90vh] overflow-y-auto">
           {selectedPreview && (
             <>
               <DialogHeader>
-                <DialogTitle>{selectedPreview.type === "sms" ? "SMS Message" : selectedPreview.subject || "Email Preview"}</DialogTitle>
+                <DialogTitle className="pr-8">{selectedPreview.type === "sms" ? "SMS Message" : selectedPreview.subject || "Email Preview"}</DialogTitle>
                 <DialogDescription asChild>
                   <div className="flex flex-col gap-1 mt-1">
                     <div className="flex items-center gap-2 text-sm">
@@ -364,23 +374,83 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
                   </div>
                 </DialogDescription>
               </DialogHeader>
-              <div className="mt-4">
-                {selectedPreview.type === "sms" ? (
-                  <div className="rounded-md border border-border bg-muted/30 p-4 text-sm whitespace-pre-wrap">
-                    {selectedPreview.emailPreview || selectedPreview.emailContent || "No message content."}
-                  </div>
-                ) : selectedPreview.emailContent ? (
-                  <iframe
-                    srcDoc={prepareEmailHtml(selectedPreview.emailContent)}
-                    className="w-full rounded-md border border-border"
-                    style={{ height: "60vh" }}
-                    sandbox="allow-same-origin"
-                    title="Email preview"
-                  />
-                ) : (
-                  <p className="text-sm text-muted-foreground">No preview available.</p>
-                )}
-              </div>
+
+              <Tabs defaultValue="preview" className="mt-4">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="preview">
+                    {selectedPreview.type === "sms" ? "Message" : "Email Preview"}
+                  </TabsTrigger>
+                  <TabsTrigger value="links">
+                    CTA Links ({selectedPreview.ctaLinks.length})
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="preview" className="mt-4">
+                  {selectedPreview.type === "sms" ? (
+                    <div className="rounded-lg border bg-white p-6">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+                        <Smartphone className="h-4 w-4" />
+                        <span>From: {selectedPreview.phoneNumber}</span>
+                      </div>
+                      <div className="text-black whitespace-pre-wrap break-words text-sm">
+                        {selectedPreview.emailPreview || selectedPreview.emailContent || "No message content."}
+                      </div>
+                    </div>
+                  ) : selectedPreview.emailContent ? (
+                    <div className="rounded-lg border bg-white overflow-auto">
+                      <iframe
+                        srcDoc={prepareEmailHtml(selectedPreview.emailContent)}
+                        sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                        className="w-full border-0"
+                        style={{ height: "60vh" }}
+                        title="Email Preview"
+                      />
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border bg-muted/20 p-4">
+                      <p className="text-sm text-muted-foreground text-center">No email content available</p>
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="links" className="mt-4">
+                  {selectedPreview.ctaLinks.length > 0 ? (
+                    <div className="space-y-3">
+                      {selectedPreview.ctaLinks.map((link, idx) => {
+                        const url = typeof link === "string" ? link : link.url
+                        const finalUrl = typeof link === "string" ? null : link.finalUrl
+                        const strippedFinalUrl = typeof link === "string" ? null : link.strippedFinalUrl
+                        const type = typeof link === "string" ? null : link.type
+                        const displayUrl = strippedFinalUrl || finalUrl || url
+                        return (
+                          <div key={idx} className="rounded-lg border bg-muted/20 p-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <a
+                                  href={displayUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-start gap-2 text-[#dc2a28] hover:underline break-all text-sm"
+                                >
+                                  <ExternalLink className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                                  <span>{displayUrl}</span>
+                                </a>
+                              </div>
+                              {type && (
+                                <Badge variant="secondary" className="capitalize flex-shrink-0">
+                                  {type}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground text-sm">No CTA links found</div>
+                  )}
+                </TabsContent>
+              </Tabs>
             </>
           )}
         </DialogContent>

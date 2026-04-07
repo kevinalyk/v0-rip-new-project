@@ -129,9 +129,11 @@ export async function GET(request: Request) {
       const scoreVals = subset.map((r) => r.totalScore).filter((v) => v != null) as number[]
       const avgCompliance = scoreVals.length > 0 ? scoreVals.reduce((a, b) => a + b, 0) / scoreVals.length : 0
 
+      // inboxRate is stored as a percentage (e.g. 66.7), divide by 100 to get a fraction
       const inboxVals = subset.map((r) => r.campaign.inboxRate).filter((v) => v != null) as number[]
-      const avgInboxRate = inboxVals.length > 0 ? inboxVals.reduce((a, b) => a + b, 0) / inboxVals.length : 0
+      const avgInboxRate = inboxVals.length > 0 ? (inboxVals.reduce((a, b) => a + b, 0) / inboxVals.length) / 100 : 0
 
+      // Compute spam rate from raw counts so it's always accurate
       const totalDelivered = subset.reduce((acc, r) => acc + r.campaign.inboxCount + r.campaign.spamCount, 0)
       const totalSpam = subset.reduce((acc, r) => acc + r.campaign.spamCount, 0)
       const spamRate = totalDelivered > 0 ? totalSpam / totalDelivered : 0

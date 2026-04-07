@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
         totalUsers: true,
         createdAt: true,
         stripeCustomerId: true,
+        stripeSubscriptionId: true,
         users: {
           where: { role: { in: ["owner", "admin"] } },
           select: { firstName: true, lastName: true, email: true, role: true },

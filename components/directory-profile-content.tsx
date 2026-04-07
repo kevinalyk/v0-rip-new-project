@@ -164,9 +164,7 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
               {entity.state && <Badge variant="outline">{entity.state}</Badge>}
               <Badge variant="secondary" className="capitalize">{entity.type}</Badge>
             </div>
-            {entity.description && (
-              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{entity.description}</p>
-            )}
+
           </div>
         </div>
 

@@ -87,7 +87,7 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
         const res = await fetch("/api/auth/me", { credentials: "include" })
         if (res.ok) {
           const user = await res.json()
-          setClientSlug(user.clientId || "rip")
+          setClientSlug(user.client?.slug || "")
           setIsAuthenticated(true)
         }
       } catch {

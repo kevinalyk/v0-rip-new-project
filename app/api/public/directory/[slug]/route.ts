@@ -21,9 +21,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         mappings: {
           select: {
             id: true,
-            emailDomain: true,
-            shortCode: true,
-            platform: true,
+            senderEmail: true,
+            senderDomain: true,
+            senderPhone: true,
           },
         },
         _count: {
@@ -41,28 +41,28 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Entity not found" }, { status: 404 })
     }
 
-    // Get recent campaigns (last 10) for preview - no auth required, just metadata
-    const recentCampaigns = await prisma.ciCampaign.findMany({
+    // Get recent campaigns for preview
+    const recentCampaigns = await prisma.competitiveInsightCampaign.findMany({
       where: { entityId: entity.id },
-      orderBy: { sentAt: "desc" },
+      orderBy: { dateReceived: "desc" },
       take: 10,
       select: {
         id: true,
         subject: true,
-        sentAt: true,
-        fromEmail: true,
+        dateReceived: true,
+        senderEmail: true,
       },
     })
 
-    const recentSms = await prisma.ciSmsMessage.findMany({
+    const recentSms = await prisma.smsQueue.findMany({
       where: { entityId: entity.id },
-      orderBy: { receivedAt: "desc" },
+      orderBy: { createdAt: "desc" },
       take: 5,
       select: {
         id: true,
-        body: true,
-        receivedAt: true,
-        shortCode: true,
+        message: true,
+        createdAt: true,
+        phoneNumber: true,
       },
     })
 
@@ -82,8 +82,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           total: entity._count.campaigns + entity._count.smsMessages,
         },
       },
-      recentCampaigns,
-      recentSms,
+      recentCampaigns: recentCampaigns.map((c) => ({
+        id: c.id,
+        subject: c.subject,
+        senderEmail: c.senderEmail,
+        dateReceived: c.dateReceived?.toISOString() ?? null,
+      })),
+      recentSms: recentSms.map((s) => ({
+        id: s.id,
+        message: s.message,
+        phoneNumber: s.phoneNumber,
+        createdAt: s.createdAt?.toISOString() ?? null,
+      })),
     })
   } catch (error) {
     console.error("Error in public directory API:", error)

@@ -763,6 +763,7 @@ export async function scanForCompetitiveInsights(options: {
         messageId?: string
         emailContent?: string
         to?: string
+        rawHeaders?: string
       }>
     >()
 
@@ -840,6 +841,7 @@ export async function scanForCompetitiveInsights(options: {
           messageId: email.messageId,
           emailContent: email.emailContent,
           to: email.to,
+          rawHeaders: email.rawHeaders,
         })
       }
     }

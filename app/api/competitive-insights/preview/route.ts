@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     if (type === "email") {
       const campaign = await prisma.competitiveInsightCampaign.findUnique({
-        where: { id: Number(id) },
+        where: { id },
         select: {
           id: true,
           subject: true,
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     if (type === "sms") {
       const sms = await prisma.smsQueue.findUnique({
-        where: { id: Number(id) },
+        where: { id },
         select: {
           id: true,
           message: true,

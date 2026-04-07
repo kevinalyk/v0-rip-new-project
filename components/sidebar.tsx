@@ -380,9 +380,9 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                 <NavItem
                   icon={<Building2 size={18} />}
                   label="Directory"
-                  active={pathname.includes("/ci/directory")}
+                  active={pathname === "/directory" || pathname.startsWith("/directory/")}
                   collapsed={false}
-                  onClick={() => navigate(`/${getClientSlug()}/ci/directory`)}
+                  onClick={() => navigate("/directory")}
                 />
               </div>
             )}

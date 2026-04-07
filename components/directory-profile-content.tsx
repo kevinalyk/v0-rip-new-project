@@ -87,7 +87,7 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
         const res = await fetch("/api/auth/me", { credentials: "include" })
         if (res.ok) {
           const user = await res.json()
-          setClientSlug(user.client?.slug || "")
+          setClientSlug(user.clientId || "rip")
           setIsAuthenticated(true)
         }
       } catch {
@@ -99,8 +99,9 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
     checkAuth()
   }, [])
 
-  // Fetch entity data
+  // Fetch entity data — wait for auth so clientSlug is ready before rendering AppLayout
   useEffect(() => {
+    if (authLoading) return
     const fetchEntity = async () => {
       try {
         const res = await fetch(`/api/public/directory/${slug}`)
@@ -113,7 +114,7 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
       }
     }
     fetchEntity()
-  }, [slug])
+  }, [authLoading, slug])
 
   if (authLoading || loading) {
     return (
@@ -146,15 +147,6 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
   return (
     <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
       <div className="container mx-auto py-8 px-4 max-w-3xl">
-
-        {/* Back link */}
-        <Link
-          href={clientSlug ? `/${clientSlug}/ci/directory` : "/login"}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-        >
-          <ArrowLeft size={14} />
-          Back to Directory
-        </Link>
 
         {/* Profile hero */}
         <div className="flex items-start gap-5 mb-8">
@@ -280,10 +272,6 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="text-xs text-muted-foreground">
-          Data provided by RIP Tool
-        </div>
       </div>
     </AppLayout>
   )

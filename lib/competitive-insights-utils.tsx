@@ -1337,6 +1337,7 @@ export async function processCompetitiveInsights(
   emailContent?: string,
   entityAssignment?: { entityId: string; assignmentMethod: string } | string | null,
   clientId?: string | null,
+  rawHeaders?: string,
 ): Promise<boolean> {
   try {
     // Preserve the original subject (before any sanitization/redaction) for dedup use

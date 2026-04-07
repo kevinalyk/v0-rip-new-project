@@ -58,6 +58,7 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
   const [filterType, setFilterType] = useState<string>("all")
   const [staticTotalCount, setStaticTotalCount] = useState(0)
   const [totalCampaignCount, setTotalCampaignCount] = useState(0)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [pagination, setPagination] = useState({
     page: 1,
     pageSize: 50,
@@ -117,6 +118,12 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
     "WI",
     "WY",
   ]
+
+  useEffect(() => {
+    fetch("/api/auth/me", { credentials: "include" })
+      .then((r) => setIsAuthenticated(r.ok))
+      .catch(() => setIsAuthenticated(false))
+  }, [])
 
   useEffect(() => {
     const fetchStaticTotals = async () => {
@@ -386,7 +393,7 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
                     {entity.party && <Badge className={getPartyBadgeClassName(entity.party)}>{entity.party}</Badge>}
                     {entity.state && <Badge variant="outline">{entity.state}</Badge>}
                     <Badge variant="secondary">{entity._count.totalCommunications} communications</Badge>
-                    {!isPublic && (
+                    {isAuthenticated && (
                       <div data-subscribe-button>
                         <CiEntitySubscribeButton entityId={entity.id} entityName={entity.name} />
                       </div>

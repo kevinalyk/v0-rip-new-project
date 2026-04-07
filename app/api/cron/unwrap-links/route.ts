@@ -341,32 +341,7 @@ function stripQueryParams(url: string): string {
   }
 }
 
-// Strip only UTM/tracking query params, preserving meaningful path params
-// (e.g. WinRed amount/recurring params that identify the donation page)
-const UTM_PARAMS = new Set([
-  "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
-  "utm_id", "utm_reader", "utm_name", "utm_place", "utm_pubreferrer",
-  "fbclid", "gclid", "msclkid", "ttclid", "twclid", "li_fat_id",
-  "mc_cid", "mc_eid", "_hsenc", "_hsmi", "hsCtaTracking",
-  "source_code", "ex_tid",
-])
 
-function stripUtmParams(url: string): string {
-  try {
-    const urlObj = new URL(url)
-    for (const key of Array.from(urlObj.searchParams.keys())) {
-      if (UTM_PARAMS.has(key)) {
-        urlObj.searchParams.delete(key)
-      }
-    }
-    // Remove trailing ? if no params remain
-    return urlObj.searchParams.size === 0
-      ? `${urlObj.origin}${urlObj.pathname}`
-      : urlObj.toString()
-  } catch {
-    return url
-  }
-}
 
 async function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -556,7 +531,7 @@ export async function GET(request: Request) {
             const finalDomain = new URL(resolvedUrl).hostname
             const wasSubstackJwt = !!originalUrl.match(/substack\.com\/redirect\/\d+\//)
             const didResolve = finalDomain !== originalDomain || wasSubstackJwt
-            const strippedFinalUrl = didResolve ? stripUtmParams(resolvedUrl) : resolvedUrl
+            const strippedFinalUrl = didResolve ? stripQueryParams(resolvedUrl) : resolvedUrl
 
             const { finalURL: _a, strippedFinalURL: _b, ...rest } = link as any
             updatedCtaLinks.push({
@@ -735,7 +710,7 @@ export async function GET(request: Request) {
             const finalDomain = new URL(resolvedUrl).hostname
             const wasSubstackJwt = !!originalUrl.match(/substack\.com\/redirect\/\d+\//)
             const didResolve = finalDomain !== originalDomain || wasSubstackJwt
-            const strippedFinalUrl = didResolve ? stripUtmParams(resolvedUrl) : resolvedUrl
+            const strippedFinalUrl = didResolve ? stripQueryParams(resolvedUrl) : resolvedUrl
 
             const { finalURL: _a, strippedFinalURL: _b, ...rest } = link as any
             updatedCtaLinks.push({

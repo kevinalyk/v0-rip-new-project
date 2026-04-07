@@ -335,7 +335,8 @@ export function checkEmailCompliance(campaign: {
   const section2Score = score([hasBothSpfAndDkim, hasDmarc, hasDmarcAlignment, hasOneClickUnsubscribeHeaders, hasUnsubscribeLinkInBody])
   const section3Score = score([hasSingleFromAddress, noFakeReplyPrefix, hasValidFromTo, noDeceptiveEmojisInSubject, noHiddenContent])
   const section4Score = score([displayNameClean, displayNameNoRecipient, displayNameNoReplyPattern, displayNameNoDeceptiveEmojis, displayNameNotGmail])
-  const totalScore = score([section1Score, section2Score, section3Score, section4Score])
+  // Average the four section scores directly — passing fractions into score() would treat them all as truthy booleans
+  const totalScore = Math.round(((section1Score + section2Score + section3Score + section4Score) / 4) * 100) / 100
 
   return {
     hasSpf,

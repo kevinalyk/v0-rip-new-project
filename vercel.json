@@ -42,6 +42,10 @@
     {
       "path": "/api/cron/engage-rip-seeds",
       "schedule": "0 8,13,19 * * *"
+    },
+    {
+      "path": "/api/cron/check-email-compliance",
+      "schedule": "0 * * * *"
     }
   ]
 }

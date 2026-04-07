@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { cookies } from "next/headers"
-import { verifySession } from "@/lib/auth"
+import { getServerSession } from "@/lib/auth"
 
 export async function GET(request: Request) {
   try {
-    const cookieStore = await cookies()
-    const session = await verifySession(cookieStore)
+    const session = await getServerSession()
 
-    if (!session || session.role !== "super_admin") {
+    if (!session || session.user.role !== "super_admin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 

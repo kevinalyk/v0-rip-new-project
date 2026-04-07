@@ -2,10 +2,22 @@
 
 import { useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Loader2, Search, Users, CheckCircle, XCircle, Building2, ChevronDown, ChevronRight } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Loader2, Search, Users, CheckCircle, XCircle, Building2, ChevronDown, ChevronRight, Ban } from "lucide-react"
 import { format, formatDistanceToNow } from "date-fns"
+import { toast } from "sonner"
 
 interface ClientUser {
   id: string
@@ -32,6 +44,7 @@ interface ClientRow {
   totalUsers: number
   createdAt: string
   stripeCustomerId: string | null
+  stripeSubscriptionId: string | null
   tier: { label: string; color: string }
   ownerName: string | null
   ownerEmail: string | null
@@ -59,6 +72,8 @@ export function AdminAccountsContent() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [usersMap, setUsersMap] = useState<Record<string, ClientUser[]>>({})
   const [usersLoading, setUsersLoading] = useState<Record<string, boolean>>({})
+  const [endTrialTarget, setEndTrialTarget] = useState<ClientRow | null>(null)
+  const [endTrialLoading, setEndTrialLoading] = useState(false)
 
   useEffect(() => {
     const fetchClients = async () => {
@@ -92,6 +107,36 @@ export function AdminAccountsContent() {
       console.error("Failed to fetch users:", err)
     } finally {
       setUsersLoading((prev) => ({ ...prev, [clientId]: false }))
+    }
+  }
+
+  const handleEndTrial = async () => {
+    if (!endTrialTarget) return
+    setEndTrialLoading(true)
+    try {
+      const res = await fetch(`/api/admin/end-trial/${endTrialTarget.id}`, {
+        method: "POST",
+        credentials: "include",
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(`Trial ended for ${endTrialTarget.name}`)
+        // Update the local list to reflect the change
+        setClients((prev) =>
+          prev.map((c) =>
+            c.id === endTrialTarget.id
+              ? { ...c, subscriptionPlan: "free", hasCompetitiveInsights: false, tier: { label: "Free", color: "secondary" } }
+              : c
+          )
+        )
+      } else {
+        toast.error(data.error ?? "Failed to end trial")
+      }
+    } catch {
+      toast.error("Failed to end trial")
+    } finally {
+      setEndTrialLoading(false)
+      setEndTrialTarget(null)
     }
   }
 
@@ -197,6 +242,7 @@ export function AdminAccountsContent() {
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Email Usage</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Renews</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Created</th>
+              <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -280,10 +326,23 @@ export function AdminAccountsContent() {
                 <td className="px-4 py-3 text-xs text-muted-foreground">
                   {format(new Date(c.createdAt), "MMM d, yyyy")}
                 </td>
+                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                  {c.subscriptionPlan !== "free" && !c.stripeCustomerId && !c.stripeSubscriptionId && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="h-7 px-2 text-xs gap-1.5 whitespace-nowrap"
+                      onClick={(e) => { e.stopPropagation(); setEndTrialTarget(c) }}
+                    >
+                      <Ban className="h-3 w-3" />
+                      End Trial
+                    </Button>
+                  )}
+                </td>
               </tr>
               {expandedId === c.id && (
                 <tr key={`${c.id}-users`} className="bg-muted/20">
-                  <td colSpan={9} className="px-8 py-3">
+                  <td colSpan={10} className="px-8 py-3">
                     {usersLoading[c.id] ? (
                       <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading users...
@@ -329,7 +388,7 @@ export function AdminAccountsContent() {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
+                <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
                   No accounts found.
                 </td>
               </tr>
@@ -338,6 +397,27 @@ export function AdminAccountsContent() {
         </table>
       </div>
       <p className="text-xs text-muted-foreground">Showing {filtered.length} of {clients.length} accounts</p>
+
+      <AlertDialog open={!!endTrialTarget} onOpenChange={(open) => { if (!open) setEndTrialTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>End Trial for {endTrialTarget?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will reset the account to the free plan and remove all paid features (including Competitive Intelligence access). Users will remain on the account. This cannot be undone without manually re-provisioning the account.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={endTrialLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleEndTrial}
+              disabled={endTrialLoading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {endTrialLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Ending Trial...</> : "End Trial"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

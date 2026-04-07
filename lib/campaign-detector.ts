@@ -34,6 +34,7 @@ interface Email {
   messageId?: string
   emailContent?: string
   to?: string // Added 'to' field to return type
+  rawHeaders?: string // Raw email headers for inbox placement analysis
 }
 
 /**
@@ -498,6 +499,17 @@ async function fetchRecentEmailsIMAP(
 
                         const toAddress = parsed.to?.value[0]?.address || parsed.to?.text || ""
 
+                        // Serialize raw headers as "Name: value\n" lines
+                        let rawHeaders: string | undefined
+                        try {
+                          const headerLines: string[] = []
+                          parsed.headers.forEach((value, name) => {
+                            const vals = Array.isArray(value) ? value : [value]
+                            vals.forEach((v) => headerLines.push(`${name}: ${typeof v === "object" ? JSON.stringify(v) : v}`))
+                          })
+                          if (headerLines.length > 0) rawHeaders = headerLines.join("\n")
+                        } catch {}
+
                         const email = {
                           subject: parsed.subject || "",
                           from: parsed.from?.value[0] || { name: "", address: "" },
@@ -505,7 +517,8 @@ async function fetchRecentEmailsIMAP(
                           messageId: parsed.messageId,
                           placement,
                           emailContent,
-                          to: toAddress, // Include TO field
+                          to: toAddress,
+                          rawHeaders,
                         }
 
                         if (email.subject && email.from && email.date) {
@@ -613,6 +626,17 @@ async function fetchRecentEmailsIMAP(
 
                         const toAddress = parsed.to?.value[0]?.address || parsed.to?.text || ""
 
+                        // Serialize raw headers as "Name: value\n" lines
+                        let rawHeaders: string | undefined
+                        try {
+                          const headerLines: string[] = []
+                          parsed.headers.forEach((value, name) => {
+                            const vals = Array.isArray(value) ? value : [value]
+                            vals.forEach((v) => headerLines.push(`${name}: ${typeof v === "object" ? JSON.stringify(v) : v}`))
+                          })
+                          if (headerLines.length > 0) rawHeaders = headerLines.join("\n")
+                        } catch {}
+
                         const email = {
                           subject: parsed.subject || "",
                           from: parsed.from?.value[0] || { name: "", address: "" },
@@ -620,7 +644,8 @@ async function fetchRecentEmailsIMAP(
                           messageId: parsed.messageId,
                           placement: "spam" as const,
                           emailContent,
-                          to: toAddress, // Include TO field
+                          to: toAddress,
+                          rawHeaders,
                         }
 
                         if (email.subject && email.from && email.date) {
@@ -919,6 +944,7 @@ export async function scanForCompetitiveInsights(options: {
           firstEmail.emailContent,
           entityAssignment,
           personalClientId,
+          firstEmail.rawHeaders,
         )
         if (isNew) {
           newInsightsCount++

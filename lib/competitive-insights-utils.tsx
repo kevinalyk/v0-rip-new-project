@@ -1337,6 +1337,7 @@ export async function processCompetitiveInsights(
   emailContent?: string,
   entityAssignment?: { entityId: string; assignmentMethod: string } | string | null,
   clientId?: string | null,
+  rawHeaders?: string,
 ): Promise<boolean> {
   try {
     // Preserve the original subject (before any sanitization/redaction) for dedup use
@@ -1584,6 +1585,7 @@ export async function processCompetitiveInsights(
             assignedAt: entityId ? new Date() : null,
             clientId,
             source: clientId ? "personal" : "seed",
+            rawHeaders: rawHeaders ?? null,
           },
         })
         // Genuinely new campaign created
@@ -1620,6 +1622,7 @@ export async function processCompetitiveInsights(
                 tags: JSON.stringify(tags),
                 emailPreview: redactedEmailPreview || raceExisting.emailPreview,
                 emailContent: redactedEmailContent || raceExisting.emailContent,
+                rawHeaders: rawHeaders ?? raceExisting.rawHeaders ?? null,
               },
             })
           }

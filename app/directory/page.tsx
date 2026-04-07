@@ -29,7 +29,7 @@ export default function PublicDirectoryPage() {
 
   return (
     <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
-      <CiDirectoryContent clientSlug={clientSlug} />
+      <CiDirectoryContent clientSlug={clientSlug} isPublic={true} />
     </AppLayout>
   )
 }

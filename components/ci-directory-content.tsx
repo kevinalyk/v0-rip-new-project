@@ -28,6 +28,7 @@ function nameToSlug(name: string): string {
 
 interface CiDirectoryContentProps {
   clientSlug: string
+  isPublic?: boolean
 }
 
 interface Entity {
@@ -45,7 +46,8 @@ interface Entity {
   }
 }
 
-export function CiDirectoryContent({ clientSlug }: CiDirectoryContentProps) {
+export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectoryContentProps) {
+  const apiBase = isPublic ? "/api/public/ci-entities" : "/api/ci-entities"
   const router = useRouter()
   const [entities, setEntities] = useState<Entity[]>([])
   const [loading, setLoading] = useState(true)
@@ -120,8 +122,8 @@ export function CiDirectoryContent({ clientSlug }: CiDirectoryContentProps) {
     const fetchStaticTotals = async () => {
       try {
         const [entitiesResponse, campaignsResponse] = await Promise.all([
-          fetch(`/api/ci-entities?page=1&pageSize=1`),
-          fetch(`/api/ci-entities?action=totalCampaigns`),
+        fetch(`${apiBase}?page=1&pageSize=1`),
+        fetch(`${apiBase}?action=totalCampaigns`),
         ])
 
         if (entitiesResponse.ok) {
@@ -165,7 +167,7 @@ export function CiDirectoryContent({ clientSlug }: CiDirectoryContentProps) {
 
         console.log("[v0] Fetching entities with params:", params.toString())
 
-        const response = await fetch(`/api/ci-entities?${params.toString()}`)
+        const response = await fetch(`${apiBase}?${params.toString()}`)
         if (response.ok) {
           const data = await response.json()
           console.log("[v0] Received entities:", data.entities.length, "Total count:", data.pagination.totalCount)

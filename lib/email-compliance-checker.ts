@@ -215,11 +215,6 @@ function checkUnsubscribeLinkInBody(emailContent: string | null, headers?: Map<s
     if (lower.includes("unsubscribe") && (lower.includes("href") || lower.includes("<a "))) {
       return true
     }
-    // The email body is redacted before storage — unsubscribe links are replaced with [Omitted].
-    // If [Omitted] appears in the footer area, that's almost certainly a redacted unsub link.
-    if (lower.includes("[omitted]")) {
-      return true
-    }
   }
 
   // Fallback: if the List-Unsubscribe header is present, virtually all senders also include

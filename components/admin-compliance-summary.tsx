@@ -11,7 +11,7 @@ type FilterType =
   | { type: "party"; party: "republican" | "democrat" }
   | { type: "placement"; party: "republican" | "democrat"; placement: "inbox" | "spam" }
   | { type: "section"; section: 1 | 2 | 3 | 4; failed: true }
-  | { type: "auth"; check: "spf" | "dkim" | "dmarc" | "tls" | "oneClick"; failed: true }
+  | { type: "auth"; check: "spf" | "dkim" | "dmarc" | "tls" | "oneClick" | "unsubBody"; failed: true }
   | null
 
 interface ComplianceRow {
@@ -202,6 +202,8 @@ export function AdminComplianceSummary() {
             return row.hasTls === false
           case "oneClick":
             return row.hasOneClickUnsubscribeHeaders === false
+          case "unsubBody":
+            return row.hasUnsubscribeLinkInBody === false
           default:
             return true
         }
@@ -237,7 +239,7 @@ export function AdminComplianceSummary() {
     }
     
     if (filter.type === "auth") {
-      const checkNames = { spf: "SPF", dkim: "DKIM", dmarc: "DMARC", tls: "TLS", oneClick: "1-Click Unsubscribe" }
+      const checkNames = { spf: "SPF", dkim: "DKIM", dmarc: "DMARC", tls: "TLS", oneClick: "1-Click Unsubscribe", unsubBody: "Unsub in Body" }
       return `Failed ${checkNames[filter.check]}`
     }
     
@@ -492,7 +494,12 @@ export function AdminComplianceSummary() {
               <div className={`text-3xl font-bold ${scoreColor(stats.oneClickUnsubRate)}`}>{pct(stats.oneClickUnsubRate)}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card 
+            className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
+              activeFilter?.type === "auth" && activeFilter.check === "unsubBody" ? "ring-2 ring-offset-2 ring-primary" : ""
+            }`}
+            onClick={() => handleFilterClick({ type: "auth", check: "unsubBody", failed: true })}
+          >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Unsub in Body Rate</CardTitle>
             </CardHeader>

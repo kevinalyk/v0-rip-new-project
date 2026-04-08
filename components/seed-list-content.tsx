@@ -143,11 +143,15 @@ export default function SeedListContent({
     }
   }, [isAdminView])
 
+  // Fetch seed emails on mount AND whenever selectedDomain changes
   useEffect(() => {
-    if (selectedDomain) {
-      fetchSeedEmails()
-    }
+    fetchSeedEmails()
   }, [selectedDomain])
+  
+  // Also fetch on initial mount to avoid race condition with domain loading
+  useEffect(() => {
+    fetchSeedEmails()
+  }, [])
 
   const fetchClients = async () => {
     try {
@@ -168,14 +172,15 @@ export default function SeedListContent({
   }
 
   const fetchSeedEmails = async () => {
-    if (!selectedDomain) return
-
     try {
       setLoading(true)
       const params = new URLSearchParams()
-      if (selectedDomain.id !== "all") {
+      
+      // Only filter by domain if selectedDomain is loaded and not "all"
+      if (selectedDomain && selectedDomain.id !== "all") {
         params.append("domainId", selectedDomain.id)
       }
+      
       if (clientSlug && clientSlug !== "admin" && clientSlug !== "rip") {
         params.append("clientSlug", clientSlug)
       }

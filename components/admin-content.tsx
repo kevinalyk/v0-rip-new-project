@@ -34,6 +34,7 @@ export function AdminContent({ user }: AdminContentProps) {
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
   const [isMigratingSMS, setIsMigratingSMS] = useState(false)
+  const [isMigratingSMSNumbers, setIsMigratingSMSNumbers] = useState(false)
   const [isSanitizingEmails, setIsSanitizingEmails] = useState(false)
   const [isBackfillingSMSLinks, setIsBackfillingSMSLinks] = useState(false)
   const [isReassigningSubstack, setIsReassigningSubstack] = useState(false)
@@ -337,6 +338,30 @@ export function AdminContent({ user }: AdminContentProps) {
       toast.error("Failed to run SMS migration")
     } finally {
       setIsMigratingSMS(false)
+    }
+  }
+
+  const handleMigrateSMSNumbers = async () => {
+    setIsMigratingSMSNumbers(true)
+    try {
+      const response = await fetch("/api/admin/migrate-sms-numbers", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success(
+          `SMS numbers migration completed: ${data.updated} updated, ${data.skipped} skipped, ${data.errors} errors`,
+        )
+      } else {
+        toast.error(data.error || "Failed to run SMS numbers migration")
+      }
+    } catch (error) {
+      toast.error("Failed to run SMS numbers migration")
+    } finally {
+      setIsMigratingSMSNumbers(false)
     }
   }
 
@@ -1679,6 +1704,29 @@ const downloadActBluePatterns = () => {
               <>
                 <Play size={16} />
                 Run SMS Migration
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Fix SMS Receiving Numbers</CardTitle>
+          <CardDescription>
+            Updates all existing SMS records to use the correct receiving phone number from rawData (fixes toNumber field)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={handleMigrateSMSNumbers} disabled={isMigratingSMSNumbers} className="gap-2">
+            {isMigratingSMSNumbers ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Migrating...
+              </>
+            ) : (
+              <>
+                <Play size={16} />
+                Fix SMS Numbers
               </>
             )}
           </Button>

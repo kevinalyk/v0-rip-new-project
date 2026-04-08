@@ -271,7 +271,7 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
             )}
             {shortCodes.length > 0 && (
               <div className="rounded-lg border border-border bg-card p-4">
-                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">SMS Short Codes</h2>
+                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">SMS Numbers</h2>
                 <div className="flex flex-wrap gap-2">
                   {shortCodes.map((code) => (
                     <Badge key={code} variant="secondary" className="font-mono text-xs">{code}</Badge>

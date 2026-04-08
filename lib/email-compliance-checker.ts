@@ -238,12 +238,11 @@ function checkUnsubscribeLinkInBody(emailContent: string | null, headers?: Map<s
 // Section 3: Content
 // ---------------------------------------------------------------------------
 
-function checkSingleFromAddress(headers: Map<string, string[]>): boolean {
-  const from = getHeader(headers, "from")
-  if (!from) return false
-  // Multiple email addresses are separated by commas — count @ signs
-  const atCount = (from.match(/@/g) ?? []).length
-  return atCount === 1
+function checkSingleFromAddress(senderEmail: string): boolean {
+  // senderEmail is already cleanly parsed by mailparser — just confirm it's a single address
+  if (!senderEmail) return false
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(senderEmail.trim())
 }
 
 function checkNoFakeReplyPrefix(subject: string, headers: Map<string, string[]>): boolean {
@@ -257,11 +256,24 @@ function checkNoFakeReplyPrefix(subject: string, headers: Map<string, string[]>)
 
 function checkValidFromTo(senderEmail: string, headers: Map<string, string[]>): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  // senderEmail is cleanly parsed — just validate it
   if (!emailRegex.test(senderEmail)) return false
+
+  // mailparser stores "to" as a JSON object: {"value":[{"address":"...","name":"..."}],...}
+  // Try to extract the address from the parsed object first, then fall back to string parsing
   const to = getHeader(headers, "to")
-  // Extract email from "Name <email>" or plain "email"
-  const toEmail = to.match(/<([^>]+)>/)?.[1] ?? to.trim()
-  return emailRegex.test(toEmail) || to.trim() === "" // allow empty To (sent via BCC)
+  if (!to || to.trim() === "") return true // BCC — acceptable
+
+  let toEmail = ""
+  try {
+    const parsed = JSON.parse(to)
+    toEmail = parsed?.value?.[0]?.address ?? parsed?.text ?? ""
+  } catch {
+    // Plain string format: "Name <email>" or just "email"
+    toEmail = to.match(/<([^>]+)>/)?.[1] ?? to.trim()
+  }
+
+  return emailRegex.test(toEmail) || toEmail === ""
 }
 
 function checkNoDeceptiveEmojisInSubject(subject: string): boolean {
@@ -369,7 +381,7 @@ export function checkEmailCompliance(campaign: {
   const hasUnsubscribeLinkInBody = checkUnsubscribeLinkInBody(emailContent ?? null, headers)
 
   // Section 3
-  const hasSingleFromAddress = checkSingleFromAddress(headers)
+  const hasSingleFromAddress = checkSingleFromAddress(senderEmail)
   const noFakeReplyPrefix = checkNoFakeReplyPrefix(subject, headers)
   const hasValidFromTo = checkValidFromTo(senderEmail, headers)
   const noDeceptiveEmojisInSubject = checkNoDeceptiveEmojisInSubject(subject)

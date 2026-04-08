@@ -28,6 +28,18 @@ export async function GET(request: Request) {
       orderBy: { email: "asc" },
     })
 
+    // Fetch SMS data for phone numbers within the date range
+    const smsMessages = await prisma.smsQueue.findMany({
+      where: {
+        ...(from && to ? { createdAt: { gte: new Date(from), lte: new Date(to) } } : {}),
+        isDeleted: false,
+      },
+      select: {
+        toNumber: true,
+        phoneNumber: true,
+      },
+    })
+
     // Fetch all campaigns within the date range that have placement data
     const campaigns = await prisma.competitiveInsightCampaign.findMany({
       where: {
@@ -82,7 +94,26 @@ export async function GET(request: Request) {
       }
     })
 
-    return NextResponse.json(result)
+    // Build phone number stats
+    const phoneStats: Record<string, { total: number }> = {}
+    
+    for (const sms of smsMessages) {
+      if (sms.toNumber) {
+        if (!phoneStats[sms.toNumber]) {
+          phoneStats[sms.toNumber] = { total: 0 }
+        }
+        phoneStats[sms.toNumber].total += 1
+      }
+    }
+
+    const phoneResult = Object.entries(phoneStats)
+      .map(([phone, stats]) => ({
+        phoneNumber: phone,
+        total: stats.total,
+      }))
+      .sort((a, b) => b.total - a.total)
+
+    return NextResponse.json({ emails: result, phones: phoneResult })
   } catch (error) {
     console.error("[seed-insights] Error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

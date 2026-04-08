@@ -25,8 +25,14 @@ export async function POST() {
 
     for (const sms of allSms) {
       try {
-        // Parse rawData to extract the phone_number (the receiving number)
-        const rawData = sms.rawData as any
+        // Parse rawData (it's a JSON string) to extract the phone_number (the receiving number)
+        let rawData: any
+        if (typeof sms.rawData === "string") {
+          rawData = JSON.parse(sms.rawData)
+        } else {
+          rawData = sms.rawData
+        }
+
         const correctToNumber = rawData?.phone_number
 
         if (!correctToNumber) {

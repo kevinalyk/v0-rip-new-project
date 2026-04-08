@@ -505,7 +505,13 @@ async function fetchRecentEmailsIMAP(
                           const headerLines: string[] = []
                           parsed.headers.forEach((value, name) => {
                             const vals = Array.isArray(value) ? value : [value]
-                            vals.forEach((v) => headerLines.push(`${name}: ${typeof v === "object" ? JSON.stringify(v) : v}`))
+                            vals.forEach((v) => {
+                              // For objects, prefer .text property (plain text) over JSON.stringify
+                              const stringValue = typeof v === "object" && v !== null
+                                ? (v.text || JSON.stringify(v))
+                                : String(v)
+                              headerLines.push(`${name}: ${stringValue}`)
+                            })
                           })
                           if (headerLines.length > 0) rawHeaders = headerLines.join("\n")
                         } catch {}
@@ -632,7 +638,13 @@ async function fetchRecentEmailsIMAP(
                           const headerLines: string[] = []
                           parsed.headers.forEach((value, name) => {
                             const vals = Array.isArray(value) ? value : [value]
-                            vals.forEach((v) => headerLines.push(`${name}: ${typeof v === "object" ? JSON.stringify(v) : v}`))
+                            vals.forEach((v) => {
+                              // For objects, prefer .text property (plain text) over JSON.stringify
+                              const stringValue = typeof v === "object" && v !== null
+                                ? (v.text || JSON.stringify(v))
+                                : String(v)
+                              headerLines.push(`${name}: ${stringValue}`)
+                            })
                           })
                           if (headerLines.length > 0) rawHeaders = headerLines.join("\n")
                         } catch {}

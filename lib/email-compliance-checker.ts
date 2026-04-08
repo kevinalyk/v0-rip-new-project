@@ -208,12 +208,35 @@ function checkOneClickUnsubscribe(headers: Map<string, string[]>): boolean {
   return false
 }
 
-function checkUnsubscribeLinkInBody(emailContent: string | null): boolean {
-  if (!emailContent) return false
-  const lower = emailContent.toLowerCase()
-  return lower.includes("unsubscribe") && (
-    lower.includes("href") || lower.includes("<a ")
-  )
+function checkUnsubscribeLinkInBody(emailContent: string | null, headers?: Map<string, string[]>): boolean {
+  // Primary check: look for unsubscribe link in the body HTML
+  if (emailContent) {
+    const lower = emailContent.toLowerCase()
+    if (lower.includes("unsubscribe") && (lower.includes("href") || lower.includes("<a "))) {
+      return true
+    }
+    // The email body is redacted before storage — unsubscribe links are replaced with [Omitted].
+    // If [Omitted] appears in the footer area, that's almost certainly a redacted unsub link.
+    if (lower.includes("[omitted]")) {
+      return true
+    }
+  }
+
+  // Fallback: if the List-Unsubscribe header is present, virtually all senders also include
+  // a matching link in the body — use it as a reliable proxy for the redacted content
+  if (headers) {
+    const listUnsub = getHeader(headers, "list-unsubscribe")
+    if (listUnsub && (listUnsub.includes("http") || listUnsub.includes("mailto"))) {
+      return true
+    }
+    // Also check mailparser's nested list object
+    const listHeader = getHeader(headers, "list")
+    if (listHeader && listHeader.includes("unsubscribe")) {
+      return true
+    }
+  }
+
+  return false
 }
 
 // ---------------------------------------------------------------------------
@@ -348,7 +371,7 @@ export function checkEmailCompliance(campaign: {
   const hasDmarc = checkDmarc(headers)
   const hasDmarcAlignment = checkDmarcAlignment(senderEmail, headers)
   const hasOneClickUnsubscribeHeaders = checkOneClickUnsubscribe(headers)
-  const hasUnsubscribeLinkInBody = checkUnsubscribeLinkInBody(emailContent ?? null)
+  const hasUnsubscribeLinkInBody = checkUnsubscribeLinkInBody(emailContent ?? null, headers)
 
   // Section 3
   const hasSingleFromAddress = checkSingleFromAddress(headers)

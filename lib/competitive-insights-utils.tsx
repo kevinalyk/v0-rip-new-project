@@ -982,7 +982,23 @@ export async function extractCTALinks(
 
   console.log(`[v0] CTA links: ${linksWithFinalUrls.map((l) => `${l.url} → ${l.finalUrl ?? "(pending cron)"}`).join(" | ")}`)
 
-  const categorizedLinks = await categorizeCtasWithAI(linksWithFinalUrls)
+  // Filter out unsubscribe links AFTER unwrapping, using finalUrl for more accurate detection
+  const aiDetectedUnsubscribeUrls = await detectUnsubscribeLinksWithAI(
+    linksWithFinalUrls.map(link => ({
+      url: link.finalUrl || link.url, // Use finalUrl if available, else original URL
+      text: link.text,
+    }))
+  )
+  
+  // Remove unsubscribe links from the final list
+  const linksWithoutUnsubscribe = linksWithFinalUrls.filter(link => {
+    const urlToCheck = link.finalUrl || link.url
+    return !aiDetectedUnsubscribeUrls.has(urlToCheck)
+  })
+
+  console.log(`[v0] Filtered ${linksWithFinalUrls.length - linksWithoutUnsubscribe.length} unsubscribe links, keeping ${linksWithoutUnsubscribe.length} CTAs`)
+
+  const categorizedLinks = await categorizeCtasWithAI(linksWithoutUnsubscribe)
 
   return categorizedLinks
 }

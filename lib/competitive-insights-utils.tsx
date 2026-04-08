@@ -906,9 +906,9 @@ export async function extractCTALinks(
   // Remove duplicates by URL
   const uniqueLinks = Array.from(new Map(links.map((link) => [link.url, link])).values())
 
-  // AI second-pass: catch obfuscated unsubscribe links regex couldn't detect (e.g. click.emails.nrsc.org/ls/click?upn=...)
-  const aiDetectedUnsubscribeUrls = await detectUnsubscribeLinksWithAI(uniqueLinks)
-  const filteredLinks = uniqueLinks.filter((link) => !aiDetectedUnsubscribeUrls.has(link.url))
+  // Don't filter out unsubscribe links - just keep all links for storage
+  // The AI categorization later will mark them as "other" or "unsubscribe" type
+  const filteredLinks = uniqueLinks
 
   // Prioritize links with CTA keywords
   const ctaLinks = filteredLinks.filter((link) =>

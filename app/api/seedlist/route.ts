@@ -29,6 +29,8 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const clientSlug = searchParams.get("clientSlug")
+    
+    console.log("[v0] Seedlist API called - userId:", userId, "role:", userRecord.role, "clientId:", userRecord.clientId, "clientSlug param:", clientSlug)
 
     let seedEmails
 
@@ -63,6 +65,7 @@ export async function GET(request: Request) {
         `[v0] Filtered seed emails by client name: ${client.name} (slug: ${clientSlug}), found ${seedEmails.length} seeds`,
       )
     } else if (userRecord.role === "super_admin") {
+      console.log("[v0] Super admin - fetching ALL seed emails without filter")
       seedEmails = await prisma.seedEmail.findMany({
         orderBy: { createdAt: "desc" },
         select: {
@@ -76,6 +79,7 @@ export async function GET(request: Request) {
           locked: true,
         },
       })
+      console.log("[v0] Super admin found", seedEmails.length, "total seed emails")
     } else {
       if (!userRecord.clientId) {
         return NextResponse.json({ error: "User not assigned to a client" }, { status: 403 })

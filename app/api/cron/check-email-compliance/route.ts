@@ -5,8 +5,7 @@ import { checkEmailCompliance } from "@/lib/email-compliance-checker"
 export const runtime = "nodejs"
 export const maxDuration = 300
 
-// Process campaigns in batches to avoid memory pressure
-const BATCH_SIZE = 50
+
 
 export async function GET(request: Request) {
   try {
@@ -48,7 +47,6 @@ export async function GET(request: Request) {
         emailContent: true,
         compliance: { select: { id: true } },
       },
-      take: BATCH_SIZE,
       orderBy: { createdAt: "desc" },
     })
 

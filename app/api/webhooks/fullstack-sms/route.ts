@@ -84,11 +84,17 @@ export async function POST(request: Request) {
 
     const { sender: actualSender, cleanedMessage } = extractActualSender(data.phone_number, data.message)
 
+    // In FullStack's webhook format:
+    // - phone_number = the RECEIVING number (your seed phone)
+    // - to = the forwarding gateway number
+    // So we need to store phone_number as toNumber
+    const receivingNumber = data.phone_number
+
     // Log the received data for debugging
     console.log("[FullStack SMS] Webhook data received:")
-    console.log("Gateway/From:", data.phone_number)
+    console.log("Receiving Number (your seed):", receivingNumber)
     console.log("Actual Sender:", actualSender)
-    console.log("To:", data.to)
+    console.log("Gateway/Forwarding To:", data.to)
     console.log("Original Message:", data.message)
     console.log("Cleaned Message:", cleanedMessage)
     console.log("Campaign ID:", data.campaign_id)
@@ -146,7 +152,7 @@ export async function POST(request: Request) {
         processed: true,
         processingAttempts: 0,
         phoneNumber: actualSender,
-        toNumber: data.to,
+        toNumber: receivingNumber, // The number that received the SMS (your seed phone)
         message: redactedMessage,
         campaignId: data.campaign_id,
         companyId: data.company_id,

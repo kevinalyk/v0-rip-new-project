@@ -165,12 +165,47 @@ function checkDmarcAlignment(senderEmail: string, headers: Map<string, string[]>
 }
 
 function checkOneClickUnsubscribe(headers: Map<string, string[]>): boolean {
-  const listUnsub = getHeader(headers, "list-unsubscribe").toLowerCase()
+  // Check standalone List-Unsubscribe-Post header (raw MIME format)
   const listUnsubPost = getHeader(headers, "list-unsubscribe-post").toLowerCase()
-  // Must have both a mailto/https unsubscribe link AND the one-click post header
+  const listUnsub = getHeader(headers, "list-unsubscribe").toLowerCase()
   const hasLink = listUnsub.includes("http") || listUnsub.includes("mailto")
-  const hasOneClick = listUnsubPost.includes("list-unsubscribe=one-click")
-  return hasLink && hasOneClick
+  const hasOneClickHeader = listUnsubPost.includes("list-unsubscribe=one-click")
+
+  if (hasLink && hasOneClickHeader) return true
+
+  // mailparser parses List-Unsubscribe-Post into the "list" header as a JSON object:
+  // list: {"unsubscribe-post":{"name":"List-Unsubscribe=One-Click"},"unsubscribe":{...}}
+  const listHeader = getHeader(headers, "list")
+  if (listHeader) {
+    try {
+      const parsed = JSON.parse(listHeader)
+      const unsubPost = parsed?.["unsubscribe-post"]
+      const unsubUrl = parsed?.["unsubscribe"]?.url || parsed?.["unsubscribe"]?.mail
+      const hasOneClickInList =
+        unsubPost?.name?.toLowerCase().includes("list-unsubscribe=one-click") ||
+        JSON.stringify(unsubPost).toLowerCase().includes("one-click")
+      if (hasOneClickInList && unsubUrl) return true
+    } catch {
+      // If JSON parse fails, fall back to string search on the raw value
+      if (listHeader.toLowerCase().includes("one-click") &&
+          (listHeader.toLowerCase().includes("http") || listHeader.toLowerCase().includes("mail"))) {
+        return true
+      }
+    }
+  }
+
+  // Also check the DKIM h= signing list — if List-Unsubscribe-Post is signed, the header exists
+  // This catches cases where the header was present but already consumed by mailparser
+  const dkimHeaders = getAllHeaders(headers, "dkim-signature").join(" ").toLowerCase()
+  const listHeaderRaw = getAllHeaders(headers, "list-unsubscribe").join(" ").toLowerCase()
+  if (
+    dkimHeaders.includes("list-unsubscribe-post") &&
+    (listHeaderRaw.includes("http") || listHeaderRaw.includes("mailto") || listHeader.toLowerCase().includes("url"))
+  ) {
+    return true
+  }
+
+  return false
 }
 
 function checkUnsubscribeLinkInBody(emailContent: string | null): boolean {

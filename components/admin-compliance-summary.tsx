@@ -1,11 +1,18 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Loader2, RefreshCw, CheckCircle, XCircle, ChevronDown, ChevronRight, ShieldCheck, ShieldAlert } from "lucide-react"
+import { Loader2, RefreshCw, CheckCircle, XCircle, ChevronDown, ChevronRight, ShieldCheck, ShieldAlert, X } from "lucide-react"
 import { format } from "date-fns"
+
+type FilterType = 
+  | { type: "party"; party: "republican" | "democrat" }
+  | { type: "placement"; party: "republican" | "democrat"; placement: "inbox" | "spam" }
+  | { type: "section"; section: 1 | 2 | 3 | 4; failed: true }
+  | { type: "auth"; check: "spf" | "dkim" | "dmarc" | "tls" | "oneClick" | "unsubBody"; failed: true }
+  | null
 
 interface ComplianceRow {
   id: string
@@ -130,6 +137,7 @@ export function AdminComplianceSummary() {
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [activeFilter, setActiveFilter] = useState<FilterType>(null)
   const pageSize = 50
 
   const fetchData = async (p = page) => {
@@ -154,6 +162,89 @@ export function AdminComplianceSummary() {
   }, [page])
 
   const totalPages = Math.ceil(total / pageSize)
+
+  // Filter rows based on active filter
+  const filteredRows = useMemo(() => {
+    if (!activeFilter) return rows
+
+    return rows.filter((row) => {
+      if (activeFilter.type === "party") {
+        return row.campaign.entity?.party === activeFilter.party
+      }
+
+      if (activeFilter.type === "placement") {
+        const isPartyMatch = row.campaign.entity?.party === activeFilter.party
+        if (!isPartyMatch) return false
+        
+        if (activeFilter.placement === "inbox") {
+          return row.campaign.inboxCount > 0
+        } else {
+          return row.campaign.spamCount > 0
+        }
+      }
+
+      if (activeFilter.type === "section") {
+        const sectionKey = `section${activeFilter.section}Score` as keyof ComplianceRow
+        const score = row[sectionKey] as number | null
+        // Failed means score < 100% (1.0)
+        return score !== null && score < 1.0
+      }
+
+      if (activeFilter.type === "auth") {
+        switch (activeFilter.check) {
+          case "spf":
+            return row.hasSpf === false
+          case "dkim":
+            return row.hasDkim === false
+          case "dmarc":
+            return row.hasDmarc === false || row.hasDmarcAlignment === false
+          case "tls":
+            return row.hasTls === false
+          case "oneClick":
+            return row.hasOneClickUnsubscribeHeaders === false
+          case "unsubBody":
+            return row.hasUnsubscribeLinkInBody === false
+          default:
+            return true
+        }
+      }
+
+      return true
+    })
+  }, [rows, activeFilter])
+
+  const handleFilterClick = (filter: FilterType) => {
+    // Toggle off if same filter, otherwise set new filter
+    if (JSON.stringify(activeFilter) === JSON.stringify(filter)) {
+      setActiveFilter(null)
+    } else {
+      setActiveFilter(filter)
+    }
+  }
+
+  const getFilterLabel = (filter: FilterType): string => {
+    if (!filter) return ""
+    
+    if (filter.type === "party") {
+      return `${filter.party.charAt(0).toUpperCase() + filter.party.slice(1)} campaigns`
+    }
+    
+    if (filter.type === "placement") {
+      return `${filter.party.charAt(0).toUpperCase() + filter.party.slice(1)} — ${filter.placement} only`
+    }
+    
+    if (filter.type === "section") {
+      const sectionNames = ["All Senders", "Bulk Senders", "Content", "Display Name"]
+      return `Failed Section ${filter.section} (${sectionNames[filter.section - 1]})`
+    }
+    
+    if (filter.type === "auth") {
+      const checkNames = { spf: "SPF", dkim: "DKIM", dmarc: "DMARC", tls: "TLS", oneClick: "1-Click Unsubscribe", unsubBody: "Unsub in Body" }
+      return `Failed ${checkNames[filter.check]}`
+    }
+    
+    return ""
+  }
 
   return (
     <div className="space-y-6">
@@ -186,9 +277,14 @@ export function AdminComplianceSummary() {
                 const isRep = party === "republican"
                 const color = isRep ? "red" : "blue"
                 const bias = s.avgCompliance >= 0.8 && s.spamRate >= 0.3
+                const isPartyFilterActive = activeFilter?.type === "party" && activeFilter.party === party
+                const isAnyPartyFilterActive = activeFilter?.type === "party" || activeFilter?.type === "placement"
                 return (
-                  <div key={party} className={`rounded-lg border-2 p-5 ${isRep ? "border-red-200 bg-red-50/30" : "border-blue-200 bg-blue-50/30"}`}>
-                    <div className="flex items-center justify-between mb-4">
+                  <div key={party} className={`rounded-lg border-2 p-5 ${isRep ? "border-red-200 bg-red-50/30" : "border-blue-200 bg-blue-50/30"} ${isPartyFilterActive ? "ring-2 ring-offset-2 " + (isRep ? "ring-red-500" : "ring-blue-500") : ""}`}>
+                    <div 
+                      className="flex items-center justify-between mb-4 cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => handleFilterClick({ type: "party", party })}
+                    >
                       <h3 className={`font-bold text-lg capitalize ${isRep ? "text-red-700" : "text-blue-700"}`}>
                         {party}
                       </h3>
@@ -212,11 +308,31 @@ export function AdminComplianceSummary() {
                             <p className="text-xs text-muted-foreground mb-1">Avg Compliance Score</p>
                             <p className={`text-2xl font-bold ${scoreColor(s.avgCompliance)}`}>{pct(s.avgCompliance)}</p>
                           </div>
-                          <div className="bg-background rounded-md p-3 border">
+                          <div 
+                            className={`bg-background rounded-md p-3 border cursor-pointer hover:ring-2 hover:ring-offset-1 transition-all ${
+                              activeFilter?.type === "placement" && activeFilter.party === party && activeFilter.placement === "inbox" 
+                                ? `ring-2 ring-offset-1 ${isRep ? "ring-red-500" : "ring-blue-500"}` 
+                                : ""
+                            }`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleFilterClick({ type: "placement", party, placement: "inbox" })
+                            }}
+                          >
                             <p className="text-xs text-muted-foreground mb-1">Avg Inbox Rate</p>
                             <p className={`text-2xl font-bold ${scoreColor(s.avgInboxRate)}`}>{pct(s.avgInboxRate)}</p>
                           </div>
-                          <div className="bg-background rounded-md p-3 border">
+                          <div 
+                            className={`bg-background rounded-md p-3 border cursor-pointer hover:ring-2 hover:ring-offset-1 transition-all ${
+                              activeFilter?.type === "placement" && activeFilter.party === party && activeFilter.placement === "spam" 
+                                ? `ring-2 ring-offset-1 ${isRep ? "ring-red-500" : "ring-blue-500"}` 
+                                : ""
+                            }`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleFilterClick({ type: "placement", party, placement: "spam" })
+                            }}
+                          >
                             <p className="text-xs text-muted-foreground mb-1">Spam Rate</p>
                             <p className={`text-2xl font-bold ${s.spamRate >= 0.3 ? "text-red-600" : s.spamRate >= 0.15 ? "text-yellow-600" : "text-green-600"}`}>
                               {pct(s.spamRate)}
@@ -235,22 +351,32 @@ export function AdminComplianceSummary() {
                         {/* Auth signals */}
                         <div className="grid grid-cols-4 gap-2 pt-1">
                           {[
-                            { label: "SPF", val: s.spfRate },
-                            { label: "DKIM", val: s.dkimRate },
-                            { label: "DMARC", val: s.dmarcRate },
-                            { label: "1-Click Unsub", val: s.oneClickRate },
-                          ].map((m) => (
-                            <div key={m.label} className="text-center">
-                              <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-1">
-                                <div
-                                  className={`h-full rounded-full ${m.val >= 0.85 ? `bg-${color}-500` : m.val >= 0.65 ? "bg-yellow-500" : "bg-red-400"}`}
-                                  style={{ width: `${Math.round(m.val * 100)}%` }}
-                                />
+                            { label: "SPF", val: s.spfRate, check: "spf" as const },
+                            { label: "DKIM", val: s.dkimRate, check: "dkim" as const },
+                            { label: "DMARC", val: s.dmarcRate, check: "dmarc" as const },
+                            { label: "1-Click Unsub", val: s.oneClickRate, check: "oneClick" as const },
+                          ].map((m) => {
+                            const isActive = activeFilter?.type === "auth" && activeFilter.check === m.check
+                            return (
+                              <div 
+                                key={m.label} 
+                                className={`text-center cursor-pointer hover:opacity-80 transition-opacity p-1 rounded ${isActive ? `ring-2 ring-offset-1 ${isRep ? "ring-red-500" : "ring-blue-500"}` : ""}`}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleFilterClick({ type: "auth", check: m.check, failed: true })
+                                }}
+                              >
+                                <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-1">
+                                  <div
+                                    className={`h-full rounded-full ${m.val >= 0.85 ? `bg-${color}-500` : m.val >= 0.65 ? "bg-yellow-500" : "bg-red-400"}`}
+                                    style={{ width: `${Math.round(m.val * 100)}%` }}
+                                  />
+                                </div>
+                                <p className="text-xs text-muted-foreground">{m.label}</p>
+                                <p className="text-xs font-semibold">{pct(m.val)}</p>
                               </div>
-                              <p className="text-xs text-muted-foreground">{m.label}</p>
-                              <p className="text-xs font-semibold">{pct(m.val)}</p>
-                            </div>
-                          ))}
+                            )
+                          })}
                         </div>
                       </div>
                     )}
@@ -303,7 +429,12 @@ export function AdminComplianceSummary() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card 
+            className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
+              activeFilter?.type === "auth" && activeFilter.check === "spf" ? "ring-2 ring-offset-2 ring-primary" : ""
+            }`}
+            onClick={() => handleFilterClick({ type: "auth", check: "spf", failed: true })}
+          >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">SPF Pass Rate</CardTitle>
             </CardHeader>
@@ -311,7 +442,12 @@ export function AdminComplianceSummary() {
               <div className={`text-3xl font-bold ${scoreColor(stats.spfRate)}`}>{pct(stats.spfRate)}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card 
+            className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
+              activeFilter?.type === "auth" && activeFilter.check === "dkim" ? "ring-2 ring-offset-2 ring-primary" : ""
+            }`}
+            onClick={() => handleFilterClick({ type: "auth", check: "dkim", failed: true })}
+          >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">DKIM Pass Rate</CardTitle>
             </CardHeader>
@@ -319,7 +455,12 @@ export function AdminComplianceSummary() {
               <div className={`text-3xl font-bold ${scoreColor(stats.dkimRate)}`}>{pct(stats.dkimRate)}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card 
+            className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
+              activeFilter?.type === "auth" && activeFilter.check === "tls" ? "ring-2 ring-offset-2 ring-primary" : ""
+            }`}
+            onClick={() => handleFilterClick({ type: "auth", check: "tls", failed: true })}
+          >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">TLS Rate</CardTitle>
             </CardHeader>
@@ -327,7 +468,12 @@ export function AdminComplianceSummary() {
               <div className={`text-3xl font-bold ${scoreColor(stats.tlsRate)}`}>{pct(stats.tlsRate)}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card 
+            className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
+              activeFilter?.type === "auth" && activeFilter.check === "dmarc" ? "ring-2 ring-offset-2 ring-primary" : ""
+            }`}
+            onClick={() => handleFilterClick({ type: "auth", check: "dmarc", failed: true })}
+          >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">DMARC Pass Rate</CardTitle>
             </CardHeader>
@@ -335,7 +481,12 @@ export function AdminComplianceSummary() {
               <div className={`text-3xl font-bold ${scoreColor(stats.dmarcRate)}`}>{pct(stats.dmarcRate)}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card 
+            className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
+              activeFilter?.type === "auth" && activeFilter.check === "oneClick" ? "ring-2 ring-offset-2 ring-primary" : ""
+            }`}
+            onClick={() => handleFilterClick({ type: "auth", check: "oneClick", failed: true })}
+          >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">1-Click Unsub Rate</CardTitle>
             </CardHeader>
@@ -343,7 +494,12 @@ export function AdminComplianceSummary() {
               <div className={`text-3xl font-bold ${scoreColor(stats.oneClickUnsubRate)}`}>{pct(stats.oneClickUnsubRate)}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card 
+            className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
+              activeFilter?.type === "auth" && activeFilter.check === "unsubBody" ? "ring-2 ring-offset-2 ring-primary" : ""
+            }`}
+            onClick={() => handleFilterClick({ type: "auth", check: "unsubBody", failed: true })}
+          >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Unsub in Body Rate</CardTitle>
             </CardHeader>
@@ -364,25 +520,34 @@ export function AdminComplianceSummary() {
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               {[
-                { label: "All Senders", score: stats.avgSection1, desc: "SPF, DKIM, TLS, Message-ID, ARC" },
-                { label: "Bulk Senders", score: stats.avgSection2, desc: "Both SPF+DKIM, DMARC, 1-Click Unsub" },
-                { label: "Content", score: stats.avgSection3, desc: "From address, subject, hidden content" },
-                { label: "Display Name", score: stats.avgSection4, desc: "No impersonation, no deceptive patterns" },
-              ].map((s) => (
-                <div key={s.label} className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{s.label}</span>
-                    {scoreBadge(s.score)}
+                { label: "All Senders", score: stats.avgSection1, desc: "SPF, DKIM, TLS, Message-ID, ARC", section: 1 as const },
+                { label: "Bulk Senders", score: stats.avgSection2, desc: "Both SPF+DKIM, DMARC, 1-Click Unsub", section: 2 as const },
+                { label: "Content", score: stats.avgSection3, desc: "From address, subject, hidden content", section: 3 as const },
+                { label: "Display Name", score: stats.avgSection4, desc: "No impersonation, no deceptive patterns", section: 4 as const },
+              ].map((s) => {
+                const isActive = activeFilter?.type === "section" && activeFilter.section === s.section
+                return (
+                  <div 
+                    key={s.label} 
+                    className={`space-y-1 p-2 rounded cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
+                      isActive ? "ring-2 ring-offset-2 ring-primary" : ""
+                    }`}
+                    onClick={() => handleFilterClick({ type: "section", section: s.section, failed: true })}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">{s.label}</span>
+                      {scoreBadge(s.score)}
+                    </div>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${s.score >= 0.85 ? "bg-green-500" : s.score >= 0.65 ? "bg-yellow-500" : "bg-red-500"}`}
+                        style={{ width: `${Math.round(s.score * 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">{s.desc}</p>
                   </div>
-                  <div className="h-2 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${s.score >= 0.85 ? "bg-green-500" : s.score >= 0.65 ? "bg-yellow-500" : "bg-red-500"}`}
-                      style={{ width: `${Math.round(s.score * 100)}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">{s.desc}</p>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </CardContent>
         </Card>
@@ -391,10 +556,24 @@ export function AdminComplianceSummary() {
       {/* Results Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Individual Campaign Results</CardTitle>
-          <CardDescription>
-            {total} campaigns checked — showing {rows.length} on this page
-          </CardDescription>
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <CardTitle className="text-base">Individual Campaign Results</CardTitle>
+              <CardDescription>
+                {total} campaigns checked — showing {filteredRows.length} {activeFilter ? "filtered " : ""}on this page
+              </CardDescription>
+            </div>
+            {activeFilter && (
+              <Badge 
+                variant="secondary" 
+                className="gap-2 cursor-pointer hover:bg-destructive/10 transition-colors"
+                onClick={() => setActiveFilter(null)}
+              >
+                {getFilterLabel(activeFilter)}
+                <X className="h-3 w-3" />
+              </Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
@@ -404,6 +583,10 @@ export function AdminComplianceSummary() {
           ) : rows.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground text-sm">
               No compliance data yet. The hourly CRON will populate this as emails come in.
+            </div>
+          ) : filteredRows.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground text-sm">
+              No campaigns match the current filter.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -423,7 +606,7 @@ export function AdminComplianceSummary() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
+                  {filteredRows.map((row) => (
                     <>
                       <tr
                         key={row.id}

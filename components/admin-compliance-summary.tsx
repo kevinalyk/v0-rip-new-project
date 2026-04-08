@@ -223,11 +223,11 @@ export function AdminComplianceSummary() {
                             </p>
                           </div>
                           <div className="bg-background rounded-md p-3 border">
-                            <p className="text-xs text-muted-foreground mb-1">Compliance vs Inbox Gap</p>
-                            <p className={`text-2xl font-bold ${(s.avgCompliance - s.avgInboxRate) >= 0.2 ? "text-red-600" : "text-green-600"}`}>
-                              {s.avgCompliance - s.avgInboxRate >= 0
-                                ? `+${pct(s.avgCompliance - s.avgInboxRate)}`
-                                : pct(s.avgCompliance - s.avgInboxRate)}
+                            <p className="text-xs text-muted-foreground mb-1">Inbox Rate vs Compliance Gap</p>
+                            <p className={`text-2xl font-bold ${(s.avgInboxRate - s.avgCompliance) <= -0.2 ? "text-red-600" : "text-green-600"}`}>
+                              {s.avgInboxRate - s.avgCompliance >= 0
+                                ? `+${pct(s.avgInboxRate - s.avgCompliance)}`
+                                : pct(s.avgInboxRate - s.avgCompliance)}
                             </p>
                           </div>
                         </div>

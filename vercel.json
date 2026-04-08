@@ -45,7 +45,7 @@
     },
     {
       "path": "/api/cron/check-email-compliance",
-      "schedule": "*/15 * * * *"
+      "schedule": "*/30 * * * *"
     }
   ]
 }

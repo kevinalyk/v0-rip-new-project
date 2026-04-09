@@ -167,7 +167,10 @@ export function AdminComplianceSummary() {
   const filteredRows = useMemo(() => {
     if (!activeFilter) return rows
 
-    return rows.filter((row) => {
+    console.log("[v0] Active filter:", activeFilter)
+    console.log("[v0] Total rows to filter:", rows.length)
+
+    const filtered = rows.filter((row) => {
       if (activeFilter.type === "party") {
         return row.campaign.entity?.party === activeFilter.party
       }
@@ -196,26 +199,38 @@ export function AdminComplianceSummary() {
           return false
         }
 
+        let result = false
         switch (activeFilter.check) {
           case "spf":
-            return row.hasSpf === false
+            result = row.hasSpf === false
+            break
           case "dkim":
-            return row.hasDkim === false
+            result = row.hasDkim === false
+            break
           case "dmarc":
-            return row.hasDmarc === false || row.hasDmarcAlignment === false
+            result = row.hasDmarc === false || row.hasDmarcAlignment === false
+            break
           case "tls":
-            return row.hasTls === false
+            result = row.hasTls === false
+            break
           case "oneClick":
-            return row.hasOneClickUnsubscribeHeaders === false
+            result = row.hasOneClickUnsubscribeHeaders === false
+            console.log("[v0] Checking oneClick for campaign:", row.campaign.id, "hasOneClickUnsubscribeHeaders:", row.hasOneClickUnsubscribeHeaders, "result:", result)
+            break
           case "unsubBody":
-            return row.hasUnsubscribeLinkInBody === false
+            result = row.hasUnsubscribeLinkInBody === false
+            break
           default:
-            return true
+            result = true
         }
+        return result
       }
 
       return true
     })
+
+    console.log("[v0] Filtered rows count:", filtered.length)
+    return filtered
   }, [rows, activeFilter])
 
   const handleFilterClick = (filter: FilterType) => {
@@ -440,7 +455,7 @@ export function AdminComplianceSummary() {
           </Card>
           <Card 
             className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
-              activeFilter?.type === "auth" && activeFilter.check === "spf" ? "ring-2 ring-offset-2 ring-primary" : ""
+              activeFilter?.type === "auth" && activeFilter.check === "spf" && !activeFilter.party ? "ring-2 ring-offset-2 ring-primary" : ""
             }`}
             onClick={() => handleFilterClick({ type: "auth", check: "spf", failed: true })}
           >
@@ -453,7 +468,7 @@ export function AdminComplianceSummary() {
           </Card>
           <Card 
             className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
-              activeFilter?.type === "auth" && activeFilter.check === "dkim" ? "ring-2 ring-offset-2 ring-primary" : ""
+              activeFilter?.type === "auth" && activeFilter.check === "dkim" && !activeFilter.party ? "ring-2 ring-offset-2 ring-primary" : ""
             }`}
             onClick={() => handleFilterClick({ type: "auth", check: "dkim", failed: true })}
           >
@@ -466,7 +481,7 @@ export function AdminComplianceSummary() {
           </Card>
           <Card 
             className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
-              activeFilter?.type === "auth" && activeFilter.check === "tls" ? "ring-2 ring-offset-2 ring-primary" : ""
+              activeFilter?.type === "auth" && activeFilter.check === "tls" && !activeFilter.party ? "ring-2 ring-offset-2 ring-primary" : ""
             }`}
             onClick={() => handleFilterClick({ type: "auth", check: "tls", failed: true })}
           >
@@ -479,7 +494,7 @@ export function AdminComplianceSummary() {
           </Card>
           <Card 
             className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
-              activeFilter?.type === "auth" && activeFilter.check === "dmarc" ? "ring-2 ring-offset-2 ring-primary" : ""
+              activeFilter?.type === "auth" && activeFilter.check === "dmarc" && !activeFilter.party ? "ring-2 ring-offset-2 ring-primary" : ""
             }`}
             onClick={() => handleFilterClick({ type: "auth", check: "dmarc", failed: true })}
           >
@@ -492,7 +507,7 @@ export function AdminComplianceSummary() {
           </Card>
           <Card 
             className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
-              activeFilter?.type === "auth" && activeFilter.check === "oneClick" ? "ring-2 ring-offset-2 ring-primary" : ""
+              activeFilter?.type === "auth" && activeFilter.check === "oneClick" && !activeFilter.party ? "ring-2 ring-offset-2 ring-primary" : ""
             }`}
             onClick={() => handleFilterClick({ type: "auth", check: "oneClick", failed: true })}
           >
@@ -505,7 +520,7 @@ export function AdminComplianceSummary() {
           </Card>
           <Card 
             className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
-              activeFilter?.type === "auth" && activeFilter.check === "unsubBody" ? "ring-2 ring-offset-2 ring-primary" : ""
+              activeFilter?.type === "auth" && activeFilter.check === "unsubBody" && !activeFilter.party ? "ring-2 ring-offset-2 ring-primary" : ""
             }`}
             onClick={() => handleFilterClick({ type: "auth", check: "unsubBody", failed: true })}
           >

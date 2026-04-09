@@ -61,6 +61,7 @@ import { CiEntitySubscribeButton } from "./ci-entity-subscribe-button"
 import { useToast } from "@/hooks/use-toast"
 import { CiViewsManager } from "./ci-views-manager" // Imported CiViewsManager
 import { CiAnalyticsView } from "./ci-analytics-view"
+import { nameToSlug } from "@/lib/directory"
 
 interface CompetitiveInsightsProps {
   clientSlug: string
@@ -1899,6 +1900,38 @@ export function CompetitiveInsights({
                         <DialogTitle className="text-xl">{selectedCampaign.subject}</DialogTitle>
                         <DialogDescription>
                           <div className="flex flex-col gap-1 mt-2">
+                            {/* Entity information */}
+                            {selectedCampaign.entity && (
+                              <div className="flex flex-col gap-1 mb-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-foreground">
+                                    {selectedCampaign.entity.name}
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    ({selectedCampaign.entity.type?.replace(/_/g, " ")})
+                                  </span>
+                                  <Button
+                                    variant="link"
+                                    size="sm"
+                                    className="h-auto p-0 text-xs"
+                                    onClick={() => window.open(`/directory/${nameToSlug(selectedCampaign.entity?.name || "")}`, "_blank")}
+                                  >
+                                    [View Profile]
+                                  </Button>
+                                </div>
+                                {selectedCampaign.entity.party && (
+                                  <div>
+                                    <Badge
+                                      variant={getPartyColor(selectedCampaign.entity.party)}
+                                      className={`text-xs capitalize ${getPartyBadgeClassName(selectedCampaign.entity.party)}`}
+                                    >
+                                      {selectedCampaign.entity.party}
+                                    </Badge>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            
                             <div className="flex items-center gap-2">
                               {selectedCampaign.type === "sms" ? (
                                 <Smartphone className="h-4 w-4" />

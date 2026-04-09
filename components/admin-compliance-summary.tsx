@@ -167,10 +167,7 @@ export function AdminComplianceSummary() {
   const filteredRows = useMemo(() => {
     if (!activeFilter) return rows
 
-    console.log("[v0] Active filter:", activeFilter)
-    console.log("[v0] Total rows to filter:", rows.length)
-
-    const filtered = rows.filter((row) => {
+    return rows.filter((row) => {
       if (activeFilter.type === "party") {
         return row.campaign.entity?.party === activeFilter.party
       }
@@ -199,38 +196,26 @@ export function AdminComplianceSummary() {
           return false
         }
 
-        let result = false
         switch (activeFilter.check) {
           case "spf":
-            result = row.hasSpf === false
-            break
+            return row.hasSpf === false
           case "dkim":
-            result = row.hasDkim === false
-            break
+            return row.hasDkim === false
           case "dmarc":
-            result = row.hasDmarc === false || row.hasDmarcAlignment === false
-            break
+            return row.hasDmarc === false || row.hasDmarcAlignment === false
           case "tls":
-            result = row.hasTls === false
-            break
+            return row.hasTls === false
           case "oneClick":
-            result = row.hasOneClickUnsubscribeHeaders === false
-            console.log("[v0] Checking oneClick for campaign:", row.campaign.id, "hasOneClickUnsubscribeHeaders:", row.hasOneClickUnsubscribeHeaders, "result:", result)
-            break
+            return row.hasOneClickUnsubscribeHeaders === false
           case "unsubBody":
-            result = row.hasUnsubscribeLinkInBody === false
-            break
+            return row.hasUnsubscribeLinkInBody === false
           default:
-            result = true
+            return true
         }
-        return result
       }
 
       return true
     })
-
-    console.log("[v0] Filtered rows count:", filtered.length)
-    return filtered
   }, [rows, activeFilter])
 
   const handleFilterClick = (filter: FilterType) => {
@@ -239,6 +224,8 @@ export function AdminComplianceSummary() {
       setActiveFilter(null)
     } else {
       setActiveFilter(filter)
+      // Reset to page 1 when applying a new filter
+      setPage(1)
     }
   }
 

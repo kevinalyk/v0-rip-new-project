@@ -41,6 +41,7 @@ export function SiteTrafficContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [days, setDays] = useState("7")
+  const [hideApiCalls, setHideApiCalls] = useState(false)
 
   const fetchData = async () => {
     setLoading(true)
@@ -352,11 +353,26 @@ export function SiteTrafficContent() {
       {/* Recent Visits */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Recent Visits
-          </CardTitle>
-          <CardDescription>Latest 50 visits</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Recent Visits
+              </CardTitle>
+              <CardDescription>Latest 50 visits</CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={hideApiCalls}
+                  onChange={(e) => setHideApiCalls(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <span>Hide API/Auth calls</span>
+              </label>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -373,10 +389,19 @@ export function SiteTrafficContent() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.recentVisits.map((visit) => {
-                  const formattedPath = formatPath(visit.path, visit.referer)
+                {data.recentVisits
+                  .filter((visit) => {
+                    // If hideApiCalls is enabled, filter out visits where formattedPath is null
+                    if (hideApiCalls) {
+                      const formattedPath = formatPath(visit.path, visit.referer)
+                      return formattedPath !== null
+                    }
+                    return true
+                  })
+                  .map((visit) => {
+                    const formattedPath = formatPath(visit.path, visit.referer)
                   
-                  return (
+                    return (
                     <TableRow key={visit.id}>
                       <TableCell className="whitespace-nowrap text-sm">
                         {formatDate(visit.createdAt)}

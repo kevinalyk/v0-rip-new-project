@@ -73,11 +73,23 @@ export function SiteTrafficContent() {
     return ua
   }
 
-  const formatPath = (path: string) => {
-    // Filter out API calls - they're just background auth checks, not meaningful page visits
-    if (path.startsWith('/api/')) return null
+  const formatPath = (path: string, referer: string | null) => {
+    // If this is an API call, extract the page from the referer instead
+    if (path.startsWith('/api/')) {
+      if (!referer) return null
+      
+      try {
+        const url = new URL(referer)
+        const refererPath = url.pathname
+        // Skip if referer is also just login or empty
+        if (!refererPath || refererPath === '/' || refererPath === '/login') return null
+        return refererPath
+      } catch {
+        return null
+      }
+    }
     
-    // Return the actual page path
+    // For non-API paths, return as-is
     return path
   }
 
@@ -362,7 +374,7 @@ export function SiteTrafficContent() {
               </TableHeader>
               <TableBody>
                 {data.recentVisits.map((visit) => {
-                  const formattedPath = formatPath(visit.path)
+                  const formattedPath = formatPath(visit.path, visit.referer)
                   
                   return (
                     <TableRow key={visit.id}>

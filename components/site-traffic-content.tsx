@@ -73,6 +73,14 @@ export function SiteTrafficContent() {
     return ua
   }
 
+  const formatPath = (path: string) => {
+    // Filter out API calls and other noise
+    if (path.startsWith('/api/')) return null
+    if (path === '/login') return null
+    
+    return path
+  }
+
   if (loading && !data) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -348,38 +356,50 @@ export function SiteTrafficContent() {
                   <TableHead>IP</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>User</TableHead>
+                  <TableHead>Page</TableHead>
                   <TableHead>User Agent</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.recentVisits.map((visit) => (
-                  <TableRow key={visit.id}>
-                    <TableCell className="whitespace-nowrap text-sm">
-                      {formatDate(visit.createdAt)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={visit.isAuthenticated ? "default" : "secondary"}>
-                        {visit.statusCode}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">{visit.ip}</TableCell>
-                    <TableCell>
-                      {visit.city && visit.country 
-                        ? `${visit.city}, ${visit.country}`
-                        : visit.country || "-"}
-                    </TableCell>
-                    <TableCell>
-                      {visit.userEmail ? (
-                        <span className="text-green-600">{visit.userEmail}</span>
-                      ) : (
-                        <span className="text-muted-foreground">Anonymous</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
-                      {truncateUserAgent(visit.userAgent)}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {data.recentVisits.map((visit) => {
+                  const formattedPath = formatPath(visit.path)
+                  
+                  return (
+                    <TableRow key={visit.id}>
+                      <TableCell className="whitespace-nowrap text-sm">
+                        {formatDate(visit.createdAt)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={visit.isAuthenticated ? "default" : "secondary"}>
+                          {visit.statusCode}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">{visit.ip}</TableCell>
+                      <TableCell>
+                        {visit.city && visit.country 
+                          ? `${visit.city}, ${visit.country}`
+                          : visit.country || "-"}
+                      </TableCell>
+                      <TableCell>
+                        {visit.userEmail ? (
+                          <span className="text-green-600">{visit.userEmail}</span>
+                        ) : (
+                          <span className="text-muted-foreground">Anonymous</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm max-w-xs">
+                        {formattedPath ? (
+                          <span className="font-mono text-blue-600">{formattedPath}</span>
+                        ) : (
+                          <span className="text-muted-foreground italic">API/Auth</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                        {truncateUserAgent(visit.userAgent)}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </div>

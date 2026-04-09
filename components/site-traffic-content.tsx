@@ -41,6 +41,7 @@ export function SiteTrafficContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [days, setDays] = useState("7")
+  const [hideApiCalls, setHideApiCalls] = useState(false)
 
   const fetchData = async () => {
     setLoading(true)
@@ -71,6 +72,26 @@ export function SiteTrafficContent() {
     if (!ua) return "-"
     if (ua.length > 60) return ua.substring(0, 60) + "..."
     return ua
+  }
+
+  const formatPath = (path: string, referer: string | null) => {
+    // If this is an API call, extract the page from the referer instead
+    if (path.startsWith('/api/')) {
+      if (!referer) return null
+      
+      try {
+        const url = new URL(referer)
+        const refererPath = url.pathname
+        // Skip if referer is also just login or empty
+        if (!refererPath || refererPath === '/' || refererPath === '/login') return null
+        return refererPath
+      } catch {
+        return null
+      }
+    }
+    
+    // For non-API paths, return as-is
+    return path
   }
 
   if (loading && !data) {
@@ -332,11 +353,26 @@ export function SiteTrafficContent() {
       {/* Recent Visits */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Recent Visits
-          </CardTitle>
-          <CardDescription>Latest 50 visits</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Recent Visits
+              </CardTitle>
+              <CardDescription>Latest 50 visits</CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={hideApiCalls}
+                  onChange={(e) => setHideApiCalls(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <span>Hide API/Auth calls</span>
+              </label>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -348,38 +384,59 @@ export function SiteTrafficContent() {
                   <TableHead>IP</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>User</TableHead>
+                  <TableHead>Page</TableHead>
                   <TableHead>User Agent</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.recentVisits.map((visit) => (
-                  <TableRow key={visit.id}>
-                    <TableCell className="whitespace-nowrap text-sm">
-                      {formatDate(visit.createdAt)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={visit.isAuthenticated ? "default" : "secondary"}>
-                        {visit.statusCode}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">{visit.ip}</TableCell>
-                    <TableCell>
-                      {visit.city && visit.country 
-                        ? `${visit.city}, ${visit.country}`
-                        : visit.country || "-"}
-                    </TableCell>
-                    <TableCell>
-                      {visit.userEmail ? (
-                        <span className="text-green-600">{visit.userEmail}</span>
-                      ) : (
-                        <span className="text-muted-foreground">Anonymous</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
-                      {truncateUserAgent(visit.userAgent)}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {data.recentVisits
+                  .filter((visit) => {
+                    // If hideApiCalls is enabled, filter out visits where formattedPath is null
+                    if (hideApiCalls) {
+                      const formattedPath = formatPath(visit.path, visit.referer)
+                      return formattedPath !== null
+                    }
+                    return true
+                  })
+                  .map((visit) => {
+                    const formattedPath = formatPath(visit.path, visit.referer)
+                  
+                    return (
+                    <TableRow key={visit.id}>
+                      <TableCell className="whitespace-nowrap text-sm">
+                        {formatDate(visit.createdAt)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={visit.isAuthenticated ? "default" : "secondary"}>
+                          {visit.statusCode}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">{visit.ip}</TableCell>
+                      <TableCell>
+                        {visit.city && visit.country 
+                          ? `${visit.city}, ${visit.country}`
+                          : visit.country || "-"}
+                      </TableCell>
+                      <TableCell>
+                        {visit.userEmail ? (
+                          <span className="text-green-600">{visit.userEmail}</span>
+                        ) : (
+                          <span className="text-muted-foreground">Anonymous</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm max-w-xs">
+                        {formattedPath ? (
+                          <span className="font-mono text-blue-600">{formattedPath}</span>
+                        ) : (
+                          <span className="text-muted-foreground italic">API/Auth</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                        {truncateUserAgent(visit.userAgent)}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </div>

@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, Lock, Mail, MessageSquare, Building2, User, Users, ArrowLeft, Calendar, Smartphone, ExternalLink } from "lucide-react"
 import { CiEntitySubscribeButton } from "@/components/ci-entity-subscribe-button"
+import { nameToSlug } from "@/lib/directory"
 
 interface Mapping {
   id: string
@@ -364,6 +365,35 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
                 <DialogTitle className="pr-8">{selectedPreview.type === "sms" ? "SMS Message" : selectedPreview.subject || "Email Preview"}</DialogTitle>
                 <DialogDescription asChild>
                   <div className="flex flex-col gap-1 mt-1">
+                    {/* Entity information */}
+                    {data?.entity && (
+                      <div className="flex flex-col gap-1 mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-foreground">
+                            {data.entity.name}
+                          </span>
+                          <span className="text-muted-foreground">
+                            ({data.entity.type?.replace(/_/g, " ")})
+                          </span>
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="h-auto p-0 text-xs"
+                            onClick={() => window.open(`/directory/${nameToSlug(data.entity.name)}`, "_blank")}
+                          >
+                            [View Profile]
+                          </Button>
+                        </div>
+                        {data.entity.party && (
+                          <div>
+                            <Badge className={`text-xs capitalize ${getPartyColor(data.entity.party)}`}>
+                              {data.entity.party}
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
                     <div className="flex items-center gap-2 text-sm">
                       {selectedPreview.type === "sms"
                         ? <Smartphone className="h-3.5 w-3.5" />

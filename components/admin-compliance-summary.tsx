@@ -143,7 +143,27 @@ export function AdminComplianceSummary() {
   const fetchData = async (p = page) => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/admin/compliance-summary?page=${p}&pageSize=${pageSize}`, {
+      let url = `/api/admin/compliance-summary?page=${p}&pageSize=${pageSize}`
+      
+      // Add filter parameters if active
+      if (activeFilter) {
+        url += `&filterType=${activeFilter.type}`
+        
+        if (activeFilter.type === "party") {
+          url += `&filterParty=${activeFilter.party}`
+        } else if (activeFilter.type === "placement") {
+          url += `&filterParty=${activeFilter.party}&filterPlacement=${activeFilter.placement}`
+        } else if (activeFilter.type === "section") {
+          url += `&filterSection=${activeFilter.section}`
+        } else if (activeFilter.type === "auth") {
+          url += `&filterCheck=${activeFilter.check}`
+          if (activeFilter.party) {
+            url += `&filterParty=${activeFilter.party}`
+          }
+        }
+      }
+
+      const res = await fetch(url, {
         credentials: "include",
       })
       if (!res.ok) return
@@ -159,64 +179,11 @@ export function AdminComplianceSummary() {
 
   useEffect(() => {
     fetchData(page)
-  }, [page])
+  }, [page, activeFilter])
 
   const totalPages = Math.ceil(total / pageSize)
 
-  // Filter rows based on active filter
-  const filteredRows = useMemo(() => {
-    if (!activeFilter) return rows
-
-    return rows.filter((row) => {
-      if (activeFilter.type === "party") {
-        return row.campaign.entity?.party === activeFilter.party
-      }
-
-      if (activeFilter.type === "placement") {
-        const isPartyMatch = row.campaign.entity?.party === activeFilter.party
-        if (!isPartyMatch) return false
-        
-        if (activeFilter.placement === "inbox") {
-          return row.campaign.inboxCount > 0
-        } else {
-          return row.campaign.spamCount > 0
-        }
-      }
-
-      if (activeFilter.type === "section") {
-        const sectionKey = `section${activeFilter.section}Score` as keyof ComplianceRow
-        const score = row[sectionKey] as number | null
-        // Failed means score < 100% (1.0)
-        return score !== null && score < 1.0
-      }
-
-      if (activeFilter.type === "auth") {
-        // If party is specified, filter by party first
-        if (activeFilter.party && row.campaign.entity?.party !== activeFilter.party) {
-          return false
-        }
-
-        switch (activeFilter.check) {
-          case "spf":
-            return row.hasSpf === false
-          case "dkim":
-            return row.hasDkim === false
-          case "dmarc":
-            return row.hasDmarc === false || row.hasDmarcAlignment === false
-          case "tls":
-            return row.hasTls === false
-          case "oneClick":
-            return row.hasOneClickUnsubscribeHeaders === false
-          case "unsubBody":
-            return row.hasUnsubscribeLinkInBody === false
-          default:
-            return true
-        }
-      }
-
-      return true
-    })
-  }, [rows, activeFilter])
+  // Filtering is now done server-side, so we use rows directly
 
   const handleFilterClick = (filter: FilterType) => {
     // Toggle off if same filter, otherwise set new filter
@@ -575,7 +542,7 @@ export function AdminComplianceSummary() {
             <div className="flex-1">
               <CardTitle className="text-base">Individual Campaign Results</CardTitle>
               <CardDescription>
-                {total} campaigns checked — showing {filteredRows.length} {activeFilter ? "filtered " : ""}on this page
+                {total} total {activeFilter ? "matching " : ""}campaigns — showing {rows.length} on this page
               </CardDescription>
             </div>
             {activeFilter && (
@@ -597,11 +564,7 @@ export function AdminComplianceSummary() {
             </div>
           ) : rows.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground text-sm">
-              No compliance data yet. The hourly CRON will populate this as emails come in.
-            </div>
-          ) : filteredRows.length === 0 ? (
-            <div className="text-center py-16 text-muted-foreground text-sm">
-              No campaigns match the current filter.
+              {activeFilter ? "No campaigns match the current filter." : "No compliance data yet. The hourly CRON will populate this as emails come in."}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -621,7 +584,7 @@ export function AdminComplianceSummary() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRows.map((row) => (
+                  {rows.map((row) => (
                     <>
                       <tr
                         key={row.id}

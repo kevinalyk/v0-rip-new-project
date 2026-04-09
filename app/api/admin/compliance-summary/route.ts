@@ -15,9 +15,59 @@ export async function GET(request: Request) {
     const pageSize = parseInt(searchParams.get("pageSize") || "50")
     const skip = (page - 1) * pageSize
 
+    // Parse filter parameters
+    const filterType = searchParams.get("filterType")
+    const filterParty = searchParams.get("filterParty")
+    const filterCheck = searchParams.get("filterCheck")
+    const filterPlacement = searchParams.get("filterPlacement")
+    const filterSection = searchParams.get("filterSection")
+
+    // Build where clause based on filter
+    const where: any = {}
+
+    if (filterType === "party" && filterParty) {
+      where.campaign = { entity: { party: filterParty } }
+    } else if (filterType === "placement" && filterParty && filterPlacement) {
+      where.campaign = {
+        entity: { party: filterParty },
+        ...(filterPlacement === "inbox" ? { inboxCount: { gt: 0 } } : { spamCount: { gt: 0 } })
+      }
+    } else if (filterType === "section" && filterSection) {
+      const sectionNum = parseInt(filterSection)
+      const sectionKey = `section${sectionNum}Score`
+      where[sectionKey] = { lt: 1.0 }
+    } else if (filterType === "auth" && filterCheck) {
+      // Build auth check filters
+      if (filterParty) {
+        where.campaign = { entity: { party: filterParty } }
+      }
+      
+      switch (filterCheck) {
+        case "spf":
+          where.hasSpf = false
+          break
+        case "dkim":
+          where.hasDkim = false
+          break
+        case "dmarc":
+          where.OR = [{ hasDmarc: false }, { hasDmarcAlignment: false }]
+          break
+        case "tls":
+          where.hasTls = false
+          break
+        case "oneClick":
+          where.hasOneClickUnsubscribeHeaders = false
+          break
+        case "unsubBody":
+          where.hasUnsubscribeLinkInBody = false
+          break
+      }
+    }
+
     const [total, rows] = await Promise.all([
-      prisma.cIEmailCompliance.count(),
+      prisma.cIEmailCompliance.count({ where }),
       prisma.cIEmailCompliance.findMany({
+        where,
         skip,
         take: pageSize,
         orderBy: { checkedAt: "desc" },

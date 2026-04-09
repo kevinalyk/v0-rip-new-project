@@ -74,10 +74,10 @@ export function SiteTrafficContent() {
   }
 
   const formatPath = (path: string) => {
-    // Filter out API calls and other noise
+    // Filter out API calls - they're just background auth checks, not meaningful page visits
     if (path.startsWith('/api/')) return null
-    if (path === '/login') return null
     
+    // Return the actual page path
     return path
   }
 

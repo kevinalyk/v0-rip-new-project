@@ -268,6 +268,7 @@ export function AdminComplianceSummary() {
             <CardTitle className="text-base">Republican vs. Democrat — Compliance &amp; Inbox Analysis</CardTitle>
             <CardDescription>
               Compares email compliance scores against actual inbox placement to surface potential Gmail bias. High compliance + high spam rate = potential bias signal.
+              <span className="block mt-1 text-xs opacity-70">Click on any metric to filter the table below.</span>
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -410,7 +411,9 @@ export function AdminComplianceSummary() {
 
       {/* Aggregate Stats */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <>
+          <p className="text-xs text-muted-foreground">Click any metric below to filter campaigns by failures</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Campaigns Checked</CardTitle>
@@ -508,6 +511,7 @@ export function AdminComplianceSummary() {
             </CardContent>
           </Card>
         </div>
+        </>
       )}
 
       {/* Section Score Breakdown */}
@@ -515,7 +519,10 @@ export function AdminComplianceSummary() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Section Score Breakdown</CardTitle>
-            <CardDescription>Average pass rate per compliance section across all checked emails</CardDescription>
+            <CardDescription>
+              Average pass rate per compliance section across all checked emails
+              <span className="block mt-1 text-xs opacity-70">Click any section to filter campaigns by failures</span>
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">

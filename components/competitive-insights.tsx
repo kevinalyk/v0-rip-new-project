@@ -61,6 +61,7 @@ import { CiEntitySubscribeButton } from "./ci-entity-subscribe-button"
 import { useToast } from "@/hooks/use-toast"
 import { CiViewsManager } from "./ci-views-manager" // Imported CiViewsManager
 import { CiAnalyticsView } from "./ci-analytics-view"
+import { nameToSlug } from "@/lib/directory"
 
 interface CompetitiveInsightsProps {
   clientSlug: string
@@ -1913,7 +1914,7 @@ export function CompetitiveInsights({
                                     variant="link"
                                     size="sm"
                                     className="h-auto p-0 text-xs"
-                                    onClick={() => window.open(`/directory/${selectedCampaign.entity?.id}`, "_blank")}
+                                    onClick={() => window.open(`/directory/${nameToSlug(selectedCampaign.entity?.name || "")}`, "_blank")}
                                   >
                                     [View Profile]
                                   </Button>

@@ -11,7 +11,7 @@ type FilterType =
   | { type: "party"; party: "republican" | "democrat" }
   | { type: "placement"; party: "republican" | "democrat"; placement: "inbox" | "spam" }
   | { type: "section"; section: 1 | 2 | 3 | 4; failed: true }
-  | { type: "auth"; check: "spf" | "dkim" | "dmarc" | "tls" | "oneClick" | "unsubBody"; failed: true }
+  | { type: "auth"; check: "spf" | "dkim" | "dmarc" | "tls" | "oneClick" | "unsubBody"; failed: true; party?: "republican" | "democrat" }
   | null
 
 interface ComplianceRow {
@@ -191,6 +191,11 @@ export function AdminComplianceSummary() {
       }
 
       if (activeFilter.type === "auth") {
+        // If party is specified, filter by party first
+        if (activeFilter.party && row.campaign.entity?.party !== activeFilter.party) {
+          return false
+        }
+
         switch (activeFilter.check) {
           case "spf":
             return row.hasSpf === false
@@ -240,7 +245,8 @@ export function AdminComplianceSummary() {
     
     if (filter.type === "auth") {
       const checkNames = { spf: "SPF", dkim: "DKIM", dmarc: "DMARC", tls: "TLS", oneClick: "1-Click Unsubscribe", unsubBody: "Unsub in Body" }
-      return `Failed ${checkNames[filter.check]}`
+      const partyPrefix = filter.party ? `${filter.party.charAt(0).toUpperCase() + filter.party.slice(1)} — ` : ""
+      return `${partyPrefix}Failed ${checkNames[filter.check]}`
     }
     
     return ""
@@ -357,14 +363,14 @@ export function AdminComplianceSummary() {
                             { label: "DMARC", val: s.dmarcRate, check: "dmarc" as const },
                             { label: "1-Click Unsub", val: s.oneClickRate, check: "oneClick" as const },
                           ].map((m) => {
-                            const isActive = activeFilter?.type === "auth" && activeFilter.check === m.check
+                            const isActive = activeFilter?.type === "auth" && activeFilter.check === m.check && activeFilter.party === party
                             return (
                               <div 
                                 key={m.label} 
                                 className={`text-center cursor-pointer hover:opacity-80 transition-opacity p-1 rounded ${isActive ? `ring-2 ring-offset-1 ${isRep ? "ring-red-500" : "ring-blue-500"}` : ""}`}
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  handleFilterClick({ type: "auth", check: m.check, failed: true })
+                                  handleFilterClick({ type: "auth", check: m.check, failed: true, party })
                                 }}
                               >
                                 <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-1">

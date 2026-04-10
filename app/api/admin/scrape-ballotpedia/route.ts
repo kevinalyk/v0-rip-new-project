@@ -4,7 +4,7 @@ import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
 
 // Only run on politician-type entities
-const SUPPORTED_TYPES = ["politician", "candidate"]
+const SUPPORTED_TYPES = ["politician", "candidate", "person"]
 
 // Convert entity name to Ballotpedia URL slug: "Abigail Spanberger" -> "Abigail_Spanberger"
 function nameToBallotpediaSlug(name: string): string {
@@ -21,51 +21,83 @@ function nameToBallotpediaSlug(name: string): string {
 
 // Extract the infobox image src from Ballotpedia HTML
 function extractInfoboxImage(html: string): string | null {
-  // Ballotpedia infobox image is inside a table.infobox, look for the first img
-  const infoboxMatch = html.match(/<table[^>]*class="[^"]*infobox[^"]*"[^>]*>([\s\S]*?)<\/table>/i)
-  if (!infoboxMatch) return null
+  // Strategy 1: find image inside a table with class containing "infobox"
+  // Use indexOf to safely walk past nested tags instead of a regex that stops at first </table>
+  const infoboxStart = html.search(/<table[^>]*class="[^"]*infobox[^"]*"/i)
+  if (infoboxStart !== -1) {
+    // Grab a generous chunk starting from the infobox — 20KB should cover it
+    const chunk = html.slice(infoboxStart, infoboxStart + 20000)
+    const imgMatch = chunk.match(/<img[^>]+src="([^"]+)"/i)
+    if (imgMatch) {
+      let src = imgMatch[1]
+      if (src.startsWith("//")) src = "https:" + src
+      if (src.startsWith("http")) return src
+    }
+  }
 
-  const imgMatch = infoboxMatch[1].match(/<img[^>]+src="([^"]+)"/i)
-  if (!imgMatch) return null
+  // Strategy 2: look for the wikitable personal photo pattern Ballotpedia uses
+  const personalPhotoMatch = html.match(/class="[^"]*(?:photo|headshot|portrait|person-image)[^"]*"[^>]*>[\s\S]{0,500}<img[^>]+src="([^"]+)"/i)
+  if (personalPhotoMatch) {
+    let src = personalPhotoMatch[1]
+    if (src.startsWith("//")) src = "https:" + src
+    if (src.startsWith("http")) return src
+  }
 
-  let src = imgMatch[1]
-  // Make absolute if needed
-  if (src.startsWith("//")) src = "https:" + src
-  if (!src.startsWith("http")) return null
+  // Strategy 3: first image in the page that looks like a person photo (not a logo/icon)
+  const allImgs = html.matchAll(/<img[^>]+src="([^"]+)"[^>]*>/gi)
+  for (const match of allImgs) {
+    let src = match[1]
+    if (src.startsWith("//")) src = "https:" + src
+    if (!src.startsWith("http")) continue
+    // Skip tiny icons and SVGs
+    if (src.includes(".svg")) continue
+    if (src.includes("logo") || src.includes("icon") || src.includes("flag") || src.includes("seal")) continue
+    // Ballotpedia person photos live under /thumb/ or upload.wikimedia
+    if (src.includes("/thumb/") || src.includes("upload.wikimedia") || src.includes("ballotpedia")) {
+      return src
+    }
+  }
 
-  return src
+  return null
 }
 
 // Extract the first meaningful bio paragraph from Ballotpedia HTML
 function extractBio(html: string): string | null {
-  // Strip script/style tags first
+  // Strip script/style/nav/table tags first so we don't pull garbage
   const clean = html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<table[\s\S]*?<\/table>/gi, "")
+    .replace(/<nav[\s\S]*?<\/nav>/gi, "")
 
-  // Find the main content div
-  const contentMatch = clean.match(/<div[^>]*id="mw-content-text"[^>]*>([\s\S]*?)<\/div>/i)
-  const body = contentMatch ? contentMatch[1] : clean
+  // Scan ALL <p> tags in the document — don't try to scope to a specific div
+  // because nested div regex is unreliable
+  const paragraphs = clean.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) || []
 
-  // Get all <p> tags, strip HTML, find the first one with real content
-  const paragraphs = body.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) || []
-  for (const p of paragraphs) {
-    const text = p
-      .replace(/<[^>]+>/g, "")
-      .replace(/\[\d+\]/g, "") // remove footnote markers like [1]
+  const cleanText = (raw: string) =>
+    raw
+      .replace(/<[^>]+>/g, "")           // strip tags
+      .replace(/\[\d+\]/g, "")           // [1] footnote markers
       .replace(/&amp;/g, "&")
       .replace(/&nbsp;/g, " ")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
       .replace(/&#\d+;/g, "")
+      .replace(/\s+/g, " ")
       .trim()
-    if (text.length > 80) {
-      // Truncate to ~500 chars at a sentence boundary
-      if (text.length > 500) {
-        const truncated = text.slice(0, 500)
-        const lastPeriod = truncated.lastIndexOf(".")
-        return lastPeriod > 100 ? truncated.slice(0, lastPeriod + 1) : truncated + "..."
-      }
-      return text
+
+  for (const p of paragraphs) {
+    const text = cleanText(p)
+    // Skip short blurbs, nav-style text, and anything that looks like a caption
+    if (text.length < 60) continue
+    if (/^(see also|contents|navigation|retrieved|external links)/i.test(text)) continue
+    // Good bio paragraphs usually name the person or mention office/political
+    if (text.length > 500) {
+      const truncated = text.slice(0, 500)
+      const lastPeriod = truncated.lastIndexOf(".")
+      return lastPeriod > 100 ? truncated.slice(0, lastPeriod + 1) : truncated + "..."
     }
+    return text
   }
   return null
 }
@@ -126,13 +158,16 @@ export async function POST(request: NextRequest) {
     }
 
     const html = await res.text()
+    console.log("[v0] scrape-ballotpedia: fetched HTML length:", html.length, "url:", ballotpediaUrl)
 
     // Extract bio
     const bio = extractBio(html)
+    console.log("[v0] scrape-ballotpedia: bio extracted:", bio ? bio.slice(0, 80) + "..." : "null")
 
     // Extract and upload image
     let imageUrl: string | null = null
     const imageSrc = extractInfoboxImage(html)
+    console.log("[v0] scrape-ballotpedia: imageSrc found:", imageSrc)
 
     if (imageSrc) {
       try {

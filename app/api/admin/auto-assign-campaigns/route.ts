@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyAuth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { extractWinRedIdentifiers, extractAnedotIdentifiers, extractActBlueIdentifiers, extractPSQIdentifiers } from "@/lib/ci-entity-utils"
+import { extractWinRedIdentifiers, extractAnedotIdentifiers, extractActBlueIdentifiers, extractPSQIdentifiers, extractRevvIdentifiers } from "@/lib/ci-entity-utils"
 
 export const maxDuration = 300 // 5 minutes
 
@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
         anedot: string[]
         psq: string[]
         actblue: string[]
+        revv: string[]
       }
     >()
 
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest) {
         anedot: (identifiers.anedot || []).map((id: string) => id.toLowerCase()),
         psq: (identifiers.psq || []).map((id: string) => id.toLowerCase()),
         actblue: (identifiers.actblue || []).map((id: string) => id.toLowerCase()),
+        revv: (identifiers.revv || []).map((id: string) => id.toLowerCase()),
       })
     }
 
@@ -290,6 +292,7 @@ async function matchCampaignToEntity(
     anedot: new Set<string>(),
     psq: new Set<string>(),
     actblue: new Set<string>(),
+    revv: new Set<string>(),
   }
 
   // Use shared extract functions — pass the full links array so they handle
@@ -298,13 +301,15 @@ async function matchCampaignToEntity(
   for (const id of extractAnedotIdentifiers(links)) donationIdentifiers.anedot.add(id)
   for (const id of extractActBlueIdentifiers(links)) donationIdentifiers.actblue.add(id)
   for (const id of extractPSQIdentifiers(links)) donationIdentifiers.psq.add(id)
+  for (const id of extractRevvIdentifiers(links)) donationIdentifiers.revv.add(id)
 
   // If no identifiers found, return null
   if (
     donationIdentifiers.winred.size === 0 &&
     donationIdentifiers.anedot.size === 0 &&
     donationIdentifiers.psq.size === 0 &&
-    donationIdentifiers.actblue.size === 0
+    donationIdentifiers.actblue.size === 0 &&
+    donationIdentifiers.revv.size === 0
   ) {
     return null
   }
@@ -336,6 +341,13 @@ async function matchCampaignToEntity(
     for (const identifier of donationIdentifiers.actblue) {
       if (entity.actblue.includes(identifier)) {
         return { entityId, entityName: entity.name, method: "auto_actblue" }
+      }
+    }
+
+    // Check Revv
+    for (const identifier of donationIdentifiers.revv) {
+      if (entity.revv.includes(identifier)) {
+        return { entityId, entityName: entity.name, method: "auto_revv" }
       }
     }
   }

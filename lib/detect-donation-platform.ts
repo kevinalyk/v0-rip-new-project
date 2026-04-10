@@ -6,6 +6,7 @@ const PLATFORM_RULES: Array<{ platform: string; domains: string[] }> = [
   { platform: "actblue", domains: ["actblue.com"] },
   { platform: "anedot",  domains: ["anedot.com"] },
   { platform: "winred",  domains: ["winred.com"] },
+  { platform: "revv",    domains: ["revv.com", "revv.co"] },
 ]
 
 /**

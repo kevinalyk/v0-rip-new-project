@@ -2286,6 +2286,30 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                 </div>
 
                 <div>
+                  <Label htmlFor="assign-entity-revv-identifiers" className="text-sm font-normal">
+                    Revv
+                  </Label>
+                  <Input
+                    id="assign-entity-revv-identifiers"
+                    placeholder="e.g., amacaction, nrsc (comma-separated)"
+                    value={assignEntityDonationIdentifiers.revv?.join(", ") || ""}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setAssignEntityDonationIdentifiers((prev) => ({
+                        ...prev,
+                        revv: value
+                          .split(",")
+                          .map((id) => id.trim().toLowerCase())
+                          .filter((id) => id.length > 0),
+                      }))
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    From URLs like: <span className="font-mono">amacaction</span>.revv.co/... or revv.com/<span className="font-mono">amacaction</span>
+                  </p>
+                </div>
+
+                <div>
                   <Label htmlFor="assign-entity-engage-identifiers" className="text-sm font-normal">
                     Engage
                   </Label>

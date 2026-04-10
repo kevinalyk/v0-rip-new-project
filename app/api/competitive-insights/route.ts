@@ -98,13 +98,13 @@ export async function GET(request: NextRequest) {
 
     let dateFilter: any = undefined
     if (client.subscriptionPlan === "free") {
-      const oneDayAgo = new Date()
-      oneDayAgo.setHours(oneDayAgo.getHours() - 24)
-      dateFilter = { gte: oneDayAgo }
+      const threeHoursAgo = new Date()
+      threeHoursAgo.setHours(threeHoursAgo.getHours() - 3)
+      dateFilter = { gte: threeHoursAgo }
     } else if (client.subscriptionPlan === "paid") {
-      const thirtyDaysAgo = new Date()
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-      dateFilter = { gte: thirtyDaysAgo }
+      const threeDaysAgo = new Date()
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
+      dateFilter = { gte: threeDaysAgo }
     }
 
     if (fromDate || toDate) {

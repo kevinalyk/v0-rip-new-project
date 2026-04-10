@@ -32,9 +32,9 @@ interface BillingData {
 }
 
 const CI_PLAN_FEATURES = {
-  free: ["Last 24 hours of campaigns", "Browse email and SMS campaigns", "Basic campaign details", "No follow feature"],
+  free: ["Last 3 hours of campaigns", "Browse email and SMS campaigns", "Basic campaign details", "No follow feature"],
   paid: [
-    "30 days of campaign history",
+    "3 days of campaign history",
     "Follow up to 3 entities/campaigns",
     "Email and SMS campaigns",
     "Campaign analytics",
@@ -167,7 +167,7 @@ export function CIPricingContent() {
   const getCurrentPlanFeatures = () => {
     const limits = getPlanLimits(currentPlan)
     return {
-      ciHistory: currentPlan === "paid" ? "30 days" : currentPlan === "free" ? "24 hours" : "unlimited",
+      ciHistory: currentPlan === "paid" ? "3 days" : currentPlan === "free" ? "3 hours" : "unlimited",
       followLimit:
         limits.ciFollowLimit === null
           ? "Unlimited"
@@ -211,9 +211,9 @@ export function CIPricingContent() {
               <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
                 <p className="font-semibold text-sm mb-2">After cancellation, you will lose access to:</p>
                 <ul className="text-sm space-y-1 ml-4 list-disc">
-                  <li>CI History: {getCurrentPlanFeatures().ciHistory} → 24 hours only</li>
+                  <li>CI History: {getCurrentPlanFeatures().ciHistory} → 3 hours only</li>
                   <li>Follow Entities: {getCurrentPlanFeatures().followLimit} → None</li>
-                  {currentPlan !== "paid" && <li>Analytics Dashboard</li>}
+                  {currentPlan !== "paid" && <li>Reporting Section</li>}
                   {(currentPlan === "basic_inboxing" || currentPlan === "enterprise") && (
                     <>
                       <li>Inbox Tools access</li>

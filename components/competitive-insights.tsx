@@ -1211,7 +1211,7 @@ export function CompetitiveInsights({
             <div className="flex-1">
               <h3 className="text-lg font-semibold text-foreground mb-2">Upgrade to See More</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                You're currently on the Free/Preview plan and can only see limited data. Upgrade to access full history,
+                You&apos;re currently on the Free/Preview plan and can only see the last 3 hours of data. Upgrade to access full history,
                 follow more entities, and unlock advanced features.
               </p>
               {/* CHANGE: Using direct style attribute to bypass Tailwind */}
@@ -1229,8 +1229,45 @@ export function CompetitiveInsights({
               size="icon"
               className="flex-shrink-0"
               onClick={() => {
-                // User can dismiss the banner
                 const banner = document.querySelector("[data-upgrade-banner]")
+                if (banner) {
+                  ; (banner as HTMLElement).style.display = "none"
+                }
+              }}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {subscriptionPlan === "paid" && !hasAdminAccess && (
+        <div
+          className="mb-6 bg-gradient-to-r from-amber-500/10 to-amber-500/5 border border-amber-500/20 rounded-lg p-6"
+          data-paid-upgrade-banner
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-foreground mb-2">You&apos;re seeing the last 3 days</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Your Basic plan includes 3 days of campaign history. Upgrade to a higher tier to unlock more history,
+                advanced filters, and the full campaign archive.
+              </p>
+              <Button
+                size="lg"
+                onClick={() => router.push(`/${clientSlug}/billing?recommended=all`)}
+                style={{ backgroundColor: "#EB3847", color: "white" }}
+                className="hover:opacity-90 transition-opacity"
+              >
+                Upgrade My Plan
+              </Button>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="flex-shrink-0"
+              onClick={() => {
+                const banner = document.querySelector("[data-paid-upgrade-banner]")
                 if (banner) {
                   ; (banner as HTMLElement).style.display = "none"
                 }

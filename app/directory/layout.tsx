@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     url: "https://app.rip-tool.com/directory",
     images: [
       {
-        url: "https://app.rip-tool.com/og-candidate-directory.png",
+        url: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-NfWjmrBARpThJtdxGKQnSXfC9a1fps.png",
         width: 1200,
         height: 630,
       },
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Inbox.GOP Directory",
     description: "Search and explore political candidates tracked by Inbox.GOP",
-    images: ["https://app.rip-tool.com/og-candidate-directory.png"],
+    images: ["https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-NfWjmrBARpThJtdxGKQnSXfC9a1fps.png"],
   },
 }
 

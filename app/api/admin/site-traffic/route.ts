@@ -12,6 +12,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const days = parseInt(searchParams.get("days") || "7")
+    const excludeApi = searchParams.get("excludeApi") === "true"
     
     const startDate = new Date()
     startDate.setDate(startDate.getDate() - days)
@@ -105,34 +106,78 @@ export async function GET(request: Request) {
     ` as Array<{ date: Date, authenticated: bigint, anonymous: bigint }>
 
     // Get recent visits - deduplicated: one row per unique ip+user combo per hour
-    const recentVisitsRaw = await prisma.$queryRaw`
-      SELECT DISTINCT ON (
-        ip,
-        COALESCE("userId", ip),
-        DATE_TRUNC('hour', "createdAt")
-      )
-        id, ip, "userAgent", referer, path, "statusCode",
-        "userEmail", "isAuthenticated", country, city, "createdAt"
-      FROM "SiteVisit"
-      WHERE "createdAt" >= ${startDate}
-      ORDER BY
-        ip,
-        COALESCE("userId", ip),
-        DATE_TRUNC('hour', "createdAt"),
-        "createdAt" DESC
-    ` as Array<{
-      id: string
-      ip: string
-      userAgent: string | null
-      referer: string | null
-      path: string
-      statusCode: number | null
-      userEmail: string | null
-      isAuthenticated: boolean
-      country: string | null
-      city: string | null
-      createdAt: Date
-    }>
+    // When excludeApi is true, only include visits where the path is not an API call
+    // and the referer resolves to a meaningful page
+    const recentVisitsRaw = excludeApi
+      ? await prisma.$queryRaw`
+          SELECT DISTINCT ON (
+            ip,
+            COALESCE("userId", ip),
+            DATE_TRUNC('hour', "createdAt")
+          )
+            id, ip, "userAgent", referer, path, "statusCode",
+            "userEmail", "isAuthenticated", country, city, "createdAt"
+          FROM "SiteVisit"
+          WHERE "createdAt" >= ${startDate}
+            AND (
+              -- Include non-API paths directly
+              (path NOT LIKE '/api/%' AND path != '/login')
+              OR
+              -- Include API calls only if referer has a meaningful page (not login/root/empty)
+              (
+                path LIKE '/api/%'
+                AND referer IS NOT NULL
+                AND referer NOT LIKE '%/login'
+                AND referer NOT LIKE '%/login?%'
+                AND length(referer) > 10
+              )
+            )
+          ORDER BY
+            ip,
+            COALESCE("userId", ip),
+            DATE_TRUNC('hour', "createdAt"),
+            "createdAt" DESC
+        ` as Array<{
+          id: string
+          ip: string
+          userAgent: string | null
+          referer: string | null
+          path: string
+          statusCode: number | null
+          userEmail: string | null
+          isAuthenticated: boolean
+          country: string | null
+          city: string | null
+          createdAt: Date
+        }>
+      : await prisma.$queryRaw`
+          SELECT DISTINCT ON (
+            ip,
+            COALESCE("userId", ip),
+            DATE_TRUNC('hour', "createdAt")
+          )
+            id, ip, "userAgent", referer, path, "statusCode",
+            "userEmail", "isAuthenticated", country, city, "createdAt"
+          FROM "SiteVisit"
+          WHERE "createdAt" >= ${startDate}
+          ORDER BY
+            ip,
+            COALESCE("userId", ip),
+            DATE_TRUNC('hour', "createdAt"),
+            "createdAt" DESC
+        ` as Array<{
+          id: string
+          ip: string
+          userAgent: string | null
+          referer: string | null
+          path: string
+          statusCode: number | null
+          userEmail: string | null
+          isAuthenticated: boolean
+          country: string | null
+          city: string | null
+          createdAt: Date
+        }>
 
     // Sort by most recent and limit to 50
     const recentVisits = recentVisitsRaw

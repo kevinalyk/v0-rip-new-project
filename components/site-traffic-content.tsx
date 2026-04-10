@@ -46,7 +46,7 @@ export function SiteTrafficContent() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`/api/admin/site-traffic?days=${days}`, {
+      const response = await fetch(`/api/admin/site-traffic?days=${days}&excludeApi=${hideApiCalls}`, {
         credentials: "include"
       })
       if (!response.ok) throw new Error("Failed to fetch")
@@ -62,7 +62,7 @@ export function SiteTrafficContent() {
 
   useEffect(() => {
     fetchData()
-  }, [days])
+  }, [days, hideApiCalls])
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleString()
@@ -389,16 +389,7 @@ export function SiteTrafficContent() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.recentVisits
-                  .filter((visit) => {
-                    // If hideApiCalls is enabled, filter out visits where formattedPath is null
-                    if (hideApiCalls) {
-                      const formattedPath = formatPath(visit.path, visit.referer)
-                      return formattedPath !== null
-                    }
-                    return true
-                  })
-                  .map((visit) => {
+                {data.recentVisits.map((visit) => {
                     const formattedPath = formatPath(visit.path, visit.referer)
                   
                     return (

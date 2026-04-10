@@ -98,13 +98,13 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { id, name, type, description, party, state, donationIdentifiers } = body
+    const { id, name, type, description, party, state, donationIdentifiers, ballotpediaUrl } = body
 
     if (!id || !name || !type) {
       return NextResponse.json({ error: "ID, name and type are required" }, { status: 400 })
     }
 
-    const result = await updateEntity(id, name, type, description, party, state, donationIdentifiers)
+    const result = await updateEntity(id, name, type, description, party, state, donationIdentifiers, ballotpediaUrl)
 
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 400 })

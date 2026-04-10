@@ -100,8 +100,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Use manually set URL if available, otherwise auto-construct from name
     const slug = nameToBallotpediaSlug(entity.name)
-    const ballotpediaUrl = `https://ballotpedia.org/${slug}`
+    const ballotpediaUrl = (entity.ballotpediaUrl as string | null) || `https://ballotpedia.org/${slug}`
 
     // Fetch Ballotpedia page
     const res = await fetch(ballotpediaUrl, {

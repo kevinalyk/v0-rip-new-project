@@ -441,6 +441,7 @@ export async function updateEntity(
   party?: string,
   state?: string,
   donationIdentifiers?: DonationIdentifiers,
+  ballotpediaUrl?: string,
 ) {
   try {
     const entity = await prisma.ciEntity.update({
@@ -452,6 +453,7 @@ export async function updateEntity(
         party,
         state,
         donationIdentifiers: donationIdentifiers || null,
+        ...(ballotpediaUrl !== undefined && { ballotpediaUrl: ballotpediaUrl || null }),
       },
     })
 

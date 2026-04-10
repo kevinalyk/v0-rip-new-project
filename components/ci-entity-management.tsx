@@ -73,6 +73,7 @@ type Entity = {
   party: string | null
   state: string | null
   donationIdentifiers?: DonationIdentifiers | null
+  ballotpediaUrl?: string | null
   _count?: {
     campaigns: number
     smsMessages: number
@@ -149,6 +150,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
   const [newEntityState, setNewEntityState] = useState("")
   const [newEntityNationwide, setNewEntityNationwide] = useState(false)
   const [newEntityDonationIdentifiers, setNewEntityDonationIdentifiers] = useState<DonationIdentifiers>({})
+  const [newEntityBallotpediaUrl, setNewEntityBallotpediaUrl] = useState("")
 
   const [donationIdentifierInputs, setDonationIdentifierInputs] = useState<{
     winred: string
@@ -466,7 +468,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
         const response = await fetch("/api/ci-entities", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+            body: JSON.stringify({
             id: editingEntityId,
             name: newEntityName,
             type: newEntityType,
@@ -475,6 +477,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
             state: newEntityState || undefined,
             tag: newEntityTag || undefined,
             donationIdentifiers: finalDonationIdentifiers,
+            ballotpediaUrl: newEntityBallotpediaUrl.trim() || undefined,
           }),
         })
 
@@ -489,6 +492,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setNewEntityState("")
           setNewEntityNationwide(false)
           setNewEntityDonationIdentifiers({})
+          setNewEntityBallotpediaUrl("")
     setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", engage: "", substack: "" }) // Reset raw inputs too
     fetchData()
     toast.success("Entity updated successfully!")
@@ -684,6 +688,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
     setNewEntityNationwide(isNationwide)
     setNewEntityState(isNationwide ? "" : entity.state || "")
     setNewEntityDonationIdentifiers(entity.donationIdentifiers || {}) // Set donation identifiers
+    setNewEntityBallotpediaUrl(entity.ballotpediaUrl || "")
 
   // Initialize raw input state based on existing donation identifiers
   setDonationIdentifierInputs({
@@ -1596,6 +1601,18 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                         {entity.state && <Badge variant="outline">{entity.state}</Badge>}
                       </div>
                       {entity.description && <CardDescription className="mt-2">{entity.description}</CardDescription>}
+                  {entity.ballotpediaUrl && (
+                    <a
+                      href={entity.ballotpediaUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 mt-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <BookOpen className="h-3 w-3" />
+                      Ballotpedia
+                    </a>
+                  )}
                     </CardHeader>
                     <CardContent>
                       <div className="flex gap-4 text-sm">
@@ -1787,6 +1804,18 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                   onChange={(e) => setNewEntityDescription(e.target.value)}
                   rows={3}
                 />
+              </div>
+              <div>
+                <Label htmlFor="entity-ballotpedia-url">Ballotpedia URL (Optional)</Label>
+                <Input
+                  id="entity-ballotpedia-url"
+                  placeholder="e.g., https://ballotpedia.org/Adam_Smith_(Washington)"
+                  value={newEntityBallotpediaUrl}
+                  onChange={(e) => setNewEntityBallotpediaUrl(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Set this manually for politicians with common names to avoid disambiguation pages.
+                </p>
               </div>
               {/* Added Tag input */}
               <div>

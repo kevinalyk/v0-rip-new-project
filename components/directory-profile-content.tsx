@@ -42,6 +42,9 @@ interface EntityData {
     state: string | null
     slug: string
     mappings: Mapping[]
+    imageUrl: string | null
+    bio: string | null
+    ballotpediaUrl: string | null
     counts: {
       emails: number
       sms: number
@@ -213,8 +216,11 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
 
         {/* Profile hero */}
         <div className="flex items-start gap-5 mb-8">
-          <div className="flex-shrink-0 w-14 h-14 rounded-xl bg-muted flex items-center justify-center text-muted-foreground">
-            {getEntityIcon(entity.type)}
+          <div className="flex-shrink-0 w-16 h-16 rounded-xl bg-muted flex items-center justify-center text-muted-foreground overflow-hidden">
+            {entity.imageUrl
+              ? <img src={entity.imageUrl} alt={entity.name} className="w-full h-full object-cover object-top" crossOrigin="anonymous" />
+              : getEntityIcon(entity.type)
+            }
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold tracking-tight text-balance mb-2">{entity.name}</h1>
@@ -256,6 +262,24 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
             <div className="text-2xl font-bold">{entity.counts.total.toLocaleString()}</div>
           </div>
         </div>
+
+        {/* Bio */}
+        {entity.bio && (
+          <div className="rounded-lg border border-border bg-card p-5 mb-8">
+            <p className="text-sm text-muted-foreground leading-relaxed">{entity.bio}</p>
+            {entity.ballotpediaUrl && (
+              <a
+                href={entity.ballotpediaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ExternalLink className="h-3 w-3" />
+                View on Ballotpedia
+              </a>
+            )}
+          </div>
+        )}
 
         {/* Domains & Short Codes */}
         {(emailDomains.length > 0 || shortCodes.length > 0) && (

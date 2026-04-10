@@ -372,6 +372,10 @@ model CiEntity {
   party              String?  // "republican", "democrat", "independent"
   state              String?  // State abbreviation (e.g., "CA", "NY") or "Nationwide"
   donationIdentifiers Json?   // Platform-specific donation identifiers: {"winred": ["nrcc"], "anedot": ["jeff-hurd"], "actblue": ["elizabethwarren", "amy-for-america"]}
+  imageUrl           String?  // Headshot URL from Vercel Blob (scraped from Ballotpedia)
+  bio                String?  // Short bio text scraped from Ballotpedia
+  ballotpediaUrl     String?  // The Ballotpedia URL that was scraped
+  ballotpediaFetchedAt DateTime? // When the Ballotpedia data was last fetched
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

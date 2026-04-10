@@ -21,7 +21,7 @@ export interface ClientWithSubscription {
 
 export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
   free: {
-    ciHistoryDays: 1, // Last day only
+    ciHistoryDays: 0.125, // Last 3 hours only (3/24 = 0.125 days)
     ciFollowLimit: 0, // Cannot follow
     hasPersonalEmail: false,
     hasInboxTools: false,
@@ -30,7 +30,7 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
     emailVolumeLimit: 0,
   },
   paid: {
-    ciHistoryDays: 30, // 30 days of history
+    ciHistoryDays: 3, // 3 days of history
     ciFollowLimit: 3, // Updated from 1 to 3 entities
     hasPersonalEmail: false,
     hasInboxTools: false,

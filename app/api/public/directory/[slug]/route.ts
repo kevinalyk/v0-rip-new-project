@@ -76,6 +76,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         state: entity.state,
         slug: nameToSlug(entity.name),
         mappings: entity.mappings,
+        imageUrl: entity.imageUrl ?? null,
+        bio: entity.bio ?? null,
+        ballotpediaUrl: entity.ballotpediaUrl ?? null,
         counts: {
           emails: entity._count.campaigns,
           sms: entity._count.smsMessages,

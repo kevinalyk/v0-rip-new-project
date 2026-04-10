@@ -13,12 +13,13 @@ export type DonationIdentifiers = {
   ngpvan?: string[]
   engage?: string[] // Engage subdomain e.g. "tomemmer" from engage.tomemmer.com
   substack?: string // Substack handle e.g. "kirstengillibrand"
+  revv?: string[]   // Revv slug e.g. "amacaction" from amacaction.revv.co/... or revv.com/amacaction
 }
 
 // Type for entity assignment
 type EntityAssignment = {
   entityId: string
-  assignmentMethod: "auto_domain" | "auto_winred" | "auto_anedot" | "auto_actblue" | "auto_psqimpact" | "auto_engage" | "auto_phone" | "auto_substack"
+  assignmentMethod: "auto_domain" | "auto_winred" | "auto_anedot" | "auto_actblue" | "auto_psqimpact" | "auto_engage" | "auto_phone" | "auto_substack" | "auto_revv"
 } | null
 
 function stripHtmlAndExtract(html: string): string {
@@ -988,6 +989,60 @@ export function extractPSQIdentifiers(ctaLinks: any): Set<string> {
 }
 
 /**
+ * Extract Revv identifiers from CTA links.
+ * Handles two URL patterns:
+ *   revv.com/{slug}/...          e.g. revv.com/amacaction
+ *   {slug}.revv.co/{path}        e.g. amacaction.revv.co/db4ce6ba3f5c8287
+ */
+export function extractRevvIdentifiers(ctaLinks: any): Set<string> {
+  const identifiers = new Set<string>()
+  if (!ctaLinks) return identifiers
+
+  const links = Array.isArray(ctaLinks) ? ctaLinks : []
+
+  const tryExtract = (url: string) => {
+    try {
+      const urlObj = new URL(url)
+      const hostname = urlObj.hostname.toLowerCase()
+
+      // Pattern 1: revv.com/{slug}/...
+      if (hostname === "revv.com" || hostname === "www.revv.com") {
+        const pathParts = urlObj.pathname.split("/").filter(Boolean)
+        if (pathParts.length > 0 && pathParts[0]) {
+          identifiers.add(pathParts[0].toLowerCase())
+        }
+        return
+      }
+
+      // Pattern 2: {slug}.revv.co
+      if (hostname.endsWith(".revv.co")) {
+        const subdomain = hostname.replace(/\.revv\.co$/, "")
+        if (subdomain && subdomain !== "www") {
+          identifiers.add(subdomain.toLowerCase())
+        }
+      }
+    } catch {
+      // Invalid URL, skip
+    }
+  }
+
+  for (const link of links) {
+    const url = typeof link === "string" ? link : link.finalUrl || link.url
+    if (!url) continue
+
+    tryExtract(url)
+
+    // Also try decoded tracking URL if finalUrl is absent
+    if ((typeof link !== "string" && !link.finalUrl) || url.includes("trk.") || url.includes("tracking") || url.includes("click.")) {
+      const decoded = tryDecodeTrackingUrl(url)
+      if (decoded) tryExtract(decoded)
+    }
+  }
+
+  return identifiers
+}
+
+/**
  * Extract NGPVAN identifiers from CTA links
  */
 export function extractNGPVANIdentifiers(ctaLinks: any): Set<string> {
@@ -1105,6 +1160,7 @@ function extractDonationIdentifiers(ctaLinks: any): Array<{ platform: string; id
   const psqIdentifiers = extractPSQIdentifiers(ctaLinks)
   const ngpvanIdentifiers = extractNGPVANIdentifiers(ctaLinks)
   const engageIdentifiers = extractEngageIdentifiers(ctaLinks)
+  const revvIdentifiers = extractRevvIdentifiers(ctaLinks)
 
   for (const identifier of winredIdentifiers) {
     identifiers.push({ platform: "winred", identifier })
@@ -1128,6 +1184,10 @@ function extractDonationIdentifiers(ctaLinks: any): Array<{ platform: string; id
 
   for (const identifier of engageIdentifiers) {
     identifiers.push({ platform: "engage", identifier })
+  }
+
+  for (const identifier of revvIdentifiers) {
+    identifiers.push({ platform: "revv", identifier })
   }
 
   return identifiers

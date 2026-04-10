@@ -30,6 +30,8 @@ import {
   ArrowRight,
   Phone,
   Smartphone,
+  BookOpen,
+  Loader2,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Label } from "@/components/ui/label"
@@ -131,6 +133,11 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [entityToDelete, setEntityToDelete] = useState<Entity | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Ballotpedia scraping state
+  const [scrapingEntityId, setScrapingEntityId] = useState<string | null>(null)
+  const [scrapeError, setScrapeError] = useState<string | null>(null)
+  const [scrapeSuccess, setScrapeSuccess] = useState<string | null>(null)
 
   // Create/Edit entity form
   const [editingEntityId, setEditingEntityId] = useState<string | null>(null)
@@ -691,6 +698,33 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
     // position is removed
     setShowCreateDialog(true)
     fetchEntityMappings(entity.id)
+  }
+
+  const handleScrapeEntity = async (entity: Entity) => {
+    setScrapingEntityId(entity.id)
+    setScrapeError(null)
+    setScrapeSuccess(null)
+    try {
+      const res = await fetch("/api/admin/scrape-ballotpedia", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ entityId: entity.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setScrapeError(data.error || "Scrape failed")
+      } else {
+        setScrapeSuccess(
+          `Fetched data for ${entity.name}.${data.imageUrl ? " Photo saved." : " No photo found."}${data.bio ? " Bio saved." : ""}`
+        )
+        fetchEntities()
+      }
+    } catch {
+      setScrapeError("Network error — could not reach scraper.")
+    } finally {
+      setScrapingEntityId(null)
+    }
   }
 
   const fetchEntityMappings = async (entityId: string) => {
@@ -1488,6 +1522,20 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
               </CardContent>
             </Card>
 
+            {/* Ballotpedia scrape feedback */}
+            {scrapeError && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive flex items-center justify-between mb-2">
+                <span>{scrapeError}</span>
+                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setScrapeError(null)}><X className="h-3 w-3" /></Button>
+              </div>
+            )}
+            {scrapeSuccess && (
+              <div className="rounded-lg border border-green-500/40 bg-green-500/10 px-4 py-3 text-sm text-green-600 flex items-center justify-between mb-2">
+                <span>{scrapeSuccess}</span>
+                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setScrapeSuccess(null)}><X className="h-3 w-3" /></Button>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {loading ? (
                 <Card className="col-span-full">
@@ -1516,6 +1564,19 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                             >
                               {entity.party}
                             </Badge>
+                          )}
+                          {(entity.type === "politician" || entity.type === "candidate") && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Fetch from Ballotpedia"
+                              disabled={scrapingEntityId === entity.id}
+                              onClick={() => handleScrapeEntity(entity)}
+                            >
+                              {scrapingEntityId === entity.id
+                                ? <Loader2 className="h-4 w-4 animate-spin" />
+                                : <BookOpen className="h-4 w-4" />}
+                            </Button>
                           )}
                           <Button variant="ghost" size="icon" onClick={() => handleEditEntity(entity)}>
                             <Pencil className="h-4 w-4" />
@@ -2282,6 +2343,30 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                     From URLs like: secure.psqimpact.com/donate/<span className="font-mono">conservative-battleground-fund</span>/...
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="assign-entity-revv-identifiers" className="text-sm font-normal">
+                    Revv
+                  </Label>
+                  <Input
+                    id="assign-entity-revv-identifiers"
+                    placeholder="e.g., amacaction, nrsc (comma-separated)"
+                    value={assignEntityDonationIdentifiers.revv?.join(", ") || ""}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setAssignEntityDonationIdentifiers((prev) => ({
+                        ...prev,
+                        revv: value
+                          .split(",")
+                          .map((id) => id.trim().toLowerCase())
+                          .filter((id) => id.length > 0),
+                      }))
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    From URLs like: <span className="font-mono">amacaction</span>.revv.co/... or revv.com/<span className="font-mono">amacaction</span>
                   </p>
                 </div>
 

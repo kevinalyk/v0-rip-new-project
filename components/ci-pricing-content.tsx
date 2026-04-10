@@ -213,7 +213,7 @@ export function CIPricingContent() {
                 <ul className="text-sm space-y-1 ml-4 list-disc">
                   <li>CI History: {getCurrentPlanFeatures().ciHistory} → 3 hours only</li>
                   <li>Follow Entities: {getCurrentPlanFeatures().followLimit} → None</li>
-                  {currentPlan !== "paid" && <li>Analytics Dashboard</li>}
+                  {currentPlan !== "paid" && <li>Reporting Section</li>}
                   {(currentPlan === "basic_inboxing" || currentPlan === "enterprise") && (
                     <>
                       <li>Inbox Tools access</li>

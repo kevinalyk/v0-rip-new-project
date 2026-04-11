@@ -44,6 +44,7 @@ interface EntityData {
     mappings: Mapping[]
     imageUrl: string | null
     bio: string | null
+    office: string | null
     ballotpediaUrl: string | null
     counts: {
       emails: number
@@ -226,15 +227,18 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
       <div className="container mx-auto py-8 px-4 max-w-3xl">
 
         {/* Profile hero */}
-        <div className="flex items-start gap-5 mb-8">
-          <div className="flex-shrink-0 w-28 h-28 rounded-2xl bg-muted flex items-center justify-center text-muted-foreground overflow-hidden">
+        <div className="flex items-start gap-6 mb-8">
+          <div className="flex-shrink-0 w-32 h-40 rounded-2xl bg-muted flex items-center justify-center text-muted-foreground overflow-hidden">
             {entity.imageUrl
               ? <img src={entity.imageUrl} alt={entity.name} className="w-full h-full object-cover object-top" crossOrigin="anonymous" />
               : getEntityIcon(entity.type)
             }
           </div>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight text-balance mb-2">{entity.name}</h1>
+          <div className="flex-1 min-w-0 pt-1">
+            <h1 className="text-2xl font-bold tracking-tight text-balance mb-1">{entity.name}</h1>
+            {entity.office && (
+              <p className="text-sm text-muted-foreground mb-2">{entity.office}</p>
+            )}
             <div className="flex flex-wrap items-center gap-2">
               {entity.party && (
                 <Badge className={getPartyColor(entity.party)}>

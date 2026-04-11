@@ -78,6 +78,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         mappings: entity.mappings,
         imageUrl: entity.imageUrl ?? null,
         bio: entity.bio ?? null,
+        office: entity.office ?? null,
         ballotpediaUrl: entity.ballotpediaUrl ?? null,
         counts: {
           emails: entity._count.campaigns,

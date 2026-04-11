@@ -360,7 +360,7 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
           ) : (
             <div className="rounded-lg border overflow-hidden">
               {/* Header row */}
-              <div className="grid grid-cols-[1fr_140px_140px_60px_auto] items-center px-4 py-2 border-b bg-muted/40 text-xs font-medium text-muted-foreground">
+              <div className="grid grid-cols-[2fr_1fr_1fr_80px_120px] items-center px-6 py-2.5 border-b bg-muted/40 text-xs font-medium text-muted-foreground">
                 <span>Name</span>
                 <span>Type</span>
                 <span>Party</span>
@@ -370,7 +370,7 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
               {entities.map((entity) => (
                 <div
                   key={entity.id}
-                  className="grid grid-cols-[1fr_140px_140px_60px_auto] items-center px-4 py-3 border-b last:border-b-0 hover:bg-accent/40 transition-colors cursor-pointer"
+                  className="grid grid-cols-[2fr_1fr_1fr_80px_120px] items-center px-6 py-3 border-b last:border-b-0 hover:bg-accent/40 transition-colors cursor-pointer"
                   onClick={(e) => {
                     if ((e.target as HTMLElement).closest("[data-subscribe-button]")) return
                     router.push(`/directory/${nameToSlug(entity.name)}`)

@@ -19,6 +19,7 @@ export async function getEntityBySlug(slug: string) {
         description: true,
         party: true,
         state: true,
+        imageUrl: true,
         mappings: {
           select: {
             id: true,
@@ -61,6 +62,7 @@ export async function getEntityBySlug(slug: string) {
         description: entity.description,
         party: entity.party,
         state: entity.state,
+        imageUrl: entity.imageUrl ?? null,
         slug: nameToSlug(entity.name),
         mappings: entity.mappings,
         counts: {

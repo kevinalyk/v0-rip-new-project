@@ -23,8 +23,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     ? entity.description
     : `Track ${entity.name}'s email and SMS communications. ${entity.counts.total} total messages captured.`
 
-  const ogImage = entity.imageUrl
-    ? { url: entity.imageUrl, width: 400, height: 500, alt: entity.name }
+  // Only use the scraped image as the OG image if it's a public Blob URL —
+  // private Blob URLs are inaccessible to social media crawlers.
+  const isPublicBlobUrl = (url: string | null) =>
+    !!url && url.includes("public.blob.vercel-storage.com")
+
+  const ogImage = isPublicBlobUrl(entity.imageUrl)
+    ? { url: entity.imageUrl as string, width: 400, height: 500, alt: entity.name }
     : { url: `${APP_URL}/og-image.png`, width: 1200, height: 630, alt: "RIP Tool" }
 
   return {
@@ -39,7 +44,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       images: [ogImage],
     },
     twitter: {
-      card: entity.imageUrl ? "summary" : "summary_large_image",
+      card: isPublicBlobUrl(entity.imageUrl) ? "summary" : "summary_large_image",
       title,
       description,
       images: [ogImage.url],

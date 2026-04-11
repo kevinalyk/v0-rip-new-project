@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search } from "lucide-react"
+import { Search, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
 import { CiEntitySubscribeButton } from "@/components/ci-entity-subscribe-button"
 import {
@@ -370,19 +371,21 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
           ) : (
             <div className="rounded-lg border overflow-hidden">
               {/* Header row */}
-              <div className="grid grid-cols-[2fr_1fr_1fr_80px_120px] items-center px-6 py-2.5 border-b bg-muted/40 text-xs font-medium text-muted-foreground">
+              <div className="grid grid-cols-[2fr_1fr_1fr_80px_120px_80px] items-center px-6 py-2.5 border-b bg-muted/40 text-xs font-medium text-muted-foreground">
                 <span>Name</span>
                 <span>Type</span>
                 <span>Party</span>
                 <span>State</span>
                 <span className="text-right">{isAuthenticated ? "Follow" : ""}</span>
+                <span></span>
               </div>
               {entities.map((entity) => (
                 <div
                   key={entity.id}
-                  className="grid grid-cols-[2fr_1fr_1fr_80px_120px] items-center px-6 py-3 border-b last:border-b-0 hover:bg-accent/40 transition-colors cursor-pointer"
+                  className="grid grid-cols-[2fr_1fr_1fr_80px_120px_80px] items-center px-6 py-3 border-b last:border-b-0 hover:bg-accent/40 transition-colors cursor-pointer"
                   onClick={(e) => {
                     if ((e.target as HTMLElement).closest("[data-subscribe-button]")) return
+                    if ((e.target as HTMLElement).closest("[data-view-button]")) return
                     router.push(`/directory/${nameToSlug(entity.name)}`)
                   }}
                 >
@@ -403,6 +406,19 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
                         <CiEntitySubscribeButton entityId={entity.id} entityName={entity.name} />
                       </div>
                     )}
+                  </span>
+                  <span className="flex justify-end" data-view-button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        router.push(`/directory/${nameToSlug(entity.name)}`)
+                      }}
+                    >
+                      View <ArrowRight className="ml-1 h-3 w-3" />
+                    </Button>
                   </span>
                 </div>
               ))}

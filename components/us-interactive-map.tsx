@@ -77,9 +77,9 @@ export function USInteractiveMap({ selectedState, onStateSelect }: USInteractive
 
   const getStateFill = (geoId: string) => {
     const name = STATE_NAMES[geoId]
-    if (selectedState && selectedState === name) return "hsl(var(--rip-red, 0 72% 51%))"
-    if (hoveredState === name) return "hsl(var(--foreground) / 0.15)"
-    return "hsl(var(--foreground) / 0.08)"
+    if (selectedState && selectedState === name) return "oklch(0.62 0.22 20)"
+    if (hoveredState === name) return "oklch(0.62 0.22 20 / 0.55)"
+    return "oklch(0.62 0.22 20 / 0.25)"
   }
 
   return (
@@ -102,8 +102,8 @@ export function USInteractiveMap({ selectedState, onStateSelect }: USInteractive
                       <Geography
                         geography={geo}
                         fill={getStateFill(geo.id)}
-                        stroke="hsl(var(--background))"
-                        strokeWidth={1.5}
+                        stroke="oklch(0.62 0.22 20 / 0.15)"
+                        strokeWidth={0.75}
                         style={{
                           default: { outline: "none", cursor: "pointer", transition: "fill 0.15s ease" },
                           hover: { outline: "none", cursor: "pointer" },

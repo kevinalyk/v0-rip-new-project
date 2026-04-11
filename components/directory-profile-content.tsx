@@ -249,35 +249,28 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
               {entity.state && <Badge variant="outline">{entity.state}</Badge>}
               <Badge variant="secondary" className="capitalize">{entity.type}</Badge>
             </div>
-            {/* Donation links */}
-            {entity.donationIdentifiers && (
-              <div className="flex flex-wrap items-center gap-2 mt-2">
-                {(entity.donationIdentifiers.winred ?? []).map((slug) => (
-                  <a
-                    key={slug}
-                    href={`https://secure.winred.com/${slug}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded-full bg-red-600/10 text-red-500 border border-red-600/20 px-3 py-0.5 text-xs font-medium hover:bg-red-600/20 transition-colors"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                    WinRed
-                  </a>
-                ))}
-                {(entity.donationIdentifiers.actblue ?? []).map((slug) => (
-                  <a
-                    key={slug}
-                    href={`https://secure.actblue.com/donate/${slug}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded-full bg-blue-600/10 text-blue-400 border border-blue-600/20 px-3 py-0.5 text-xs font-medium hover:bg-blue-600/20 transition-colors"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                    ActBlue
-                  </a>
-                ))}
-              </div>
-            )}
+            {/* Donation links — WinRed for Republicans only */}
+            {entity.donationIdentifiers &&
+              entity.party?.toLowerCase() === "republican" &&
+              (entity.donationIdentifiers.winred ?? []).length > 0 && (
+                <div className="flex flex-col gap-1 mt-3">
+                  <span className="text-xs font-semibold text-muted-foreground mb-0.5">
+                    WinRed Donation Page
+                  </span>
+                  {(entity.donationIdentifiers.winred ?? []).map((slug) => (
+                    <a
+                      key={slug}
+                      href={`https://secure.winred.com/${slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs text-red-500 hover:text-red-400 transition-colors"
+                    >
+                      <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                      {`secure.winred.com/${slug}`}
+                    </a>
+                  ))}
+                </div>
+              )}
           </div>
           {isAuthenticated && (
             <div className="flex-shrink-0">

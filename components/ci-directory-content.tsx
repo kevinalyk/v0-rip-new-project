@@ -359,28 +359,41 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
             <div className="text-center py-8 text-muted-foreground">No entities found. Try adjusting your filters.</div>
           ) : (
             <div className="rounded-lg border overflow-hidden">
+              {/* Header row */}
+              <div className="grid grid-cols-[1fr_140px_140px_60px_auto] items-center px-4 py-2 border-b bg-muted/40 text-xs font-medium text-muted-foreground">
+                <span>Name</span>
+                <span>Type</span>
+                <span>Party</span>
+                <span>State</span>
+                <span className="text-right">{isAuthenticated ? "Follow" : ""}</span>
+              </div>
               {entities.map((entity) => (
                 <div
                   key={entity.id}
-                  className="flex items-center justify-between px-4 py-2.5 border-b last:border-b-0 hover:bg-accent/40 transition-colors cursor-pointer"
+                  className="grid grid-cols-[1fr_140px_140px_60px_auto] items-center px-4 py-3 border-b last:border-b-0 hover:bg-accent/40 transition-colors cursor-pointer"
                   onClick={(e) => {
                     if ((e.target as HTMLElement).closest("[data-subscribe-button]")) return
-                    if ((e.target as HTMLElement).closest("[data-profile-link]")) return
                     router.push(`/directory/${nameToSlug(entity.name)}`)
                   }}
                 >
-                  <div className="font-medium text-sm">{entity.name}</div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="font-medium text-sm">{entity.name}</span>
+                  <span>
                     <Badge className={`${getTypeBadgeColor(entity.type)} text-xs capitalize`}>{entity.type}</Badge>
-                    {entity.party && <Badge className={`${getPartyBadgeClassName(entity.party)} text-xs`}>{entity.party}</Badge>}
-                    {entity.state && <Badge variant="outline" className="text-xs">{entity.state}</Badge>}
-                    <span className="text-xs text-muted-foreground w-32 text-right">{entity._count.totalCommunications} communications</span>
+                  </span>
+                  <span>
+                    {entity.party
+                      ? <Badge className={`${getPartyBadgeClassName(entity.party)} text-xs capitalize`}>{entity.party}</Badge>
+                      : <span className="text-muted-foreground text-xs">—</span>
+                    }
+                  </span>
+                  <span className="text-sm text-muted-foreground">{entity.state ?? "—"}</span>
+                  <span className="flex justify-end">
                     {isAuthenticated && (
                       <div data-subscribe-button>
                         <CiEntitySubscribeButton entityId={entity.id} entityName={entity.name} />
                       </div>
                     )}
-                  </div>
+                  </span>
                 </div>
               ))}
             </div>

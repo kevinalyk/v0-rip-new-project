@@ -19,89 +19,107 @@ function nameToBallotpediaSlug(name: string): string {
     .join("_")
 }
 
-// Extract the infobox image src from Ballotpedia HTML
+// Shared HTML text cleaner
+function cleanText(raw: string): string {
+  return raw
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#\d+;/g, "")
+    .replace(/\[[\w\s]*\]/g, "") // remove [source] markers
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+// Extract the infobox image src from Ballotpedia HTML.
+// Ballotpedia uses <div class="infobox person"> with <div class="widget-row"> children.
 function extractInfoboxImage(html: string): string | null {
-  // Strategy 1: find image inside a table with class containing "infobox"
-  // Use indexOf to safely walk past nested tags instead of a regex that stops at first </table>
-  const infoboxStart = html.search(/<table[^>]*class="[^"]*infobox[^"]*"/i)
+  // Strategy 1: find div.infobox block and grab first img inside it
+  const infoboxStart = html.search(/<div[^>]*class="[^"]*infobox[^"]*"/i)
   if (infoboxStart !== -1) {
-    // Grab a generous chunk starting from the infobox — 20KB should cover it
-    const chunk = html.slice(infoboxStart, infoboxStart + 20000)
+    const chunk = html.slice(infoboxStart, infoboxStart + 30000)
     const imgMatch = chunk.match(/<img[^>]+src="([^"]+)"/i)
     if (imgMatch) {
       let src = imgMatch[1]
       if (src.startsWith("//")) src = "https:" + src
-      if (src.startsWith("http")) return src
+      if (src.startsWith("http")) {
+        console.log("[v0] scrape-ballotpedia: image found via infobox div:", src)
+        return src
+      }
     }
   }
 
-  // Strategy 2: look for the wikitable personal photo pattern Ballotpedia uses
-  const personalPhotoMatch = html.match(/class="[^"]*(?:photo|headshot|portrait|person-image)[^"]*"[^>]*>[\s\S]{0,500}<img[^>]+src="([^"]+)"/i)
-  if (personalPhotoMatch) {
-    let src = personalPhotoMatch[1]
+  // Strategy 2: widget-row containing an img (Ballotpedia photo rows)
+  const widgetImgMatch = html.match(/class="[^"]*widget-row[^"]*"[^>]*>[\s\S]{0,2000}<img[^>]+src="([^"]+)"/i)
+  if (widgetImgMatch) {
+    let src = widgetImgMatch[1]
     if (src.startsWith("//")) src = "https:" + src
-    if (src.startsWith("http")) return src
+    if (src.startsWith("http")) {
+      console.log("[v0] scrape-ballotpedia: image found via widget-row:", src)
+      return src
+    }
   }
 
-  // Strategy 3: first image in the page that looks like a person photo (not a logo/icon)
+  // Strategy 3: first plausible person photo anywhere on the page
   const allImgs = html.matchAll(/<img[^>]+src="([^"]+)"[^>]*>/gi)
   for (const match of allImgs) {
     let src = match[1]
     if (src.startsWith("//")) src = "https:" + src
     if (!src.startsWith("http")) continue
-    // Skip tiny icons and SVGs
     if (src.includes(".svg")) continue
     if (src.includes("logo") || src.includes("icon") || src.includes("flag") || src.includes("seal")) continue
-    // Ballotpedia person photos live under /thumb/ or upload.wikimedia
     if (src.includes("/thumb/") || src.includes("upload.wikimedia") || src.includes("ballotpedia")) {
+      console.log("[v0] scrape-ballotpedia: image found via page scan:", src)
       return src
     }
   }
 
+  console.log("[v0] scrape-ballotpedia: no image found")
   return null
 }
 
-// Extract the current office/title from the Ballotpedia infobox
-// e.g. "Candidate, U.S. House New York District 23"
+// Extract the current office/title from the Ballotpedia infobox.
+// Ballotpedia infobox structure (confirmed via inspect element):
+//   <div class="infobox person">
+//     <div class="widget-row value-only">Aaron Gies</div>          <- name, skip
+//     <div class="widget-row">...</div>                            <- photo row
+//     <div class="widget-row value-only black">Democratic Party…</div>  <- party, skip
+//     <div class="widget-row value-only">Candidate, U.S. House…</div>   <- OFFICE <--
+//     <div class="widget-row value-only">Elections and appointments</div> <- section header, skip
 function extractOffice(html: string): string | null {
-  // The infobox has a row that reads something like:
-  //   <td ...>Candidate, U.S. House New York District 23</td>
-  // It sits right below the image row and before "Elections and appointments"
-  // Strategy: grab the infobox chunk then look for the first non-empty td text
-  // that isn't a name, party, or section header.
-  const infoboxStart = html.search(/<table[^>]*class="[^"]*infobox[^"]*"/i)
-  if (infoboxStart === -1) return null
-
-  const chunk = html.slice(infoboxStart, infoboxStart + 20000)
-
-  // Strip the image row so we don't accidentally grab alt text
-  const noImg = chunk.replace(/<tr[^>]*>[\s\S]*?<img[\s\S]*?<\/tr>/i, "")
-
-  // Find all <td> cell texts
-  const cells = noImg.match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || []
-  const cleanText = (raw: string) =>
-    raw
-      .replace(/<[^>]+>/g, "")
-      .replace(/&amp;/g, "&")
-      .replace(/&nbsp;/g, " ")
-      .replace(/&#\d+;/g, "")
-      .replace(/\s+/g, " ")
-      .trim()
-
-  // Section headers we want to skip
-  const skipPatterns = /^(elections and appointments|contact|next election|campaign website|personal website|see also|external|footnote)/i
-
-  for (const cell of cells) {
-    const text = cleanText(cell)
-    if (!text || text.length < 5 || text.length > 120) continue
-    if (skipPatterns.test(text)) continue
-    // Skip if it looks like just a date (e.g. "June 23, 2026")
-    if (/^\w+ \d+, \d{4}$/.test(text)) continue
-    // Skip pure party labels already captured elsewhere
-    if (/^(democratic|republican|independent|libertarian|green)\s*(party)?$/i.test(text)) continue
-    return text
+  const infoboxStart = html.search(/<div[^>]*class="[^"]*infobox[^"]*"/i)
+  if (infoboxStart === -1) {
+    console.log("[v0] scrape-ballotpedia: no infobox div found for office extraction")
+    return null
   }
 
+  const chunk = html.slice(infoboxStart, infoboxStart + 30000)
+  console.log("[v0] scrape-ballotpedia: infobox chunk (first 500 chars):", chunk.slice(0, 500))
+
+  // Extract all widget-row div texts
+  const rows = chunk.match(/<div[^>]*class="[^"]*widget-row[^"]*"[^>]*>([\s\S]*?)<\/div>/gi) || []
+  console.log("[v0] scrape-ballotpedia: widget-row count:", rows.length)
+
+  const skipPatterns = /^(elections and appointments|contact|next election|campaign website|personal website|personal facebook|personal linkedin|personal instagram|campaign facebook|campaign x|campaign instagram|see also|external|footnote|born|age|from ballotpedia)/i
+
+  for (const row of rows) {
+    const text = cleanText(row)
+    console.log("[v0] scrape-ballotpedia: widget-row text:", text)
+    if (!text || text.length < 8 || text.length > 150) continue
+    if (skipPatterns.test(text)) continue
+    if (/^\w+ \d+, \d{4}$/.test(text)) continue // pure date
+    // Skip party-only labels
+    if (/^(democratic|republican|independent|libertarian|green|working families)(\s*(party|,|\s))*$/i.test(text)) continue
+    // Must look like an office title
+    if (/candidate|representative|rep\.|senator|sen\.|house|senate|district|governor|gov\.|congress|assembly|mayor|council|secretary|attorney|treasurer|commissioner|delegate|president/i.test(text)) {
+      console.log("[v0] scrape-ballotpedia: office found:", text)
+      return text
+    }
+  }
+
+  console.log("[v0] scrape-ballotpedia: no office found in widget rows")
   return null
 }
 

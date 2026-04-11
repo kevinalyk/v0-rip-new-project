@@ -80,6 +80,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         bio: entity.bio ?? null,
         office: entity.office ?? null,
         ballotpediaUrl: entity.ballotpediaUrl ?? null,
+        donationIdentifiers: (entity.donationIdentifiers as Record<string, string[]> | null) ?? null,
         counts: {
           emails: entity._count.campaigns,
           sms: entity._count.smsMessages,

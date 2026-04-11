@@ -46,6 +46,7 @@ interface EntityData {
     bio: string | null
     office: string | null
     ballotpediaUrl: string | null
+    donationIdentifiers: Record<string, string[]> | null
     counts: {
       emails: number
       sms: number
@@ -248,6 +249,35 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
               {entity.state && <Badge variant="outline">{entity.state}</Badge>}
               <Badge variant="secondary" className="capitalize">{entity.type}</Badge>
             </div>
+            {/* Donation links */}
+            {entity.donationIdentifiers && (
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                {(entity.donationIdentifiers.winred ?? []).map((slug) => (
+                  <a
+                    key={slug}
+                    href={`https://secure.winred.com/${slug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-full bg-red-600/10 text-red-500 border border-red-600/20 px-3 py-0.5 text-xs font-medium hover:bg-red-600/20 transition-colors"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    WinRed
+                  </a>
+                ))}
+                {(entity.donationIdentifiers.actblue ?? []).map((slug) => (
+                  <a
+                    key={slug}
+                    href={`https://secure.actblue.com/donate/${slug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-full bg-blue-600/10 text-blue-400 border border-blue-600/20 px-3 py-0.5 text-xs font-medium hover:bg-blue-600/20 transition-colors"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    ActBlue
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
           {isAuthenticated && (
             <div className="flex-shrink-0">

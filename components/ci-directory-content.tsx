@@ -215,6 +215,15 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
     }
   }
 
+  const ABBREVIATIONS = new Set(["pac", "jfc", "rnc", "dnc", "nrcc", "dccc", "nrsc", "dscc", "fec"])
+
+  const formatType = (type: string) => {
+    return type
+      .split("_")
+      .map((word) => (ABBREVIATIONS.has(word.toLowerCase()) ? word.toUpperCase() : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()))
+      .join(" ")
+  }
+
   const getTypeBadgeColor = (type: string) => {
     switch (type) {
       case "candidate":
@@ -331,6 +340,7 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
                   <SelectItem value="organization">Organization</SelectItem>
                   <SelectItem value="nonprofit">Nonprofit</SelectItem>
                   <SelectItem value="data_broker">Data Broker</SelectItem>
+                  <SelectItem value="jfc">JFC</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -378,7 +388,7 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
                 >
                   <span className="font-medium text-sm">{entity.name}</span>
                   <span>
-                    <Badge className={`${getTypeBadgeColor(entity.type)} text-xs capitalize`}>{entity.type}</Badge>
+                    <Badge className={`${getTypeBadgeColor(entity.type)} text-xs`}>{formatType(entity.type)}</Badge>
                   </span>
                   <span>
                     {entity.party

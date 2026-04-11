@@ -41,19 +41,21 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
       return NextResponse.json({ error: "Share link has expired" }, { status: 410 })
     }
 
-    // Increment view count
+    // Increment share view count and total view count
     if (isSms) {
       await prisma.smsQueue.update({
         where: { id: campaign.id },
         data: {
-          shareViewCount: (campaign.shareViewCount || 0) + 1,
+          shareViewCount: { increment: 1 },
+          viewCount: { increment: 1 },
         },
       })
     } else {
       await prisma.competitiveInsightCampaign.update({
         where: { id: campaign.id },
         data: {
-          shareViewCount: (campaign.shareViewCount || 0) + 1,
+          shareViewCount: { increment: 1 },
+          viewCount: { increment: 1 },
         },
       })
     }

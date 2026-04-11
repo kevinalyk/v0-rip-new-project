@@ -1693,6 +1693,12 @@ export function CompetitiveInsights({
                               onClick={() => {
                                 if (!shouldShowPreview || index < previewLimit) {
                                   setSelectedCampaign(campaign)
+                                  // Fire-and-forget view tracking
+                                  fetch("/api/track-view", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ id: campaign.id, type: campaign.type }),
+                                  }).catch(() => {})
                                 }
                               }}
                             >

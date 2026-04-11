@@ -44,10 +44,7 @@ function extractInfoboxImage(html: string): string | null {
     if (imgMatch) {
       let src = imgMatch[1]
       if (src.startsWith("//")) src = "https:" + src
-      if (src.startsWith("http")) {
-        console.log("[v0] scrape-ballotpedia: image found via infobox div:", src)
-        return src
-      }
+      if (src.startsWith("http")) return src
     }
   }
 
@@ -56,10 +53,7 @@ function extractInfoboxImage(html: string): string | null {
   if (widgetImgMatch) {
     let src = widgetImgMatch[1]
     if (src.startsWith("//")) src = "https:" + src
-    if (src.startsWith("http")) {
-      console.log("[v0] scrape-ballotpedia: image found via widget-row:", src)
-      return src
-    }
+    if (src.startsWith("http")) return src
   }
 
   // Strategy 3: first plausible person photo anywhere on the page
@@ -71,12 +65,10 @@ function extractInfoboxImage(html: string): string | null {
     if (src.includes(".svg")) continue
     if (src.includes("logo") || src.includes("icon") || src.includes("flag") || src.includes("seal")) continue
     if (src.includes("/thumb/") || src.includes("upload.wikimedia") || src.includes("ballotpedia")) {
-      console.log("[v0] scrape-ballotpedia: image found via page scan:", src)
       return src
     }
   }
 
-  console.log("[v0] scrape-ballotpedia: no image found")
   return null
 }
 
@@ -90,23 +82,17 @@ function extractInfoboxImage(html: string): string | null {
 //     <div class="widget-row value-only">Elections and appointments</div> <- section header, skip
 function extractOffice(html: string): string | null {
   const infoboxStart = html.search(/<div[^>]*class="[^"]*infobox[^"]*"/i)
-  if (infoboxStart === -1) {
-    console.log("[v0] scrape-ballotpedia: no infobox div found for office extraction")
-    return null
-  }
+  if (infoboxStart === -1) return null
 
   const chunk = html.slice(infoboxStart, infoboxStart + 30000)
-  console.log("[v0] scrape-ballotpedia: infobox chunk (first 500 chars):", chunk.slice(0, 500))
 
   // Extract all widget-row div texts
   const rows = chunk.match(/<div[^>]*class="[^"]*widget-row[^"]*"[^>]*>([\s\S]*?)<\/div>/gi) || []
-  console.log("[v0] scrape-ballotpedia: widget-row count:", rows.length)
 
   const skipPatterns = /^(elections and appointments|contact|next election|campaign website|personal website|personal facebook|personal linkedin|personal instagram|campaign facebook|campaign x|campaign instagram|see also|external|footnote|born|age|from ballotpedia)/i
 
   for (const row of rows) {
     const text = cleanText(row)
-    console.log("[v0] scrape-ballotpedia: widget-row text:", text)
     if (!text || text.length < 8 || text.length > 150) continue
     if (skipPatterns.test(text)) continue
     if (/^\w+ \d+, \d{4}$/.test(text)) continue // pure date
@@ -114,12 +100,10 @@ function extractOffice(html: string): string | null {
     if (/^(democratic|republican|independent|libertarian|green|working families)(\s*(party|,|\s))*$/i.test(text)) continue
     // Must look like an office title
     if (/candidate|representative|rep\.|senator|sen\.|house|senate|district|governor|gov\.|congress|assembly|mayor|council|secretary|attorney|treasurer|commissioner|delegate|president/i.test(text)) {
-      console.log("[v0] scrape-ballotpedia: office found:", text)
       return text
     }
   }
 
-  console.log("[v0] scrape-ballotpedia: no office found in widget rows")
   return null
 }
 

@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, User, Users, Building2, Database, Mail } from "lucide-react"
+import { Search } from "lucide-react"
 import { toast } from "sonner"
 import { CiEntitySubscribeButton } from "@/components/ci-entity-subscribe-button"
 import {
@@ -201,21 +201,6 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
     if (type === "type") setFilterType(value)
   }
 
-  const getEntityIcon = (type: string) => {
-    switch (type) {
-      case "politician":
-        return <User className="h-5 w-5" />
-      case "pac":
-        return <Users className="h-5 w-5" />
-      case "organization":
-        return <Building2 className="h-5 w-5" />
-      case "data_broker":
-        return <Database className="h-5 w-5" />
-      default:
-        return <Mail className="h-5 w-5" />
-    }
-  }
-
   const getPartyBadgeClassName = (party: string | null) => {
     if (!party) return "capitalize bg-gray-600 text-white"
     switch (party.toLowerCase()) {
@@ -232,12 +217,15 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
 
   const getTypeBadgeColor = (type: string) => {
     switch (type) {
+      case "candidate":
       case "politician":
-        return "bg-violet-700 text-white hover:bg-violet-800"
+        return "bg-slate-600 text-white hover:bg-slate-700"
       case "pac":
         return "bg-amber-700 text-white hover:bg-amber-800"
       case "organization":
         return "bg-emerald-700 text-white hover:bg-emerald-800"
+      case "nonprofit":
+        return "bg-cyan-700 text-white hover:bg-cyan-800"
       case "data_broker":
         return "bg-teal-700 text-white hover:bg-teal-800"
       default:
@@ -338,9 +326,10 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="politician">Politician</SelectItem>
+                  <SelectItem value="candidate">Candidate</SelectItem>
                   <SelectItem value="pac">PAC</SelectItem>
                   <SelectItem value="organization">Organization</SelectItem>
+                  <SelectItem value="nonprofit">Nonprofit</SelectItem>
                   <SelectItem value="data_broker">Data Broker</SelectItem>
                 </SelectContent>
               </Select>
@@ -369,30 +358,23 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
           ) : entities.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">No entities found. Try adjusting your filters.</div>
           ) : (
-            <div className="space-y-3">
+            <div className="rounded-lg border overflow-hidden">
               {entities.map((entity) => (
                 <div
                   key={entity.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
+                  className="flex items-center justify-between px-4 py-2.5 border-b last:border-b-0 hover:bg-accent/40 transition-colors cursor-pointer"
                   onClick={(e) => {
-                    // Don't navigate if clicking the subscribe button or profile link
                     if ((e.target as HTMLElement).closest("[data-subscribe-button]")) return
                     if ((e.target as HTMLElement).closest("[data-profile-link]")) return
                     router.push(`/directory/${nameToSlug(entity.name)}`)
                   }}
                 >
-                  <div className="flex items-center gap-4 flex-1">
-                    <div className="flex-shrink-0">{getEntityIcon(entity.type)}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-lg">{entity.name}</div>
-
-                    </div>
-                  </div>
+                  <div className="font-medium text-sm">{entity.name}</div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <Badge className={getTypeBadgeColor(entity.type)}>{entity.type}</Badge>
-                    {entity.party && <Badge className={getPartyBadgeClassName(entity.party)}>{entity.party}</Badge>}
-                    {entity.state && <Badge variant="outline">{entity.state}</Badge>}
-                    <Badge variant="secondary">{entity._count.totalCommunications} communications</Badge>
+                    <Badge className={`${getTypeBadgeColor(entity.type)} text-xs capitalize`}>{entity.type}</Badge>
+                    {entity.party && <Badge className={`${getPartyBadgeClassName(entity.party)} text-xs`}>{entity.party}</Badge>}
+                    {entity.state && <Badge variant="outline" className="text-xs">{entity.state}</Badge>}
+                    <span className="text-xs text-muted-foreground w-32 text-right">{entity._count.totalCommunications} communications</span>
                     {isAuthenticated && (
                       <div data-subscribe-button>
                         <CiEntitySubscribeButton entityId={entity.id} entityName={entity.name} />

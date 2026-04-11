@@ -64,42 +64,43 @@ function extractInfoboxImage(html: string): string | null {
 // Extract the current office/title from the Ballotpedia infobox
 // e.g. "Candidate, U.S. House New York District 23"
 function extractOffice(html: string): string | null {
-  // The infobox has a row that reads something like:
-  //   <td ...>Candidate, U.S. House New York District 23</td>
-  // It sits right below the image row and before "Elections and appointments"
-  // Strategy: grab the infobox chunk then look for the first non-empty td text
-  // that isn't a name, party, or section header.
   const infoboxStart = html.search(/<table[^>]*class="[^"]*infobox[^"]*"/i)
   if (infoboxStart === -1) return null
 
+  // Grab a generous chunk starting from the infobox
   const chunk = html.slice(infoboxStart, infoboxStart + 20000)
 
-  // Strip the image row so we don't accidentally grab alt text
-  const noImg = chunk.replace(/<tr[^>]*>[\s\S]*?<img[\s\S]*?<\/tr>/i, "")
-
-  // Find all <td> cell texts
-  const cells = noImg.match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || []
   const cleanText = (raw: string) =>
     raw
       .replace(/<[^>]+>/g, "")
       .replace(/&amp;/g, "&")
       .replace(/&nbsp;/g, " ")
       .replace(/&#\d+;/g, "")
+      .replace(/\[[\w\s]+\]/g, "") // remove [source] markers
       .replace(/\s+/g, " ")
       .trim()
 
-  // Section headers we want to skip
-  const skipPatterns = /^(elections and appointments|contact|next election|campaign website|personal website|see also|external|footnote)/i
+  // Section headers and noise to skip
+  const skipPatterns = /^(elections and appointments|contact|next election|campaign website|personal website|personal facebook|personal linkedin|personal instagram|campaign facebook|campaign x|campaign instagram|see also|external|footnote|retrieved|born|age|party|affiliation)/i
+
+  // Ballotpedia uses <th> (not <td>) for the office row in the infobox.
+  // Scan both <th> and <td> cells — office rows are typically <th colspan="2"> with dark bg.
+  const cells = chunk.match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || []
 
   for (const cell of cells) {
     const text = cleanText(cell)
-    if (!text || text.length < 5 || text.length > 120) continue
+    if (!text || text.length < 8 || text.length > 150) continue
     if (skipPatterns.test(text)) continue
-    // Skip if it looks like just a date (e.g. "June 23, 2026")
+    // Skip pure dates
     if (/^\w+ \d+, \d{4}$/.test(text)) continue
-    // Skip pure party labels already captured elsewhere
-    if (/^(democratic|republican|independent|libertarian|green)\s*(party)?$/i.test(text)) continue
-    return text
+    // Skip the person's own name
+    if (text.toLowerCase() === cleanText(chunk.match(/<caption[^>]*>([\s\S]*?)<\/caption>/i)?.[0] || "").toLowerCase()) continue
+    // Skip pure party labels
+    if (/^(democratic|republican|independent|libertarian|green|working families)(\s+party)?$/i.test(text)) continue
+    // Must look like an office — contains "candidate", "representative", "senator", "house", "senate", "district", "governor", "congress", "assembly", "mayor", "council"
+    if (/candidate|representative|senator|house|senate|district|governor|congress|assembly|mayor|council|secretary|attorney|treasurer|commissioner/i.test(text)) {
+      return text
+    }
   }
 
   return null

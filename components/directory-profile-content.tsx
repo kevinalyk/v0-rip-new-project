@@ -254,7 +254,7 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
               entity.party?.toLowerCase() === "republican" &&
               (entity.donationIdentifiers.winred ?? []).length > 0 && (
                 <div className="flex flex-col gap-1 mt-3">
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">
+                  <span className="text-xs font-semibold text-muted-foreground mb-0.5">
                     WinRed Donation Page
                   </span>
                   {(entity.donationIdentifiers.winred ?? []).map((slug) => (

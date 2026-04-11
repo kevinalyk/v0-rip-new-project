@@ -10,30 +10,24 @@ export async function POST(request: NextRequest) {
     const { id, type } = body
 
     if (!id || !type) {
-      console.log("[v0] track-view: missing id or type", { id, type })
       return NextResponse.json({ error: "id and type are required" }, { status: 400 })
     }
 
-    console.log("[v0] track-view: received", { id, type, idType: typeof id })
-
     if (type === "sms") {
-      console.log("[v0] track-view: updating SmsQueue id:", String(id))
       await prisma.smsQueue.update({
         where: { id: String(id) },
         data: { viewCount: { increment: 1 } },
       })
     } else {
-      console.log("[v0] track-view: updating CompetitiveInsightCampaign id:", Number(id))
+      // CompetitiveInsightCampaign uses string Cuid ids
       await prisma.competitiveInsightCampaign.update({
-        where: { id: Number(id) },
+        where: { id: String(id) },
         data: { viewCount: { increment: 1 } },
       })
     }
 
-    console.log("[v0] track-view: success")
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[v0] track-view: error", error)
     return NextResponse.json({ success: false }, { status: 500 })
   }
 }

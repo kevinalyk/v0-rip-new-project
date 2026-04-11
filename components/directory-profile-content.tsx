@@ -251,17 +251,17 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
             </div>
             {/* Donation links */}
             {entity.donationIdentifiers && (
-              <div className="flex flex-wrap items-center gap-2 mt-2">
+              <div className="flex flex-col gap-1 mt-2">
                 {(entity.donationIdentifiers.winred ?? []).map((slug) => (
                   <a
                     key={slug}
                     href={`https://secure.winred.com/${slug}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded-full bg-red-600/10 text-red-500 border border-red-600/20 px-3 py-0.5 text-xs font-medium hover:bg-red-600/20 transition-colors"
+                    className="inline-flex items-center gap-1.5 text-xs text-red-500 hover:text-red-400 transition-colors"
                   >
-                    <ExternalLink className="h-3 w-3" />
-                    WinRed
+                    <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                    {`secure.winred.com/${slug}`}
                   </a>
                 ))}
                 {(entity.donationIdentifiers.actblue ?? []).map((slug) => (
@@ -270,10 +270,10 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
                     href={`https://secure.actblue.com/donate/${slug}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded-full bg-blue-600/10 text-blue-400 border border-blue-600/20 px-3 py-0.5 text-xs font-medium hover:bg-blue-600/20 transition-colors"
+                    className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
                   >
-                    <ExternalLink className="h-3 w-3" />
-                    ActBlue
+                    <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                    {`secure.actblue.com/donate/${slug}`}
                   </a>
                 ))}
               </div>

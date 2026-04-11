@@ -61,6 +61,50 @@ function extractInfoboxImage(html: string): string | null {
   return null
 }
 
+// Extract the current office/title from the Ballotpedia infobox
+// e.g. "Candidate, U.S. House New York District 23"
+function extractOffice(html: string): string | null {
+  // The infobox has a row that reads something like:
+  //   <td ...>Candidate, U.S. House New York District 23</td>
+  // It sits right below the image row and before "Elections and appointments"
+  // Strategy: grab the infobox chunk then look for the first non-empty td text
+  // that isn't a name, party, or section header.
+  const infoboxStart = html.search(/<table[^>]*class="[^"]*infobox[^"]*"/i)
+  if (infoboxStart === -1) return null
+
+  const chunk = html.slice(infoboxStart, infoboxStart + 20000)
+
+  // Strip the image row so we don't accidentally grab alt text
+  const noImg = chunk.replace(/<tr[^>]*>[\s\S]*?<img[\s\S]*?<\/tr>/i, "")
+
+  // Find all <td> cell texts
+  const cells = noImg.match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || []
+  const cleanText = (raw: string) =>
+    raw
+      .replace(/<[^>]+>/g, "")
+      .replace(/&amp;/g, "&")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&#\d+;/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+
+  // Section headers we want to skip
+  const skipPatterns = /^(elections and appointments|contact|next election|campaign website|personal website|see also|external|footnote)/i
+
+  for (const cell of cells) {
+    const text = cleanText(cell)
+    if (!text || text.length < 5 || text.length > 120) continue
+    if (skipPatterns.test(text)) continue
+    // Skip if it looks like just a date (e.g. "June 23, 2026")
+    if (/^\w+ \d+, \d{4}$/.test(text)) continue
+    // Skip pure party labels already captured elsewhere
+    if (/^(democratic|republican|independent|libertarian|green)\s*(party)?$/i.test(text)) continue
+    return text
+  }
+
+  return null
+}
+
 // Extract the first meaningful bio paragraph from Ballotpedia HTML
 function extractBio(html: string): string | null {
   // Strip script/style/nav/table tags first so we don't pull garbage
@@ -158,16 +202,14 @@ export async function POST(request: NextRequest) {
     }
 
     const html = await res.text()
-    console.log("[v0] scrape-ballotpedia: fetched HTML length:", html.length, "url:", ballotpediaUrl)
 
-    // Extract bio
+    // Extract bio, office, and image
     const bio = extractBio(html)
-    console.log("[v0] scrape-ballotpedia: bio extracted:", bio ? bio.slice(0, 80) + "..." : "null")
+    const office = extractOffice(html)
 
     // Extract and upload image
     let imageUrl: string | null = null
     const imageSrc = extractInfoboxImage(html)
-    console.log("[v0] scrape-ballotpedia: imageSrc found:", imageSrc)
 
     if (imageSrc) {
       try {
@@ -196,7 +238,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!bio && !imageUrl) {
+    if (!bio && !imageUrl && !office) {
       return NextResponse.json(
         {
           error: `Found the Ballotpedia page but could not extract any usable data. The page structure may be different for this entity.`,
@@ -212,6 +254,7 @@ export async function POST(request: NextRequest) {
       data: {
         ...(imageUrl && { imageUrl }),
         ...(bio && { bio }),
+        ...(office && { office }),
         ballotpediaUrl,
         ballotpediaFetchedAt: new Date(),
       },
@@ -222,6 +265,7 @@ export async function POST(request: NextRequest) {
       entityId: updated.id,
       imageUrl: updated.imageUrl,
       bio: updated.bio,
+      office: updated.office,
       ballotpediaUrl: updated.ballotpediaUrl,
     })
   } catch (error) {

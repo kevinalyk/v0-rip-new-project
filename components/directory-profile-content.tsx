@@ -44,6 +44,7 @@ interface EntityData {
     mappings: Mapping[]
     imageUrl: string | null
     bio: string | null
+    office: string | null
     ballotpediaUrl: string | null
     counts: {
       emails: number
@@ -63,6 +64,17 @@ function getPartyColor(party: string | null) {
     case "independent":
     case "third party": return "bg-zinc-500 text-white"
     default: return "bg-muted text-muted-foreground"
+  }
+}
+
+function getPartyBorderColor(party: string | null) {
+  if (!party) return "border-l-border"
+  switch (party.toLowerCase()) {
+    case "republican": return "border-l-red-600"
+    case "democrat": return "border-l-blue-600"
+    case "independent":
+    case "third party": return "border-l-zinc-500"
+    default: return "border-l-border"
   }
 }
 
@@ -215,15 +227,18 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
       <div className="container mx-auto py-8 px-4 max-w-3xl">
 
         {/* Profile hero */}
-        <div className="flex items-start gap-5 mb-8">
-          <div className="flex-shrink-0 w-16 h-16 rounded-xl bg-muted flex items-center justify-center text-muted-foreground overflow-hidden">
+        <div className="flex items-start gap-6 mb-8">
+          <div className="flex-shrink-0 w-32 h-40 rounded-2xl bg-muted flex items-center justify-center text-muted-foreground overflow-hidden">
             {entity.imageUrl
               ? <img src={entity.imageUrl} alt={entity.name} className="w-full h-full object-cover object-top" crossOrigin="anonymous" />
               : getEntityIcon(entity.type)
             }
           </div>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight text-balance mb-2">{entity.name}</h1>
+          <div className="flex-1 min-w-0 pt-1">
+            <h1 className="text-2xl font-bold tracking-tight text-balance mb-1">{entity.name}</h1>
+            {entity.office && (
+              <p className="text-sm text-muted-foreground mb-2">{entity.office}</p>
+            )}
             <div className="flex flex-wrap items-center gap-2">
               {entity.party && (
                 <Badge className={getPartyColor(entity.party)}>
@@ -241,31 +256,29 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
           )}
         </div>
 
-        {/* Stat cards */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
-              <Mail className="h-3.5 w-3.5" />
-              Emails
-            </div>
-            <div className="text-2xl font-bold">{entity.counts.emails.toLocaleString()}</div>
+        {/* Inline stats row */}
+        <div className="flex items-center gap-6 mb-8 px-1">
+          <div className="flex items-center gap-2">
+            <Mail className="h-4 w-4 text-muted-foreground" />
+            <span className="text-2xl font-bold">{entity.counts.emails.toLocaleString()}</span>
+            <span className="text-sm text-muted-foreground">Email{entity.counts.emails !== 1 ? "s" : ""}</span>
           </div>
-          <div className="rounded-lg border border-border bg-card p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
-              <MessageSquare className="h-3.5 w-3.5" />
-              SMS
-            </div>
-            <div className="text-2xl font-bold">{entity.counts.sms.toLocaleString()}</div>
+          <div className="h-5 w-px bg-border" />
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 text-muted-foreground" />
+            <span className="text-2xl font-bold">{entity.counts.sms.toLocaleString()}</span>
+            <span className="text-sm text-muted-foreground">SMS</span>
           </div>
-          <div className="rounded-lg border border-border bg-card p-4">
-            <div className="text-muted-foreground text-xs mb-1">Total</div>
-            <div className="text-2xl font-bold">{entity.counts.total.toLocaleString()}</div>
+          <div className="h-5 w-px bg-border" />
+          <div className="flex items-center gap-2">
+            <span className="text-2xl font-bold">{entity.counts.total.toLocaleString()}</span>
+            <span className="text-sm text-muted-foreground">Total</span>
           </div>
         </div>
 
         {/* Bio */}
         {entity.bio && (
-          <div className="rounded-lg border border-border bg-card p-5 mb-8">
+          <div className={`rounded-lg border border-border border-l-4 ${getPartyBorderColor(entity.party)} bg-card p-5 mb-8`}>
             <p className="text-sm text-muted-foreground leading-relaxed">{entity.bio}</p>
             {entity.ballotpediaUrl && (
               <a
@@ -286,7 +299,7 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
           <div className="grid gap-4 md:grid-cols-2 mb-8">
             {emailDomains.length > 0 && (
               <div className="rounded-lg border border-border bg-card p-4">
-                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Email Domains</h2>
+                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pb-2 mb-3 border-b border-border">Email Domains</h2>
                 <div className="flex flex-wrap gap-2">
                   {emailDomains.map((domain) => (
                     <Badge key={domain} variant="secondary" className="font-mono text-xs">{domain}</Badge>
@@ -296,7 +309,7 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
             )}
             {shortCodes.length > 0 && (
               <div className="rounded-lg border border-border bg-card p-4">
-                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">SMS Numbers</h2>
+                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pb-2 mb-3 border-b border-border">SMS Numbers</h2>
                 <div className="flex flex-wrap gap-2">
                   {shortCodes.map((code) => (
                     <Badge key={code} variant="secondary" className="font-mono text-xs">{code}</Badge>

@@ -315,7 +315,7 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
           {pagination.totalCount > 0 && (
             <Badge variant="outline" className="flex items-center gap-1.5 text-xs">
               <Users className="h-3 w-3" />
-              {pagination.totalCount.toLocaleString()} entities
+              {pagination.totalCount.toLocaleString()} {filterState !== "all" ? `in ${selectedMapState ?? filterState}` : "entities"}
             </Badge>
           )}
           {!mapLoading && totalActive > 0 && (

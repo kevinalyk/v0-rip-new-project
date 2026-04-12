@@ -166,8 +166,8 @@ export default function CIMapPage() {
 
         {/* Map area */}
         <div className="flex flex-1 gap-6 p-6">
-          {/* Left column: map + state items feed */}
-          <div className="flex-1 flex flex-col gap-4 min-w-0">
+          {/* Left column: map only */}
+          <div className="flex-1 min-w-0">
           {/* Map card */}
           <Card className="flex flex-col overflow-hidden">
             <CardContent className="flex-1 p-4" style={{ minHeight: 480 }}>
@@ -178,195 +178,10 @@ export default function CIMapPage() {
               />
             </CardContent>
           </Card>
-
-          {/* State items panel — slides in when a state is selected */}
-          {selectedState && (
-            <Card>
-              <CardHeader className="pb-3 flex flex-row items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-[#EB3847]" />
-                  <CardTitle className="text-base font-semibold">
-                    {selectedState} — Last 24 Hours
-                  </CardTitle>
-                  {selectedActivity && (
-                    <div className="flex items-center gap-1.5 ml-2">
-                      <Badge variant="outline" className="text-xs flex items-center gap-1">
-                        <Mail className="h-3 w-3" /> {selectedActivity.emailCount}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs flex items-center gap-1">
-                        <MessageSquare className="h-3 w-3" /> {selectedActivity.smsCount}
-                      </Badge>
-                    </div>
-                  )}
-                </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => setSelectedState(null)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </CardHeader>
-              <CardContent>
-                {stateItemsLoading ? (
-                  <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
-                    Loading...
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-6">
-                    {/* Emails column */}
-                    <div>
-                      <h3 className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                        <Mail className="h-3.5 w-3.5" /> Emails ({stateItemsData?.emails.length ?? 0})
-                      </h3>
-                      {!stateItemsData?.emails.length ? (
-                        <p className="text-sm text-muted-foreground">No emails in the last 24h.</p>
-                      ) : (
-                        <div className="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
-                          {stateItemsData.emails.map((email) => (
-                            <div key={email.id} className="rounded-lg border border-border bg-muted/30 p-3 hover:bg-muted/50 transition-colors">
-                              <div className="flex items-start gap-2">
-                                {email.entity?.imageUrl ? (
-                                  <img
-                                    src={email.entity.imageUrl}
-                                    alt={email.entity.name}
-                                    className="h-7 w-7 rounded-full object-cover shrink-0 mt-0.5"
-                                  />
-                                ) : (
-                                  <div className="h-7 w-7 rounded-full bg-[#EB3847]/15 flex items-center justify-center shrink-0 mt-0.5">
-                                    <Mail className="h-3.5 w-3.5 text-[#EB3847]" />
-                                  </div>
-                                )}
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-xs font-medium truncate leading-snug">{email.subject || "(No subject)"}</p>
-                                  <p className="text-xs text-muted-foreground truncate mt-0.5 flex items-center gap-1">
-                                    <User className="h-3 w-3 shrink-0" />
-                                    {email.entity?.name ?? email.senderName ?? email.senderEmail}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                                    <Clock className="h-3 w-3 shrink-0" />
-                                    {new Date(email.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                                    {" · "}
-                                    {new Date(email.createdAt).toLocaleDateString([], { month: "short", day: "numeric" })}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* SMS column */}
-                    <div>
-                      <h3 className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                        <MessageSquare className="h-3.5 w-3.5" /> SMS ({stateItemsData?.smsMessages.length ?? 0})
-                      </h3>
-                      {!stateItemsData?.smsMessages.length ? (
-                        <p className="text-sm text-muted-foreground">No SMS in the last 24h.</p>
-                      ) : (
-                        <div className="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
-                          {stateItemsData.smsMessages.map((sms) => (
-                            <div key={sms.id} className="rounded-lg border border-border bg-muted/30 p-3 hover:bg-muted/50 transition-colors">
-                              <div className="flex items-start gap-2">
-                                {sms.entity?.imageUrl ? (
-                                  <img
-                                    src={sms.entity.imageUrl}
-                                    alt={sms.entity.name}
-                                    className="h-7 w-7 rounded-full object-cover shrink-0 mt-0.5"
-                                  />
-                                ) : (
-                                  <div className="h-7 w-7 rounded-full bg-[#EB3847]/15 flex items-center justify-center shrink-0 mt-0.5">
-                                    <MessageSquare className="h-3.5 w-3.5 text-[#EB3847]" />
-                                  </div>
-                                )}
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-xs font-medium truncate leading-snug">
-                                    {sms.entity?.name ?? sms.phoneNumber ?? "Unknown sender"}
-                                  </p>
-                                  {sms.message && (
-                                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{sms.message}</p>
-                                  )}
-                                  <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                                    <Clock className="h-3 w-3 shrink-0" />
-                                    {new Date(sms.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                                    {" · "}
-                                    {new Date(sms.createdAt).toLocaleDateString([], { month: "short", day: "numeric" })}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
           </div>
 
-          {/* State info panel */}
-          <div className="w-64 shrink-0 flex flex-col gap-4 self-start">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-                  Selected State
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {selectedState ? (
-                  <div className="space-y-3">
-                    <p className="text-lg font-semibold">{selectedState}</p>
-                    {selectedActivity ? (
-                      <div className="space-y-2">
-                        <p className="text-xs text-muted-foreground">Activity in the last 24h:</p>
-                        <div className="flex flex-col gap-1.5">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="flex items-center gap-1.5 text-muted-foreground">
-                              <Mail className="h-3.5 w-3.5" /> Emails
-                            </span>
-                            <span className="font-semibold text-[#EB3847]">{selectedActivity.emailCount}</span>
-                          </div>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="flex items-center gap-1.5 text-muted-foreground">
-                              <MessageSquare className="h-3.5 w-3.5" /> SMS
-                            </span>
-                            <span className="font-semibold text-[#EB3847]">{selectedActivity.smsCount}</span>
-                          </div>
-                          <div className="flex items-center justify-between text-sm border-t border-border pt-1.5 mt-0.5">
-                            <span className="text-muted-foreground">Total</span>
-                            <span className="font-bold">{selectedActivity.total}</span>
-                          </div>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Last activity{" "}
-                          {new Date(selectedActivity.latestAt).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        No activity in the last 24 hours.
-                      </p>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start text-muted-foreground px-0 text-xs"
-                      onClick={() => setSelectedState(null)}
-                    >
-                      <X className="h-3 w-3 mr-1" /> Clear selection
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Click a state on the map to see its activity.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Activity breakdown — top states */}
+          {/* Side panel — top states + legend */}
+          <div className="w-56 shrink-0 flex flex-col gap-4 self-start">
             {activity.length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
@@ -404,7 +219,6 @@ export default function CIMapPage() {
               </Card>
             )}
 
-            {/* Legend */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
@@ -427,6 +241,139 @@ export default function CIMapPage() {
             </Card>
           </div>
         </div>
+
+        {/* Bottom drawer overlay — slides up when a state is selected */}
+        {selectedState && (
+          <>
+            {/* Backdrop — clicking it deselects */}
+            <div
+              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+              onClick={() => setSelectedState(null)}
+            />
+
+            {/* Drawer */}
+            <div
+              className="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl border-t border-border shadow-2xl"
+              style={{ background: "hsl(var(--card))", maxHeight: "55vh" }}
+            >
+              {/* Drag handle + header */}
+              <div className="flex items-center justify-between px-6 pt-4 pb-3 border-b border-border">
+                <div className="flex items-center gap-3">
+                  <MapPin className="h-4 w-4 text-[#EB3847]" />
+                  <h2 className="text-base font-semibold">
+                    {selectedState} — Last 24 Hours
+                  </h2>
+                  {selectedActivity && (
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="outline" className="text-xs flex items-center gap-1">
+                        <Mail className="h-3 w-3" /> {selectedActivity.emailCount}
+                      </Badge>
+                      <Badge variant="outline" className="text-xs flex items-center gap-1">
+                        <MessageSquare className="h-3 w-3" /> {selectedActivity.smsCount}
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                  onClick={() => setSelectedState(null)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* Content */}
+              <div className="overflow-y-auto px-6 py-4" style={{ maxHeight: "calc(55vh - 64px)" }}>
+                {stateItemsLoading ? (
+                  <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">
+                    Loading...
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-8">
+                    {/* Emails */}
+                    <div>
+                      <h3 className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                        <Mail className="h-3.5 w-3.5" /> Emails ({stateItemsData?.emails.length ?? 0})
+                      </h3>
+                      {!stateItemsData?.emails.length ? (
+                        <p className="text-sm text-muted-foreground">No emails in the last 24h.</p>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {stateItemsData.emails.map((email) => (
+                            <div key={email.id} className="rounded-lg border border-border bg-muted/30 p-3 hover:bg-muted/50 transition-colors">
+                              <div className="flex items-start gap-2">
+                                {email.entity?.imageUrl ? (
+                                  <img src={email.entity.imageUrl} alt={email.entity.name} className="h-7 w-7 rounded-full object-cover shrink-0 mt-0.5" />
+                                ) : (
+                                  <div className="h-7 w-7 rounded-full bg-[#EB3847]/15 flex items-center justify-center shrink-0 mt-0.5">
+                                    <Mail className="h-3.5 w-3.5 text-[#EB3847]" />
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-medium truncate leading-snug">{email.subject || "(No subject)"}</p>
+                                  <p className="text-xs text-muted-foreground truncate mt-0.5 flex items-center gap-1">
+                                    <User className="h-3 w-3 shrink-0" />
+                                    {email.entity?.name ?? email.senderName ?? email.senderEmail}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                                    <Clock className="h-3 w-3 shrink-0" />
+                                    {new Date(email.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                    {" · "}
+                                    {new Date(email.createdAt).toLocaleDateString([], { month: "short", day: "numeric" })}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* SMS */}
+                    <div>
+                      <h3 className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                        <MessageSquare className="h-3.5 w-3.5" /> SMS ({stateItemsData?.smsMessages.length ?? 0})
+                      </h3>
+                      {!stateItemsData?.smsMessages.length ? (
+                        <p className="text-sm text-muted-foreground">No SMS in the last 24h.</p>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {stateItemsData.smsMessages.map((sms) => (
+                            <div key={sms.id} className="rounded-lg border border-border bg-muted/30 p-3 hover:bg-muted/50 transition-colors">
+                              <div className="flex items-start gap-2">
+                                {sms.entity?.imageUrl ? (
+                                  <img src={sms.entity.imageUrl} alt={sms.entity.name} className="h-7 w-7 rounded-full object-cover shrink-0 mt-0.5" />
+                                ) : (
+                                  <div className="h-7 w-7 rounded-full bg-[#EB3847]/15 flex items-center justify-center shrink-0 mt-0.5">
+                                    <MessageSquare className="h-3.5 w-3.5 text-[#EB3847]" />
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-medium truncate">{sms.entity?.name ?? sms.phoneNumber ?? "Unknown sender"}</p>
+                                  {sms.message && (
+                                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{sms.message}</p>
+                                  )}
+                                  <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                                    <Clock className="h-3 w-3 shrink-0" />
+                                    {new Date(sms.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                    {" · "}
+                                    {new Date(sms.createdAt).toLocaleDateString([], { month: "short", day: "numeric" })}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </AppLayout>
   )

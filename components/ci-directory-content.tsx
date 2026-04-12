@@ -239,7 +239,16 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
   const handleFilterChange = (type: "party" | "state" | "type", value: string) => {
     setPagination((prev) => ({ ...prev, page: 1 }))
     if (type === "party") setFilterParty(value)
-    if (type === "state") setFilterState(value)
+    if (type === "state") {
+      setFilterState(value)
+      // Sync the map highlight — convert abbrev back to full name
+      if (value === "all") {
+        setSelectedMapState(null)
+      } else {
+        const fullName = ABBREV_TO_FULL[value] ?? value
+        setSelectedMapState(fullName)
+      }
+    }
     if (type === "type") setFilterType(value)
   }
 
@@ -624,68 +633,61 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
       {/* ── ENTITY TABLE ── */}
       <div className="px-6 pb-6 pt-4">
         {/* Search + filters bar */}
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <div className="relative w-52">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search entities..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-9"
-            />
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="relative w-52">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search entities..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 h-9"
+              />
+            </div>
+
+            <Select value={filterParty} onValueChange={(value) => handleFilterChange("party", value)}>
+              <SelectTrigger className="w-36 h-9 text-sm">
+                <SelectValue placeholder="All Parties" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Parties</SelectItem>
+                <SelectItem value="republican">Republican</SelectItem>
+                <SelectItem value="democrat">Democrat</SelectItem>
+                <SelectItem value="independent">Independent</SelectItem>
+                <SelectItem value="unknown">Unknown</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={filterState} onValueChange={(value) => handleFilterChange("state", value)}>
+              <SelectTrigger className="w-36 h-9 text-sm">
+                <SelectValue placeholder="All States" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All States</SelectItem>
+                {US_STATES.map((state) => (
+                  <SelectItem key={state} value={state}>{state}</SelectItem>
+                ))}
+                <SelectItem value="unknown">Unknown</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={filterType} onValueChange={(value) => handleFilterChange("type", value)}>
+              <SelectTrigger className="w-36 h-9 text-sm">
+                <SelectValue placeholder="All Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="candidate">Candidate</SelectItem>
+                <SelectItem value="pac">PAC</SelectItem>
+                <SelectItem value="organization">Organization</SelectItem>
+                <SelectItem value="nonprofit">Nonprofit</SelectItem>
+                <SelectItem value="data_broker">Data Broker</SelectItem>
+                <SelectItem value="jfc">JFC</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          <Select value={filterParty} onValueChange={(value) => handleFilterChange("party", value)}>
-            <SelectTrigger className="w-36 h-9 text-sm">
-              <SelectValue placeholder="All Parties" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Parties</SelectItem>
-              <SelectItem value="republican">Republican</SelectItem>
-              <SelectItem value="democrat">Democrat</SelectItem>
-              <SelectItem value="independent">Independent</SelectItem>
-              <SelectItem value="unknown">Unknown</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={filterState} onValueChange={(value) => handleFilterChange("state", value)}>
-            <SelectTrigger className="w-36 h-9 text-sm">
-              <SelectValue placeholder="All States" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All States</SelectItem>
-              {US_STATES.map((state) => (
-                <SelectItem key={state} value={state}>{state}</SelectItem>
-              ))}
-              <SelectItem value="unknown">Unknown</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={filterType} onValueChange={(value) => handleFilterChange("type", value)}>
-            <SelectTrigger className="w-36 h-9 text-sm">
-              <SelectValue placeholder="All Types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="candidate">Candidate</SelectItem>
-              <SelectItem value="pac">PAC</SelectItem>
-              <SelectItem value="organization">Organization</SelectItem>
-              <SelectItem value="nonprofit">Nonprofit</SelectItem>
-              <SelectItem value="data_broker">Data Broker</SelectItem>
-              <SelectItem value="jfc">JFC</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {selectedMapState && (
-            <Badge variant="secondary" className="flex items-center gap-1.5 text-xs px-2.5 py-1 h-9">
-              {selectedMapState}
-              <button onClick={() => setSelectedMapState(null)} className="ml-1 hover:text-foreground text-muted-foreground">
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          )}
-
-          <span className="text-sm text-muted-foreground ml-auto">
+          <span className="text-sm text-muted-foreground">
             {pagination.totalCount === 0
               ? "No entities match"
               : <>Showing {(pagination.page - 1) * pagination.pageSize + 1}–{Math.min(pagination.page * pagination.pageSize, pagination.totalCount)} of {pagination.totalCount}</>

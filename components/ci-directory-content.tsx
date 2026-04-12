@@ -343,7 +343,8 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
       </div>
 
       {/* ── MAP + RIGHT PANEL ── */}
-      <div className="flex gap-4 px-6 pt-4 pb-2" style={{ height: 480 }}>
+      {/* 100vh minus: page header ~80px, search bar ~60px, table header ~48px, padding ~16px */}
+      <div className="flex gap-4 px-6 pt-4 pb-2" style={{ height: "calc(100vh - 204px)" }}>
         {/* Map */}
         <div className="flex-1 min-w-0 h-full">
           <Card className="h-full">

@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const since = new Date(Date.now() - 3 * 60 * 60 * 1000)
 
     // Fetch recent emails grouped by entity state
     const recentEmails = await prisma.competitiveInsightCampaign.findMany({

@@ -119,7 +119,7 @@ export default function CIMapPage() {
             <div>
               <h1 className="text-xl font-semibold tracking-tight">Interactive Map</h1>
               <p className="text-sm text-muted-foreground">
-                Pulsing dots show states with activity in the last 24 hours.
+                Pulsing dots show states with activity in the last 3 hours.
               </p>
             </div>
           </div>
@@ -225,7 +225,7 @@ export default function CIMapPage() {
                           <Mail className="h-3 w-3" /> Emails ({stateItemsData?.emails.length ?? 0})
                         </h3>
                         {!stateItemsData?.emails.length ? (
-                          <p className="text-xs text-muted-foreground">No emails in the last 24h.</p>
+                          <p className="text-xs text-muted-foreground">No emails in the last 3h.</p>
                         ) : (
                           <div className="flex flex-col gap-1.5">
                             {stateItemsData.emails.map((email) => (
@@ -263,7 +263,7 @@ export default function CIMapPage() {
                           <MessageSquare className="h-3 w-3" /> SMS ({stateItemsData?.smsMessages.length ?? 0})
                         </h3>
                         {!stateItemsData?.smsMessages.length ? (
-                          <p className="text-xs text-muted-foreground">No SMS in the last 24h.</p>
+                          <p className="text-xs text-muted-foreground">No SMS in the last 3h.</p>
                         ) : (
                           <div className="flex flex-col gap-1.5">
                             {stateItemsData.smsMessages.map((sms) => (
@@ -305,7 +305,7 @@ export default function CIMapPage() {
                   <Card>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-                        Top States (24h)
+                        Top States (3h)
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
@@ -347,7 +347,7 @@ export default function CIMapPage() {
                   <CardContent className="space-y-2">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#EB3847] animate-pulse shrink-0" />
-                      Pulsing dot = activity in last 24h
+                      Pulsing dot = activity in last 3h
                     </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <span className="inline-block w-2.5 h-2.5 rounded bg-[#EB3847] shrink-0" />

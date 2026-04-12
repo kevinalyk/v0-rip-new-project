@@ -385,6 +385,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                   collapsed={false}
                   onClick={() => navigate("/directory")}
                 />
+
               </div>
             )}
 

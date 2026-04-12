@@ -39,7 +39,6 @@ import {
   Code,
   Key,
   Activity,
-  Map,
 } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { useTheme } from "next-themes"
@@ -386,15 +385,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                   collapsed={false}
                   onClick={() => navigate("/directory")}
                 />
-                {selectedClientSlug === "rip" && (
-                  <NavItem
-                    icon={<Map size={18} />}
-                    label="Interactive Map"
-                    active={pathname.includes("/ci/map")}
-                    collapsed={false}
-                    onClick={() => navigate(`/rip/ci/map`)}
-                  />
-                )}
+
               </div>
             )}
 

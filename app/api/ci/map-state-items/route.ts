@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
           createdAt: { gte: since },
           isHidden: false,
           isDeleted: false,
-          entity: { state },
+          entity: { is: { state } },
         },
         select: {
           id: true,
@@ -49,7 +49,8 @@ export async function GET(request: NextRequest) {
           createdAt: { gte: since },
           isHidden: false,
           isDeleted: false,
-          entity: { state },
+          entityId: { not: null },
+          entity: { is: { state } },
         },
         select: {
           id: true,

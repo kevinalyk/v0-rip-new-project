@@ -343,11 +343,11 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
       </div>
 
       {/* ── MAP + RIGHT PANEL ── */}
-      <div className="flex gap-4 px-6 pt-6 pb-2">
+      <div className="flex gap-4 px-6 pt-4 pb-2" style={{ height: 300 }}>
         {/* Map */}
-        <div className="flex-1 min-w-0">
-          <Card>
-            <CardContent className="p-4" style={{ minHeight: 340 }}>
+        <div className="flex-1 min-w-0 h-full">
+          <Card className="h-full">
+            <CardContent className="p-3 h-full">
               <USInteractiveMap
                 selectedState={selectedMapState}
                 onStateSelect={setSelectedMapState}
@@ -358,11 +358,11 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
         </div>
 
         {/* Right panel */}
-        <div className="w-72 shrink-0 flex flex-col gap-4 overflow-y-auto" style={{ maxHeight: 380 }}>
+        <div className="w-64 shrink-0 flex flex-col gap-3 overflow-y-auto h-full">
           {selectedMapState ? (
             /* State detail: emails + SMS */
-            <Card className="flex flex-col">
-              <CardHeader className="pb-3 border-b border-border">
+            <Card className="flex flex-col h-full">
+              <CardHeader className="pb-2 pt-3 px-3 border-b border-border">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 min-w-0">
                     <MapPin className="h-4 w-4 text-[#EB3847] shrink-0" />
@@ -476,19 +476,19 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
             <>
               {activity.length > 0 && (
                 <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                  <CardHeader className="pb-1 pt-3 px-3">
+                    <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                       Top States (3h)
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-2">
+                  <CardContent className="px-3 pb-3 space-y-1.5">
                     {[...activity]
                       .sort((a, b) => b.total - a.total)
                       .slice(0, 5)
                       .map((item) => (
                         <div key={item.state} className="flex items-center justify-between text-sm">
                           <button
-                            className="text-left hover:text-[#EB3847] transition-colors font-medium"
+                            className="text-left hover:text-[#EB3847] transition-colors font-medium text-xs"
                             onClick={() => setSelectedMapState(ABBREV_TO_FULL[item.state] ?? item.state)}
                           >
                             {ABBREV_TO_FULL[item.state] ?? item.state}
@@ -511,22 +511,22 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
                 </Card>
               )}
               <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                <CardHeader className="pb-1 pt-3 px-3">
+                  <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Legend
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2">
+                <CardContent className="px-3 pb-3 space-y-1.5">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#EB3847] animate-pulse shrink-0" />
-                    Pulsing dot = activity in last 3h
+                    <span className="inline-block w-2 h-2 rounded-full bg-[#EB3847] animate-pulse shrink-0" />
+                    Pulsing = activity in last 3h
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="inline-block w-2.5 h-2.5 rounded bg-[#EB3847] shrink-0" />
-                    Solid red fill = selected state
+                    <span className="inline-block w-2 h-2 rounded bg-[#EB3847] shrink-0" />
+                    Red fill = selected state
                   </div>
-                  <p className="text-xs text-muted-foreground pt-1">
-                    Click a state to filter the directory below.
+                  <p className="text-xs text-muted-foreground">
+                    Click a state to filter below.
                   </p>
                 </CardContent>
               </Card>

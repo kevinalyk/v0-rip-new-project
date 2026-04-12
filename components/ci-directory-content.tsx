@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, ArrowRight, MapPin, X, Mail, MessageSquare, Activity, Clock } from "lucide-react"
+import { Search, ArrowRight, MapPin, X, Mail, MessageSquare, Activity, Clock, Users } from "lucide-react"
 import { toast } from "sonner"
 import { CiEntitySubscribeButton } from "@/components/ci-entity-subscribe-button"
 import {
@@ -312,6 +312,12 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
           <p className="text-sm text-muted-foreground mt-0.5">Browse all entities currently tracked in the system.</p>
         </div>
         <div className="flex items-center gap-2">
+          {pagination.totalCount > 0 && (
+            <Badge variant="outline" className="flex items-center gap-1.5 text-xs">
+              <Users className="h-3 w-3" />
+              {pagination.totalCount.toLocaleString()} entities
+            </Badge>
+          )}
           {!mapLoading && totalActive > 0 && (
             <>
               <Badge variant="outline" className="flex items-center gap-1.5 text-xs">

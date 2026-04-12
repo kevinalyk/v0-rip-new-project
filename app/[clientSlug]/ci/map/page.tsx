@@ -8,8 +8,47 @@ import { AppLayout } from "@/components/app-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { MapPin, X, Mail, MessageSquare, Activity } from "lucide-react"
+import { MapPin, X, Mail, MessageSquare, Activity, Clock, User } from "lucide-react"
 import type { StateActivity } from "@/components/us-interactive-map"
+
+// Full state name -> abbreviation reverse lookup
+const FULL_TO_ABBREV: Record<string, string> = {
+  Alabama:"AL", Alaska:"AK", Arizona:"AZ", Arkansas:"AR", California:"CA",
+  Colorado:"CO", Connecticut:"CT", Delaware:"DE", Florida:"FL", Georgia:"GA",
+  Hawaii:"HI", Idaho:"ID", Illinois:"IL", Indiana:"IN", Iowa:"IA", Kansas:"KS",
+  Kentucky:"KY", Louisiana:"LA", Maine:"ME", Maryland:"MD", Massachusetts:"MA",
+  Michigan:"MI", Minnesota:"MN", Mississippi:"MS", Missouri:"MO", Montana:"MT",
+  Nebraska:"NE", Nevada:"NV", "New Hampshire":"NH", "New Jersey":"NJ", "New Mexico":"NM",
+  "New York":"NY", "North Carolina":"NC", "North Dakota":"ND", Ohio:"OH", Oklahoma:"OK",
+  Oregon:"OR", Pennsylvania:"PA", "Rhode Island":"RI", "South Carolina":"SC",
+  "South Dakota":"SD", Tennessee:"TN", Texas:"TX", Utah:"UT", Vermont:"VT",
+  Virginia:"VA", Washington:"WA", "West Virginia":"WV", Wisconsin:"WI", Wyoming:"WY",
+  "District of Columbia":"DC",
+}
+
+interface StateEmail {
+  id: string
+  subject: string
+  senderName: string | null
+  senderEmail: string
+  createdAt: string
+  entity: { id: string; name: string; imageUrl: string | null; type: string } | null
+}
+
+interface StateSms {
+  id: string
+  message: string | null
+  phoneNumber: string | null
+  createdAt: string
+  entity: { id: string; name: string; imageUrl: string | null; type: string } | null
+}
+
+interface StateItemsData {
+  emails: StateEmail[]
+  smsMessages: StateSms[]
+  state: string
+  since: string
+}
 
 // Dynamically import the map to avoid SSR issues with react-simple-maps
 const USInteractiveMap = dynamic(
@@ -50,6 +89,14 @@ export default function CIMapPage() {
     "/api/ci/map-activity",
     fetcher,
     { refreshInterval: 60_000 }
+  )
+
+  // Fetch items for selected state (keyed by state abbreviation)
+  const selectedStateAbbrev = selectedState ? FULL_TO_ABBREV[selectedState] : null
+  const { data: stateItemsData, isLoading: stateItemsLoading } = useSWR<StateItemsData>(
+    selectedStateAbbrev ? `/api/ci/map-state-items?state=${selectedStateAbbrev}` : null,
+    fetcher,
+    { revalidateOnFocus: false }
   )
 
   const activity: StateActivity[] = data?.activity ?? []
@@ -119,8 +166,10 @@ export default function CIMapPage() {
 
         {/* Map area */}
         <div className="flex flex-1 gap-6 p-6">
+          {/* Left column: map + state items feed */}
+          <div className="flex-1 flex flex-col gap-4 min-w-0">
           {/* Map card */}
-          <Card className="flex-1 flex flex-col overflow-hidden">
+          <Card className="flex flex-col overflow-hidden">
             <CardContent className="flex-1 p-4" style={{ minHeight: 480 }}>
               <USInteractiveMap
                 selectedState={selectedState}
@@ -130,8 +179,132 @@ export default function CIMapPage() {
             </CardContent>
           </Card>
 
+          {/* State items panel — slides in when a state is selected */}
+          {selectedState && (
+            <Card>
+              <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-[#EB3847]" />
+                  <CardTitle className="text-base font-semibold">
+                    {selectedState} — Last 24 Hours
+                  </CardTitle>
+                  {selectedActivity && (
+                    <div className="flex items-center gap-1.5 ml-2">
+                      <Badge variant="outline" className="text-xs flex items-center gap-1">
+                        <Mail className="h-3 w-3" /> {selectedActivity.emailCount}
+                      </Badge>
+                      <Badge variant="outline" className="text-xs flex items-center gap-1">
+                        <MessageSquare className="h-3 w-3" /> {selectedActivity.smsCount}
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => setSelectedState(null)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {stateItemsLoading ? (
+                  <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+                    Loading...
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-6">
+                    {/* Emails column */}
+                    <div>
+                      <h3 className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                        <Mail className="h-3.5 w-3.5" /> Emails ({stateItemsData?.emails.length ?? 0})
+                      </h3>
+                      {!stateItemsData?.emails.length ? (
+                        <p className="text-sm text-muted-foreground">No emails in the last 24h.</p>
+                      ) : (
+                        <div className="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
+                          {stateItemsData.emails.map((email) => (
+                            <div key={email.id} className="rounded-lg border border-border bg-muted/30 p-3 hover:bg-muted/50 transition-colors">
+                              <div className="flex items-start gap-2">
+                                {email.entity?.imageUrl ? (
+                                  <img
+                                    src={email.entity.imageUrl}
+                                    alt={email.entity.name}
+                                    className="h-7 w-7 rounded-full object-cover shrink-0 mt-0.5"
+                                  />
+                                ) : (
+                                  <div className="h-7 w-7 rounded-full bg-[#EB3847]/15 flex items-center justify-center shrink-0 mt-0.5">
+                                    <Mail className="h-3.5 w-3.5 text-[#EB3847]" />
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-medium truncate leading-snug">{email.subject || "(No subject)"}</p>
+                                  <p className="text-xs text-muted-foreground truncate mt-0.5 flex items-center gap-1">
+                                    <User className="h-3 w-3 shrink-0" />
+                                    {email.entity?.name ?? email.senderName ?? email.senderEmail}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                                    <Clock className="h-3 w-3 shrink-0" />
+                                    {new Date(email.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                    {" · "}
+                                    {new Date(email.createdAt).toLocaleDateString([], { month: "short", day: "numeric" })}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* SMS column */}
+                    <div>
+                      <h3 className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                        <MessageSquare className="h-3.5 w-3.5" /> SMS ({stateItemsData?.smsMessages.length ?? 0})
+                      </h3>
+                      {!stateItemsData?.smsMessages.length ? (
+                        <p className="text-sm text-muted-foreground">No SMS in the last 24h.</p>
+                      ) : (
+                        <div className="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
+                          {stateItemsData.smsMessages.map((sms) => (
+                            <div key={sms.id} className="rounded-lg border border-border bg-muted/30 p-3 hover:bg-muted/50 transition-colors">
+                              <div className="flex items-start gap-2">
+                                {sms.entity?.imageUrl ? (
+                                  <img
+                                    src={sms.entity.imageUrl}
+                                    alt={sms.entity.name}
+                                    className="h-7 w-7 rounded-full object-cover shrink-0 mt-0.5"
+                                  />
+                                ) : (
+                                  <div className="h-7 w-7 rounded-full bg-[#EB3847]/15 flex items-center justify-center shrink-0 mt-0.5">
+                                    <MessageSquare className="h-3.5 w-3.5 text-[#EB3847]" />
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-medium truncate leading-snug">
+                                    {sms.entity?.name ?? sms.phoneNumber ?? "Unknown sender"}
+                                  </p>
+                                  {sms.message && (
+                                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{sms.message}</p>
+                                  )}
+                                  <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                                    <Clock className="h-3 w-3 shrink-0" />
+                                    {new Date(sms.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                    {" · "}
+                                    {new Date(sms.createdAt).toLocaleDateString([], { month: "short", day: "numeric" })}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+          </div>
+
           {/* State info panel */}
-          <div className="w-64 shrink-0 flex flex-col gap-4">
+          <div className="w-64 shrink-0 flex flex-col gap-4 self-start">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">

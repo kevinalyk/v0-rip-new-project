@@ -1,8 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ComposableMap, Geographies, Geography, ZoomableGroup } from "react-simple-maps"
-// Note: using a custom fixed-position tooltip instead of Radix TooltipProvider to avoid SVG foreignObject issues
+import { ComposableMap, Geographies, Geography } from "react-simple-maps"
 
 const GEO_URL = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json"
 
@@ -27,18 +26,19 @@ interface USInteractiveMapProps {
   onStateSelect?: (stateName: string | null) => void
 }
 
-// RIP brand colors as hex for SVG fill (SVG doesn't support oklch)
-const RIP_RED         = "#EB3847"
-const RIP_RED_HOVER   = "rgba(235,56,71,0.45)"
-const RIP_RED_DEFAULT = "rgba(235,56,71,0.12)"
-const RIP_BLUE_STROKE = "rgba(55,98,127,0.5)"
+// State fill: dark slate tiles with RIP red accent on interaction
+// Designed so future activity dots (bright RIP red) pop against the dark fills
+const STATE_DEFAULT  = "#1e2433"   // dark navy-slate — matches dark sidebar tone
+const STATE_HOVER    = "#2d3548"   // slightly lighter slate
+const STATE_SELECTED = "#EB3847"   // full RIP red
+const STROKE_COLOR   = "#3a4257"   // subtle border, same family as fills
 
 export function USInteractiveMap({ selectedState, onStateSelect }: USInteractiveMapProps) {
   const [hoveredState, setHoveredState] = useState<string | null>(null)
   const [tooltip, setTooltip] = useState<{ name: string; x: number; y: number } | null>(null)
 
-  const handleStateClick = (geo: { id: string }) => {
-    const name = STATE_NAMES[geo.id] ?? geo.id
+  const handleStateClick = (geoId: string) => {
+    const name = STATE_NAMES[geoId] ?? geoId
     if (onStateSelect) {
       onStateSelect(selectedState === name ? null : name)
     }
@@ -46,63 +46,83 @@ export function USInteractiveMap({ selectedState, onStateSelect }: USInteractive
 
   const getStateFill = (geoId: string) => {
     const name = STATE_NAMES[geoId]
-    if (selectedState && selectedState === name) return RIP_RED
-    if (hoveredState === name) return RIP_RED_HOVER
-    return RIP_RED_DEFAULT
+    if (selectedState === name) return STATE_SELECTED
+    if (hoveredState === name) return STATE_HOVER
+    return STATE_DEFAULT
+  }
+
+  const getStrokeColor = (geoId: string) => {
+    const name = STATE_NAMES[geoId]
+    if (selectedState === name) return "#ff6b7a"   // lighter red border on selected
+    return STROKE_COLOR
   }
 
   return (
     <div className="relative w-full h-full">
+      {/* Subtle grid background — intel/dashboard feel */}
+      <div
+        className="absolute inset-0 rounded-lg opacity-30"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(235,56,71,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(235,56,71,0.06) 1px, transparent 1px)",
+          backgroundSize: "40px 40px",
+        }}
+      />
+
       <ComposableMap
         projection="geoAlbersUsa"
-        style={{ width: "100%", height: "100%" }}
+        style={{ width: "100%", height: "100%", position: "relative" }}
       >
-        <ZoomableGroup>
-          <Geographies geography={GEO_URL}>
-            {({ geographies }) =>
-              geographies.map((geo) => {
-                const name = STATE_NAMES[geo.id] ?? geo.id
-                return (
-                  <Geography
-                    key={geo.rsmKey}
-                    geography={geo}
-                    fill={getStateFill(geo.id)}
-                    stroke={RIP_BLUE_STROKE}
-                    strokeWidth={0.6}
-                    style={{
-                      default: { outline: "none", cursor: "pointer", transition: "fill 0.12s ease" },
-                      hover:   { outline: "none", cursor: "pointer" },
-                      pressed: { outline: "none" },
-                    }}
-                    onClick={() => handleStateClick(geo)}
-                    onMouseEnter={(e) => {
-                      setHoveredState(name)
-                      setTooltip({ name, x: e.clientX, y: e.clientY })
-                    }}
-                    onMouseMove={(e) => {
-                      setTooltip({ name, x: e.clientX, y: e.clientY })
-                    }}
-                    onMouseLeave={() => {
-                      setHoveredState(null)
-                      setTooltip(null)
-                    }}
-                  />
-                )
-              })
-            }
-          </Geographies>
-        </ZoomableGroup>
+        <Geographies geography={GEO_URL}>
+          {({ geographies }) =>
+            geographies.map((geo) => {
+              const name = STATE_NAMES[geo.id] ?? geo.id
+              return (
+                <Geography
+                  key={geo.rsmKey}
+                  geography={geo}
+                  fill={getStateFill(geo.id)}
+                  stroke={getStrokeColor(geo.id)}
+                  strokeWidth={selectedState === name ? 1.5 : 0.8}
+                  style={{
+                    default: { outline: "none", cursor: "pointer" },
+                    hover:   { outline: "none", cursor: "pointer" },
+                    pressed: { outline: "none" },
+                  }}
+                  onClick={() => handleStateClick(geo.id)}
+                  onMouseEnter={(e) => {
+                    setHoveredState(name)
+                    setTooltip({ name, x: e.clientX, y: e.clientY })
+                  }}
+                  onMouseMove={(e) => {
+                    setTooltip((prev) => prev ? { ...prev, x: e.clientX, y: e.clientY } : null)
+                  }}
+                  onMouseLeave={() => {
+                    setHoveredState(null)
+                    setTooltip(null)
+                  }}
+                />
+              )
+            })
+          }
+        </Geographies>
       </ComposableMap>
 
-      {/* Custom tooltip — fixed position follows cursor */}
+      {/* Fixed-position tooltip that follows the cursor */}
       {tooltip && (
         <div
-          className="fixed z-50 pointer-events-none px-2.5 py-1 rounded text-xs font-medium bg-popover border border-border text-popover-foreground shadow-md"
-          style={{ left: tooltip.x + 12, top: tooltip.y - 32 }}
+          className="fixed z-50 pointer-events-none px-2.5 py-1 rounded text-xs font-medium shadow-lg"
+          style={{
+            left: tooltip.x + 14,
+            top: tooltip.y - 36,
+            background: "#1e2433",
+            border: "1px solid #3a4257",
+            color: "#e2e8f0",
+          }}
         >
           {tooltip.name}
           {selectedState === tooltip.name && (
-            <span className="ml-1.5 text-[oklch(0.62_0.22_20)]">selected</span>
+            <span className="ml-1.5" style={{ color: "#EB3847" }}>&#x2713;</span>
           )}
         </div>
       )}

@@ -309,7 +309,7 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
       <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Directory</h1>
-          <p className="text-sm text-muted-foreground mt-0.5 max-w-2xl">Our heat map shows you where the latest texts and emails were sent from and lets you browse all tracked campaigns and organizations in the system. Red dots on the map indicate that a campaign based in that state sent an email or text in the last 3 hours.</p>
+          <p className="text-sm text-muted-foreground mt-0.5 max-w-4xl">Our heat map shows you where the latest texts and emails were sent from and lets you browse all tracked campaigns and organizations in the system. Red dots on the map indicate that a campaign based in that state sent an email or text in the last 3 hours.</p>
         </div>
         <div className="flex items-center gap-2">
           {pagination.totalCount > 0 && (

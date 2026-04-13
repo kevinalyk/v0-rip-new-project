@@ -45,6 +45,17 @@ const STATE_CENTROIDS: Record<string, [number, number]> = {
   WI: [-89.6, 44.2], WY: [-107.6, 43.0], DC: [-77.0, 38.9],
 }
 
+// Approximate scatter radius (degrees) per state — larger states get wider spread
+const STATE_SPREAD: Record<string, number> = {
+  AK: 4.0, TX: 3.0, CA: 2.5, MT: 2.5, NM: 2.0, AZ: 2.0, NV: 2.0, CO: 1.8,
+  WY: 1.8, OR: 1.8, ID: 1.8, UT: 1.8, KS: 1.6, NE: 1.6, SD: 1.6, ND: 1.6,
+  MN: 1.6, OK: 1.6, MO: 1.4, WA: 1.4, AR: 1.4, IA: 1.4, IL: 1.4, WI: 1.4,
+  MI: 1.4, GA: 1.4, FL: 1.4, NC: 1.4, AL: 1.2, MS: 1.2, TN: 1.2, KY: 1.2,
+  IN: 1.2, OH: 1.2, VA: 1.2, PA: 1.2, NY: 1.2, LA: 1.2, WV: 1.0, SC: 1.0,
+  ME: 1.0, VT: 0.7, NH: 0.7, MA: 0.7, NJ: 0.6, CT: 0.5, DE: 0.4, RI: 0.3,
+  MD: 0.6, DC: 0.2, HI: 0.5,
+}
+
 export interface StateActivity {
   state: string
   emailCount: number
@@ -174,40 +185,63 @@ export function USInteractiveMap({ selectedState, onStateSelect, activityData = 
           }
         </Geographies>
 
-        {/* Activity dots — one pulsing marker per active state */}
-        {activityData.map((item) => {
+        {/* Activity dots — one dot per email/SMS, scattered around the state centroid */}
+        {activityData.flatMap((item) => {
           const coords = STATE_CENTROIDS[item.state]
-          if (!coords) return null
-          // Scale dot size slightly by volume (max radius 7)
-          const r = Math.min(4 + Math.floor(item.total / 3), 7)
-          return (
-            <Marker key={item.state} coordinates={coords}>
-              {/* All dot layers are pointer-events:none so clicks pass through to the Geography below */}
-              {/* Outer expanding ring */}
+          if (!coords) return []
+
+          // Cap at 20 dots so dense states don't become noise
+          const total = Math.min(item.total, 20)
+
+          // Generate deterministic pseudo-random offsets seeded by state+index
+          // so dots don't move on re-renders
+          const dots: Array<{ key: string; lng: number; lat: number; delay: number }> = []
+          for (let i = 0; i < total; i++) {
+            // Simple LCG seeded by state abbrev char codes + index
+            const seed = item.state.charCodeAt(0) * 31 + item.state.charCodeAt(1) * 17 + i * 13
+            const r1 = ((seed * 1664525 + 1013904223) & 0xffffffff) / 0xffffffff
+            const r2 = (((seed + 1) * 1664525 + 1013904223) & 0xffffffff) / 0xffffffff
+            // Spread radius varies by state size — larger states get wider scatter
+            const spread = STATE_SPREAD[item.state] ?? 1.2
+            // Map 0-1 to -spread..+spread using Box-Muller-ish approach
+            const angle = r1 * Math.PI * 2
+            const dist  = Math.sqrt(r2) * spread
+            dots.push({
+              key: `${item.state}-${i}`,
+              lng: coords[0] + Math.cos(angle) * dist,
+              lat: coords[1] + Math.sin(angle) * dist * 0.6, // compress N/S to match map projection
+              delay: (i * 0.15) % 1.8,
+            })
+          }
+
+          return dots.map(({ key, lng, lat, delay }) => (
+            <Marker key={key} coordinates={[lng, lat]}>
               <circle
-                className="rip-dot-ring"
-                cx={0} cy={0} r={r}
+                cx={0} cy={0} r={4}
                 fill="none"
                 stroke="#EB3847"
-                strokeWidth={1.5}
-                style={{ pointerEvents: "none" }}
+                strokeWidth={1.2}
+                style={{
+                  pointerEvents: "none",
+                  animation: `rip-pulse-ring 1.8s ease-out infinite ${delay}s`,
+                }}
               />
-              {/* Inner pulsing fill */}
               <circle
-                className="rip-dot-pulse"
-                cx={0} cy={0} r={r}
+                cx={0} cy={0} r={4}
                 fill="#EB3847"
                 fillOpacity={0.85}
-                style={{ pointerEvents: "none" }}
+                style={{
+                  pointerEvents: "none",
+                  animation: `rip-pulse 1.8s ease-out infinite ${delay}s`,
+                }}
               />
-              {/* Static core dot */}
               <circle
-                cx={0} cy={0} r={r * 0.5}
+                cx={0} cy={0} r={2}
                 fill="#ff6472"
                 style={{ pointerEvents: "none" }}
               />
             </Marker>
-          )
+          ))
         })}
       </ComposableMap>
 

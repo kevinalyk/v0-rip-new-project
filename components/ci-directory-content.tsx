@@ -425,8 +425,15 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
                           {stateItemsData.emails.map((email) => (
                             <button
                               key={email.id}
-                              className="w-full text-left rounded-md border border-border bg-muted/20 p-2.5 hover:bg-muted/40 transition-colors cursor-pointer"
+                              className={`w-full text-left rounded-md border border-border bg-muted/20 p-2.5 transition-colors ${isPublic ? "cursor-default" : "hover:bg-muted/40 cursor-pointer"}`}
                               onClick={async () => {
+                                if (isPublic) {
+                                  toast("Create an account to view full communications", {
+                                    description: "Sign up for free to access emails, SMS, and more.",
+                                    action: { label: "Sign Up", onClick: () => window.location.href = "/sign-up" },
+                                  })
+                                  return
+                                }
                                 try {
                                   const res = await fetch(`/api/ci-campaigns/${email.id}/share`, { method: "POST", credentials: "include" })
                                   if (!res.ok) throw new Error()
@@ -476,8 +483,15 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
                           {stateItemsData.smsMessages.map((sms) => (
                             <button
                               key={sms.id}
-                              className="w-full text-left rounded-md border border-border bg-muted/20 p-2.5 hover:bg-muted/40 transition-colors cursor-pointer"
+                              className={`w-full text-left rounded-md border border-border bg-muted/20 p-2.5 transition-colors ${isPublic ? "cursor-default" : "hover:bg-muted/40 cursor-pointer"}`}
                               onClick={async () => {
+                                if (isPublic) {
+                                  toast("Create an account to view full communications", {
+                                    description: "Sign up for free to access emails, SMS, and more.",
+                                    action: { label: "Sign Up", onClick: () => window.location.href = "/sign-up" },
+                                  })
+                                  return
+                                }
                                 try {
                                   const res = await fetch(`/api/ci-campaigns/${sms.id}/share`, { method: "POST", credentials: "include" })
                                   if (!res.ok) throw new Error()

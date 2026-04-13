@@ -39,24 +39,8 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
       return NextResponse.json({ error: "Share link has expired" }, { status: 410 })
     }
 
-    // Increment share view count and total view count
-    if (isSms) {
-      await prisma.smsQueue.update({
-        where: { id: campaign.id },
-        data: {
-          shareViewCount: { increment: 1 },
-          viewCount: { increment: 1 },
-        },
-      })
-    } else {
-      await prisma.competitiveInsightCampaign.update({
-        where: { id: campaign.id },
-        data: {
-          shareViewCount: { increment: 1 },
-          viewCount: { increment: 1 },
-        },
-      })
-    }
+    // Note: view count is incremented server-side in app/share/[token]/page.tsx
+    // to ensure it fires for all visitors including anonymous users.
 
     if (isSms) {
       const sms = campaign as any

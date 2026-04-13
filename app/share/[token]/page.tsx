@@ -4,6 +4,53 @@ import SharePageClient from "./share-page-client"
 
 const prisma = new PrismaClient()
 
+async function incrementViewCount(token: string) {
+  try {
+    // Check if token is expired (7 days)
+    const now = new Date()
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+
+    // Try email campaign first
+    const campaign = await prisma.competitiveInsightCampaign.findUnique({
+      where: { shareToken: token },
+      select: { id: true, shareTokenCreatedAt: true },
+    })
+
+    if (campaign) {
+      if (!campaign.shareTokenCreatedAt || campaign.shareTokenCreatedAt >= sevenDaysAgo) {
+        await prisma.competitiveInsightCampaign.update({
+          where: { id: campaign.id },
+          data: {
+            viewCount: { increment: 1 },
+            shareViewCount: { increment: 1 },
+          },
+        })
+      }
+      return
+    }
+
+    // Try SMS
+    const sms = await prisma.smsQueue.findUnique({
+      where: { shareToken: token },
+      select: { id: true, shareTokenCreatedAt: true },
+    })
+
+    if (sms) {
+      if (!sms.shareTokenCreatedAt || sms.shareTokenCreatedAt >= sevenDaysAgo) {
+        await prisma.smsQueue.update({
+          where: { id: sms.id },
+          data: {
+            viewCount: { increment: 1 },
+            shareViewCount: { increment: 1 },
+          },
+        })
+      }
+    }
+  } catch (error) {
+    console.error("[share] Failed to increment view count for token", token, error)
+  }
+}
+
 export async function generateMetadata({ params }: { params: { token: string } }): Promise<Metadata> {
   try {
     const token = params.token
@@ -82,6 +129,8 @@ export async function generateMetadata({ params }: { params: { token: string } }
   }
 }
 
-export default function SharePage() {
+export default async function SharePage({ params }: { params: { token: string } }) {
+  // Increment view count server-side on every page load — no auth required
+  await incrementViewCount(params.token)
   return <SharePageClient />
 }

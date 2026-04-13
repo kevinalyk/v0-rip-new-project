@@ -313,7 +313,7 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
       <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Directory</h1>
-          <p className="text-sm text-muted-foreground mt-0.5 max-w-4xl">Our heat map shows you where the latest texts and emails were sent from and lets you browse all tracked campaigns and organizations in the system. Red dots on the map indicate that a campaign based in that state sent an email or text in the last 3 hours.</p>
+          <p className="text-sm text-muted-foreground mt-0.5 max-w-4xl">Our heat map shows you where the latest texts and emails were sent from and lets you browse all tracked campaigns and organizations in the system. Each red dot represents one email or SMS sent in the last 3 hours — more dots means more activity in that state.</p>
         </div>
         <div className="flex items-center gap-2">
           {pagination.totalCount > 0 && (
@@ -425,8 +425,15 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
                           {stateItemsData.emails.map((email) => (
                             <button
                               key={email.id}
-                              className="w-full text-left rounded-md border border-border bg-muted/20 p-2.5 hover:bg-muted/40 transition-colors cursor-pointer"
+                              className={`w-full text-left rounded-md border border-border bg-muted/20 p-2.5 transition-colors ${isPublic ? "cursor-default" : "hover:bg-muted/40 cursor-pointer"}`}
                               onClick={async () => {
+                                if (isPublic) {
+                                  toast("Create an account to view full communications", {
+                                    description: "Sign up for free to access emails, SMS, and more.",
+                                    action: { label: "Sign Up", onClick: () => window.location.href = "/sign-up" },
+                                  })
+                                  return
+                                }
                                 try {
                                   const res = await fetch(`/api/ci-campaigns/${email.id}/share`, { method: "POST", credentials: "include" })
                                   if (!res.ok) throw new Error()
@@ -476,8 +483,15 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
                           {stateItemsData.smsMessages.map((sms) => (
                             <button
                               key={sms.id}
-                              className="w-full text-left rounded-md border border-border bg-muted/20 p-2.5 hover:bg-muted/40 transition-colors cursor-pointer"
+                              className={`w-full text-left rounded-md border border-border bg-muted/20 p-2.5 transition-colors ${isPublic ? "cursor-default" : "hover:bg-muted/40 cursor-pointer"}`}
                               onClick={async () => {
+                                if (isPublic) {
+                                  toast("Create an account to view full communications", {
+                                    description: "Sign up for free to access emails, SMS, and more.",
+                                    action: { label: "Sign Up", onClick: () => window.location.href = "/sign-up" },
+                                  })
+                                  return
+                                }
                                 try {
                                   const res = await fetch(`/api/ci-campaigns/${sms.id}/share`, { method: "POST", credentials: "include" })
                                   if (!res.ok) throw new Error()

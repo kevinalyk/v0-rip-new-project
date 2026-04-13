@@ -176,6 +176,7 @@ model Client {
   ciViews           CiView[] // Added relation to CI Views owned by this client
   entityTags        EntityTag[] // Added relation to entity tags
   personalEmailDomains PersonalEmailDomain[] // Personal email domains for CI
+  personalPhoneNumbers PersonalPhoneNumber[] // Personal phone numbers for CI
   
   @@index([totalUsers])
 }
@@ -432,6 +433,8 @@ model SmsQueue {
   companyId          Int?      // Company ID from FullStack
   entityId           String?   // Link to assigned entity
   entity             CiEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  clientId           String?   // Link to assigned client (for personal SMS)
+  source             String    @default("seed") // "seed" or "personal"
   assignmentMethod   String?  // "auto_winred", "auto_anedot", "auto_actblue", "auto_phone", "manual"
   assignedAt         DateTime? // When the SMS was assigned to an entity
   ctaLinks           String?   @db.Text // JSON array of CTA links extracted from message
@@ -459,6 +462,21 @@ model SmsQueue {
   @@index([shareToken])
   @@index([assignedAt])
   @@index([isDeleted])
+  @@index([clientId])
+  @@index([source])
+}
+
+model PersonalPhoneNumber {
+  id          String   @id @default(cuid())
+  phoneNumber String   @unique
+  clientId    String
+  assignedBy  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
 }
 
 model CiEntitySubscription {

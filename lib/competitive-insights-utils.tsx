@@ -1397,10 +1397,13 @@ export async function processCompetitiveInsights(
 
     const ripEmailAddresses = new Set(ripSeedEmails.map((se) => se.email))
 
+    // Filter results to only RIP seeds for inbox/spam counting
     const ripResults = results.filter((r) => ripEmailAddresses.has(r.seedEmail))
 
-    if (ripResults.length === 0) {
-      return
+    // If no RIP results AND no clientId (personal assignment), skip
+    // But if we have a clientId, we should still create the campaign even without RIP results
+    if (ripResults.length === 0 && !clientId) {
+      return false
     }
 
     // Build a map of seedEmail → placement for this run so we can filter
@@ -1416,7 +1419,9 @@ export async function processCompetitiveInsights(
     const totalCount = ripResults.length
     const inboxRate = totalCount > 0 ? (inboxCount / totalCount) * 100 : 0
 
-    const seedEmailsList = Array.from(ripEmailAddresses)
+    // For sanitization, include all seed emails from results (both RIP and personal client seeds)
+    const allResultSeedEmails = results.map((r) => r.seedEmail)
+    const seedEmailsList = [...new Set([...ripEmailAddresses, ...allResultSeedEmails])]
 
     const tags = autoGenerateTags(senderEmail, senderName, sanitizedSubject, emailContent)
 
@@ -1530,13 +1535,15 @@ export async function processCompetitiveInsights(
           ? await extractCTALinks(emailContent, seedEmailsList, sanitizedSubject)
           : []
 
-      // Only count results from seed emails not already recorded for this campaign
+      // Only count RIP seed results for inbox/spam statistics
       const alreadySeen = new Set<string>(Array.isArray(existing.seenBySeedEmails) ? existing.seenBySeedEmails as string[] : [])
-      const newResults = ripResults.filter((r) => !alreadySeen.has(r.seedEmail))
-      const newInbox = newResults.filter((r) => r.placement === "inbox").length
-      const newSpam = newResults.filter((r) => r.placement === "spam").length
-      const newNotDelivered = newResults.filter((r) => r.placement === "not_found").length
-      const updatedSeen = [...alreadySeen, ...newResults.map((r) => r.seedEmail)]
+      const newRipResults = ripResults.filter((r) => !alreadySeen.has(r.seedEmail))
+      const newInbox = newRipResults.filter((r) => r.placement === "inbox").length
+      const newSpam = newRipResults.filter((r) => r.placement === "spam").length
+      const newNotDelivered = newRipResults.filter((r) => r.placement === "not_found").length
+      // Track ALL seeds seen (including personal client seeds) for dedup purposes
+      const allNewResults = results.filter((r) => !alreadySeen.has(r.seedEmail))
+      const updatedSeen = [...alreadySeen, ...allNewResults.map((r) => r.seedEmail)]
       const updatedInbox = existing.inboxCount + newInbox
       const updatedSpam = existing.spamCount + newSpam
       const updatedNotDelivered = existing.notDeliveredCount + newNotDelivered
@@ -1587,7 +1594,7 @@ export async function processCompetitiveInsights(
             spamCount,
             notDeliveredCount,
             inboxRate,
-            seenBySeedEmails: ripResults.map((r) => r.seedEmail),
+            seenBySeedEmails: results.map((r) => r.seedEmail),
             ctaLinks: ctaLinks.length > 0 ? JSON.stringify(ctaLinks) : null,
             donationPlatform: ctaLinks.length > 0 ? detectDonationPlatform(ctaLinks) : null,
             tags: JSON.stringify(tags),
@@ -1613,11 +1620,14 @@ export async function processCompetitiveInsights(
           })
           if (raceExisting) {
             const raceAlreadySeen = new Set<string>(Array.isArray(raceExisting.seenBySeedEmails) ? raceExisting.seenBySeedEmails as string[] : [])
-            const raceNewResults = ripResults.filter((r) => !raceAlreadySeen.has(r.seedEmail))
-            const raceNewInbox = raceNewResults.filter((r) => r.placement === "inbox").length
-            const raceNewSpam = raceNewResults.filter((r) => r.placement === "spam").length
-            const raceNewNotDelivered = raceNewResults.filter((r) => r.placement === "not_found").length
-            const raceUpdatedSeen = [...raceAlreadySeen, ...raceNewResults.map((r) => r.seedEmail)]
+            // Use RIP results for counting
+            const raceNewRipResults = ripResults.filter((r) => !raceAlreadySeen.has(r.seedEmail))
+            const raceNewInbox = raceNewRipResults.filter((r) => r.placement === "inbox").length
+            const raceNewSpam = raceNewRipResults.filter((r) => r.placement === "spam").length
+            const raceNewNotDelivered = raceNewRipResults.filter((r) => r.placement === "not_found").length
+            // Use ALL results for tracking seen seeds
+            const raceAllNewResults = results.filter((r) => !raceAlreadySeen.has(r.seedEmail))
+            const raceUpdatedSeen = [...raceAlreadySeen, ...raceAllNewResults.map((r) => r.seedEmail)]
             const raceUpdatedInbox = raceExisting.inboxCount + raceNewInbox
             const raceUpdatedSpam = raceExisting.spamCount + raceNewSpam
             const raceUpdatedNotDelivered = raceExisting.notDeliveredCount + raceNewNotDelivered

@@ -1,18 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { verifyAuth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 
+// Public endpoint — no auth required (directory is publicly accessible)
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await verifyAuth(request)
-    if (!authResult.success || !authResult.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    if (authResult.user.role !== "super_admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
     const { searchParams } = new URL(request.url)
     const state = searchParams.get("state") // e.g. "MN"
 

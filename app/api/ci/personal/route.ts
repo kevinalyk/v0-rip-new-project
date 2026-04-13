@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
       dateFilter = { gte: thirtyDaysAgo }
     }
 
-    // Fetch only campaigns from client's personal email
+    // Fetch email campaigns from client's personal email
     const emailCampaigns = await prisma.competitiveInsightCampaign.findMany({
       where: {
         clientId: targetClientId,
@@ -73,21 +73,26 @@ export async function GET(request: NextRequest) {
       take: 1000,
     })
 
-    console.log("[v0] Personal Email API - Client ID:", targetClientId)
-    console.log("[v0] Personal Email API - Found campaigns:", emailCampaigns.length)
-    console.log(
-      "[v0] Personal Email API - Sample campaign:",
-      emailCampaigns[0]
-        ? {
-            id: emailCampaigns[0].id,
-            clientId: emailCampaigns[0].clientId,
-            source: emailCampaigns[0].source,
-            subject: emailCampaigns[0].subject,
-          }
-        : "No campaigns",
-    )
+    // Fetch SMS from client's personal phone numbers
+    const smsCampaigns = await prisma.smsQueue.findMany({
+      where: {
+        clientId: targetClientId,
+        source: "personal",
+        isDeleted: false,
+        ...(dateFilter && { createdAt: dateFilter }),
+      },
+      include: {
+        entity: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 1000,
+    })
 
-    const transformedCampaigns = emailCampaigns.map((campaign) => ({
+    console.log("[v0] Personal CI API - Client ID:", targetClientId)
+    console.log("[v0] Personal CI API - Found email campaigns:", emailCampaigns.length)
+    console.log("[v0] Personal CI API - Found SMS campaigns:", smsCampaigns.length)
+
+    const transformedEmailCampaigns = emailCampaigns.map((campaign) => ({
       id: campaign.id,
       type: "email" as const,
       senderName: campaign.senderName,
@@ -117,7 +122,34 @@ export async function GET(request: NextRequest) {
         : null,
     }))
 
-    return NextResponse.json({ insights: transformedCampaigns })
+    const transformedSmsCampaigns = smsCampaigns.map((sms) => ({
+      id: sms.id,
+      type: "sms" as const,
+      phoneNumber: sms.phoneNumber,
+      message: sms.message,
+      dateReceived: sms.createdAt.toISOString(),
+      ctaLinks: sms.ctaLinks ? JSON.parse(sms.ctaLinks as string) : [],
+      entityId: sms.entityId,
+      isHidden: sms.isDeleted,
+      clientId: sms.clientId,
+      source: sms.source,
+      entity: sms.entity
+        ? {
+            id: sms.entity.id,
+            name: sms.entity.name,
+            type: sms.entity.type,
+            party: sms.entity.party,
+            state: sms.entity.state,
+          }
+        : null,
+    }))
+
+    // Combine and sort by date (most recent first)
+    const allCampaigns = [...transformedEmailCampaigns, ...transformedSmsCampaigns].sort(
+      (a, b) => new Date(b.dateReceived).getTime() - new Date(a.dateReceived).getTime()
+    )
+
+    return NextResponse.json({ insights: allCampaigns })
   } catch (error) {
     console.error("Error fetching personal email campaigns:", error)
     return NextResponse.json({ error: "Failed to fetch personal email campaigns" }, { status: 500 })

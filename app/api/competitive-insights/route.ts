@@ -589,8 +589,8 @@ export async function GET(request: NextRequest) {
         phoneNumber: sms.phoneNumber,
         toNumber: sms.toNumber,
         isHidden: sms.isHidden,
-        clientId: null,
-        source: "seed",
+        clientId: sms.clientId || null,
+        source: sms.source || "seed",
       }
     })
 

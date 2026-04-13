@@ -1,19 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { verifyAuth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 
+// Public endpoint — no auth required (directory is publicly accessible)
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await verifyAuth(request)
-    if (!authResult.success || !authResult.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Only RIP (super_admin) can access this
-    if (authResult.user.role !== "super_admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
     const since = new Date(Date.now() - 3 * 60 * 60 * 1000)
 
     // Fetch recent emails grouped by entity state

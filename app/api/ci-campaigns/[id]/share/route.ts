@@ -1,9 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { PrismaClient } from "@prisma/client"
+import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
 import { nanoid } from "nanoid"
-
-const prisma = new PrismaClient()
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {

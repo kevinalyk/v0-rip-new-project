@@ -442,7 +442,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                       collapsed={false}
                       onClick={() => navigate(`/${getClientSlug()}/inbox/reporting`)}
                     />
-
+                    <NavItem
+                      icon={<Mail size={18} />}
+                      label="Seed List"
+                      active={pathname.includes("/inbox/seed-list")}
+                      collapsed={false}
+                      onClick={() => navigate(`/${getClientSlug()}/inbox/seed-list`)}
+                    />
                   </div>
                 )}
               </>
@@ -503,10 +509,10 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                     />
                     <NavItem
                       icon={<Globe size={18} />}
-                      label="Personal Assignments"
-                      active={pathname === "/rip/admin/personal-assignments"}
+                      label="Personal Domains"
+                      active={pathname === "/rip/admin/personal-email-domains"}
                       collapsed={false}
-                      onClick={() => navigate("/rip/admin/personal-assignments")}
+                      onClick={() => navigate("/rip/admin/personal-email-domains")}
                     />
                     <NavItem
                       icon={<ScanSearch size={18} />}

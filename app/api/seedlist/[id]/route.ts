@@ -98,15 +98,14 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     const body = await request.json()
     const { assignedToClient } = body
 
-    // assignedToClient can be a client name (to assign) or null/empty (to unassign)
-    if (assignedToClient === undefined) {
+    if (!assignedToClient) {
       return NextResponse.json({ error: "assignedToClient is required" }, { status: 400 })
     }
 
-    // Update the seed email's assigned client (null or empty string means unassign)
+    // Update the seed email's assigned client
     const updatedSeed = await prisma.seedEmail.update({
       where: { id: params.id },
-      data: { assignedToClient: assignedToClient || null },
+      data: { assignedToClient },
     })
 
     console.log(`Seed email ${params.id} assigned to client ${assignedToClient}`)

@@ -1,11 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { verifyAuth } from "@/lib/auth"
 
 // POST /api/track-view
 // Increments viewCount for a campaign or SMS message.
-// No auth required — this is a fire-and-forget tracking call.
+// Requires auth to prevent anonymous inflation.
 export async function POST(request: NextRequest) {
   try {
+    // Require a valid session — unauthenticated callers should not count
+    const authResult = await verifyAuth(request)
+    if (!authResult.success || !authResult.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const body = await request.json()
     const { id, type } = body
 
@@ -19,7 +26,6 @@ export async function POST(request: NextRequest) {
         data: { viewCount: { increment: 1 } },
       })
     } else {
-      // CompetitiveInsightCampaign uses string Cuid ids
       await prisma.competitiveInsightCampaign.update({
         where: { id: String(id) },
         data: { viewCount: { increment: 1 } },
@@ -28,6 +34,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    console.error("[track-view] error:", error)
     return NextResponse.json({ success: false }, { status: 500 })
   }
 }

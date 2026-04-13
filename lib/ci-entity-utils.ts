@@ -410,6 +410,7 @@ export async function createEntity(
   party?: string,
   state?: string,
   donationIdentifiers?: DonationIdentifiers,
+  ballotpediaUrl?: string,
 ) {
   try {
     const entity = await prisma.ciEntity.create({
@@ -420,6 +421,7 @@ export async function createEntity(
         party,
         state,
         donationIdentifiers: donationIdentifiers || null,
+        ...(ballotpediaUrl ? { ballotpediaUrl } : {}),
       },
     })
 

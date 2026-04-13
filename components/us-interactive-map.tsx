@@ -197,15 +197,17 @@ export function USInteractiveMap({ selectedState, onStateSelect, activityData = 
           // so dots don't move on re-renders
           const dots: Array<{ key: string; lng: number; lat: number; delay: number }> = []
           for (let i = 0; i < total; i++) {
-            // Simple LCG seeded by state abbrev char codes + index
-            const seed = item.state.charCodeAt(0) * 31 + item.state.charCodeAt(1) * 17 + i * 13
-            const r1 = ((seed * 1664525 + 1013904223) & 0xffffffff) / 0xffffffff
-            const r2 = (((seed + 1) * 1664525 + 1013904223) & 0xffffffff) / 0xffffffff
+            // LCG with >>> 0 to keep values as unsigned 32-bit (avoids negative results)
+            const c0 = item.state.charCodeAt(0) || 0
+            const c1 = item.state.charCodeAt(1) || 0
+            const seed = (c0 * 31 + c1 * 17 + i * 13) >>> 0
+            const r1 = (((seed * 1664525 + 1013904223) >>> 0)) / 0xffffffff
+            const r2 = ((((seed + 1) * 1664525 + 1013904223) >>> 0)) / 0xffffffff
             // Spread radius varies by state size — larger states get wider scatter
             const spread = STATE_SPREAD[item.state] ?? 1.2
-            // Map 0-1 to -spread..+spread using Box-Muller-ish approach
+            // Polar coords: angle 0-2π, distance scaled by sqrt for uniform distribution
             const angle = r1 * Math.PI * 2
-            const dist  = Math.sqrt(r2) * spread
+            const dist  = Math.sqrt(Math.max(0, r2)) * spread
             dots.push({
               key: `${item.state}-${i}`,
               lng: coords[0] + Math.cos(angle) * dist,

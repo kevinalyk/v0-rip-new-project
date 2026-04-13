@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { PrismaClient } from "@prisma/client"
-import { verifyAuth } from "@/lib/verify-auth"
+import { verifyAuth } from "@/lib/auth"
 
 const prisma = new PrismaClient()
 

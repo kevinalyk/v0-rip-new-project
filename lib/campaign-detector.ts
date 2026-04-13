@@ -699,7 +699,9 @@ async function fetchRecentEmailsIMAP(
 }
 
 /**
- * Scan ONLY RIP-locked seed emails for competitive insights
+ * Scan ALL locked seed emails for competitive insights
+ * - RIP-locked seeds: used for inbox/spam counting, source="seed"
+ * - Other client-locked seeds: assigned to that client, source="personal"
  */
 export async function scanForCompetitiveInsights(options: {
   daysToScan?: number
@@ -732,30 +734,33 @@ export async function scanForCompetitiveInsights(options: {
       }
     }
 
-    // Get ONLY RIP-locked seed emails
-    // assignedToClient stores the slug string "RIP" (not the cuid), so query both
-    const ripSeedEmails = await prisma.seedEmail.findMany({
+    // Get ALL locked seed emails (both RIP and other clients)
+    const allLockedSeedEmails = await prisma.seedEmail.findMany({
       where: {
         active: true,
         locked: true,
-        OR: [
-          { assignedToClient: ripClient.id },
-          { assignedToClient: "RIP" },
-          { assignedToClient: "rip" },
-        ],
+        assignedToClient: { not: null },
       },
     })
 
-    if (ripSeedEmails.length === 0) {
+    if (allLockedSeedEmails.length === 0) {
       return {
         success: false,
         newInsights: 0,
         totalEmails: 0,
-        error: "No RIP-locked seed emails found",
+        error: "No locked seed emails found",
       }
     }
 
-    console.log(`🔒 Found ${ripSeedEmails.length} RIP-locked seed emails for competitive insights`)
+    // Separate RIP seeds from other client seeds
+    const ripSeedEmails = allLockedSeedEmails.filter(
+      (s) => s.assignedToClient === ripClient.id || s.assignedToClient?.toLowerCase() === "rip"
+    )
+    const otherClientSeedEmails = allLockedSeedEmails.filter(
+      (s) => s.assignedToClient !== ripClient.id && s.assignedToClient?.toLowerCase() !== "rip"
+    )
+
+    console.log(`🔒 Found ${allLockedSeedEmails.length} locked seed emails (${ripSeedEmails.length} RIP, ${otherClientSeedEmails.length} other clients)`)
 
     // Calculate the date range for scanning
     const startDate = new Date()
@@ -767,6 +772,7 @@ export async function scanForCompetitiveInsights(options: {
       string,
       Array<{
         seedEmail: string
+        seedClientId?: string // clientId if this seed is assigned to a non-RIP client
         placement: "inbox" | "spam" | "social" | "promotions" | "other"
         subject: string
         senderName: string
@@ -779,16 +785,25 @@ export async function scanForCompetitiveInsights(options: {
       }>
     >()
 
-    console.log(`🚀 Starting parallel email fetch for ${ripSeedEmails.length} RIP seed emails...`)
+    console.log(`🚀 Starting parallel email fetch for ${allLockedSeedEmails.length} locked seed emails...`)
 
     const BATCH_SIZE = 10
     const allEmailResults: Array<{ seedEmail: any; emails: Email[] }> = []
 
-    const ripSeedEmailAddresses = ripSeedEmails.map((s) => s.email)
+    // Build a map of seed email address → assigned client ID (for non-RIP seeds)
+    const seedEmailToClientId = new Map<string, string>()
+    for (const seed of otherClientSeedEmails) {
+      if (seed.assignedToClient) {
+        seedEmailToClientId.set(seed.email.toLowerCase(), seed.assignedToClient)
+      }
+    }
 
-    // Process seed emails in batches
-    for (let i = 0; i < ripSeedEmails.length; i += BATCH_SIZE) {
-      const batch = ripSeedEmails.slice(i, i + BATCH_SIZE)
+    const ripSeedEmailAddresses = ripSeedEmails.map((s) => s.email)
+    const allSeedEmailAddresses = allLockedSeedEmails.map((s) => s.email)
+
+    // Process ALL locked seed emails in batches (both RIP and other clients)
+    for (let i = 0; i < allLockedSeedEmails.length; i += BATCH_SIZE) {
+      const batch = allLockedSeedEmails.slice(i, i + BATCH_SIZE)
 
       // Fetch emails in parallel for this batch
       const batchResults = await Promise.all(
@@ -813,7 +828,7 @@ export async function scanForCompetitiveInsights(options: {
       allEmailResults.push(...batchResults)
     }
 
-    console.log(`✅ Finished parallel fetch for all ${ripSeedEmails.length} RIP seed emails`)
+    console.log(`✅ Finished parallel fetch for all ${allLockedSeedEmails.length} locked seed emails`)
 
     // Pre-fetch all personal email domains so we can resolve forwarded addresses without extra DB calls
     const personalEmailDomains = await prisma.personalEmailDomain.findMany({
@@ -825,7 +840,7 @@ export async function scanForCompetitiveInsights(options: {
     for (const { seedEmail, emails } of allEmailResults) {
       totalEmailsScanned += emails.length
       for (const email of emails) {
-        const sanitizedSubject = sanitizeSubject(email.subject, ripSeedEmailAddresses)
+        const sanitizedSubject = sanitizeSubject(email.subject, allSeedEmailAddresses)
         const fingerprint = createCampaignFingerprint(email.from.address, sanitizedSubject, email.date)
 
         if (!allEmailsByFingerprint.has(fingerprint)) {
@@ -843,8 +858,12 @@ export async function scanForCompetitiveInsights(options: {
           }
         }
 
+        // Check if this seed email is assigned to a non-RIP client
+        const seedClientId = seedEmailToClientId.get(seedEmail.email.toLowerCase())
+
         allEmailsByFingerprint.get(fingerprint)!.push({
           seedEmail: effectiveSeedEmail,
+          seedClientId, // will be undefined for RIP seeds
           placement: email.placement,
           subject: sanitizedSubject,
           senderName: email.from.name,
@@ -905,8 +924,10 @@ export async function scanForCompetitiveInsights(options: {
         const updatedNotDelivered = existing.notDeliveredCount + notDeliveredCount
         const updatedTotal = updatedInbox + updatedSpam + updatedNotDelivered
 
-        // Check if this duplicate came via a personal email — if so, attach clientId
-        const existingPersonalClientId = await resolvePersonalClientId(emails)
+        // Check if this duplicate came via a personal email or seed assignment — if so, attach clientId
+        const existingSeedAssignedClientId = emails.find((e) => e.seedClientId)?.seedClientId
+        const existingPersonalDomainClientId = await resolvePersonalClientId(emails)
+        const existingPersonalClientId = existingSeedAssignedClientId || existingPersonalDomainClientId
 
         await prisma.competitiveInsightCampaign.update({
           where: { id: existing.id },
@@ -945,8 +966,11 @@ export async function scanForCompetitiveInsights(options: {
         firstEmail.emailContent,
       )
 
-      // Resolve clientId from personal email TO address via PersonalEmailDomain table
-      const personalClientId = await resolvePersonalClientId(emails)
+      // Resolve clientId: first check if any email came from a non-RIP seed assignment
+      // If not, fall back to personal email domain resolution
+      const seedAssignedClientId = emails.find((e) => e.seedClientId)?.seedClientId
+      const personalDomainClientId = await resolvePersonalClientId(emails)
+      const personalClientId = seedAssignedClientId || personalDomainClientId
 
       try {
         const isNew = await processCompetitiveInsights(
@@ -962,7 +986,7 @@ export async function scanForCompetitiveInsights(options: {
         )
         if (isNew) {
           newInsightsCount++
-          console.log(`✅ Processed NEW campaign with AI: "${firstEmail.subject}"${personalClientId ? ` [personal: ${personalClientId}]` : ""}`)
+          console.log(`✅ Processed NEW campaign with AI: "${firstEmail.subject}"${personalClientId ? ` [personal: ${personalClientId}${seedAssignedClientId ? " via seed" : " via domain"}]` : ""}`)
         } else {
           skippedDuplicates++
           console.log(`⏭️ Skipped duplicate (race condition): "${firstEmail.subject}"`)

@@ -371,13 +371,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                   collapsed={false}
                   onClick={() => navigate(`/${getClientSlug()}/ci/subscriptions`)}
                 />
-                <NavItem
-                  icon={<Mail size={18} />}
-                  label="Personal"
-                  active={pathname.includes("/ci/personal")}
-                  collapsed={false}
-                  onClick={() => navigate(`/${getClientSlug()}/ci/personal`)}
-                />
+                    <NavItem
+                      icon={<Inbox size={18} />}
+                      label="Personal Inbox"
+                      active={pathname.includes("/ci/personal")}
+                      collapsed={false}
+                      onClick={() => navigate(`/${getClientSlug()}/ci/personal`)}
+                    />
                 <NavItem
                   icon={<Building2 size={18} />}
                   label="Directory"

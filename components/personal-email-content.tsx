@@ -93,18 +93,19 @@ export function PersonalEmailContent({ clientSlug }: PersonalEmailContentProps) 
                 </DialogHeader>
                 <div className="space-y-4 mt-4">
                   <div>
-                    <h3 className="font-semibold mb-2">1. Admin Assigns Seeds</h3>
+                    <h3 className="font-semibold mb-2">1. Seeds Are Assigned to You</h3>
                     <p className="text-sm text-muted-foreground">
-                      Our team assigns specific seed email addresses and phone numbers to your organization. These seeds
-                      are subscribed to political campaigns, PACs, and organizations on your behalf.
+                      Our team assigns specific seed email addresses and phone numbers to your organization. You then
+                      use these seeds to sign up for the political campaigns, PACs, and organizations you want to
+                      monitor.
                     </p>
                   </div>
 
                   <div>
                     <h3 className="font-semibold mb-2">2. Automatic Processing</h3>
                     <p className="text-sm text-muted-foreground">
-                      All emails and SMS messages received by your assigned seeds are automatically processed and added
-                      to your personal feed.
+                      Once your seeds start receiving emails and SMS messages, everything is automatically processed
+                      and added to your personal feed.
                     </p>
                   </div>
 
@@ -119,8 +120,8 @@ export function PersonalEmailContent({ clientSlug }: PersonalEmailContentProps) 
                   <div>
                     <h3 className="font-semibold mb-2">4. Expanded Coverage</h3>
                     <p className="text-sm text-muted-foreground">
-                      Personal seed assignments help ensure you have coverage of specific campaigns or organizations
-                      that matter most to your work.
+                      Use your assigned seeds to sign up for any campaigns or organizations you want to track,
+                      giving you targeted coverage on top of the general CI feed.
                     </p>
                   </div>
                 </div>

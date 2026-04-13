@@ -131,9 +131,13 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
     "VA","WA","WV","WI","WY",
   ]
 
+  // Use public endpoints when the page is accessed without auth
+  const mapActivityEndpoint = isPublic ? "/api/public/map-activity" : "/api/ci/map-activity"
+  const mapStateItemsEndpoint = isPublic ? "/api/public/map-state-items" : "/api/ci/map-state-items"
+
   // Map activity data
   const { data: mapData, isLoading: mapLoading } = useSWR<{ activity: StateActivity[]; since: string }>(
-    "/api/ci/map-activity",
+    mapActivityEndpoint,
     fetcher,
     { refreshInterval: 60_000 }
   )
@@ -150,7 +154,7 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
 
   // State items (emails + SMS) for the right panel
   const { data: stateItemsData, isLoading: stateItemsLoading } = useSWR<StateItemsData>(
-    selectedStateAbbrev ? `/api/ci/map-state-items?state=${selectedStateAbbrev}` : null,
+    selectedStateAbbrev ? `${mapStateItemsEndpoint}?state=${selectedStateAbbrev}` : null,
     fetcher,
     { revalidateOnFocus: false }
   )

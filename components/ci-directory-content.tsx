@@ -308,8 +308,8 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
       {/* Page header */}
       <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Entity Directory</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Browse all entities currently tracked in the system.</p>
+          <h1 className="text-xl font-semibold tracking-tight">Directory</h1>
+          <p className="text-sm text-muted-foreground mt-0.5 max-w-4xl">Our heat map shows you where the latest texts and emails were sent from and lets you browse all tracked campaigns and organizations in the system. Red dots on the map indicate that a campaign based in that state sent an email or text in the last 3 hours.</p>
         </div>
         <div className="flex items-center gap-2">
           {pagination.totalCount > 0 && (
@@ -419,7 +419,21 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
                       ) : (
                         <div className="flex flex-col gap-1.5">
                           {stateItemsData.emails.map((email) => (
-                            <div key={email.id} className="rounded-md border border-border bg-muted/20 p-2.5 hover:bg-muted/40 transition-colors">
+                            <button
+                              key={email.id}
+                              className="w-full text-left rounded-md border border-border bg-muted/20 p-2.5 hover:bg-muted/40 transition-colors cursor-pointer"
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch(`/api/ci-campaigns/${email.id}/share`, { method: "POST", credentials: "include" })
+                                  if (!res.ok) throw new Error()
+                                  const data = await res.json()
+                                  const url = `${window.location.origin}/share/${data.shareToken}`
+                                  window.open(url, "_blank")
+                                } catch {
+                                  toast.error("Could not generate share link")
+                                }
+                              }}
+                            >
                               <div className="flex items-start gap-2">
                                 {email.entity?.imageUrl ? (
                                   <img src={email.entity.imageUrl} alt={email.entity.name} className="h-6 w-6 rounded-full object-cover shrink-0 mt-0.5" />
@@ -441,7 +455,7 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
                                   </p>
                                 </div>
                               </div>
-                            </div>
+                            </button>
                           ))}
                         </div>
                       )}
@@ -456,7 +470,21 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
                       ) : (
                         <div className="flex flex-col gap-1.5">
                           {stateItemsData.smsMessages.map((sms) => (
-                            <div key={sms.id} className="rounded-md border border-border bg-muted/20 p-2.5 hover:bg-muted/40 transition-colors">
+                            <button
+                              key={sms.id}
+                              className="w-full text-left rounded-md border border-border bg-muted/20 p-2.5 hover:bg-muted/40 transition-colors cursor-pointer"
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch(`/api/ci-campaigns/${sms.id}/share`, { method: "POST", credentials: "include" })
+                                  if (!res.ok) throw new Error()
+                                  const data = await res.json()
+                                  const url = `${window.location.origin}/share/${data.shareToken}`
+                                  window.open(url, "_blank")
+                                } catch {
+                                  toast.error("Could not generate share link")
+                                }
+                              }}
+                            >
                               <div className="flex items-start gap-2">
                                 {sms.entity?.imageUrl ? (
                                   <img src={sms.entity.imageUrl} alt={sms.entity.name} className="h-6 w-6 rounded-full object-cover shrink-0 mt-0.5" />
@@ -478,7 +506,7 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
                                   </p>
                                 </div>
                               </div>
-                            </div>
+                            </button>
                           ))}
                         </div>
                       )}

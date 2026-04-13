@@ -182,6 +182,7 @@ export function USInteractiveMap({ selectedState, onStateSelect, activityData = 
           const r = Math.min(4 + Math.floor(item.total / 3), 7)
           return (
             <Marker key={item.state} coordinates={coords}>
+              {/* All dot layers are pointer-events:none so clicks pass through to the Geography below */}
               {/* Outer expanding ring */}
               <circle
                 className="rip-dot-ring"
@@ -189,6 +190,7 @@ export function USInteractiveMap({ selectedState, onStateSelect, activityData = 
                 fill="none"
                 stroke="#EB3847"
                 strokeWidth={1.5}
+                style={{ pointerEvents: "none" }}
               />
               {/* Inner pulsing fill */}
               <circle
@@ -196,11 +198,13 @@ export function USInteractiveMap({ selectedState, onStateSelect, activityData = 
                 cx={0} cy={0} r={r}
                 fill="#EB3847"
                 fillOpacity={0.85}
+                style={{ pointerEvents: "none" }}
               />
               {/* Static core dot */}
               <circle
                 cx={0} cy={0} r={r * 0.5}
                 fill="#ff6472"
+                style={{ pointerEvents: "none" }}
               />
             </Marker>
           )

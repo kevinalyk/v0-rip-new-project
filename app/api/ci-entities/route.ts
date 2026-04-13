@@ -67,16 +67,26 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, type, description, party, state, donationIdentifiers } = body
+    const { name, type, description, party, state, donationIdentifiers, ballotpediaUrl } = body
 
     if (!name || !type) {
       return NextResponse.json({ error: "Name and type are required" }, { status: 400 })
     }
 
-    const result = await createEntity(name, type, description, party, state, donationIdentifiers)
+    const result = await createEntity(name, type, description, party, state, donationIdentifiers, ballotpediaUrl)
 
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 400 })
+    }
+
+    // Auto-trigger Ballotpedia scraper if a URL was provided and type is supported
+    if (ballotpediaUrl && result.entity && ["candidate", "politician", "person"].includes(type)) {
+      const baseUrl = request.nextUrl.origin
+      fetch(`${baseUrl}/api/admin/scrape-ballotpedia`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", cookie: request.headers.get("cookie") || "" },
+        body: JSON.stringify({ entityId: result.entity.id }),
+      }).catch((err) => console.error("[ci-entities] Auto-scrape failed:", err))
     }
 
     return NextResponse.json({ entity: result.entity })
@@ -108,6 +118,16 @@ export async function PUT(request: NextRequest) {
 
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 400 })
+    }
+
+    // Auto-trigger Ballotpedia scraper if a URL was provided and type is supported
+    if (ballotpediaUrl && result.entity && ["candidate", "politician", "person"].includes(type)) {
+      const baseUrl = request.nextUrl.origin
+      fetch(`${baseUrl}/api/admin/scrape-ballotpedia`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", cookie: request.headers.get("cookie") || "" },
+        body: JSON.stringify({ entityId: id }),
+      }).catch((err) => console.error("[ci-entities] Auto-scrape on update failed:", err))
     }
 
     return NextResponse.json({ entity: result.entity })

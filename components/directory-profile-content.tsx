@@ -352,7 +352,7 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
             </span>
           </div>
 
-          <div className="divide-y divide-border relative">
+          <div className={`divide-y divide-border relative${!isAuthenticated ? " min-h-[240px]" : ""}`}>
             {recentCampaigns.slice(0, 5).map((campaign) => (
               <div
                 key={campaign.id}

@@ -131,6 +131,25 @@ export async function POST(request: Request) {
       )
     }
 
+    // Check if the receiving number is assigned to a specific client (personal SMS)
+    // Normalize the receiving number for lookup (remove +1 prefix if present)
+    const normalizedReceivingNumber = receivingNumber.replace(/^\+?1?/, "")
+    const personalPhoneAssignment = await prisma.personalPhoneNumber.findFirst({
+      where: {
+        OR: [
+          { phoneNumber: normalizedReceivingNumber },
+          { phoneNumber: receivingNumber },
+          { phoneNumber: `+1${normalizedReceivingNumber}` },
+          { phoneNumber: `1${normalizedReceivingNumber}` },
+        ],
+      },
+      select: { clientId: true },
+    })
+
+    if (personalPhoneAssignment) {
+      console.log("[FullStack SMS] Personal phone assignment found for client:", personalPhoneAssignment.clientId)
+    }
+
     // Apply name redaction to protect seed identities
     const redactedNames = await getRedactedNames()
     const nameRedactedMessage = (applyRedaction(cleanedMessage, redactedNames) as string) || cleanedMessage
@@ -161,6 +180,9 @@ export async function POST(request: Request) {
         assignedAt: entityAssignment ? new Date() : null,
         ctaLinks: JSON.stringify(ctaLinks),
         dedupHash,
+        // Personal SMS assignment
+        clientId: personalPhoneAssignment?.clientId || null,
+        source: personalPhoneAssignment ? "personal" : "seed",
         createdAt: new Date(),
       },
       update: {}, // no-op: if it already exists, do nothing

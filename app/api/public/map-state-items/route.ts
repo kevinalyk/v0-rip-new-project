@@ -23,53 +23,40 @@ export async function GET(request: NextRequest) {
         },
         select: {
           id: true,
-          senderName: true,
           subject: true,
-          dateReceived: true,
+          senderName: true,
+          senderEmail: true,
+          createdAt: true,
           entity: {
-            select: { id: true, name: true, type: true, party: true, state: true },
+            select: { id: true, name: true, imageUrl: true, type: true },
           },
         },
-        orderBy: { dateReceived: "desc" },
-        take: 20,
+        orderBy: { createdAt: "desc" },
+        take: 50,
       }),
       prisma.smsQueue.findMany({
         where: {
           createdAt: { gte: since },
           isHidden: false,
           isDeleted: false,
+          entityId: { not: null },
           entity: { is: { state } },
         },
         select: {
           id: true,
           message: true,
+          phoneNumber: true,
           createdAt: true,
           entity: {
-            select: { id: true, name: true, type: true, party: true, state: true },
+            select: { id: true, name: true, imageUrl: true, type: true },
           },
         },
         orderBy: { createdAt: "desc" },
-        take: 20,
+        take: 50,
       }),
     ])
 
-    return NextResponse.json({
-      emails: emails.map((e) => ({
-        id: e.id,
-        type: "email",
-        senderName: e.senderName,
-        subject: e.subject,
-        date: e.dateReceived.toISOString(),
-        entity: e.entity,
-      })),
-      sms: smsMessages.map((s) => ({
-        id: s.id,
-        type: "sms",
-        message: s.message,
-        date: s.createdAt.toISOString(),
-        entity: s.entity,
-      })),
-    })
+    return NextResponse.json({ emails, smsMessages, state, since: since.toISOString() })
   } catch (error) {
     console.error("Error fetching public map state items:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -196,18 +196,27 @@ export function USInteractiveMap({ selectedState, onStateSelect, activityData = 
           // Generate deterministic pseudo-random offsets seeded by state+index
           // so dots don't move on re-renders
           const dots: Array<{ key: string; lng: number; lat: number; delay: number }> = []
+          // Mulberry32 — a fast, high-quality 32-bit PRNG seeded per state
+          const c0 = item.state.charCodeAt(0) || 65
+          const c1 = item.state.charCodeAt(1) || 65
+          let rngState = (c0 * 374761393 + c1 * 668265263) >>> 0
+          const rand = () => {
+            rngState = (rngState + 0x6D2B79F5) >>> 0
+            let z = rngState
+            z = Math.imul(z ^ (z >>> 15), z | 1)
+            z ^= z + Math.imul(z ^ (z >>> 7), z | 61)
+            return ((z ^ (z >>> 14)) >>> 0) / 0x100000000
+          }
+
           for (let i = 0; i < total; i++) {
-            // LCG with >>> 0 to keep values as unsigned 32-bit (avoids negative results)
-            const c0 = item.state.charCodeAt(0) || 0
-            const c1 = item.state.charCodeAt(1) || 0
-            const seed = (c0 * 31 + c1 * 17 + i * 13) >>> 0
-            const r1 = (((seed * 1664525 + 1013904223) >>> 0)) / 0xffffffff
-            const r2 = ((((seed + 1) * 1664525 + 1013904223) >>> 0)) / 0xffffffff
+            // Advance the RNG twice per dot for independent angle and distance
+            const r1 = rand()
+            const r2 = rand()
             // Spread radius varies by state size — larger states get wider scatter
             const spread = STATE_SPREAD[item.state] ?? 1.2
             // Polar coords: angle 0-2π, distance scaled by sqrt for uniform distribution
             const angle = r1 * Math.PI * 2
-            const dist  = Math.sqrt(Math.max(0, r2)) * spread
+            const dist  = Math.sqrt(r2) * spread
             dots.push({
               key: `${item.state}-${i}`,
               lng: coords[0] + Math.cos(angle) * dist,

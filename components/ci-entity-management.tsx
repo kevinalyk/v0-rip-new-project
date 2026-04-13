@@ -157,6 +157,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
     anedot: string
     actblue: string
     psqimpact: string
+    revv: string
     engage: string
     substack: string
   }>({
@@ -164,6 +165,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
     anedot: "",
     actblue: "",
     psqimpact: "",
+    revv: "",
     engage: "",
     substack: "",
   })
@@ -183,6 +185,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
   const [assignEntityNationwide, setAssignEntityNationwide] = useState(false)
   // </CHANGE> Add donation identifiers state for assign dialog
   const [assignEntityDonationIdentifiers, setAssignEntityDonationIdentifiers] = useState<DonationIdentifiers>({})
+  const [assignEntityBallotpediaUrl, setAssignEntityBallotpediaUrl] = useState("")
 
   const [showDeleteMessageDialog, setShowDeleteMessageDialog] = useState(false)
   const [messageToDelete, setMessageToDelete] = useState<Campaign | null>(null)
@@ -493,7 +496,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setNewEntityNationwide(false)
           setNewEntityDonationIdentifiers({})
           setNewEntityBallotpediaUrl("")
-    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", engage: "", substack: "" }) // Reset raw inputs too
+          setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", revv: "", engage: "", substack: "" }) // Reset raw inputs too
     fetchData()
     toast.success("Entity updated successfully!")
         } else {
@@ -526,7 +529,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setNewEntityState("")
           setNewEntityNationwide(false)
           setNewEntityDonationIdentifiers({})
-    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", engage: "", substack: "" }) // Reset raw inputs too
+          setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", revv: "", engage: "", substack: "" }) // Reset raw inputs too
     fetchData()
     toast.success("Entity created successfully!")
         } else {
@@ -558,6 +561,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
             party: assignEntityParty || undefined,
             state: assignEntityState || undefined,
             tag: assignEntityTag || undefined,
+            ballotpediaUrl: assignEntityBallotpediaUrl.trim() || undefined,
             donationIdentifiers: assignEntityDonationIdentifiers,
           }),
         })
@@ -603,8 +607,9 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setAssignEntityParty("")
           setAssignEntityState("")
           setAssignEntityNationwide(false)
+          setAssignEntityBallotpediaUrl("")
           setAssignEntityDonationIdentifiers({}) // Clear donation identifiers
-          setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", engage: "", substack: "" }) // Clear raw inputs
+          setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", revv: "", engage: "", substack: "" }) // Clear raw inputs
           setCreateMapping(true)
           fetchData()
           toast.success("Campaigns assigned to new entity!")
@@ -815,7 +820,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
       // Reset donation identifiers on close
       setNewEntityDonationIdentifiers({})
       // Reset raw inputs when closing the dialog
-    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", engage: "", substack: "" })
+    setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", revv: "", engage: "", substack: "" })
   }
 }
 
@@ -1957,6 +1962,36 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                     </div>
 
                     <div>
+                      <Label htmlFor="entity-revv-identifiers" className="text-sm font-normal">
+                        Revv
+                      </Label>
+                      <Input
+                        id="entity-revv-identifiers"
+                        placeholder="e.g., amacaction, nrsc (comma-separated)"
+                        value={donationIdentifierInputs.revv ?? ""}
+                        onChange={(e) => {
+                          setDonationIdentifierInputs((prev) => ({
+                            ...prev,
+                            revv: e.target.value,
+                          }))
+                        }}
+                        onBlur={(e) => {
+                          const value = e.target.value
+                          setNewEntityDonationIdentifiers((prev) => ({
+                            ...prev,
+                            revv: value
+                              .split(",")
+                              .map((id) => id.trim().toLowerCase())
+                              .filter((id) => id.length > 0),
+                          }))
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        From URLs like: <span className="font-mono">amacaction</span>.revv.co/... or revv.com/<span className="font-mono">amacaction</span>
+                      </p>
+                    </div>
+
+                    <div>
                       <Label htmlFor="entity-engage-identifiers" className="text-sm font-normal">
                         Engage
                       </Label>
@@ -2260,6 +2295,18 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                       onChange={(e) => setAssignEntityDescription(e.target.value)}
                       rows={3}
                     />
+                  </div>
+                  <div>
+                    <Label htmlFor="assign-entity-ballotpedia-url">Ballotpedia URL (Optional)</Label>
+                    <Input
+                      id="assign-entity-ballotpedia-url"
+                      placeholder="e.g., https://ballotpedia.org/Adam_Smith_(Washington)"
+                      value={assignEntityBallotpediaUrl}
+                      onChange={(e) => setAssignEntityBallotpediaUrl(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Set this manually for politicians with common names to avoid disambiguation pages.
+                    </p>
                   </div>
                   {/* Tag input for assign dialog */}
                   <div>

@@ -820,20 +820,29 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
                     className={pagination.page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
                   />
                 </PaginationItem>
-                {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                  const pageNum = i + 1
-                  return (
+                {(() => {
+                  const total = pagination.totalPages
+                  const current = pagination.page
+                  const delta = 2 // pages on each side of current
+                  let start = Math.max(1, current - delta)
+                  let end = Math.min(total, current + delta)
+                  // Keep window at 5 wide when possible
+                  if (end - start < 4) {
+                    if (start === 1) end = Math.min(total, start + 4)
+                    else start = Math.max(1, end - 4)
+                  }
+                  return Array.from({ length: end - start + 1 }, (_, i) => start + i).map((pageNum) => (
                     <PaginationItem key={pageNum}>
                       <PaginationLink
                         onClick={() => setPagination((prev) => ({ ...prev, page: pageNum }))}
-                        isActive={pagination.page === pageNum}
+                        isActive={current === pageNum}
                         className="cursor-pointer"
                       >
                         {pageNum}
                       </PaginationLink>
                     </PaginationItem>
-                  )
-                })}
+                  ))
+                })()}
                 <PaginationItem>
                   <PaginationNext
                     onClick={() =>

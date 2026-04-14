@@ -416,6 +416,8 @@ export async function GET(request: NextRequest) {
 
     let emailInsights: any[] = []
     let smsMessages: any[] = []
+    let emailCount = 0
+    let smsCount = 0
 
     const effectiveMessageType = messageType
 
@@ -455,7 +457,19 @@ export async function GET(request: NextRequest) {
             : { skip, take: limit }),
         }
         
-        emailInsights = await prisma.competitiveInsightCampaign.findMany(emailQuery)
+        // When fetching a single page (email-only, no donation platform filter), run a
+        // parallel count query so the total isn't capped at the page size
+        if (!shouldFetchAll && !fetchAllForCombining) {
+          const [rows, count] = await Promise.all([
+            prisma.competitiveInsightCampaign.findMany(emailQuery),
+            prisma.competitiveInsightCampaign.count({ where: emailWhere }),
+          ])
+          emailInsights = rows
+          emailCount = count
+        } else {
+          emailInsights = await prisma.competitiveInsightCampaign.findMany(emailQuery)
+          emailCount = emailInsights.length
+        }
 
         // Display-side dedup: if two rows share senderEmail + same calendar day + same
         // normalized subject, keep only the [Omitted] version (or highest inboxCount if neither has it).
@@ -515,7 +529,17 @@ export async function GET(request: NextRequest) {
             : { skip, take: limit }),
         }
         
-        smsMessages = await prisma.smsQueue.findMany(smsQuery)
+        if (!shouldFetchAll && !fetchAllForCombining) {
+          const [rows, count] = await Promise.all([
+            prisma.smsQueue.findMany(smsQuery),
+            prisma.smsQueue.count({ where: smsWhere }),
+          ])
+          smsMessages = rows
+          smsCount = count
+        } else {
+          smsMessages = await prisma.smsQueue.findMany(smsQuery)
+          smsCount = smsMessages.length
+        }
   
       }
     } catch (dbError) {
@@ -606,6 +630,16 @@ export async function GET(request: NextRequest) {
     // Only use overrideTotal for thirdParty — houseFileOnly includes SMS so we let allInsights handle the count normally
     if (thirdParty && thirdPartyCampaignIds !== null) {
       overrideTotal = await prisma.competitiveInsightCampaign.count({ where: emailWhere })
+    }
+
+    // For single message-type filters (email-only or sms-only) without donation platform,
+    // use the dedicated count queries run in parallel above
+    if (!shouldFetchAll && !fetchAllForCombining && overrideTotal === null) {
+      if (effectiveMessageType === "email") {
+        overrideTotal = emailCount
+      } else if (effectiveMessageType === "sms") {
+        overrideTotal = smsCount
+      }
     }
 
     if (donationPlatform && donationPlatform !== "all") {

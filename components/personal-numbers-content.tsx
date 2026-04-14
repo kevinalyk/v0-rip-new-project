@@ -67,6 +67,7 @@ export function PersonalNumbersContent({ clientSlug }: PersonalNumbersContentPro
   const canRequest =
     currentUser?.role === "owner" ||
     currentUser?.role === "admin" ||
+    currentUser?.role === "super_admin" ||
     currentUser?.role === "super_admin"
 
   const formatPhoneNumber = (phone: string) => {

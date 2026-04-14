@@ -5,7 +5,33 @@ import jwt from "jsonwebtoken"
 
 const prisma = new PrismaClient()
 
+// Rate limiting: max 30 requests per minute per IP
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>()
+const MAX_REQUESTS = 30
+const WINDOW_MS = 60 * 1000 // 1 minute
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now()
+  const entry = rateLimitMap.get(ip)
+  if (!entry || now > entry.resetTime) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + WINDOW_MS })
+    return true
+  }
+  if (entry.count >= MAX_REQUESTS) return false
+  entry.count++
+  return true
+}
+
 export async function GET(request: NextRequest) {
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
+    request.headers.get("x-real-ip") ??
+    "unknown"
+
+  if (!checkRateLimit(ip)) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 })
+  }
+
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get("auth_token")?.value

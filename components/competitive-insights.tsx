@@ -541,7 +541,6 @@ export function CompetitiveInsights({
 
         // Store entities with IDs, party, and state for cascading filters
         if (data.entities) {
-          console.log("[v0] All entities from API:", data.entities.slice(0, 5))
           setAllEntities(data.entities)
           setAllSenders(data.entities.map((e: { id: string; name: string; party?: string | null; state?: string | null }) => e.name))
         }

@@ -1232,22 +1232,13 @@ const downloadActBluePatterns = () => {
   // </CHANGE>
 
   const handleTestUnwrapUrl = async () => {
-    console.log("[v0] Test unwrap button clicked")
-    console.log("[v0] Test URL:", testUrl)
-    // </CHANGE>
-
     if (!testUrl.trim()) {
-      console.log("[v0] No URL entered - showing error")
-      // </CHANGE>
       toast.error("Please enter a URL to test")
       return
     }
 
     setIsTestingUrl(true)
     setTestUrlResults(null)
-
-    console.log("[v0] Making API request to /api/admin/test-unwrap-url")
-    // </CHANGE>
 
     try {
       const response = await fetch("/api/admin/test-unwrap-url", {
@@ -1257,20 +1248,9 @@ const downloadActBluePatterns = () => {
         body: JSON.stringify({ url: testUrl.trim() }),
       })
 
-      console.log("[v0] API response status:", response.status)
-      // </CHANGE>
-
       const data = await response.json()
 
-      console.log("[v0] API response data:", data)
-      // </CHANGE>
-
       if (response.ok) {
-        console.log("[v0] Setting test results:", {
-          steps: data.redirectChain?.totalSteps,
-          changed: data.final?.changed,
-        })
-        // </CHANGE>
         setTestUrlResults(data)
         if (data.final.changed) {
           toast.success(`URL unwrapped successfully (${data.redirectChain.totalSteps} steps)`)
@@ -1278,17 +1258,12 @@ const downloadActBluePatterns = () => {
           toast.info("URL already at final destination")
         }
       } else {
-        console.log("[v0] API error:", data.error)
-        // </CHANGE>
         toast.error(data.error || "Failed to unwrap URL")
       }
     } catch (error) {
-      console.error("[v0] Fetch error:", error)
-      // </CHANGE>
+      console.error("Failed to unwrap URL:", error)
       toast.error("Failed to unwrap URL")
     } finally {
-      console.log("[v0] Test unwrap complete - resetting loading state")
-      // </CHANGE>
       setIsTestingUrl(false)
     }
   }
@@ -2804,7 +2779,6 @@ const downloadActBluePatterns = () => {
       </Card>
 
       {/* Batch Unwrap Links Tool */}
-      {console.log("[v0] Rendering Batch Unwrap Links card")}
       <Card>
         <CardHeader>
           <CardTitle>Batch Unwrap Links</CardTitle>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Mail, Info, Loader2 } from "lucide-react"
+import { Smartphone, Info, Loader2 } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -15,7 +15,7 @@ import {
 import { CompetitiveInsights } from "@/components/competitive-insights"
 import { Badge } from "@/components/ui/badge"
 
-interface PersonalEmailContentProps {
+interface PersonalNumbersContentProps {
   clientSlug: string
 }
 
@@ -25,7 +25,7 @@ interface Assignment {
   phoneNumbers: Array<{ id: string; phoneNumber: string }>
 }
 
-export function PersonalEmailContent({ clientSlug }: PersonalEmailContentProps) {
+export function PersonalNumbersContent({ clientSlug }: PersonalNumbersContentProps) {
   const [assignments, setAssignments] = useState<Assignment | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -47,22 +47,33 @@ export function PersonalEmailContent({ clientSlug }: PersonalEmailContentProps) 
     fetchAssignments()
   }, [clientSlug])
 
-  const hasSeeds = assignments && assignments.seeds.length > 0
+  const hasPhones = assignments && assignments.phoneNumbers.length > 0
+
+  const formatPhoneNumber = (phone: string) => {
+    const cleaned = phone.replace(/\D/g, "")
+    if (cleaned.length === 10) {
+      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`
+    }
+    if (cleaned.length === 11 && cleaned.startsWith("1")) {
+      return `+1 (${cleaned.slice(1, 4)}) ${cleaned.slice(4, 7)}-${cleaned.slice(7)}`
+    }
+    return phone
+  }
 
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Personal Email</h1>
+        <h1 className="text-3xl font-bold mb-2">Personal Numbers</h1>
         <p className="text-muted-foreground">
-          Emails from seed accounts assigned to your organization appear here.
+          SMS messages from phone numbers assigned to your organization appear here.
         </p>
       </div>
 
       <Card className="mb-8">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Mail className="h-5 w-5" />
-            Your Email Seeds
+            <Smartphone className="h-5 w-5" />
+            Your Phone Numbers
             <Dialog>
               <DialogTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-6 w-6 ml-1">
@@ -73,39 +84,39 @@ export function PersonalEmailContent({ clientSlug }: PersonalEmailContentProps) 
                 <DialogHeader>
                   <DialogTitle>How It Works</DialogTitle>
                   <DialogDescription>
-                    Learn how personal seed email assignments work for competitive intelligence.
+                    Learn how personal phone number assignments work for competitive intelligence.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 mt-4">
                   <div>
-                    <h3 className="font-semibold mb-2">1. Seeds Are Assigned to You</h3>
+                    <h3 className="font-semibold mb-2">1. Phone Numbers Are Assigned to You</h3>
                     <p className="text-sm text-muted-foreground">
-                      Our team assigns specific seed email addresses to your organization. You then use these seeds
-                      to sign up for the political campaigns, PACs, and organizations you want to monitor.
+                      Our team assigns specific phone numbers to your organization as an add-on. You then use these
+                      numbers to sign up for SMS lists from the campaigns and organizations you want to monitor.
                     </p>
                   </div>
 
                   <div>
                     <h3 className="font-semibold mb-2">2. Automatic Processing</h3>
                     <p className="text-sm text-muted-foreground">
-                      Once your seeds start receiving emails, everything is automatically processed and added to
-                      your personal feed.
+                      Once your numbers start receiving SMS messages, everything is automatically processed and added
+                      to your personal numbers feed.
                     </p>
                   </div>
 
                   <div>
                     <h3 className="font-semibold mb-2">3. Personal Badge</h3>
                     <p className="text-sm text-muted-foreground">
-                      Messages from your personal seeds appear both here and in the main CI feed with a "Personal"
-                      badge, making it easy to identify your exclusive coverage.
+                      Messages from your personal numbers appear both here and in the main CI feed with a "Personal"
+                      badge, making it easy to identify your exclusive SMS coverage.
                     </p>
                   </div>
 
                   <div>
-                    <h3 className="font-semibold mb-2">4. Expanded Coverage</h3>
+                    <h3 className="font-semibold mb-2">4. Add-On Coverage</h3>
                     <p className="text-sm text-muted-foreground">
-                      Use your assigned seeds to sign up for any campaigns or organizations you want to track,
-                      giving you targeted email coverage on top of the general CI feed.
+                      Personal phone numbers are an add-on to your subscription. Contact your administrator to add
+                      more numbers or expand your SMS monitoring coverage.
                     </p>
                   </div>
                 </div>
@@ -113,9 +124,9 @@ export function PersonalEmailContent({ clientSlug }: PersonalEmailContentProps) 
             </Dialog>
           </CardTitle>
           <CardDescription>
-            {hasSeeds
-              ? `Email seed accounts assigned to ${assignments?.clientName || "your organization"}`
-              : "No email seed accounts are currently assigned to your organization."}
+            {hasPhones
+              ? `Phone numbers assigned to ${assignments?.clientName || "your organization"}`
+              : "No phone numbers are currently assigned to your organization."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -124,23 +135,26 @@ export function PersonalEmailContent({ clientSlug }: PersonalEmailContentProps) 
               <Loader2 className="h-4 w-4 animate-spin" />
               <span className="text-sm">Loading assignments...</span>
             </div>
-          ) : hasSeeds ? (
+          ) : hasPhones ? (
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <Mail className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Assigned Email Seeds ({assignments!.seeds.length})</span>
+                <Smartphone className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">
+                  Assigned Phone Numbers ({assignments!.phoneNumbers.length})
+                </span>
               </div>
               <div className="flex flex-wrap gap-2">
-                {assignments!.seeds.map((seed) => (
-                  <Badge key={seed.id} variant="secondary" className="font-mono text-xs">
-                    {seed.email}
+                {assignments!.phoneNumbers.map((phone) => (
+                  <Badge key={phone.id} variant="secondary" className="font-mono text-xs">
+                    {formatPhoneNumber(phone.phoneNumber)}
                   </Badge>
                 ))}
               </div>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Contact your administrator to have email seed accounts assigned to your organization.
+              Personal phone numbers are an add-on. Contact your administrator to have numbers assigned to your
+              organization.
             </p>
           )}
         </CardContent>
@@ -148,7 +162,7 @@ export function PersonalEmailContent({ clientSlug }: PersonalEmailContentProps) 
 
       <CompetitiveInsights
         clientSlug={clientSlug}
-        apiEndpoint="/api/ci/personal-email"
+        apiEndpoint="/api/ci/personal-numbers"
         showPersonalBadge={true}
         hideHeader={true}
       />

@@ -39,6 +39,7 @@ import {
   Code,
   Key,
   Activity,
+  Smartphone,
 } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { useTheme } from "next-themes"
@@ -371,13 +372,20 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                   collapsed={false}
                   onClick={() => navigate(`/${getClientSlug()}/ci/subscriptions`)}
                 />
-                    <NavItem
-                      icon={<Inbox size={18} />}
-                      label="Personal Inbox"
-                      active={pathname.includes("/ci/personal")}
-                      collapsed={false}
-                      onClick={() => navigate(`/${getClientSlug()}/ci/personal`)}
-                    />
+                <NavItem
+                  icon={<Mail size={18} />}
+                  label="Personal Email"
+                  active={pathname.includes("/ci/personal") && !pathname.includes("/ci/personal-numbers")}
+                  collapsed={false}
+                  onClick={() => navigate(`/${getClientSlug()}/ci/personal`)}
+                />
+                <NavItem
+                  icon={<Smartphone size={18} />}
+                  label="Personal Numbers"
+                  active={pathname.includes("/ci/personal-numbers")}
+                  collapsed={false}
+                  onClick={() => navigate(`/${getClientSlug()}/ci/personal-numbers`)}
+                />
                 <NavItem
                   icon={<Building2 size={18} />}
                   label="Directory"

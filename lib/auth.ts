@@ -9,47 +9,22 @@ const secretKey = new TextEncoder().encode(JWT_SECRET)
 
 // Function to create a JWT token
 export async function createToken(payload: any, expiresIn = "7d") {
-  console.log("[v0] createToken called with payload:", payload)
-  console.log("[v0] createToken expiresIn:", expiresIn)
-  console.log("[v0] createToken JWT_SECRET exists:", !!JWT_SECRET)
-  console.log("[v0] createToken JWT_SECRET length:", JWT_SECRET.length)
-  
-  try {
-    console.log("[v0] createToken: Creating SignJWT...")
-    const jwt = await new SignJWT(payload)
-      .setProtectedHeader({ alg: "HS256" })
-      .setIssuedAt()
-      .setExpirationTime(expiresIn)
-      .sign(secretKey)
-
-    console.log("[v0] createToken: Token created successfully")
-    console.log("[v0] createToken: Token length:", jwt.length)
-    return jwt
-  } catch (error) {
-    console.error("[v0] createToken: Error creating token:", error)
-    throw error
-  }
+  const jwt = await new SignJWT(payload)
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(expiresIn)
+    .sign(secretKey)
+  return jwt
 }
 
 // Function to verify a JWT token
 export async function verifyToken(token: string) {
-  console.log("[v0] verifyToken called")
-  console.log("[v0] verifyToken: Token length:", token.length)
-  console.log("[v0] verifyToken: Token preview:", token.substring(0, 50) + "...")
-  console.log("[v0] verifyToken: JWT_SECRET exists:", !!JWT_SECRET)
-  
   try {
-    console.log("[v0] verifyToken: Calling jwtVerify...")
     const { payload } = await jwtVerify(token, secretKey, {
       algorithms: ["HS256"],
     })
-    console.log("[v0] verifyToken: Token verified successfully")
-    console.log("[v0] verifyToken: Payload:", payload)
     return payload
-  } catch (error) {
-    console.error("[v0] verifyToken: Token verification FAILED")
-    console.error("[v0] verifyToken: Error:", error)
-    console.error("[v0] verifyToken: Error message:", error instanceof Error ? error.message : "Unknown error")
+  } catch {
     return null
   }
 }
@@ -63,11 +38,9 @@ export async function getCurrentUser() {
     return null
   }
 
-  console.log("[v0] Found auth_token, length:", token.length)
   try {
     return await verifyToken(token)
-  } catch (error) {
-    console.error("[v0] Error getting current user:", error)
+  } catch {
     return null
   }
 }
@@ -140,17 +113,12 @@ export async function hasAccessToDomain(userId: string, domainId: string, requir
 export async function isSystemAdmin(userId: string) {
   try {
     const prisma = (await import("@/lib/prisma")).default
-    console.log("Checking system admin for userId:", userId)
-
     // First check legacy User.role field
     const user = await prisma.user.findUnique({
       where: { id: userId },
     })
 
-    console.log("Found user:", user)
-
     if (user?.role === "super_admin" || user?.role === "admin" || user?.role === "owner") {
-      console.log("User is super_admin, admin, or owner via User.role")
       return true
     }
 
@@ -161,8 +129,6 @@ export async function isSystemAdmin(userId: string) {
         role: "admin",
       },
     })
-
-    console.log("Admin access found:", adminAccess)
 
     return !!adminAccess
   } catch (error) {

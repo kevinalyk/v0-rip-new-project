@@ -50,41 +50,25 @@ export async function validateApiKey(
 ): Promise<ApiAuthContext | null> {
   try {
     const token = extractBearerToken(authHeader);
-    console.log("[v0] Token extraction result:", token ? "success" : "no token");
     if (!token) return null;
 
     const keyHash = hashApiKey(token);
-    console.log("[v0] Key hash computed, searching database...");
 
     // Find the API key in database
     const apiKey = await prisma.apiKey.findUnique({
       where: { keyHash },
     });
 
-    console.log("[v0] API key lookup result:", apiKey ? "found" : "not found");
-
-    if (!apiKey) {
-      console.log("[v0] Invalid API key attempt");
-      return null;
-    }
+    if (!apiKey) return null;
 
     // Check if key is active
-    if (!apiKey.isActive) {
-      console.log("[v0] API key is inactive");
-      return null;
-    }
+    if (!apiKey.isActive) return null;
 
     // Check if key has expired
-    if (apiKey.expiresAt && apiKey.expiresAt < new Date()) {
-      console.log("[v0] API key has expired");
-      return null;
-    }
+    if (apiKey.expiresAt && apiKey.expiresAt < new Date()) return null;
 
     // Check if key has been revoked
-    if (apiKey.revokedAt) {
-      console.log("[v0] API key has been revoked");
-      return null;
-    }
+    if (apiKey.revokedAt) return null;
 
     // Parse scopes
     const scopes = Array.isArray(apiKey.scopes)
@@ -107,8 +91,7 @@ export async function validateApiKey(
       clientId: apiKey.clientId || undefined,
       rateLimit: apiKey.rateLimit,
     };
-  } catch (error) {
-    console.error("[v0] Error validating API key:", error);
+  } catch {
     return null;
   }
 }
@@ -196,7 +179,7 @@ export async function withApiAuth(
     // Call the handler with auth context
     return await handler(request, authContext);
   } catch (error) {
-    console.error("[v0] API auth error:", error);
+    console.error("API auth error:", error);
     return new Response(
       JSON.stringify({
         error: "Internal server error",

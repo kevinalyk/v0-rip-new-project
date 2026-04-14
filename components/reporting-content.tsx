@@ -94,8 +94,6 @@ export function ReportingContent({ isAdminView, clientSlug }: ReportingContentPr
         params.append("clientSlug", clientSlug)
       }
 
-      console.log("[v0] Reporting: Fetching data with params:", params.toString())
-
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
 
@@ -108,10 +106,9 @@ export function ReportingContent({ isAdminView, clientSlug }: ReportingContentPr
 
       if (response.ok) {
         const data = await response.json()
-        console.log("[v0] Reporting data received:", data)
         setMetrics(data)
       } else {
-        console.error("[v0] Reporting: Error fetching reports:", await response.text())
+        console.error("Reporting: Error fetching reports:", await response.text())
         setMetrics({
           totalCampaigns: 0,
           averageDeliveryRate: 0,
@@ -124,7 +121,7 @@ export function ReportingContent({ isAdminView, clientSlug }: ReportingContentPr
         })
       }
     } catch (error) {
-      console.error("[v0] Reporting: Error fetching reporting data:", error)
+      console.error("Reporting: Error fetching reporting data:", error)
       setMetrics({
         totalCampaigns: 0,
         averageDeliveryRate: 0,

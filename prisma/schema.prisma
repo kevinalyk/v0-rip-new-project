@@ -299,6 +299,8 @@ model CompetitiveInsightCampaign {
   deletedBy           String?  // Which admin deleted it
   donationPlatform    String?  // Detected donation platform: "winred" | "actblue" | "anedot" | "psq"
   rawHeaders          String?  @db.Text // Raw email headers for compliance checking
+  dkimSelector        String?  // Raw parsed .s= value from DKIM-Signature header (e.g. "gears", "s1")
+  sendingProvider     String?  // Resolved friendly name from DkimSenderMapping (e.g. "Message Gears")
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -317,6 +319,8 @@ model CompetitiveInsightCampaign {
   @@index([assignedAt])
   @@index([isDeleted])
   @@index([donationPlatform])
+  @@index([dkimSelector])
+  @@index([sendingProvider])
 }
 
 model CIEmailCompliance {
@@ -628,4 +632,23 @@ model SiteVisit {
   @@index([isAuthenticated])
   @@index([createdAt])
   @@index([path])
+}
+
+model DkimSenderMapping {
+  id            String   @id @default(cuid())
+  selectorValue String   @unique  // Raw .s= value from DKIM-Signature, e.g. "gears", "s1", "k1"
+  friendlyName  String            // Human-readable provider name, e.g. "Message Gears"
+  notes         String?           // Optional internal notes
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model DkimProviderMapping {
+  id           String   @id @default(cuid())
+  selector     String   @unique // DKIM .s= value (e.g. "gears", "s1", "k1")
+  providerName String   // Human-readable name (e.g. "Message Gears", "Sendgrid")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([selector])
 }

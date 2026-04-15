@@ -517,6 +517,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
                       onClick={() => navigate("/rip/admin/personal-assignments")}
                     />
                     <NavItem
+                      icon={<Mail size={18} />}
+                      label="Sender Providers"
+                      active={pathname === "/rip/admin/sender-providers"}
+                      collapsed={false}
+                      onClick={() => navigate("/rip/admin/sender-providers")}
+                    />
+                    <NavItem
                       icon={<ScanSearch size={18} />}
                       label="Seed Insights"
                       active={pathname === "/rip/admin/seed-insights"}

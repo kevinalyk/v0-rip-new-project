@@ -25,7 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2, Plus, Pencil, Trash2 } from "lucide-react"
+import { Loader2, Plus, Pencil, Trash2, RefreshCw } from "lucide-react"
 import AppLayout from "@/components/app-layout"
 
 type Mapping = {
@@ -56,6 +56,7 @@ export default function SenderProvidersPage() {
   const [saving, setSaving] = useState(false)
 
   const [deleteTarget, setDeleteTarget] = useState<Mapping | null>(null)
+  const [backfilling, setBackfilling] = useState(false)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -94,6 +95,23 @@ export default function SenderProvidersPage() {
   useEffect(() => {
     if (isAuthorized) fetchMappings()
   }, [isAuthorized])
+
+  const handleBackfill = async () => {
+    setBackfilling(true)
+    try {
+      const res = await fetch("/api/admin/dkim-mappings/backfill", { method: "POST" })
+      const data = await res.json()
+      if (res.ok) {
+        toast({ title: "Backfill complete", description: data.message })
+      } else {
+        toast({ title: "Backfill failed", description: data.error || "Something went wrong", variant: "destructive" })
+      }
+    } catch {
+      toast({ title: "Backfill failed", description: "Something went wrong", variant: "destructive" })
+    } finally {
+      setBackfilling(false)
+    }
+  }
 
   const openAddDialog = () => {
     setEditTarget(null)
@@ -181,10 +199,16 @@ export default function SenderProvidersPage() {
                 Map DKIM selector values (the <code className="text-xs bg-muted px-1 py-0.5 rounded">.s=</code> field) to friendly provider names shown on emails.
               </p>
             </div>
-            <Button className="bg-rip-red hover:bg-rip-red/90 text-white" onClick={openAddDialog}>
-              <Plus size={16} className="mr-2" />
-              Add Mapping
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={handleBackfill} disabled={backfilling}>
+                {backfilling ? <Loader2 size={16} className="mr-2 animate-spin" /> : <RefreshCw size={16} className="mr-2" />}
+                Backfill Providers
+              </Button>
+              <Button className="bg-rip-red hover:bg-rip-red/90 text-white" onClick={openAddDialog}>
+                <Plus size={16} className="mr-2" />
+                Add Mapping
+              </Button>
+            </div>
           </div>
 
           <div className="border rounded-md">

@@ -287,6 +287,9 @@ export function CompetitiveInsights({
   const [selectedDonationPlatform, setSelectedDonationPlatform] = useState<string>("all")
   const [showThirdParty, setShowThirdParty] = useState<boolean>(false)
   const [showHouseFileOnly, setShowHouseFileOnly] = useState<boolean>(false)
+  // Multi-select message filters: "email" | "sms" | "third_party" | "house_file"
+  const [selectedMessageFilters, setSelectedMessageFilters] = useState<string[]>([])
+  const [isMessageFilterOpen, setIsMessageFilterOpen] = useState(false)
   const [senderSearchTerm, setSenderSearchTerm] = useState("") // Declared senderSearchTerm
   const senderSearchInputRef = useRef<HTMLInputElement>(null) // Declare senderSearchInputRef
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null)
@@ -377,10 +380,8 @@ export function CompetitiveInsights({
       activeSearchQuery !== "" ||
       selectedSender.length > 0 ||
       selectedPartyFilter !== "all" ||
-      selectedMessageType !== "all" ||
+      selectedMessageFilters.length > 0 ||
       selectedDonationPlatform !== "all" ||
-      showThirdParty ||
-      showHouseFileOnly ||
       dateRange.from !== undefined ||
       dateRange.to !== undefined
     )
@@ -388,9 +389,7 @@ export function CompetitiveInsights({
     activeSearchQuery,
     selectedSender,
     selectedPartyFilter,
-    selectedMessageType,
-    showThirdParty,
-    showHouseFileOnly,
+    selectedMessageFilters,
     selectedDonationPlatform,
     dateRange.from,
     dateRange.to,
@@ -523,10 +522,8 @@ export function CompetitiveInsights({
     selectedSender,
     selectedPartyFilter,
     selectedStateFilter,
-    selectedMessageType,
+    selectedMessageFilters,
     selectedDonationPlatform,
-    showThirdParty,
-    showHouseFileOnly,
     dateRange.from,
     dateRange.to,
     currentPage,
@@ -614,7 +611,26 @@ export function CompetitiveInsights({
     const campaignParty = campaign.entity?.party?.toLowerCase()
     const matchesParty = selectedPartyFilter === "all" || campaignParty === selectedPartyFilter.toLowerCase() // Use renamed state
 
-    const matchesMessageType = selectedMessageType === "all" || campaign.type === selectedMessageType
+    // Multi-select message filter: no filters selected = show all
+    const matchesMessageType = selectedMessageFilters.length === 0 || (() => {
+      const hasEmail = selectedMessageFilters.includes("email")
+      const hasSms = selectedMessageFilters.includes("sms")
+      const hasThirdParty = selectedMessageFilters.includes("third_party")
+      const hasHouseFile = selectedMessageFilters.includes("house_file")
+      const isEmail = campaign.type === "email"
+      const isSms = campaign.type === "sms"
+      const isThirdPartySource = campaign.source === "third_party" || (!campaign.clientId)
+      const isHouseFileSource = !!campaign.clientId
+      // Build type match: if email or sms filters selected, restrict to those types
+      const typeFilters = [hasEmail && "email", hasSms && "sms"].filter(Boolean) as string[]
+      const matchesType = typeFilters.length === 0 || typeFilters.includes(campaign.type)
+      // Build source match: if house_file or third_party filters selected, restrict to those sources
+      const matchesSource =
+        (!hasHouseFile && !hasThirdParty) ||
+        (hasHouseFile && isHouseFileSource) ||
+        (hasThirdParty && isThirdPartySource)
+      return matchesType && matchesSource
+    })()
 
     let matchesDonationPlatform = true
     if (selectedDonationPlatform !== "all") {
@@ -686,11 +702,19 @@ export function CompetitiveInsights({
       }
       if (selectedPartyFilter && selectedPartyFilter !== "all") params.append("party", selectedPartyFilter)
       if (selectedStateFilter && selectedStateFilter !== "all") params.append("state", selectedStateFilter)
-      if (selectedMessageType && selectedMessageType !== "all") params.append("messageType", selectedMessageType)
+      // Multi-select message filters
+      if (selectedMessageFilters.length > 0) {
+        const hasEmail = selectedMessageFilters.includes("email")
+        const hasSms = selectedMessageFilters.includes("sms")
+        const hasThirdParty = selectedMessageFilters.includes("third_party")
+        const hasHouseFile = selectedMessageFilters.includes("house_file")
+        if (hasEmail && !hasSms) params.append("messageType", "email")
+        else if (hasSms && !hasEmail) params.append("messageType", "sms")
+        if (hasThirdParty) params.append("thirdParty", "true")
+        if (hasHouseFile) params.append("houseFileOnly", "true")
+      }
       if (selectedDonationPlatform && selectedDonationPlatform !== "all")
         params.append("donationPlatform", selectedDonationPlatform)
-      if (showThirdParty) params.append("thirdParty", "true")
-      if (showHouseFileOnly) params.append("houseFileOnly", "true")
       if (dateRange.from) params.append("fromDate", dateRange.from.toISOString())
       if (dateRange.to) params.append("toDate", dateRange.to.toISOString())
 
@@ -739,7 +763,7 @@ export function CompetitiveInsights({
     selectedSender,
     selectedPartyFilter,
     selectedStateFilter,
-    selectedMessageType,
+    selectedMessageFilters,
     selectedDonationPlatform,
     dateRange.from,
     dateRange.to,
@@ -860,6 +884,7 @@ export function CompetitiveInsights({
     setSelectedDonationPlatform("all")
     setShowThirdParty(false)
     setShowHouseFileOnly(false)
+    setSelectedMessageFilters([])
     setShowAutocomplete(false)
     setCurrentPage(1)
   }
@@ -1139,6 +1164,7 @@ export function CompetitiveInsights({
     setSelectedDonationPlatform(filterSettings.selectedDonationPlatform || "all")
     setShowThirdParty(filterSettings.showThirdParty || false)
     setShowHouseFileOnly(filterSettings.showHouseFileOnly || false)
+    setSelectedMessageFilters(filterSettings.selectedMessageFilters || [])
     setDateRange({
       from: filterSettings.dateRange?.from ? new Date(filterSettings.dateRange.from) : undefined,
       to: filterSettings.dateRange?.to ? new Date(filterSettings.dateRange.to) : undefined,
@@ -1156,6 +1182,7 @@ export function CompetitiveInsights({
       selectedDonationPlatform,
       showThirdParty,
       showHouseFileOnly,
+      selectedMessageFilters,
       dateRange: {
         from: dateRange.from?.toISOString(),
         to: dateRange.to?.toISOString(),
@@ -1429,36 +1456,84 @@ export function CompetitiveInsights({
                   </SelectContent>
                 </Select>
 
-                <Select
-                  value={showThirdParty ? "third_party" : showHouseFileOnly ? "house_file_only" : selectedMessageType}
-                  onValueChange={(val) => {
-                    if (val === "third_party") {
-                      setShowThirdParty(true)
-                      setShowHouseFileOnly(false)
-                      setSelectedMessageType("all")
-                    } else if (val === "house_file_only") {
-                      setShowHouseFileOnly(true)
-                      setShowThirdParty(false)
-                      setSelectedMessageType("all")
-                    } else {
-                      setShowThirdParty(false)
-                      setShowHouseFileOnly(false)
-                      setSelectedMessageType(val)
-                    }
-                  }}
-                  disabled={shouldShowPaywall || shouldShowPreview}
-                >
-                  <SelectTrigger className="w-full md:w-[180px]">
-                    <SelectValue placeholder="Filter by type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Messages</SelectItem>
-                    <SelectItem value="email">Email Only</SelectItem>
-                    <SelectItem value="sms">SMS Only</SelectItem>
-                    <SelectItem value="third_party">Third Party</SelectItem>
-                    <SelectItem value="house_file_only">House File Only</SelectItem>
-                  </SelectContent>
-                </Select>
+                {/* Multi-select message type filter */}
+                <Popover open={isMessageFilterOpen} onOpenChange={setIsMessageFilterOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full md:w-auto bg-transparent justify-between gap-2"
+                      disabled={shouldShowPaywall || shouldShowPreview}
+                    >
+                      {selectedMessageFilters.length === 0
+                        ? "All Messages"
+                        : selectedMessageFilters
+                            .map((f) =>
+                              f === "email"
+                                ? "Email"
+                                : f === "sms"
+                                ? "SMS"
+                                : f === "third_party"
+                                ? "Third Party"
+                                : "House File"
+                            )
+                            .join(", ")}
+                      {selectedMessageFilters.length > 0 && (
+                        <Badge variant="secondary" className="ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                          {selectedMessageFilters.length}
+                        </Badge>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[200px] p-2" align="start">
+                    <div className="space-y-1">
+                      {[
+                        { value: "email", label: "Email" },
+                        { value: "sms", label: "SMS" },
+                        { value: "third_party", label: "Third Party" },
+                        { value: "house_file", label: "House File" },
+                      ].map(({ value, label }) => (
+                        <label
+                          key={value}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer text-sm"
+                        >
+                          <Checkbox
+                            checked={selectedMessageFilters.includes(value)}
+                            onCheckedChange={(checked) => {
+                              setSelectedMessageFilters((prev) =>
+                                checked ? [...prev, value] : prev.filter((f) => f !== value)
+                              )
+                              // Sync legacy state for CiAnalyticsView
+                              const next = checked
+                                ? [...selectedMessageFilters, value]
+                                : selectedMessageFilters.filter((f) => f !== value)
+                              setShowThirdParty(next.includes("third_party"))
+                              setShowHouseFileOnly(next.includes("house_file"))
+                              const emailOnly = next.includes("email") && !next.includes("sms")
+                              const smsOnly = next.includes("sms") && !next.includes("email")
+                              setSelectedMessageType(emailOnly ? "email" : smsOnly ? "sms" : "all")
+                            }}
+                          />
+                          {label}
+                        </label>
+                      ))}
+                      {selectedMessageFilters.length > 0 && (
+                        <div className="pt-1 border-t mt-1">
+                          <button
+                            className="w-full text-left px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+                            onClick={() => {
+                              setSelectedMessageFilters([])
+                              setShowThirdParty(false)
+                              setShowHouseFileOnly(false)
+                              setSelectedMessageType("all")
+                            }}
+                          >
+                            Clear selection
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
 
                 {/* Platform Filter - Conditional rendering */}
                 {(currentUserClient === "winred" || currentUserClient === "RIP") && (
@@ -1573,9 +1648,7 @@ export function CompetitiveInsights({
                       !dateRange.to &&
                       selectedSender.length === 0 &&
                       selectedPartyFilter === "all" &&
-                      selectedMessageType === "all" &&
-                      !showThirdParty &&
-                      !showHouseFileOnly &&
+                      selectedMessageFilters.length === 0 &&
                       selectedDonationPlatform === "all")
                   }
                 >

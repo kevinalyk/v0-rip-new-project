@@ -289,6 +289,7 @@ export function CompetitiveInsights({
   const [showHouseFileOnly, setShowHouseFileOnly] = useState<boolean>(false)
   // Multi-select message filters: "email" | "sms" | "third_party" | "house_file"
   const [selectedMessageFilters, setSelectedMessageFilters] = useState<string[]>([])
+  const [pendingMessageFilters, setPendingMessageFilters] = useState<string[]>([])
   const [isMessageFilterOpen, setIsMessageFilterOpen] = useState(false)
   const [senderSearchTerm, setSenderSearchTerm] = useState("") // Declared senderSearchTerm
   const senderSearchInputRef = useRef<HTMLInputElement>(null) // Declare senderSearchInputRef
@@ -885,6 +886,7 @@ export function CompetitiveInsights({
     setShowThirdParty(false)
     setShowHouseFileOnly(false)
     setSelectedMessageFilters([])
+    setPendingMessageFilters([])
     setShowAutocomplete(false)
     setCurrentPage(1)
   }
@@ -1457,7 +1459,16 @@ export function CompetitiveInsights({
                 </Select>
 
                 {/* Multi-select message type filter */}
-                <Popover open={isMessageFilterOpen} onOpenChange={setIsMessageFilterOpen}>
+                <Popover
+                  open={isMessageFilterOpen}
+                  onOpenChange={(open) => {
+                    if (open) {
+                      // Sync pending to current applied filters when opening
+                      setPendingMessageFilters(selectedMessageFilters)
+                    }
+                    setIsMessageFilterOpen(open)
+                  }}
+                >
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -1484,7 +1495,7 @@ export function CompetitiveInsights({
                       )}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[200px] p-2" align="start">
+                  <PopoverContent className="w-[210px] p-2" align="start">
                     <div className="space-y-1">
                       {[
                         { value: "email", label: "Email" },
@@ -1497,39 +1508,42 @@ export function CompetitiveInsights({
                           className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer text-sm"
                         >
                           <Checkbox
-                            checked={selectedMessageFilters.includes(value)}
+                            checked={pendingMessageFilters.includes(value)}
                             onCheckedChange={(checked) => {
-                              setSelectedMessageFilters((prev) =>
+                              setPendingMessageFilters((prev) =>
                                 checked ? [...prev, value] : prev.filter((f) => f !== value)
                               )
-                              // Sync legacy state for CiAnalyticsView
-                              const next = checked
-                                ? [...selectedMessageFilters, value]
-                                : selectedMessageFilters.filter((f) => f !== value)
-                              setShowThirdParty(next.includes("third_party"))
-                              setShowHouseFileOnly(next.includes("house_file"))
-                              const emailOnly = next.includes("email") && !next.includes("sms")
-                              const smsOnly = next.includes("sms") && !next.includes("email")
-                              setSelectedMessageType(emailOnly ? "email" : smsOnly ? "sms" : "all")
                             }}
                           />
                           {label}
                         </label>
                       ))}
-                      {selectedMessageFilters.length > 0 && (
-                        <div className="pt-1 border-t mt-1">
-                          <button
-                            className="w-full text-left px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
-                            onClick={() => {
-                              setSelectedMessageFilters([])
-                              setShowThirdParty(false)
-                              setShowHouseFileOnly(false)
-                              setSelectedMessageType("all")
-                            }}
-                          >
-                            Clear selection
-                          </button>
-                        </div>
+                    </div>
+                    <div className="pt-2 mt-1 border-t flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        className="flex-1 h-8 text-xs"
+                        onClick={() => {
+                          const next = pendingMessageFilters
+                          setSelectedMessageFilters(next)
+                          // Sync legacy state for CiAnalyticsView and API params
+                          setShowThirdParty(next.includes("third_party"))
+                          setShowHouseFileOnly(next.includes("house_file"))
+                          const emailOnly = next.includes("email") && !next.includes("sms")
+                          const smsOnly = next.includes("sms") && !next.includes("email")
+                          setSelectedMessageType(emailOnly ? "email" : smsOnly ? "sms" : "all")
+                          setIsMessageFilterOpen(false)
+                        }}
+                      >
+                        Apply
+                      </Button>
+                      {pendingMessageFilters.length > 0 && (
+                        <button
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                          onClick={() => setPendingMessageFilters([])}
+                        >
+                          Clear
+                        </button>
                       )}
                     </div>
                   </PopoverContent>

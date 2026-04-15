@@ -36,6 +36,7 @@ export function PersonalNumbersContent({ clientSlug }: PersonalNumbersContentPro
   const [userLoading, setUserLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [requestDialogOpen, setRequestDialogOpen] = useState(false)
+  const [notAdminDialogOpen, setNotAdminDialogOpen] = useState(false)
   const [quantity, setQuantity] = useState(1)
   const [submitting, setSubmitting] = useState(false)
 
@@ -201,27 +202,21 @@ export function PersonalNumbersContent({ clientSlug }: PersonalNumbersContentPro
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-muted-foreground">
                 Personal phone numbers are a $100 add-on.{" "}
-                {!userLoading && canRequest ? (
-                  <button
-                    className="underline underline-offset-2 hover:text-foreground transition-colors"
-                    onClick={() => setRequestDialogOpen(true)}
-                  >
-                    Click here to request a number.
-                  </button>
-                ) : !userLoading ? (
-                  "Contact your administrator to request a number."
-                ) : null}
-              </p>
-              {!userLoading && canRequest && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0"
-                  onClick={() => setRequestDialogOpen(true)}
+                <button
+                  className="underline underline-offset-2 hover:text-foreground transition-colors"
+                  onClick={() => canRequest ? setRequestDialogOpen(true) : setNotAdminDialogOpen(true)}
                 >
-                  Request a Number
-                </Button>
-              )}
+                  Click here to request a number.
+                </button>
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => canRequest ? setRequestDialogOpen(true) : setNotAdminDialogOpen(true)}
+              >
+                Request a Number
+              </Button>
             </div>
           )}
         </CardContent>
@@ -288,6 +283,23 @@ export function PersonalNumbersContent({ clientSlug }: PersonalNumbersContentPro
                 )}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Not admin dialog */}
+      <Dialog open={notAdminDialogOpen} onOpenChange={setNotAdminDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Request a Number</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Contact your administrator to request a phone number for your organization.
+          </p>
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => setNotAdminDialogOpen(false)}>
+              Close
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

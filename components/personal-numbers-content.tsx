@@ -53,7 +53,9 @@ export function PersonalNumbersContent({ clientSlug }: PersonalNumbersContentPro
         }
         if (userRes.ok) {
           const userData = await userRes.json()
-          setCurrentUser({ role: userData.role })
+          // role lives at userData.debug.userRole (from /api/debug/user-info)
+          const role = userData.debug?.userRole ?? userData.role
+          setCurrentUser({ role })
         }
         setUserLoading(false)
       } catch (error) {

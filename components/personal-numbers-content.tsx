@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Smartphone, Info, Loader2, Plus, Minus } from "lucide-react"
+import { Smartphone, Info, Loader2, Plus, Minus, XCircle } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -37,8 +37,11 @@ export function PersonalNumbersContent({ clientSlug }: PersonalNumbersContentPro
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [requestDialogOpen, setRequestDialogOpen] = useState(false)
   const [notAdminDialogOpen, setNotAdminDialogOpen] = useState(false)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [selectedToCancel, setSelectedToCancel] = useState<string[]>([])
   const [quantity, setQuantity] = useState(1)
   const [submitting, setSubmitting] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
 
   useEffect(() => {
     async function fetchData() {
@@ -68,6 +71,38 @@ export function PersonalNumbersContent({ clientSlug }: PersonalNumbersContentPro
 
     fetchData()
   }, [clientSlug])
+
+  const handleCancel = async () => {
+    if (selectedToCancel.length === 0) return
+    setCancelling(true)
+    try {
+      const res = await fetch("/api/ci/cancel-phone-number", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ numbersToCancel: selectedToCancel }),
+      })
+
+      if (res.ok) {
+        toast.success("Cancellation request submitted. We'll process it shortly.")
+        setCancelDialogOpen(false)
+        setSelectedToCancel([])
+      } else {
+        const data = await res.json()
+        toast.error(data.error || "Failed to submit cancellation")
+      }
+    } catch {
+      toast.error("Failed to submit cancellation")
+    } finally {
+      setCancelling(false)
+    }
+  }
+
+  const toggleCancelNumber = (phoneNumber: string) => {
+    setSelectedToCancel((prev) =>
+      prev.includes(phoneNumber) ? prev.filter((n) => n !== phoneNumber) : [...prev, phoneNumber]
+    )
+  }
 
   const hasPhones = assignments && assignments.phoneNumbers.length > 0
   const canRequest =
@@ -185,20 +220,45 @@ export function PersonalNumbersContent({ clientSlug }: PersonalNumbersContentPro
               <span className="text-sm">Loading assignments...</span>
             </div>
           ) : hasPhones ? (
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Smartphone className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">
-                  Assigned Phone Numbers ({assignments!.phoneNumbers.length})
-                </span>
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Smartphone className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">
+                    Assigned Phone Numbers ({assignments!.phoneNumbers.length})
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {assignments!.phoneNumbers.map((phone) => (
+                    <Badge key={phone.id} variant="secondary" className="font-mono text-xs">
+                      {formatPhoneNumber(phone.phoneNumber)}
+                    </Badge>
+                  ))}
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {assignments!.phoneNumbers.map((phone) => (
-                  <Badge key={phone.id} variant="secondary" className="font-mono text-xs">
-                    {formatPhoneNumber(phone.phoneNumber)}
-                  </Badge>
-                ))}
-              </div>
+              {!userLoading && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => canRequest ? setRequestDialogOpen(true) : setNotAdminDialogOpen(true)}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Request More Numbers
+                  </Button>
+                  {canRequest && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                      onClick={() => { setSelectedToCancel([]); setCancelDialogOpen(true) }}
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Cancel a Number
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -282,6 +342,79 @@ export function PersonalNumbersContent({ clientSlug }: PersonalNumbersContentPro
                   </>
                 ) : (
                   "Submit Request"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Phone Number Dialog */}
+      <Dialog open={cancelDialogOpen} onOpenChange={(open) => { setCancelDialogOpen(open); if (!open) setSelectedToCancel([]) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel Phone Number(s)</DialogTitle>
+            <DialogDescription>
+              Select which number(s) you&apos;d like to cancel.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-2 space-y-5">
+            <div className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground space-y-1">
+              <p>If you cancel a number, you will retain access to it through the <strong className="text-foreground">remainder of your current billing period</strong>. After that:</p>
+              <ul className="list-disc list-inside space-y-1 mt-2">
+                <li>You will no longer receive <strong className="text-foreground">future messages</strong> on that number.</li>
+                <li>All <strong className="text-foreground">historical messages</strong> will remain accessible.</li>
+                <li>Your monthly spend will decrease by <strong className="text-foreground">$100 per number canceled</strong>.</li>
+              </ul>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Select numbers to cancel</p>
+              {assignments?.phoneNumbers.map((phone) => {
+                const formatted = formatPhoneNumber(phone.phoneNumber)
+                const selected = selectedToCancel.includes(formatted)
+                return (
+                  <button
+                    key={phone.id}
+                    onClick={() => toggleCancelNumber(formatted)}
+                    className={`w-full flex items-center justify-between rounded-md border px-4 py-2 text-sm transition-colors ${
+                      selected
+                        ? "border-destructive bg-destructive/10 text-destructive"
+                        : "border-border hover:bg-muted"
+                    }`}
+                  >
+                    <span className="font-mono">{formatted}</span>
+                    {selected && <XCircle className="h-4 w-4" />}
+                  </button>
+                )
+              })}
+            </div>
+
+            {selectedToCancel.length > 0 && (
+              <div className="rounded-lg border bg-muted/40 p-3 flex justify-between text-sm">
+                <span className="text-muted-foreground">
+                  {selectedToCancel.length} number{selectedToCancel.length > 1 ? "s" : ""} &times; $100/month
+                </span>
+                <span className="font-semibold text-destructive">-${selectedToCancel.length * 100}/month</span>
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end">
+              <Button variant="outline" onClick={() => setCancelDialogOpen(false)} disabled={cancelling}>
+                Keep Numbers
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleCancel}
+                disabled={cancelling || selectedToCancel.length === 0}
+              >
+                {cancelling ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Submitting...
+                  </>
+                ) : (
+                  `Cancel ${selectedToCancel.length > 0 ? selectedToCancel.length : ""} Number${selectedToCancel.length !== 1 ? "s" : ""}`
                 )}
               </Button>
             </div>

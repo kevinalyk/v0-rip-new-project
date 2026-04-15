@@ -6,7 +6,7 @@ const prisma = new PrismaClient()
 
 export async function GET(request: Request) {
   const auth = await verifyAuth(request)
-  if (!auth || auth.role !== "super_admin") {
+  if (!auth.success || !auth.user || auth.user.role !== "super_admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
   }
 
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const auth = await verifyAuth(request)
-  if (!auth || auth.role !== "super_admin") {
+  if (!auth.success || !auth.user || auth.user.role !== "super_admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
   }
 
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
       data: {
         phoneNumber: normalizedPhone,
         clientId,
-        assignedBy: auth.email || auth.userId,
+        assignedBy: auth.user.email || auth.user.id,
       },
       include: {
         client: {
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   const auth = await verifyAuth(request)
-  if (!auth || auth.role !== "super_admin") {
+  if (!auth.success || !auth.user || auth.user.role !== "super_admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
   }
 

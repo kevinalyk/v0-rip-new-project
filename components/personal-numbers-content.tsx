@@ -33,6 +33,7 @@ interface CurrentUser {
 export function PersonalNumbersContent({ clientSlug }: PersonalNumbersContentProps) {
   const [assignments, setAssignments] = useState<Assignment | null>(null)
   const [loading, setLoading] = useState(true)
+  const [userLoading, setUserLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [requestDialogOpen, setRequestDialogOpen] = useState(false)
   const [quantity, setQuantity] = useState(1)
@@ -53,8 +54,10 @@ export function PersonalNumbersContent({ clientSlug }: PersonalNumbersContentPro
           const userData = await userRes.json()
           setCurrentUser({ role: userData.role })
         }
+        setUserLoading(false)
       } catch (error) {
         console.error("Error fetching data:", error)
+        setUserLoading(false)
       } finally {
         setLoading(false)
       }
@@ -198,20 +201,18 @@ export function PersonalNumbersContent({ clientSlug }: PersonalNumbersContentPro
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-muted-foreground">
                 Personal phone numbers are a $100 add-on.{" "}
-                {canRequest ? (
-                  <>
-                    <button
-                      className="underline underline-offset-2 hover:text-foreground transition-colors"
-                      onClick={() => setRequestDialogOpen(true)}
-                    >
-                      Click here to request a number.
-                    </button>
-                  </>
-                ) : (
+                {!userLoading && canRequest ? (
+                  <button
+                    className="underline underline-offset-2 hover:text-foreground transition-colors"
+                    onClick={() => setRequestDialogOpen(true)}
+                  >
+                    Click here to request a number.
+                  </button>
+                ) : !userLoading ? (
                   "Contact your administrator to request a number."
-                )}
+                ) : null}
               </p>
-              {canRequest && (
+              {!userLoading && canRequest && (
                 <Button
                   size="sm"
                   variant="outline"

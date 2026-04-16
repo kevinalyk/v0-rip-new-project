@@ -2263,7 +2263,7 @@ export function CompetitiveInsights({
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Share Email</DialogTitle>
-              <DialogDescription>Anyone with this link can view this email for the next 7 days.</DialogDescription>
+              <DialogDescription>Anyone with this link can view this email.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="flex items-center gap-2">
@@ -2278,7 +2278,7 @@ export function CompetitiveInsights({
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                This link will expire in 7 days. Views are tracked for analytics.
+                This link never expires. Views are tracked for analytics.
               </p>
             </div>
           </DialogContent>

@@ -7,6 +7,7 @@ interface GraphEmail {
   placement: "inbox" | "spam" | "other"
   messageId?: string
   emailContent?: string
+  rawHeaders?: string
 }
 
 export async function fetchOutlookEmails(seedEmail: any, startDate: Date, maxEmails: number): Promise<GraphEmail[]> {
@@ -45,6 +46,7 @@ async function fetchFromFolder(
     date: Date
     messageId?: string
     emailContent?: string
+    rawHeaders?: string
   }>
 > {
   const maxRetries = 3
@@ -57,7 +59,7 @@ async function fetchFromFolder(
       const url =
         `https://graph.microsoft.com/v1.0/me/mailfolders/${folderName}/messages?` +
         `$filter=receivedDateTime ge ${filterDate}&` +
-        `$select=subject,from,receivedDateTime,internetMessageId,body&` +
+        `$select=subject,from,receivedDateTime,internetMessageId,body,internetMessageHeaders&` +
         `$orderby=receivedDateTime desc&` +
         `$top=${Math.min(maxEmails, 50)}`
 
@@ -95,16 +97,27 @@ async function fetchFromFolder(
         const data = await response.json()
         const messages = data.value || []
 
-        const emails = messages.map((message: any) => ({
-          subject: message.subject || "",
-          from: {
-            name: message.from?.emailAddress?.name || "",
-            address: message.from?.emailAddress?.address || "",
-          },
-          date: new Date(message.receivedDateTime),
-          messageId: message.internetMessageId,
-          emailContent: message.body?.content || "",
-        }))
+        const emails = messages.map((message: any) => {
+          // Serialize internetMessageHeaders array into "Name: value\n" format
+          // matching the format produced by mailparser for IMAP emails.
+          let rawHeaders: string | undefined
+          const headersList: Array<{ name: string; value: string }> = message.internetMessageHeaders || []
+          if (headersList.length > 0) {
+            rawHeaders = headersList.map((h) => `${h.name}: ${h.value}`).join("\n")
+          }
+
+          return {
+            subject: message.subject || "",
+            from: {
+              name: message.from?.emailAddress?.name || "",
+              address: message.from?.emailAddress?.address || "",
+            },
+            date: new Date(message.receivedDateTime),
+            messageId: message.internetMessageId,
+            emailContent: message.body?.content || "",
+            rawHeaders,
+          }
+        })
 
         return emails
       } catch (fetchError: any) {

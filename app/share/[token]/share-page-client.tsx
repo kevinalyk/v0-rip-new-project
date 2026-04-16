@@ -63,7 +63,7 @@ export default function SharePageClient() {
         if (response.status === 404) {
           setError("This share link is invalid or has been removed.")
         } else if (response.status === 410) {
-          setError("This share link has expired. Share links are valid for 7 days.")
+          setError("This share link is invalid or has been removed.")
         } else {
           setError("Failed to load campaign.")
         }
@@ -151,9 +151,7 @@ export default function SharePageClient() {
           <div className="text-6xl">🔗</div>
           <h1 className="text-2xl font-bold">{error || "Campaign not found"}</h1>
           <p className="text-muted-foreground">
-            {error === "This share link has expired. Share links are valid for 7 days."
-              ? "Share links expire after 7 days for security. Please request a new share link."
-              : "The campaign you're looking for doesn't exist or the link is invalid."}
+            {"The campaign you're looking for doesn't exist or the link is invalid."}
           </p>
           <Button onClick={handleClose}>{isAuthenticated ? "Go to Dashboard" : "Go to Login"}</Button>
           <div className="pt-4 border-t">

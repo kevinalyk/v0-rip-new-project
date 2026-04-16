@@ -921,15 +921,6 @@ export function CompetitiveInsights({
       const fullUrl = `${window.location.origin}/share/${data.shareToken}`
       setShareLink(fullUrl)
       setShareDialogOpen(true)
-
-      // Optimistically increment shareCount on the selected campaign
-      setSelectedCampaign((prev: any) =>
-        prev ? { ...prev, shareCount: (prev.shareCount || 0) + 1 } : prev
-      )
-      // Also update the campaign list so the count persists when modal is closed
-      setCampaigns((prev: any[]) =>
-        prev.map((c) => (c.id === campaignId ? { ...c, shareCount: (c.shareCount || 0) + 1 } : c))
-      )
     } catch (error) {
       console.error("Error generating share link:", error)
     } finally {
@@ -2172,15 +2163,9 @@ export function CompetitiveInsights({
                           size="sm"
                           onClick={() => handleGenerateShareLink(selectedCampaign.id as number)}
                           disabled={generatingShareLink}
-                          className="gap-2"
                         >
-                          <Share2 className="h-4 w-4" />
+                          <Share2 className="h-4 w-4 mr-2" />
                           {generatingShareLink ? "Generating..." : "Share"}
-                          {(selectedCampaign.shareCount ?? 0) > 0 && (
-                            <Badge variant="secondary" className="h-5 px-1.5 text-xs">
-                              {selectedCampaign.shareCount}
-                            </Badge>
-                          )}
                         </Button>
                       </div>
                     </div>
@@ -2296,11 +2281,6 @@ export function CompetitiveInsights({
               </div>
               <p className="text-xs text-muted-foreground">
                 This link never expires. Views are tracked for analytics.
-                {selectedCampaign && (selectedCampaign.shareCount ?? 0) > 0 && (
-                  <span className="ml-1">
-                    Shared {selectedCampaign.shareCount} {selectedCampaign.shareCount === 1 ? "time" : "times"}.
-                  </span>
-                )}
               </p>
             </div>
           </DialogContent>

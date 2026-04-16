@@ -600,11 +600,13 @@ export function CompetitiveInsights({
 
     // Third-party filter is applied server-side via the API — no client-side filtering needed
 
+    const searchTermLower = searchTerm.toLowerCase()
     const matchesSearch =
-      campaign.senderName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      campaign.senderEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      campaign.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (campaign.emailContent && campaign.emailContent.toLowerCase().includes(searchTerm.toLowerCase()))
+      (campaign.senderName || "").toLowerCase().includes(searchTermLower) ||
+      (campaign.senderEmail || "").toLowerCase().includes(searchTermLower) ||
+      (campaign.subject || "").toLowerCase().includes(searchTermLower) ||
+      (campaign.message || "").toLowerCase().includes(searchTermLower) ||
+      (campaign.emailContent || "").toLowerCase().includes(searchTermLower)
 
     const campaignName = campaign.entity?.name || campaign.senderName
     const matchesSender = selectedSender.length === 0 || selectedSender.includes(campaignName)
@@ -990,7 +992,7 @@ export function CompetitiveInsights({
     }
 
     // For email campaigns, check sender email and domain
-    const senderEmail = campaign.senderEmail.toLowerCase()
+    const senderEmail = (campaign.senderEmail || "").toLowerCase()
     const senderDomain = senderEmail.split("@")[1]
 
     // Check if exact email is mapped

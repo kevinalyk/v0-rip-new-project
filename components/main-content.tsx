@@ -3093,9 +3093,9 @@ function CampaignsContent({ clientSlug, isAdminView }: { clientSlug?: string; is
 
   const filteredCampaigns = campaigns.filter((campaign) => {
     const searchTermLower = searchTerm.toLowerCase()
-    const subjectMatches = campaign.subject.toLowerCase().includes(searchTermLower)
-    const senderMatches = campaign.sender.toLowerCase().includes(searchTermLower)
-    const fromEmailMatches = campaign.fromEmail.toLowerCase().includes(searchTermLower)
+    const subjectMatches = (campaign.subject || "").toLowerCase().includes(searchTermLower)
+    const senderMatches = (campaign.sender || "").toLowerCase().includes(searchTermLower)
+    const fromEmailMatches = (campaign.fromEmail || "").toLowerCase().includes(searchTermLower)
 
     const dateFilterActive = dateRange.from || dateRange.to
     const campaignDate = new Date(campaign.sentDate)

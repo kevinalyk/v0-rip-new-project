@@ -57,20 +57,38 @@ export async function GET(request: NextRequest) {
       dateFilter = { gte: thirtyDaysAgo }
     }
 
-    // Fetch email campaigns only from client's personal seeds
-    const emailCampaigns = await prisma.competitiveInsightCampaign.findMany({
-      where: {
-        clientId: targetClientId,
-        source: "personal",
-        isHidden: false,
-        ...(dateFilter && { dateReceived: dateFilter }),
-      },
-      include: {
-        entity: true,
-      },
-      orderBy: { dateReceived: "desc" },
-      take: 1000,
-    })
+    // Pagination params (same names as the main CI component sends)
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10))
+    const limit = Math.max(1, parseInt(searchParams.get("limit") || "10", 10))
+    const skip = (page - 1) * limit
+
+    const where = {
+      clientId: targetClientId,
+      source: "personal",
+      isHidden: false,
+      ...(dateFilter && { dateReceived: dateFilter }),
+    }
+
+    // Fetch total count and paginated records in parallel
+    const [total, emailCampaigns] = await Promise.all([
+      prisma.competitiveInsightCampaign.count({ where }),
+      prisma.competitiveInsightCampaign.findMany({
+        where,
+        include: { entity: true },
+        orderBy: { dateReceived: "desc" },
+        skip,
+        take: limit,
+      }),
+    ])
+
+    // Safe JSON parse helper — handles already-parsed objects, strings, and nulls
+    const safeParse = (value: any): any[] => {
+      if (!value) return []
+      if (typeof value === "string") {
+        try { return JSON.parse(value) } catch { return [] }
+      }
+      return Array.isArray(value) ? value : []
+    }
 
     const transformedEmailCampaigns = emailCampaigns.map((campaign) => ({
       id: campaign.id,
@@ -83,8 +101,8 @@ export async function GET(request: NextRequest) {
       inboxCount: campaign.inboxCount,
       spamCount: campaign.spamCount,
       notDeliveredCount: campaign.notDeliveredCount,
-      ctaLinks: campaign.ctaLinks ? JSON.parse(campaign.ctaLinks as string) : [],
-      tags: campaign.tags ? JSON.parse(campaign.tags as string) : [],
+      ctaLinks: safeParse(campaign.ctaLinks),
+      tags: safeParse(campaign.tags),
       emailPreview: campaign.emailPreview || "",
       emailContent: campaign.emailContent,
       entityId: campaign.entityId,
@@ -102,7 +120,15 @@ export async function GET(request: NextRequest) {
         : null,
     }))
 
-    return NextResponse.json({ insights: transformedEmailCampaigns })
+    return NextResponse.json({
+      insights: transformedEmailCampaigns,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    })
   } catch (error) {
     console.error("Error fetching personal email campaigns:", error)
     return NextResponse.json({ error: "Failed to fetch personal email campaigns" }, { status: 500 })

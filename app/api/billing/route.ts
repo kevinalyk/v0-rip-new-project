@@ -2,6 +2,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { getPlanLimits, getUsagePercentage } from "@/lib/subscription-utils"
+import Stripe from "stripe"
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2025-03-31.basil" })
 
 export async function GET(request: NextRequest) {
   try {
@@ -73,6 +76,24 @@ export async function GET(request: NextRequest) {
     const planLimits = getPlanLimits(client.subscriptionPlan as any)
     const usagePercentage = getUsagePercentage(client.emailVolumeUsed, client.emailVolumeLimit)
 
+    // Fetch the actual recurring amount from Stripe so we show what they really pay
+    let stripeMonthlyAmount: number | null = null
+    let stripeBillingInterval: string | null = null
+    if (client.stripeSubscriptionId) {
+      try {
+        const subscription = await stripe.subscriptions.retrieve(client.stripeSubscriptionId, {
+          expand: ["items.data.price"],
+        })
+        const item = subscription.items.data[0]
+        if (item?.price) {
+          stripeMonthlyAmount = item.price.unit_amount // in cents
+          stripeBillingInterval = item.price.recurring?.interval ?? null
+        }
+      } catch (err) {
+        console.error("[v0] Billing API: Failed to fetch Stripe subscription price:", err)
+      }
+    }
+
     const hasAdminAccess = user.role === "super_admin" || (client.name && client.name.toLowerCase().includes("rip"))
     console.log("[v0] Billing API: hasAdminAccess:", hasAdminAccess, "role:", user.role, "client:", client.name)
 
@@ -95,6 +116,8 @@ export async function GET(request: NextRequest) {
         stripeCustomerId: client.stripeCustomerId,
         cancelAtPeriodEnd: client.cancelAtPeriodEnd,
         scheduledDowngradePlan: client.scheduledDowngradePlan,
+        stripeMonthlyAmount,   // actual amount in cents from Stripe, or null
+        stripeBillingInterval, // "month" | "year" | null
       },
       planLimits,
       hasAdminAccess,

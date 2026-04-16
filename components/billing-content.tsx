@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, CreditCard, Calendar, Check, X, AlertTriangle } from "lucide-react"
+import { Loader2, CreditCard, Calendar, Check, X, AlertTriangle, Receipt, Download, ExternalLink } from "lucide-react"
 import { format } from "date-fns"
 import { cancelSubscription } from "@/app/actions/stripe"
 import {
@@ -37,6 +37,8 @@ interface BillingData {
     stripeCustomerId: string | null
     cancelAtPeriodEnd?: boolean // Added to track scheduled cancellation
     scheduledDowngradePlan?: string | null // Added scheduledDowngradePlan to interface
+    stripeMonthlyAmount?: number | null   // actual amount in cents from Stripe
+    stripeBillingInterval?: string | null // "month" | "year"
   }
   planLimits: {
     emailVolumeLimit: number
@@ -146,18 +148,51 @@ const getPlanFeatures = (plan: string) => {
   }
 }
 
+interface Invoice {
+  id: string
+  number: string | null
+  status: string | null
+  amountPaid: number
+  currency: string
+  created: number
+  periodStart: number
+  periodEnd: number
+  hostedInvoiceUrl: string | null
+  invoicePdf: string | null
+  description: string | null
+}
+
 export function BillingContent({ clientSlug }: BillingContentProps) {
   const [billingData, setBillingData] = useState<BillingData | null>(null)
   const [loading, setLoading] = useState(true)
   const [canceling, setCanceling] = useState(false)
   const [redirectingToPortal, setRedirectingToPortal] = useState(false)
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [loadingInvoices, setLoadingInvoices] = useState(false)
   const params = useParams()
   const router = useRouter()
   const resolvedClientSlug = clientSlug || (params.clientSlug as string)
 
   useEffect(() => {
     fetchBillingData()
+    fetchInvoices()
   }, [resolvedClientSlug])
+
+  const fetchInvoices = async () => {
+    try {
+      setLoadingInvoices(true)
+      const url = `/api/billing/invoices?clientSlug=${resolvedClientSlug}`
+      const response = await fetch(url, { credentials: "include" })
+      if (response.ok) {
+        const data = await response.json()
+        setInvoices(data.invoices || [])
+      }
+    } catch (error) {
+      console.error("Error fetching invoices:", error)
+    } finally {
+      setLoadingInvoices(false)
+    }
+  }
 
   const fetchBillingData = async () => {
     try {
@@ -311,7 +346,13 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
                   <span className="text-2xl font-bold">{planFeatures.name}</span>
                   <div className="flex items-center gap-2">
                     <Badge variant="secondary" className="text-lg px-3 py-1">
-                      {planFeatures.price === "$0" ? "Free" : `${planFeatures.price}/mo`}
+                      {client.stripeMonthlyAmount != null
+                        ? client.stripeMonthlyAmount === 0
+                          ? "Free"
+                          : `$${(client.stripeMonthlyAmount / 100).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}/${client.stripeBillingInterval ?? "mo"}`
+                        : planFeatures.price === "$0"
+                        ? "Free"
+                        : `${planFeatures.price}/mo`}
                     </Badge>
                     {isScheduledForDowngrade && client.subscriptionRenewDate && (
                       <Badge variant="outline" className="text-yellow-600 border-yellow-600">
@@ -587,6 +628,78 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
             </CardContent>
           </Card> */}
         </div>
+
+        {/* Billing History / Receipts */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5" />
+              Billing History
+            </CardTitle>
+            <CardDescription>Download receipts and view past invoices</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingInvoices ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : invoices.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">No invoices found.</p>
+            ) : (
+              <div className="divide-y">
+                {invoices.map((invoice) => {
+                  const date = new Date(invoice.created * 1000)
+                  const periodStart = new Date(invoice.periodStart * 1000)
+                  const periodEnd = new Date(invoice.periodEnd * 1000)
+                  const amount = (invoice.amountPaid / 100).toLocaleString("en-US", {
+                    style: "currency",
+                    currency: invoice.currency.toUpperCase(),
+                  })
+                  return (
+                    <div key={invoice.id} className="flex items-center justify-between py-3 gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium">
+                            {format(periodStart, "MMM d")} – {format(periodEnd, "MMM d, yyyy")}
+                          </p>
+                          {invoice.status === "paid" ? (
+                            <Badge variant="secondary" className="text-xs">Paid</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-xs capitalize">{invoice.status}</Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {invoice.number && <span className="mr-2">{invoice.number}</span>}
+                          {format(date, "MMM d, yyyy")}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-sm font-medium">{amount}</span>
+                        {invoice.invoicePdf && (
+                          <a href={invoice.invoicePdf} target="_blank" rel="noopener noreferrer">
+                            <Button variant="outline" size="sm" className="gap-1.5 bg-transparent">
+                              <Download className="h-3.5 w-3.5" />
+                              PDF
+                            </Button>
+                          </a>
+                        )}
+                        {invoice.hostedInvoiceUrl && (
+                          <a href={invoice.hostedInvoiceUrl} target="_blank" rel="noopener noreferrer">
+                            <Button variant="outline" size="sm" className="gap-1.5 bg-transparent">
+                              <ExternalLink className="h-3.5 w-3.5" />
+                              View
+                            </Button>
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
       </div>
     </div>
   )

@@ -44,13 +44,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       isSms = true
     }
 
-    // Check if existing token is still valid (within 7 days)
     const now = new Date()
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-    const tokenExpired = campaign.shareTokenCreatedAt && campaign.shareTokenCreatedAt < sevenDaysAgo
 
-    // Generate new token if none exists or if expired
-    if (!campaign.shareToken || tokenExpired) {
+    // Generate new token if none exists
+    if (!campaign.shareToken) {
       const newToken = nanoid(16)
 
       if (isSms) {
@@ -59,7 +56,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           data: {
             shareToken: newToken,
             shareTokenCreatedAt: now,
-            shareCount: tokenExpired ? 1 : (campaign.shareCount || 0) + 1,
+            shareCount: (campaign.shareCount || 0) + 1,
           },
           select: {
             id: true,
@@ -74,7 +71,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           data: {
             shareToken: newToken,
             shareTokenCreatedAt: now,
-            shareCount: tokenExpired ? 1 : (campaign.shareCount || 0) + 1,
+            shareCount: (campaign.shareCount || 0) + 1,
           },
           select: {
             id: true,
@@ -122,7 +119,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({
       shareUrl,
       shareToken: campaign.shareToken,
-      expiresAt: new Date(campaign.shareTokenCreatedAt!.getTime() + 7 * 24 * 60 * 60 * 1000),
     })
   } catch (error) {
     console.error("Error generating share link:", error)

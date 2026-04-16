@@ -6,45 +6,37 @@ const prisma = new PrismaClient()
 
 async function incrementViewCount(token: string) {
   try {
-    // Check if token is expired (7 days)
-    const now = new Date()
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-
     // Try email campaign first
     const campaign = await prisma.competitiveInsightCampaign.findUnique({
       where: { shareToken: token },
-      select: { id: true, shareTokenCreatedAt: true },
+      select: { id: true },
     })
 
     if (campaign) {
-      if (!campaign.shareTokenCreatedAt || campaign.shareTokenCreatedAt >= sevenDaysAgo) {
-        await prisma.competitiveInsightCampaign.update({
-          where: { id: campaign.id },
-          data: {
-            viewCount: { increment: 1 },
-            shareViewCount: { increment: 1 },
-          },
-        })
-      }
+      await prisma.competitiveInsightCampaign.update({
+        where: { id: campaign.id },
+        data: {
+          viewCount: { increment: 1 },
+          shareViewCount: { increment: 1 },
+        },
+      })
       return
     }
 
     // Try SMS
     const sms = await prisma.smsQueue.findUnique({
       where: { shareToken: token },
-      select: { id: true, shareTokenCreatedAt: true },
+      select: { id: true },
     })
 
     if (sms) {
-      if (!sms.shareTokenCreatedAt || sms.shareTokenCreatedAt >= sevenDaysAgo) {
-        await prisma.smsQueue.update({
-          where: { id: sms.id },
-          data: {
-            viewCount: { increment: 1 },
-            shareViewCount: { increment: 1 },
-          },
-        })
-      }
+      await prisma.smsQueue.update({
+        where: { id: sms.id },
+        data: {
+          viewCount: { increment: 1 },
+          shareViewCount: { increment: 1 },
+        },
+      })
     }
   } catch (error) {
     console.error("[share] Failed to increment view count for token", token, error)
@@ -78,16 +70,6 @@ export async function generateMetadata({ params }: { params: { token: string } }
       return {
         title: "Shared Campaign — Inbox.GOP",
         description: "View this shared campaign on Inbox.GOP",
-      }
-    }
-
-    // Check if expired (7 days)
-    const now = new Date()
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-    if (campaign.shareTokenCreatedAt && campaign.shareTokenCreatedAt < sevenDaysAgo) {
-      return {
-        title: "Expired Link — Inbox.GOP",
-        description: "This share link has expired",
       }
     }
 

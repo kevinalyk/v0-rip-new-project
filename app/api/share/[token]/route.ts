@@ -31,14 +31,6 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
       isSms = true
     }
 
-    // Check if token is expired (7 days)
-    const now = new Date()
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-
-    if (campaign.shareTokenCreatedAt && campaign.shareTokenCreatedAt < sevenDaysAgo) {
-      return NextResponse.json({ error: "Share link has expired" }, { status: 410 })
-    }
-
     // Note: view count is incremented server-side in app/share/[token]/page.tsx
     // to ensure it fires for all visitors including anonymous users.
 

@@ -57,26 +57,41 @@ export async function GET(request: NextRequest) {
       dateFilter = { gte: thirtyDaysAgo }
     }
 
-    // Fetch SMS only from client's personal phone numbers
-    const smsCampaigns = await prisma.smsQueue.findMany({
-      where: {
-        clientId: targetClientId,
-        source: "personal",
-        isDeleted: false,
-        ...(dateFilter && { createdAt: dateFilter }),
-      },
-      include: {
-        entity: true,
-      },
-      orderBy: { createdAt: "desc" },
-      take: 1000,
-    })
+    // Pagination params (same names as the main CI component sends)
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10))
+    const limit = Math.max(1, parseInt(searchParams.get("limit") || "10", 10))
+    const skip = (page - 1) * limit
+
+    const where = {
+      clientId: targetClientId,
+      source: "personal",
+      isDeleted: false,
+      ...(dateFilter && { createdAt: dateFilter }),
+    }
+
+    // Fetch total count and paginated records in parallel
+    const [total, smsCampaigns] = await Promise.all([
+      prisma.smsQueue.count({ where }),
+      prisma.smsQueue.findMany({
+        where,
+        include: { entity: true },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+    ])
 
     const transformedSmsCampaigns = smsCampaigns.map((sms) => ({
       id: sms.id,
       type: "sms" as const,
       phoneNumber: sms.phoneNumber,
       message: sms.message,
+      // Expose as both emailPreview (used by the detail modal) and smsContent
+      emailPreview: sms.message,
+      smsContent: sms.message,
+      subject: sms.message ? sms.message.slice(0, 80) : "",
+      senderName: sms.entity?.name || sms.phoneNumber || "",
+      senderEmail: sms.phoneNumber || "",
       dateReceived: sms.createdAt.toISOString(),
       ctaLinks: sms.ctaLinks ? JSON.parse(sms.ctaLinks as string) : [],
       entityId: sms.entityId,
@@ -94,7 +109,15 @@ export async function GET(request: NextRequest) {
         : null,
     }))
 
-    return NextResponse.json({ insights: transformedSmsCampaigns })
+    return NextResponse.json({
+      insights: transformedSmsCampaigns,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    })
   } catch (error) {
     console.error("Error fetching personal SMS campaigns:", error)
     return NextResponse.json({ error: "Failed to fetch personal SMS campaigns" }, { status: 500 })

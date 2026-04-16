@@ -37,6 +37,8 @@ interface BillingData {
     stripeCustomerId: string | null
     cancelAtPeriodEnd?: boolean // Added to track scheduled cancellation
     scheduledDowngradePlan?: string | null // Added scheduledDowngradePlan to interface
+    stripeMonthlyAmount?: number | null   // actual amount in cents from Stripe
+    stripeBillingInterval?: string | null // "month" | "year"
   }
   planLimits: {
     emailVolumeLimit: number
@@ -344,7 +346,13 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
                   <span className="text-2xl font-bold">{planFeatures.name}</span>
                   <div className="flex items-center gap-2">
                     <Badge variant="secondary" className="text-lg px-3 py-1">
-                      {planFeatures.price === "$0" ? "Free" : `${planFeatures.price}/mo`}
+                      {client.stripeMonthlyAmount != null
+                        ? client.stripeMonthlyAmount === 0
+                          ? "Free"
+                          : `$${(client.stripeMonthlyAmount / 100).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}/${client.stripeBillingInterval ?? "mo"}`
+                        : planFeatures.price === "$0"
+                        ? "Free"
+                        : `${planFeatures.price}/mo`}
                     </Badge>
                     {isScheduledForDowngrade && client.subscriptionRenewDate && (
                       <Badge variant="outline" className="text-yellow-600 border-yellow-600">

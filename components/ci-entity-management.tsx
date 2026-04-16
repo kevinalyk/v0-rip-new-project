@@ -32,6 +32,7 @@ import {
   Smartphone,
   BookOpen,
   Loader2,
+  Link2,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Label } from "@/components/ui/label"
@@ -111,6 +112,7 @@ interface EntityMapping {
   senderEmail: string | null
   senderDomain: string | null
   senderPhone: string | null
+  ctaDomain: string | null
   createdAt: string
 }
 
@@ -172,6 +174,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
 
   const [entityMappings, setEntityMappings] = useState<EntityMapping[]>([])
   const [newMappingInput, setNewMappingInput] = useState("")
+  const [newCtaDomainInput, setNewCtaDomainInput] = useState("")
   const [loadingMappings, setLoadingMappings] = useState(false)
 
   // Assign Dialog state
@@ -2050,14 +2053,65 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                   <div>
                     <Label className="text-base font-semibold">Email & SMS Mappings</Label>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Emails, domains, or SMS short codes will automatically be assigned to this entity
+                      Emails, domains, SMS short codes, or CTA domains will automatically be assigned to this entity
                     </p>
                   </div>
 
-                  {/* Add new mapping */}
+                  {/* CTA Domains sub-section */}
+                  <div className="space-y-1">
+                    <Label className="text-sm font-normal">CTA Domains</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="e.g., fundconservatives.org or https://go.fundconservatives.org/..."
+                        value={newCtaDomainInput}
+                        onChange={(e) => setNewCtaDomainInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            if (!newCtaDomainInput.trim()) return
+                            // Wrap bare domains in a protocol so addEntityMapping detects it as a URL
+                            const val = newCtaDomainInput.trim()
+                            const normalized = val.includes("://") ? val : `https://${val}`
+                            setNewMappingInput(normalized)
+                            setTimeout(() => {
+                              handleAddMapping()
+                              setNewCtaDomainInput("")
+                              setNewMappingInput("")
+                            }, 0)
+                          }
+                        }}
+                      />
+                      <Button
+                        onClick={() => {
+                          if (!newCtaDomainInput.trim()) return
+                          const val = newCtaDomainInput.trim()
+                          const normalized = val.includes("://") ? val : `https://${val}`
+                          setNewMappingInput(normalized)
+                          setTimeout(() => {
+                            handleAddMapping()
+                            setNewCtaDomainInput("")
+                            setNewMappingInput("")
+                          }, 0)
+                        }}
+                        disabled={!newCtaDomainInput.trim()}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Any campaign with a link to this domain (e.g., <span className="font-mono">go.fundconservatives.org</span>) will be auto-assigned
+                    </p>
+                  </div>
+
+                  <div className="border-t pt-3">
+                    <Label className="text-sm font-normal">Email, Domain & Phone Mappings</Label>
+                    <p className="text-xs text-muted-foreground mt-1 mb-2">Sender email, domain, or SMS short code (e.g., info@example.com, example.com, 55404)</p>
+                  </div>
+
+                  {/* Add new email/domain/phone mapping */}
                   <div className="flex gap-2">
                     <Input
-                      placeholder="Enter email, domain, or SMS short code (e.g., info@example.com, example.com, or 55404)"
+                      placeholder="e.g., info@example.com, example.com, or 55404"
                       value={newMappingInput}
                       onChange={(e) => setNewMappingInput(e.target.value)}
                       onKeyDown={(e) => {
@@ -2078,7 +2132,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                       <div className="text-sm text-muted-foreground text-center py-4">Loading mappings...</div>
                     ) : entityMappings.length === 0 ? (
                       <div className="text-sm text-muted-foreground text-center py-4">
-                        No mappings yet. Add an email, domain, or SMS short code above.
+                        No mappings yet. Add an email, domain, phone, or CTA URL above.
                       </div>
                     ) : (
                   entityMappings.map((mapping) => (
@@ -2089,10 +2143,12 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                       <div className="flex items-center gap-2">
                         {mapping.senderPhone ? (
                           <Phone className="h-4 w-4 text-muted-foreground" />
+                        ) : mapping.ctaDomain ? (
+                          <Link2 className="h-4 w-4 text-muted-foreground" />
                         ) : (
                           <Mail className="h-4 w-4 text-muted-foreground" />
                         )}
-                        <span>{mapping.senderPhone || mapping.senderEmail || mapping.senderDomain}</span>
+                        <span>{mapping.senderPhone || mapping.ctaDomain || mapping.senderEmail || mapping.senderDomain}</span>
                       </div>
                       <Button
                         variant="ghost"

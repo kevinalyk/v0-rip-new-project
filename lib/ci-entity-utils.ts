@@ -19,7 +19,7 @@ export type DonationIdentifiers = {
 // Type for entity assignment
 type EntityAssignment = {
   entityId: string
-  assignmentMethod: "auto_domain" | "auto_winred" | "auto_anedot" | "auto_actblue" | "auto_psqimpact" | "auto_engage" | "auto_phone" | "auto_substack" | "auto_revv"
+  assignmentMethod: "auto_domain" | "auto_winred" | "auto_anedot" | "auto_actblue" | "auto_psqimpact" | "auto_engage" | "auto_phone" | "auto_substack" | "auto_revv" | "auto_cta_domain"
 } | null
 
 function stripHtmlAndExtract(html: string): string {
@@ -251,6 +251,70 @@ export async function findEntityForPhone(phoneNumber: string, ctaLinks?: any): P
     return null
   } catch (error) {
     console.error("Error finding entity for phone:", error)
+    return null
+  }
+}
+
+/**
+ * Extract the root domain (e.g., "fundconservatives.org") from a URL,
+ * stripping any subdomain prefix like "go.", "www.", "e.", "secure.", etc.
+ */
+export function extractRootDomain(url: string): string | null {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase()
+    const parts = hostname.split(".")
+    // Handle known two-part TLDs like .co.uk, .com.au, etc.
+    const twoPartTlds = new Set(["co.uk", "com.au", "co.nz", "org.uk", "net.au"])
+    if (parts.length >= 3) {
+      const lastTwo = parts.slice(-2).join(".")
+      if (twoPartTlds.has(lastTwo)) {
+        return parts.slice(-3).join(".")
+      }
+    }
+    // Default: last two parts (handles .com, .org, .net, etc.)
+    return parts.slice(-2).join(".")
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Find entity by matching root domains from CTA links against ctaDomain mappings.
+ * Strips subdomains so "go.fundconservatives.org" matches "fundconservatives.org".
+ */
+export async function findEntityByCtaDomain(ctaLinks: any): Promise<EntityAssignment> {
+  try {
+    if (!ctaLinks) return null
+
+    const links = Array.isArray(ctaLinks) ? ctaLinks : []
+    if (links.length === 0) return null
+
+    // Collect unique root domains from all CTA links
+    const rootDomains = new Set<string>()
+    for (const link of links) {
+      const url = typeof link === "string" ? link : link.finalUrl || link.url
+      if (!url) continue
+      const root = extractRootDomain(url)
+      if (root) rootDomains.add(root)
+    }
+
+    if (rootDomains.size === 0) return null
+
+    // Query for any matching ctaDomain mapping
+    const mapping = await prisma.ciEntityMapping.findFirst({
+      where: {
+        ctaDomain: { in: Array.from(rootDomains) },
+      },
+      select: { entityId: true },
+    })
+
+    if (mapping) {
+      return { entityId: mapping.entityId, assignmentMethod: "auto_cta_domain" }
+    }
+
+    return null
+  } catch (error) {
+    console.error("Error finding entity by CTA domain:", error)
     return null
   }
 }
@@ -689,20 +753,36 @@ export async function addEntityMapping(entityId: string, emailOrDomain: string) 
   try {
     const normalized = emailOrDomain.toLowerCase().trim()
 
-    // Determine the type: phone (numeric-only short code), email, or domain
+    // Determine the type:
+    //   phone  = numeric-only (short codes like "55404")
+    //   email  = contains "@"
+    //   url    = contains "://" → extract root domain → ctaDomain
+    //   domain = everything else (e.g., "fundconservatives.org")
     const isPhone = /^\d+$/.test(normalized)
     const isEmail = !isPhone && normalized.includes("@")
+    const isUrl = !isPhone && !isEmail && normalized.includes("://")
+
+    // For URLs, extract the root domain
+    const ctaDomainValue = isUrl ? extractRootDomain(normalized) : null
+    const isCta = isUrl || (!isPhone && !isEmail && !normalized.includes("@"))
+
+    // For plain domains entered without a protocol treat as ctaDomain if they
+    // look like a domain (contain a dot and no @) — only if not a senderDomain.
+    // We still support senderDomain for backward compat (no protocol, no @, has dot).
+    // Decision: if the user enters something like "fundconservatives.org" (no @, no ://)
+    // we store it as senderDomain (existing behavior). Only URLs trigger ctaDomain.
+
+    const whereClause = isPhone
+      ? [{ senderPhone: normalized }]
+      : isEmail
+      ? [{ senderEmail: normalized }]
+      : isUrl
+      ? [{ ctaDomain: ctaDomainValue }]
+      : [{ senderDomain: normalized }]
 
     // Check if mapping already exists
     const existingMapping = await prisma.ciEntityMapping.findFirst({
-      where: {
-        entityId,
-        OR: isPhone
-          ? [{ senderPhone: normalized }]
-          : isEmail
-          ? [{ senderEmail: normalized }]
-          : [{ senderDomain: normalized }],
-      },
+      where: { entityId, OR: whereClause },
     })
 
     if (existingMapping) {
@@ -717,6 +797,8 @@ export async function addEntityMapping(entityId: string, emailOrDomain: string) 
           ? { senderPhone: normalized }
           : isEmail
           ? { senderEmail: normalized, senderDomain: normalized.split("@")[1] }
+          : isUrl
+          ? { ctaDomain: ctaDomainValue }
           : { senderDomain: normalized }),
       },
     })

@@ -402,6 +402,7 @@ model CiEntityMapping {
   senderEmail  String?  // Exact email match (e.g., "info@donaldtrump.com")
   senderDomain String?  // Domain match (e.g., "donaldtrump.com")
   senderPhone  String?  // Phone number match (e.g., "+14342298933")
+  ctaDomain    String?  // Root domain match on CTA links (e.g., "fundconservatives.org")
   createdAt    DateTime @default(now())
 
   entity       CiEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
@@ -410,6 +411,7 @@ model CiEntityMapping {
   @@index([senderEmail])
   @@index([senderDomain])
   @@index([senderPhone])
+  @@index([ctaDomain])
 }
 
 model CtaCategory {

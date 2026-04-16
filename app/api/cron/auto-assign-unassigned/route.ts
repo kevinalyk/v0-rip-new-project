@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { findEntityForSender, findEntityForPhone } from "@/lib/ci-entity-utils"
+import { findEntityForSender, findEntityForPhone, findEntityByCtaDomain } from "@/lib/ci-entity-utils"
 
 /**
  * Auto-assign unassigned campaigns using AI and donation identifier matching
@@ -77,13 +77,21 @@ export async function GET(request: Request) {
         }
 
         // Use the existing AI + donation identifier matching logic
-        const entityResult = await findEntityForSender(
+        let entityResult = await findEntityForSender(
           campaign.senderEmail || "",
           campaign.senderName || "",
           ctaLinks,
           campaign.subject || "",                              // arg 4: emailSubject
           campaign.emailContent || campaign.emailPreview || "" // arg 5: emailBody
         )
+
+        // Fallback: try CTA domain matching if no result yet
+        if (!entityResult && ctaLinks.length > 0) {
+          entityResult = await findEntityByCtaDomain(ctaLinks)
+          if (entityResult) {
+            console.log(`[v0] Auto-Assign Cron: Email Campaign ID ${campaign.id} - matched via CTA domain`)
+          }
+        }
 
         if (entityResult && entityResult.entityId) {
           // Found a match! Assign it
@@ -148,10 +156,18 @@ export async function GET(request: Request) {
         }
 
         // Use findEntityForPhone for SMS (checks donation identifiers + phone number mappings)
-        const entityResult = await findEntityForPhone(
+        let entityResult = await findEntityForPhone(
           sms.phoneNumber || "", // Correct field name for sender phone
           ctaLinks
         )
+
+        // Fallback: try CTA domain matching if no result yet
+        if (!entityResult && ctaLinks.length > 0) {
+          entityResult = await findEntityByCtaDomain(ctaLinks)
+          if (entityResult) {
+            console.log(`[v0] Auto-Assign Cron: SMS ID ${sms.id} - matched via CTA domain`)
+          }
+        }
 
         if (entityResult && entityResult.entityId) {
           // Found a match! Assign it

@@ -174,6 +174,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
 
   const [entityMappings, setEntityMappings] = useState<EntityMapping[]>([])
   const [newMappingInput, setNewMappingInput] = useState("")
+  const [newCtaDomainInput, setNewCtaDomainInput] = useState("")
   const [loadingMappings, setLoadingMappings] = useState(false)
 
   // Assign Dialog state
@@ -2052,14 +2053,65 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                   <div>
                     <Label className="text-base font-semibold">Email & SMS Mappings</Label>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Emails, domains, or SMS short codes will automatically be assigned to this entity
+                      Emails, domains, SMS short codes, or CTA domains will automatically be assigned to this entity
                     </p>
                   </div>
 
-                  {/* Add new mapping */}
+                  {/* CTA Domains sub-section */}
+                  <div className="space-y-1">
+                    <Label className="text-sm font-normal">CTA Domains</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="e.g., fundconservatives.org or https://go.fundconservatives.org/..."
+                        value={newCtaDomainInput}
+                        onChange={(e) => setNewCtaDomainInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            if (!newCtaDomainInput.trim()) return
+                            // Wrap bare domains in a protocol so addEntityMapping detects it as a URL
+                            const val = newCtaDomainInput.trim()
+                            const normalized = val.includes("://") ? val : `https://${val}`
+                            setNewMappingInput(normalized)
+                            setTimeout(() => {
+                              handleAddMapping()
+                              setNewCtaDomainInput("")
+                              setNewMappingInput("")
+                            }, 0)
+                          }
+                        }}
+                      />
+                      <Button
+                        onClick={() => {
+                          if (!newCtaDomainInput.trim()) return
+                          const val = newCtaDomainInput.trim()
+                          const normalized = val.includes("://") ? val : `https://${val}`
+                          setNewMappingInput(normalized)
+                          setTimeout(() => {
+                            handleAddMapping()
+                            setNewCtaDomainInput("")
+                            setNewMappingInput("")
+                          }, 0)
+                        }}
+                        disabled={!newCtaDomainInput.trim()}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Any campaign with a link to this domain (e.g., <span className="font-mono">go.fundconservatives.org</span>) will be auto-assigned
+                    </p>
+                  </div>
+
+                  <div className="border-t pt-3">
+                    <Label className="text-sm font-normal">Email, Domain & Phone Mappings</Label>
+                    <p className="text-xs text-muted-foreground mt-1 mb-2">Sender email, domain, or SMS short code (e.g., info@example.com, example.com, 55404)</p>
+                  </div>
+
+                  {/* Add new email/domain/phone mapping */}
                   <div className="flex gap-2">
                     <Input
-                      placeholder="Email, domain, phone, or CTA URL (e.g., info@example.com, example.com, 55404, or https://go.example.org)"
+                      placeholder="e.g., info@example.com, example.com, or 55404"
                       value={newMappingInput}
                       onChange={(e) => setNewMappingInput(e.target.value)}
                       onKeyDown={(e) => {

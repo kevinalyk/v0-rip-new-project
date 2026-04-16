@@ -615,6 +615,9 @@ export async function GET(request: NextRequest) {
         isHidden: sms.isHidden,
         clientId: sms.clientId || null,
         source: sms.source || "seed",
+        shareCount: sms.shareCount || 0,
+        shareViewCount: sms.shareViewCount || 0,
+        viewCount: sms.viewCount || 0,
       }
     })
 

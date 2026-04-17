@@ -1159,8 +1159,19 @@ async function resolvePersonalClientId(emails: Array<{ to?: string }>): Promise<
       })
       if (client) return client.id
     } else {
-      // Entire domain maps to a single client
-      return record.clientId
+      // Entire domain maps to a single client — verify the stored id is a real Client row
+      if (!record.clientId) continue
+      const client = await prisma.client.findUnique({
+        where: { id: record.clientId },
+        select: { id: true },
+      })
+      if (client) return client.id
+      // If not found by id, try treating it as a slug (legacy data)
+      const clientBySlug = await prisma.client.findFirst({
+        where: { slug: { equals: record.clientId, mode: "insensitive" } },
+        select: { id: true },
+      })
+      if (clientBySlug) return clientBySlug.id
     }
   }
 

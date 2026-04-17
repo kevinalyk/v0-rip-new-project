@@ -15,12 +15,12 @@ export const metadata: Metadata = {
   description: "Inbox.GOP — A tool dedicated to helping Republicans and conservatives inbox effectively.",
   icons: {
     icon: [
-      { url: "/images/IconOnly_Transparent_NoBuffer.png", type: "image/png" },
+      { url: "/images/IconOnly_Transparent_NoBuffer.png", sizes: "any", type: "image/png" },
+      { url: "/icon.png", sizes: "512x512", type: "image/png" },
     ],
-    shortcut: "/images/IconOnly_Transparent_NoBuffer.png",
-    apple: "/images/IconOnly_Transparent_NoBuffer.png",
+    shortcut: { url: "/images/IconOnly_Transparent_NoBuffer.png", type: "image/png" },
+    apple: { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
   },
-  generator: "v0.app",
 }
 
 export default function RootLayout({

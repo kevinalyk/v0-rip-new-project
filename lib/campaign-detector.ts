@@ -791,10 +791,30 @@ export async function scanForCompetitiveInsights(options: {
     const allEmailResults: Array<{ seedEmail: any; emails: Email[] }> = []
 
     // Build a map of seed email address → assigned client ID (for non-RIP seeds)
+    // assignedToClient may store a name ("Test Client"), slug ("test_client"), or real id —
+    // resolve it to the actual Client.id in all cases.
     const seedEmailToClientId = new Map<string, string>()
     for (const seed of otherClientSeedEmails) {
-      if (seed.assignedToClient) {
-        seedEmailToClientId.set(seed.email.toLowerCase(), seed.assignedToClient)
+      if (!seed.assignedToClient) continue
+      const raw = seed.assignedToClient
+
+      // 1. Try as a real id (cuid / nanoid format)
+      let resolved = await prisma.client.findUnique({ where: { id: raw }, select: { id: true } })
+
+      // 2. Try as a slug
+      if (!resolved) {
+        resolved = await prisma.client.findFirst({ where: { slug: { equals: raw, mode: "insensitive" } }, select: { id: true } })
+      }
+
+      // 3. Try as a name
+      if (!resolved) {
+        resolved = await prisma.client.findFirst({ where: { name: { equals: raw, mode: "insensitive" } }, select: { id: true } })
+      }
+
+      if (resolved) {
+        seedEmailToClientId.set(seed.email.toLowerCase(), resolved.id)
+      } else {
+        console.error(`[v0] seedEmailToClientId: could not resolve assignedToClient "${raw}" for seed ${seed.email} — skipping`)
       }
     }
 

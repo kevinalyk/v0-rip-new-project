@@ -1583,6 +1583,15 @@ export async function processCompetitiveInsights(
         // Only extract CTAs for genuinely new campaigns
         ctaLinks = emailContent ? await extractCTALinks(emailContent, seedEmailsList, sanitizedSubject) : []
 
+        // Guard: verify clientId is a real Client row before inserting to avoid FK violation
+        if (clientId) {
+          const clientExists = await prisma.client.findUnique({ where: { id: clientId }, select: { id: true } })
+          if (!clientExists) {
+            console.error(`[processCompetitiveInsights] clientId "${clientId}" not found in Client table — clearing to avoid FK violation`)
+            clientId = null
+          }
+        }
+
         await prisma.competitiveInsightCampaign.create({
           data: {
             senderEmail,

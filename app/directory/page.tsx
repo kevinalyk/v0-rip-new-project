@@ -24,7 +24,7 @@ export default async function PublicDirectoryPage() {
 
   return (
     <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
-      <CiDirectoryContent clientSlug={clientSlug} isPublic={true} />
+      <CiDirectoryContent clientSlug={clientSlug} isPublic={!clientSlug} />
     </AppLayout>
   )
 }

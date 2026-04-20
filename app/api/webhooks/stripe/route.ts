@@ -113,16 +113,38 @@ export async function POST(req: NextRequest) {
         const session = event.data.object
         console.log("[Stripe Webhook] Checkout completed:", session.id)
 
-        const clientId = session.client_reference_id || session.metadata?.clientId
+        const sessionClientId = session.client_reference_id || session.metadata?.clientId
         const plan = session.metadata?.plan as SubscriptionPlan
         const hasCompetitiveInsights = session.metadata?.hasCompetitiveInsights === "true"
         const subscriptionType = session.metadata?.subscriptionType // "plan", "ci", or "both"
 
-        if (!clientId) {
-          console.error("[Stripe Webhook] checkout.session.completed missing clientId — no client_reference_id or metadata.clientId", session.id)
+        // Fallback: resolve clientId via the customer's email if not set in session metadata
+        let resolvedClientId = sessionClientId
+        if (!resolvedClientId && session.customer) {
+          try {
+            const stripeCustomer = await stripe.customers.retrieve(session.customer as string)
+            const customerEmail = !stripeCustomer.deleted ? stripeCustomer.email : null
+            if (customerEmail) {
+              const user = await prisma.user.findFirst({
+                where: { email: { equals: customerEmail, mode: "insensitive" } },
+                select: { clientId: true },
+              })
+              if (user?.clientId) {
+                resolvedClientId = user.clientId
+                console.log("[Stripe Webhook] Resolved clientId via email fallback:", resolvedClientId, customerEmail)
+              }
+            }
+          } catch (err) {
+            console.error("[Stripe Webhook] Error resolving clientId by email in checkout.session.completed:", err)
+          }
         }
 
-        if (clientId && session.subscription) {
+        if (!resolvedClientId) {
+          console.error("[Stripe Webhook] checkout.session.completed — could not resolve clientId for session:", session.id)
+        }
+
+        if (resolvedClientId && session.subscription) {
+          const clientId = resolvedClientId
           const existingClient = await prisma.client.findUnique({
             where: { id: clientId },
             select: { stripeSubscriptionId: true, stripeCiSubscriptionId: true },
@@ -260,12 +282,39 @@ export async function POST(req: NextRequest) {
         console.log("[Stripe Webhook] Subscription created:", subscription.id)
 
         // Look up client by stripeCustomerId since checkout.session may not yet have set stripeSubscriptionId
-        const client = await prisma.client.findFirst({
+        let client = await prisma.client.findFirst({
           where: { stripeCustomerId: subscription.customer as string },
         })
 
+        // Fallback: if no client found by stripeCustomerId, look up the Stripe customer's email
+        // and match it against a User to find their client. This handles cases where
+        // checkout.session.completed had no client_reference_id or metadata.clientId.
         if (!client) {
-          console.log("[Stripe Webhook] No client found for customer:", subscription.customer, "— may be handled by checkout.session.completed")
+          try {
+            const stripeCustomer = await stripe.customers.retrieve(subscription.customer as string)
+            const customerEmail = !stripeCustomer.deleted ? stripeCustomer.email : null
+            if (customerEmail) {
+              const user = await prisma.user.findFirst({
+                where: { email: { equals: customerEmail, mode: "insensitive" } },
+                include: { client: true },
+              })
+              if (user?.client) {
+                client = user.client
+                // Stamp the stripeCustomerId now so future events can find this client
+                await prisma.client.update({
+                  where: { id: client.id },
+                  data: { stripeCustomerId: subscription.customer as string },
+                })
+                console.log("[Stripe Webhook] Resolved client via email fallback:", client.id, customerEmail)
+              }
+            }
+          } catch (err) {
+            console.error("[Stripe Webhook] Error resolving customer by email:", err)
+          }
+        }
+
+        if (!client) {
+          console.log("[Stripe Webhook] No client found for customer:", subscription.customer, "— skipping")
           break
         }
 

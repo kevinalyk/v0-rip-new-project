@@ -3075,10 +3075,37 @@ const downloadActBluePatterns = () => {
 
           {dkimAuditResults && (
             <div className="space-y-3">
-              <div className="flex gap-6 text-sm">
-                <div><span className="text-muted-foreground">Total emails scanned:</span> <strong>{dkimAuditResults.totalEmails.toLocaleString()}</strong></div>
-                <div><span className="text-muted-foreground">Unique selectors:</span> <strong>{dkimAuditResults.uniqueSelectors}</strong></div>
-                <div><span className="text-muted-foreground">Unmapped:</span> <strong className={dkimAuditResults.unmappedCount > 0 ? "text-amber-500" : ""}>{dkimAuditResults.unmappedCount}</strong></div>
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex gap-6 text-sm">
+                  <div><span className="text-muted-foreground">Total emails scanned:</span> <strong>{dkimAuditResults.totalEmails.toLocaleString()}</strong></div>
+                  <div><span className="text-muted-foreground">Unique selectors:</span> <strong>{dkimAuditResults.uniqueSelectors}</strong></div>
+                  <div><span className="text-muted-foreground">Unmapped:</span> <strong className={dkimAuditResults.unmappedCount > 0 ? "text-amber-500" : ""}>{dkimAuditResults.unmappedCount}</strong></div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const rows = [
+                      ["Selector (s=)", "Count", "Percentage", "Mapped To"],
+                      ...dkimAuditResults.results.map((r) => [
+                        r.selector,
+                        r.count,
+                        `${r.percentage}%`,
+                        r.mappedTo ?? "",
+                      ]),
+                    ]
+                    const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n")
+                    const blob = new Blob([csv], { type: "text/csv" })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement("a")
+                    a.href = url
+                    a.download = `dkim-selector-audit-${new Date().toISOString().slice(0, 10)}.csv`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  }}
+                >
+                  Export CSV
+                </Button>
               </div>
 
               <div className="border rounded-md divide-y">

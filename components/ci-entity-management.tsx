@@ -784,6 +784,37 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
     }
   }
 
+  const handleAddCtaMapping = async () => {
+    const val = newCtaDomainInput.trim()
+    if (!val || !editingEntityId) return
+
+    const normalized = val.includes("://") ? val : `https://${val}`
+
+    try {
+      const response = await fetch("/api/ci-entities/mappings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entityId: editingEntityId,
+          emailOrDomain: normalized,
+        }),
+      })
+
+      if (response.ok) {
+        setNewCtaDomainInput("")
+        fetchEntityMappings(editingEntityId)
+        fetchData()
+        toast.success("CTA domain added successfully!")
+      } else {
+        const data = await response.json()
+        toast.error(data.error || "Failed to add CTA domain")
+      }
+    } catch (error) {
+      console.error("Error adding CTA domain:", error)
+      toast.error("Failed to add CTA domain")
+    }
+  }
+
   const handleRemoveMapping = async (mappingId: string) => {
     if (!editingEntityId) return
 
@@ -2068,31 +2099,12 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             e.preventDefault()
-                            if (!newCtaDomainInput.trim()) return
-                            // Wrap bare domains in a protocol so addEntityMapping detects it as a URL
-                            const val = newCtaDomainInput.trim()
-                            const normalized = val.includes("://") ? val : `https://${val}`
-                            setNewMappingInput(normalized)
-                            setTimeout(() => {
-                              handleAddMapping()
-                              setNewCtaDomainInput("")
-                              setNewMappingInput("")
-                            }, 0)
+                            handleAddCtaMapping()
                           }
                         }}
                       />
                       <Button
-                        onClick={() => {
-                          if (!newCtaDomainInput.trim()) return
-                          const val = newCtaDomainInput.trim()
-                          const normalized = val.includes("://") ? val : `https://${val}`
-                          setNewMappingInput(normalized)
-                          setTimeout(() => {
-                            handleAddMapping()
-                            setNewCtaDomainInput("")
-                            setNewMappingInput("")
-                          }, 0)
-                        }}
+                        onClick={handleAddCtaMapping}
                         disabled={!newCtaDomainInput.trim()}
                       >
                         <Plus className="h-4 w-4" />

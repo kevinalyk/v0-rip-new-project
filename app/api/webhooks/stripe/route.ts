@@ -113,16 +113,38 @@ export async function POST(req: NextRequest) {
         const session = event.data.object
         console.log("[Stripe Webhook] Checkout completed:", session.id)
 
-        const clientId = session.client_reference_id || session.metadata?.clientId
+        const sessionClientId = session.client_reference_id || session.metadata?.clientId
         const plan = session.metadata?.plan as SubscriptionPlan
         const hasCompetitiveInsights = session.metadata?.hasCompetitiveInsights === "true"
         const subscriptionType = session.metadata?.subscriptionType // "plan", "ci", or "both"
 
-        if (!clientId) {
-          console.error("[Stripe Webhook] checkout.session.completed missing clientId — no client_reference_id or metadata.clientId", session.id)
+        // Fallback: resolve clientId via the customer's email if not set in session metadata
+        let resolvedClientId = sessionClientId
+        if (!resolvedClientId && session.customer) {
+          try {
+            const stripeCustomer = await stripe.customers.retrieve(session.customer as string)
+            const customerEmail = !stripeCustomer.deleted ? stripeCustomer.email : null
+            if (customerEmail) {
+              const user = await prisma.user.findFirst({
+                where: { email: { equals: customerEmail, mode: "insensitive" } },
+                select: { clientId: true },
+              })
+              if (user?.clientId) {
+                resolvedClientId = user.clientId
+                console.log("[Stripe Webhook] Resolved clientId via email fallback:", resolvedClientId, customerEmail)
+              }
+            }
+          } catch (err) {
+            console.error("[Stripe Webhook] Error resolving clientId by email in checkout.session.completed:", err)
+          }
         }
 
-        if (clientId && session.subscription) {
+        if (!resolvedClientId) {
+          console.error("[Stripe Webhook] checkout.session.completed — could not resolve clientId for session:", session.id)
+        }
+
+        if (resolvedClientId && session.subscription) {
+          const clientId = resolvedClientId
           const existingClient = await prisma.client.findUnique({
             where: { id: clientId },
             select: { stripeSubscriptionId: true, stripeCiSubscriptionId: true },
@@ -213,7 +235,9 @@ export async function POST(req: NextRequest) {
             } else if (productName?.includes("Additional User Seats")) {
               additionalUserSeats = item.quantity || 0
               updateData.stripeUserSeatPriceId = item.price.id
-              console.log("[Stripe Webhook] Found additional user seats:", additionalUserSeats)
+              updateData.stripeUserSeatsItemId = item.id
+              updateData.paidUserSeats = additionalUserSeats
+              console.log("[Stripe Webhook] Found additional user seats:", additionalUserSeats, "item:", item.id)
             }
           }
 
@@ -260,12 +284,39 @@ export async function POST(req: NextRequest) {
         console.log("[Stripe Webhook] Subscription created:", subscription.id)
 
         // Look up client by stripeCustomerId since checkout.session may not yet have set stripeSubscriptionId
-        const client = await prisma.client.findFirst({
+        let client = await prisma.client.findFirst({
           where: { stripeCustomerId: subscription.customer as string },
         })
 
+        // Fallback: if no client found by stripeCustomerId, look up the Stripe customer's email
+        // and match it against a User to find their client. This handles cases where
+        // checkout.session.completed had no client_reference_id or metadata.clientId.
         if (!client) {
-          console.log("[Stripe Webhook] No client found for customer:", subscription.customer, "— may be handled by checkout.session.completed")
+          try {
+            const stripeCustomer = await stripe.customers.retrieve(subscription.customer as string)
+            const customerEmail = !stripeCustomer.deleted ? stripeCustomer.email : null
+            if (customerEmail) {
+              const user = await prisma.user.findFirst({
+                where: { email: { equals: customerEmail, mode: "insensitive" } },
+                include: { client: true },
+              })
+              if (user?.client) {
+                client = user.client
+                // Stamp the stripeCustomerId now so future events can find this client
+                await prisma.client.update({
+                  where: { id: client.id },
+                  data: { stripeCustomerId: subscription.customer as string },
+                })
+                console.log("[Stripe Webhook] Resolved client via email fallback:", client.id, customerEmail)
+              }
+            }
+          } catch (err) {
+            console.error("[Stripe Webhook] Error resolving customer by email:", err)
+          }
+        }
+
+        if (!client) {
+          console.log("[Stripe Webhook] No client found for customer:", subscription.customer, "— skipping")
           break
         }
 
@@ -325,6 +376,8 @@ export async function POST(req: NextRequest) {
           } else if (productName?.includes("Additional User Seats")) {
             additionalUserSeats = item.quantity || 0
             updateData.stripeUserSeatPriceId = item.price.id
+            updateData.stripeUserSeatsItemId = item.id
+            updateData.paidUserSeats = additionalUserSeats
           }
         }
 
@@ -342,6 +395,9 @@ export async function POST(req: NextRequest) {
         } else if (hasPlanItem && !hasCiItem) {
           updateData.stripeSubscriptionId = subscription.id
         }
+
+        updateData.cancelAtPeriodEnd = false
+        updateData.scheduledDowngradePlan = null
 
         if (updateData.subscriptionPlan) {
           updateData.userSeatsIncluded = getUserSeatsIncluded(updateData.subscriptionPlan)
@@ -469,7 +525,9 @@ export async function POST(req: NextRequest) {
             } else if (productName?.includes("Additional User Seats")) {
               additionalUserSeats = item.quantity || 0
               updateData.stripeUserSeatPriceId = item.price.id
-              console.log("[Stripe Webhook] Updated additional user seats:", additionalUserSeats)
+              updateData.stripeUserSeatsItemId = item.id
+              updateData.paidUserSeats = additionalUserSeats
+              console.log("[Stripe Webhook] Updated additional user seats:", additionalUserSeats, "item:", item.id)
             }
           }
 
@@ -595,6 +653,69 @@ export async function POST(req: NextRequest) {
           })
         }
 
+        break
+      }
+
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object
+        // Only handle subscription renewals (not the first invoice which checkout.session handles)
+        if (invoice.billing_reason !== "subscription_cycle" && invoice.billing_reason !== "subscription_update") break
+        if (!invoice.subscription) break
+
+        console.log("[Stripe Webhook] Invoice paid for subscription:", invoice.subscription)
+
+        const client = await prisma.client.findFirst({
+          where: {
+            OR: [
+              { stripeSubscriptionId: invoice.subscription as string },
+              { stripeCiSubscriptionId: invoice.subscription as string },
+            ],
+          },
+        })
+
+        if (!client) {
+          console.log("[Stripe Webhook] invoice.payment_succeeded — no client found for subscription:", invoice.subscription)
+          break
+        }
+
+        const fullSubscription = await stripe.subscriptions.retrieve(invoice.subscription as string)
+        const renewDate = new Date(fullSubscription.current_period_end * 1000)
+        const periodStart = new Date(fullSubscription.current_period_start * 1000)
+
+        await prisma.client.update({
+          where: { id: client.id },
+          data: {
+            subscriptionStatus: "active",
+            subscriptionRenewDate: renewDate,
+            lastUsageReset: periodStart,
+            emailVolumeUsed: 0,
+            cancelAtPeriodEnd: fullSubscription.cancel_at_period_end || false,
+          },
+        })
+        console.log("[Stripe Webhook] Renewed subscription for client:", client.id, "next renewal:", renewDate)
+        break
+      }
+
+      case "invoice.payment_failed": {
+        const invoice = event.data.object
+        if (!invoice.subscription) break
+
+        const client = await prisma.client.findFirst({
+          where: {
+            OR: [
+              { stripeSubscriptionId: invoice.subscription as string },
+              { stripeCiSubscriptionId: invoice.subscription as string },
+            ],
+          },
+        })
+
+        if (client) {
+          await prisma.client.update({
+            where: { id: client.id },
+            data: { subscriptionStatus: "past_due" },
+          })
+          console.log("[Stripe Webhook] Marked client as past_due:", client.id)
+        }
         break
       }
 

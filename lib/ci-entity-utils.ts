@@ -256,31 +256,19 @@ export async function findEntityForPhone(phoneNumber: string, ctaLinks?: any): P
 }
 
 /**
- * Extract the root domain (e.g., "fundconservatives.org") from a URL,
- * stripping any subdomain prefix like "go.", "www.", "e.", "secure.", etc.
+ * Extract the exact hostname from a URL (e.g., "support.johnkennedy.com").
+ * No subdomain stripping — what you store is what gets matched.
  */
 export function extractRootDomain(url: string): string | null {
   try {
-    const hostname = new URL(url).hostname.toLowerCase()
-    const parts = hostname.split(".")
-    // Handle known two-part TLDs like .co.uk, .com.au, etc.
-    const twoPartTlds = new Set(["co.uk", "com.au", "co.nz", "org.uk", "net.au"])
-    if (parts.length >= 3) {
-      const lastTwo = parts.slice(-2).join(".")
-      if (twoPartTlds.has(lastTwo)) {
-        return parts.slice(-3).join(".")
-      }
-    }
-    // Default: last two parts (handles .com, .org, .net, etc.)
-    return parts.slice(-2).join(".")
+    return new URL(url).hostname.toLowerCase()
   } catch {
     return null
   }
 }
 
 /**
- * Find entity by matching root domains from CTA links against ctaDomain mappings.
- * Strips subdomains so "go.fundconservatives.org" matches "fundconservatives.org".
+ * Find entity by matching exact hostnames from CTA links against ctaDomain mappings.
  */
 export async function findEntityByCtaDomain(ctaLinks: any): Promise<EntityAssignment> {
   try {

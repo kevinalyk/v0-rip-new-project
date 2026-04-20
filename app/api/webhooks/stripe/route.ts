@@ -235,7 +235,9 @@ export async function POST(req: NextRequest) {
             } else if (productName?.includes("Additional User Seats")) {
               additionalUserSeats = item.quantity || 0
               updateData.stripeUserSeatPriceId = item.price.id
-              console.log("[Stripe Webhook] Found additional user seats:", additionalUserSeats)
+              updateData.stripeUserSeatsItemId = item.id
+              updateData.paidUserSeats = additionalUserSeats
+              console.log("[Stripe Webhook] Found additional user seats:", additionalUserSeats, "item:", item.id)
             }
           }
 
@@ -374,6 +376,8 @@ export async function POST(req: NextRequest) {
           } else if (productName?.includes("Additional User Seats")) {
             additionalUserSeats = item.quantity || 0
             updateData.stripeUserSeatPriceId = item.price.id
+            updateData.stripeUserSeatsItemId = item.id
+            updateData.paidUserSeats = additionalUserSeats
           }
         }
 
@@ -391,6 +395,9 @@ export async function POST(req: NextRequest) {
         } else if (hasPlanItem && !hasCiItem) {
           updateData.stripeSubscriptionId = subscription.id
         }
+
+        updateData.cancelAtPeriodEnd = false
+        updateData.scheduledDowngradePlan = null
 
         if (updateData.subscriptionPlan) {
           updateData.userSeatsIncluded = getUserSeatsIncluded(updateData.subscriptionPlan)
@@ -518,7 +525,9 @@ export async function POST(req: NextRequest) {
             } else if (productName?.includes("Additional User Seats")) {
               additionalUserSeats = item.quantity || 0
               updateData.stripeUserSeatPriceId = item.price.id
-              console.log("[Stripe Webhook] Updated additional user seats:", additionalUserSeats)
+              updateData.stripeUserSeatsItemId = item.id
+              updateData.paidUserSeats = additionalUserSeats
+              console.log("[Stripe Webhook] Updated additional user seats:", additionalUserSeats, "item:", item.id)
             }
           }
 
@@ -644,6 +653,69 @@ export async function POST(req: NextRequest) {
           })
         }
 
+        break
+      }
+
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object
+        // Only handle subscription renewals (not the first invoice which checkout.session handles)
+        if (invoice.billing_reason !== "subscription_cycle" && invoice.billing_reason !== "subscription_update") break
+        if (!invoice.subscription) break
+
+        console.log("[Stripe Webhook] Invoice paid for subscription:", invoice.subscription)
+
+        const client = await prisma.client.findFirst({
+          where: {
+            OR: [
+              { stripeSubscriptionId: invoice.subscription as string },
+              { stripeCiSubscriptionId: invoice.subscription as string },
+            ],
+          },
+        })
+
+        if (!client) {
+          console.log("[Stripe Webhook] invoice.payment_succeeded — no client found for subscription:", invoice.subscription)
+          break
+        }
+
+        const fullSubscription = await stripe.subscriptions.retrieve(invoice.subscription as string)
+        const renewDate = new Date(fullSubscription.current_period_end * 1000)
+        const periodStart = new Date(fullSubscription.current_period_start * 1000)
+
+        await prisma.client.update({
+          where: { id: client.id },
+          data: {
+            subscriptionStatus: "active",
+            subscriptionRenewDate: renewDate,
+            lastUsageReset: periodStart,
+            emailVolumeUsed: 0,
+            cancelAtPeriodEnd: fullSubscription.cancel_at_period_end || false,
+          },
+        })
+        console.log("[Stripe Webhook] Renewed subscription for client:", client.id, "next renewal:", renewDate)
+        break
+      }
+
+      case "invoice.payment_failed": {
+        const invoice = event.data.object
+        if (!invoice.subscription) break
+
+        const client = await prisma.client.findFirst({
+          where: {
+            OR: [
+              { stripeSubscriptionId: invoice.subscription as string },
+              { stripeCiSubscriptionId: invoice.subscription as string },
+            ],
+          },
+        })
+
+        if (client) {
+          await prisma.client.update({
+            where: { id: client.id },
+            data: { subscriptionStatus: "past_due" },
+          })
+          console.log("[Stripe Webhook] Marked client as past_due:", client.id)
+        }
         break
       }
 

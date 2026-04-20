@@ -3055,12 +3055,12 @@ const downloadActBluePatterns = () => {
         </CardContent>
       </Card>
 
-      {/* DKIM Selector Audit */}
+      {/* Sending IP Audit */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">DKIM Selector Audit</CardTitle>
+          <CardTitle className="text-base">Sending IP Audit</CardTitle>
           <CardDescription>
-            Scan all emails for unique DKIM <code className="text-xs bg-muted px-1 py-0.5 rounded">s=</code> selector values and their counts. Use this to discover unknown selectors and add them to the Sender Providers mapping table.
+            Scan all emails with raw headers and count unique sending IPs (from <code className="text-xs bg-muted px-1 py-0.5 rounded">Received-SPF</code> / <code className="text-xs bg-muted px-1 py-0.5 rounded">Authentication-Results</code>). Use this to identify which ESPs are being used.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -3077,29 +3077,31 @@ const downloadActBluePatterns = () => {
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex gap-6 text-sm">
-                  <div><span className="text-muted-foreground">Total emails scanned:</span> <strong>{dkimAuditResults.totalEmails.toLocaleString()}</strong></div>
-                  <div><span className="text-muted-foreground">Unique selectors:</span> <strong>{dkimAuditResults.uniqueSelectors}</strong></div>
-                  <div><span className="text-muted-foreground">Unmapped:</span> <strong className={dkimAuditResults.unmappedCount > 0 ? "text-amber-500" : ""}>{dkimAuditResults.unmappedCount}</strong></div>
+                  <div><span className="text-muted-foreground">Emails scanned:</span> <strong>{dkimAuditResults.totalEmails.toLocaleString()}</strong></div>
+                  <div><span className="text-muted-foreground">With IP:</span> <strong>{(dkimAuditResults.totalWithIp ?? dkimAuditResults.totalEmails).toLocaleString()}</strong></div>
+                  <div><span className="text-muted-foreground">Unique IPs:</span> <strong>{dkimAuditResults.uniqueIps ?? dkimAuditResults.uniqueSelectors}</strong></div>
+                  {(dkimAuditResults.noIpCount ?? 0) > 0 && (
+                    <div><span className="text-muted-foreground">No IP found:</span> <strong className="text-amber-500">{dkimAuditResults.noIpCount}</strong></div>
+                  )}
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => {
                     const rows = [
-                      ["Selector (s=)", "Count", "Percentage", "Mapped To"],
-                      ...dkimAuditResults.results.map((r) => [
-                        r.selector,
+                      ["Sending IP", "Count", "Percentage of Total"],
+                      ...dkimAuditResults.results.map((r: any) => [
+                        r.ip ?? r.selector,
                         r.count,
                         `${r.percentage}%`,
-                        r.mappedTo ?? "",
                       ]),
                     ]
-                    const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n")
+                    const csv = rows.map((r) => r.map((v: any) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n")
                     const blob = new Blob([csv], { type: "text/csv" })
                     const url = URL.createObjectURL(blob)
                     const a = document.createElement("a")
                     a.href = url
-                    a.download = `dkim-selector-audit-${new Date().toISOString().slice(0, 10)}.csv`
+                    a.download = `sending-ip-audit-${new Date().toISOString().slice(0, 10)}.csv`
                     a.click()
                     URL.revokeObjectURL(url)
                   }}
@@ -3109,47 +3111,16 @@ const downloadActBluePatterns = () => {
               </div>
 
               <div className="border rounded-md divide-y">
-                {/* Header row */}
-                <div className="grid grid-cols-[1fr_80px_80px_1fr_120px] gap-3 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
-                  <span>Selector (s=)</span>
+                <div className="grid grid-cols-[1fr_100px_80px] gap-3 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
+                  <span>Sending IP</span>
                   <span className="text-right">Count</span>
                   <span className="text-right">%</span>
-                  <span>Mapped to</span>
-                  <span></span>
                 </div>
-                {dkimAuditResults.results.map((r) => (
-                  <div key={r.selector} className="grid grid-cols-[1fr_80px_80px_1fr_120px] gap-3 px-3 py-2 items-center text-sm">
-                    <span className="font-mono text-xs">{r.selector}</span>
+                {dkimAuditResults.results.map((r: any) => (
+                  <div key={r.ip ?? r.selector} className="grid grid-cols-[1fr_100px_80px] gap-3 px-3 py-2 items-center text-sm">
+                    <span className="font-mono text-xs">{r.ip ?? r.selector}</span>
                     <span className="text-right tabular-nums">{r.count.toLocaleString()}</span>
                     <span className="text-right tabular-nums text-muted-foreground">{r.percentage}%</span>
-                    {r.mappedTo ? (
-                      <span className="text-green-500 text-xs">{r.mappedTo}</span>
-                    ) : (
-                      <Input
-                        className="h-7 text-xs"
-                        placeholder="Provider name..."
-                        value={dkimNewName[r.selector] ?? ""}
-                        onChange={(e) =>
-                          setDkimNewName((prev) => ({ ...prev, [r.selector]: e.target.value }))
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleAddDkimMapping(r.selector)
-                        }}
-                      />
-                    )}
-                    {r.mappedTo ? (
-                      <span className="text-xs text-muted-foreground text-right">Mapped</span>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs"
-                        disabled={addingSelector === r.selector || !dkimNewName[r.selector]?.trim()}
-                        onClick={() => handleAddDkimMapping(r.selector)}
-                      >
-                        {addingSelector === r.selector ? <Loader2 size={12} className="animate-spin" /> : "Add Mapping"}
-                      </Button>
-                    )}
                   </div>
                 ))}
               </div>

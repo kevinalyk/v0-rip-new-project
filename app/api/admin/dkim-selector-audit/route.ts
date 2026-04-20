@@ -2,17 +2,22 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 
-// Parse every DKIM-Signature block from raw headers and return the s= selector values.
-// Headers can be folded (continuation lines start with whitespace).
-function extractDkimSelectors(rawHeaders: string): string[] {
-  const selectors: string[] = []
-  const dkimRegex = /DKIM-Signature:[^\n]*(?:\n[ \t][^\n]*)*/gi
-  let match: RegExpExecArray | null
-  while ((match = dkimRegex.exec(rawHeaders)) !== null) {
-    const sMatch = /\bs=([^;\s]+)/i.exec(match[0])
-    if (sMatch) selectors.push(sMatch[1].trim().toLowerCase())
-  }
-  return selectors
+// Extract the sending IP from Received-SPF or Authentication-Results headers.
+// Prefers client-ip= (Received-SPF), falls back to sender IP in Authentication-Results.
+function extractSendingIp(rawHeaders: string): string | null {
+  // Received-SPF: pass (... client-ip=1.2.3.4; ...)
+  const spfMatch = /client-ip=([\d.]+)/i.exec(rawHeaders)
+  if (spfMatch) return spfMatch[1]
+
+  // Authentication-Results: ... sender IP is 1.2.3.4
+  const authMatch = /sender IP is ([\d.]+)/i.exec(rawHeaders)
+  if (authMatch) return authMatch[1]
+
+  // Received: from hostname ([1.2.3.4]) — first external hop
+  const receivedMatch = /Received: from [^\n]*\[([\d.]+)\]/i.exec(rawHeaders)
+  if (receivedMatch) return receivedMatch[1]
+
+  return null
 }
 
 export async function GET(request: NextRequest) {
@@ -21,44 +26,42 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  // Pull only the rawHeaders field for all non-deleted emails that have headers stored
+  // Pull rawHeaders for all non-deleted emails that have headers stored
   const campaigns = await prisma.competitiveInsightCampaign.findMany({
     where: { rawHeaders: { not: null }, isDeleted: false },
     select: { rawHeaders: true },
   })
 
-  // Count occurrences of each unique s= selector value
-  const selectorCounts = new Map<string, number>()
+  // Count occurrences of each unique sending IP
+  const ipCounts = new Map<string, number>()
+  let noIpCount = 0
+
   for (const campaign of campaigns) {
     if (!campaign.rawHeaders) continue
-    for (const selector of extractDkimSelectors(campaign.rawHeaders)) {
-      selectorCounts.set(selector, (selectorCounts.get(selector) ?? 0) + 1)
+    const ip = extractSendingIp(campaign.rawHeaders)
+    if (ip) {
+      ipCounts.set(ip, (ipCounts.get(ip) ?? 0) + 1)
+    } else {
+      noIpCount++
     }
   }
 
   const totalEmails = campaigns.length
+  const totalWithIp = totalEmails - noIpCount
 
-  // Check which selectors are already mapped in DkimSenderMapping
-  const existingMappings = await prisma.dkimSenderMapping.findMany({
-    select: { selectorValue: true, friendlyName: true },
-  })
-  const mappingLookup = new Map(
-    existingMappings.map((m) => [m.selectorValue.toLowerCase(), m.friendlyName])
-  )
-
-  const results = Array.from(selectorCounts.entries())
+  const results = Array.from(ipCounts.entries())
     .sort((a, b) => b[1] - a[1])
-    .map(([selector, count]) => ({
-      selector,
+    .map(([ip, count]) => ({
+      ip,
       count,
       percentage: totalEmails > 0 ? Math.round((count / totalEmails) * 1000) / 10 : 0,
-      mappedTo: mappingLookup.get(selector) ?? null,
     }))
 
   return NextResponse.json({
     results,
     totalEmails,
-    uniqueSelectors: results.length,
-    unmappedCount: results.filter((r) => !r.mappedTo).length,
+    totalWithIp,
+    uniqueIps: results.length,
+    noIpCount,
   })
 }

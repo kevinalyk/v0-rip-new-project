@@ -300,7 +300,8 @@ model CompetitiveInsightCampaign {
   donationPlatform    String?  // Detected donation platform: "winred" | "actblue" | "anedot" | "psq"
   rawHeaders          String?  @db.Text // Raw email headers for compliance checking
   dkimSelector        String?  // Raw parsed .s= value from DKIM-Signature header (e.g. "gears", "s1")
-  sendingProvider     String?  // Resolved friendly name from DkimSenderMapping (e.g. "Message Gears")
+  sendingIp           String?  // Parsed sending IP from rawHeaders (client-ip= / Received-SPF)
+  sendingProvider     String?  // Resolved friendly name from IpSenderMapping (e.g. "MessageGears")
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -320,6 +321,7 @@ model CompetitiveInsightCampaign {
   @@index([isDeleted])
   @@index([donationPlatform])
   @@index([dkimSelector])
+  @@index([sendingIp])
   @@index([sendingProvider])
 }
 
@@ -653,4 +655,22 @@ model DkimProviderMapping {
   updatedAt    DateTime @updatedAt
 
   @@index([selector])
+}
+
+model IpSenderMapping {
+  id             String    @id @default(cuid())
+  ip             String    @unique // The exact sending IP (e.g. "63.143.59.236")
+  cidr           String?   // CIDR block from RDAP (e.g. "63.143.59.128/25")
+  orgName        String?   // Raw org name from ARIN RDAP (e.g. "MessageGears, LLC")
+  friendlyName   String?   // Human-readable override set by admin (e.g. "MessageGears")
+  reverseDns     String?   // PTR record (e.g. "mail.messagegears.net") — fallback for generic cloud IPs
+  rdapChecked    Boolean   @default(false) // Whether an RDAP lookup has been attempted
+  lastLookedUpAt DateTime? // When the last RDAP lookup ran
+  notes          String?   // Optional internal notes
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([orgName])
+  @@index([friendlyName])
+  @@index([rdapChecked])
 }

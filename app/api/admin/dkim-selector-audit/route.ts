@@ -1,24 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-
-// Extract the sending IP from Received-SPF or Authentication-Results headers.
-// Prefers client-ip= (Received-SPF), falls back to sender IP in Authentication-Results.
-function extractSendingIp(rawHeaders: string): string | null {
-  // Received-SPF: pass (... client-ip=1.2.3.4; ...)
-  const spfMatch = /client-ip=([\d.]+)/i.exec(rawHeaders)
-  if (spfMatch) return spfMatch[1]
-
-  // Authentication-Results: ... sender IP is 1.2.3.4
-  const authMatch = /sender IP is ([\d.]+)/i.exec(rawHeaders)
-  if (authMatch) return authMatch[1]
-
-  // Received: from hostname ([1.2.3.4]) — first external hop
-  const receivedMatch = /Received: from [^\n]*\[([\d.]+)\]/i.exec(rawHeaders)
-  if (receivedMatch) return receivedMatch[1]
-
-  return null
-}
+import { extractSendingIp } from "@/lib/ip-sender-utils"
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser(request)

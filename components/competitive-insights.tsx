@@ -2083,11 +2083,13 @@ export function CompetitiveInsights({
                               <Calendar className="h-4 w-4" />
                               {new Date(selectedCampaign.dateReceived).toLocaleDateString()}
                             </div>
+                            {/* Temporarily hidden — sendingProvider display
                             {selectedCampaign.type === "email" && selectedCampaign.sendingProvider && (
                               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <span>Sent by {selectedCampaign.sendingProvider}</span>
                               </div>
                             )}
+                            */}
                           </div>
                         </DialogDescription>
                       </div>

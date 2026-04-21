@@ -57,5 +57,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function DirectoryProfilePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  return <DirectoryProfileContent slug={slug} />
+  // Fetch data server-side so the initial HTML response contains the full profile
+  // content for crawlers and social media previews, not just a loading spinner.
+  const initialData = await getEntityBySlug(slug)
+  return <DirectoryProfileContent slug={slug} initialData={initialData} />
 }

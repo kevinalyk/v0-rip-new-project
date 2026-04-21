@@ -393,6 +393,8 @@ export default function NewsPageClient({ initialAnnouncements }: NewsPageClientP
             ))}
           </div>
         )}
+    </div>
+
       {/* Create / Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open && !saving) setDialogOpen(false) }}>
         <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">

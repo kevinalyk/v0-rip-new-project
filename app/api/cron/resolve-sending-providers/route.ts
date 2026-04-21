@@ -38,7 +38,7 @@ export async function GET(request: Request) {
         isDeleted: false,
       },
       select: { id: true, rawHeaders: true },
-      take: 2000, // process in batches to stay within time limit
+      take: 2000,
     })
 
     for (const campaign of unparsed) {

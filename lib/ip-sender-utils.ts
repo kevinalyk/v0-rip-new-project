@@ -1,21 +1,48 @@
 import { prisma } from "@/lib/prisma"
 
 /**
- * Extract the sending IP from raw email headers.
- * Priority: client-ip= (Received-SPF) → sender IP (Authentication-Results) → Received: from
+ * Returns true if the IP is a private/internal/loopback address that
+ * should never be used as a sending provider IP.
+ */
+function isPrivateIp(ip: string): boolean {
+  if (ip === "127.0.0.1") return true
+  const parts = ip.split(".").map(Number)
+  if (parts.length !== 4) return false
+  // 10.0.0.0/8
+  if (parts[0] === 10) return true
+  // 172.16.0.0/12
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true
+  // 192.168.0.0/16
+  if (parts[0] === 192 && parts[1] === 168) return true
+  // 127.0.0.0/8
+  if (parts[0] === 127) return true
+  return false
+}
+
+/**
+ * Extract the public sending IP from raw email headers.
+ * Priority: client-ip= (Received-SPF) → sender IP (Authentication-Results) →
+ *           first public IP in Received: from chain.
+ * Skips all private/internal IP ranges.
  */
 export function extractSendingIp(rawHeaders: string): string | null {
   // Received-SPF: pass (... client-ip=1.2.3.4; ...)
-  const spfMatch = /client-ip=([\d.]+)/i.exec(rawHeaders)
-  if (spfMatch) return spfMatch[1]
+  const spfMatches = [...rawHeaders.matchAll(/client-ip=([\d.]+)/gi)]
+  for (const m of spfMatches) {
+    if (!isPrivateIp(m[1])) return m[1]
+  }
 
   // Authentication-Results: ... sender IP is 1.2.3.4
-  const authMatch = /sender IP is ([\d.]+)/i.exec(rawHeaders)
-  if (authMatch) return authMatch[1]
+  const authMatches = [...rawHeaders.matchAll(/sender IP is ([\d.]+)/gi)]
+  for (const m of authMatches) {
+    if (!isPrivateIp(m[1])) return m[1]
+  }
 
-  // Received: from hostname ([1.2.3.4]) — first external hop
-  const receivedMatch = /Received: from [^\n]*\[([\d.]+)\]/i.exec(rawHeaders)
-  if (receivedMatch) return receivedMatch[1]
+  // Received: from hostname ([1.2.3.4]) — walk all hops, return first public IP
+  const receivedMatches = [...rawHeaders.matchAll(/Received:[^\n]*\[([\d.]+)\]/gi)]
+  for (const m of receivedMatches) {
+    if (!isPrivateIp(m[1])) return m[1]
+  }
 
   return null
 }

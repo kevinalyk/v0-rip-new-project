@@ -30,26 +30,48 @@ export async function GET(request: Request) {
       errors: 0,
     }
 
-    // ── Step 1: Parse sendingIp from rawHeaders for emails that don't have it yet ──
+    // ── Step 1: Parse sendingIp from rawHeaders ──
+    // Includes: (a) emails with no sendingIp yet, and (b) emails with a private/internal IP
+    // that was incorrectly assigned in a previous run (10.x.x.x, 127.x.x.x, 192.168.x.x, 172.16-31.x.x)
+    const PRIVATE_IP_PATTERN = /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/
     const unparsed = await prisma.competitiveInsightCampaign.findMany({
       where: {
         rawHeaders: { not: null },
-        sendingIp: null,
         isDeleted: false,
+        OR: [
+          { sendingIp: null },
+          // Re-process private IPs written by the old buggy regex
+          { sendingIp: { startsWith: "10." } },
+          { sendingIp: { startsWith: "127." } },
+          { sendingIp: { startsWith: "192.168." } },
+        ],
       },
-      select: { id: true, rawHeaders: true },
-      take: 2000, // process in batches to stay within time limit
+      select: { id: true, rawHeaders: true, sendingIp: true },
+      take: 2000,
     })
 
     for (const campaign of unparsed) {
       if (!campaign.rawHeaders) continue
       const ip = extractSendingIp(campaign.rawHeaders)
+      const isOldBadIp = campaign.sendingIp && PRIVATE_IP_PATTERN.test(campaign.sendingIp)
+
       if (ip) {
         await prisma.competitiveInsightCampaign.update({
           where: { id: campaign.id },
-          data: { sendingIp: ip },
+          data: {
+            sendingIp: ip,
+            // Clear the provider so Step 2 re-resolves it
+            sendingProvider: isOldBadIp ? null : undefined,
+          },
         })
         stats.ipParsed++
+      } else if (isOldBadIp) {
+        // No public IP found — clear both fields so it doesn't stay wrong
+        await prisma.competitiveInsightCampaign.update({
+          where: { id: campaign.id },
+          data: { sendingIp: null, sendingProvider: null },
+        })
+        stats.noIpFound++
       } else {
         stats.noIpFound++
       }

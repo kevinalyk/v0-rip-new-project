@@ -118,12 +118,13 @@ function prepareEmailHtml(html: string) {
   return `<head><base target="_blank">${noLinkStyle}</head>${html}`
 }
 
-export function DirectoryProfileContent({ slug }: { slug: string }) {
+export function DirectoryProfileContent({ slug, initialData }: { slug: string; initialData?: EntityData | null }) {
   const [clientSlug, setClientSlug] = useState<string>("")
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [authLoading, setAuthLoading] = useState(true)
-  const [data, setData] = useState<EntityData | null>(null)
-  const [loading, setLoading] = useState(true)
+  // If server pre-fetched the data, use it directly — no client fetch needed.
+  const [data, setData] = useState<EntityData | null>(initialData ?? null)
+  const [loading, setLoading] = useState(!initialData)
   const [notFound, setNotFound] = useState(false)
   const [selectedPreview, setSelectedPreview] = useState<PreviewItem | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -147,9 +148,9 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
     checkAuth()
   }, [])
 
-  // Fetch entity data — wait for auth so clientSlug is ready before rendering AppLayout
+  // Only fetch entity data on the client if it was not pre-fetched server-side.
   useEffect(() => {
-    if (authLoading) return
+    if (initialData || authLoading) return
     const fetchEntity = async () => {
       try {
         const res = await fetch(`/api/public/directory/${slug}`)
@@ -162,7 +163,7 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
       }
     }
     fetchEntity()
-  }, [authLoading, slug])
+  }, [authLoading, slug, initialData])
 
   const handlePreviewClick = async (id: string, type: "email" | "sms") => {
     if (!isAuthenticated) return
@@ -194,7 +195,9 @@ export function DirectoryProfileContent({ slug }: { slug: string }) {
     }
   }
 
-  if (authLoading || loading) {
+  // If data was server-rendered, skip the full-page loading spinner — auth
+  // check still runs in the background and hydrates interactive controls.
+  if ((authLoading && !initialData) || loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-[#dc2a28]" />

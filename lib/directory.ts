@@ -20,6 +20,10 @@ export async function getEntityBySlug(slug: string) {
         party: true,
         state: true,
         imageUrl: true,
+        bio: true,
+        office: true,
+        ballotpediaUrl: true,
+        donationIdentifiers: true,
         mappings: {
           select: {
             id: true,
@@ -63,6 +67,10 @@ export async function getEntityBySlug(slug: string) {
         party: entity.party,
         state: entity.state,
         imageUrl: entity.imageUrl ?? null,
+        bio: entity.bio ?? null,
+        office: entity.office ?? null,
+        ballotpediaUrl: entity.ballotpediaUrl ?? null,
+        donationIdentifiers: (entity.donationIdentifiers as Record<string, string[]> | null) ?? null,
         slug: nameToSlug(entity.name),
         mappings: entity.mappings,
         counts: {

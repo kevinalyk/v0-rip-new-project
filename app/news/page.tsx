@@ -49,7 +49,6 @@ export default async function NewsPage() {
 
   try {
     const rows = await prisma.announcement.findMany({
-      where: { NOT: { publishedAt: null } },
       orderBy: { publishedAt: "desc" },
       select: {
         id: true,

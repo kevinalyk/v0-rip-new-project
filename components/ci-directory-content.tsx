@@ -792,7 +792,13 @@ export function CiDirectoryContent({ clientSlug, isPublic = false, initialEntiti
                       router.push(`/directory/${nameToSlug(entity.name)}`)
                     }}
                   >
-                    <span className="font-medium text-sm">{entity.name}</span>
+                    <a
+                      href={`/directory/${nameToSlug(entity.name)}`}
+                      className="font-medium text-sm hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {entity.name}
+                    </a>
                     <span>
                       <Badge className={`${getTypeBadgeColor(entity.type)} text-xs`}>{formatType(entity.type)}</Badge>
                     </span>
@@ -815,6 +821,7 @@ export function CiDirectoryContent({ clientSlug, isPublic = false, initialEntiti
                         variant="ghost"
                         size="sm"
                         className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                        aria-label={`View ${entity.name} profile`}
                         onClick={(e) => {
                           e.stopPropagation()
                           router.push(`/directory/${nameToSlug(entity.name)}`)

@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import AppLayout from "@/components/app-layout"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, ArrowLeft, Facebook, Link2, Pencil, Trash2 } from "lucide-react"
@@ -38,7 +37,6 @@ export default function NewsPostClient({ slug, initialPost }: { slug: string; in
   const { toast } = useToast()
 
   const [userRole, setUserRole] = useState<string | null>(null)
-  const [clientSlug, setClientSlug] = useState<string>("")
   const [authLoading, setAuthLoading] = useState(true)
   // Seed with server-rendered data so the article body is in the initial HTML.
   const [post, setPost] = useState<Announcement | null>(initialPost ?? null)
@@ -54,7 +52,6 @@ export default function NewsPostClient({ slug, initialPost }: { slug: string; in
         if (res.ok) {
           const user = await res.json()
           setUserRole(user.role)
-          setClientSlug(user.clientId || "rip")
         }
         // Not authenticated — that's fine, news is public. Just leave userRole as null.
       } catch {
@@ -126,24 +123,22 @@ export default function NewsPostClient({ slug, initialPost }: { slug: string; in
 
   if (notFound) {
     return (
-      <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
-        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-          <p className="text-lg font-medium">Post not found.</p>
-          <Link href="/news">
-            <Button variant="outline" className="gap-2">
-              <ArrowLeft size={14} />
-              Back to News
-            </Button>
-          </Link>
-        </div>
-      </AppLayout>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <p className="text-lg font-medium">Post not found.</p>
+        <Link href="/news">
+          <Button variant="outline" className="gap-2">
+            <ArrowLeft size={14} />
+            Back to News
+          </Button>
+        </Link>
+      </div>
     )
   }
 
   if (!post) return null
 
   return (
-    <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
+    <>
       {/* Full-width image banner */}
       {post.imageUrl && (
         <div className="w-full h-[260px] overflow-hidden">
@@ -264,6 +259,6 @@ export default function NewsPostClient({ slug, initialPost }: { slug: string; in
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AppLayout>
+    </>
   )
 }

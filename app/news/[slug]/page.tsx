@@ -1,7 +1,10 @@
 export const dynamic = "force-dynamic"
 
 import type { Metadata } from "next"
+import { cookies } from "next/headers"
 import prisma from "@/lib/prisma"
+import { verifyToken } from "@/lib/auth"
+import AppLayout from "@/components/app-layout"
 import NewsPostClient from "./news-post-client"
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
@@ -57,6 +60,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function NewsPostPage({ params }: Props) {
+  // Resolve auth server-side so AppLayout and clientSlug are in the initial HTML.
+  let clientSlug = ""
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("auth_token")?.value
+    if (token) {
+      const payload = await verifyToken(token)
+      if (payload) clientSlug = (payload.clientSlug as string) || ""
+    }
+  } catch { /* unauthenticated visitor */ }
+
   // Pre-fetch the post server-side so the full article body is present in the
   // initial HTML — crawlers and social scrapers read real content, not a spinner.
   let initialPost: {
@@ -96,5 +110,9 @@ export default async function NewsPostPage({ params }: Props) {
     console.error("[NewsPostPage] failed to pre-fetch post:", err)
   }
 
-  return <NewsPostClient slug={params.slug} initialPost={initialPost} />
+  return (
+    <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
+      <NewsPostClient slug={params.slug} initialPost={initialPost} />
+    </AppLayout>
+  )
 }

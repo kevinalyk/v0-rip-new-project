@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import AppLayout from "@/components/app-layout"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -52,7 +51,6 @@ export default function NewsPageClient({ initialAnnouncements }: NewsPageClientP
   const { toast } = useToast()
 
   const [userRole, setUserRole] = useState<string | null>(null)
-  const [clientSlug, setClientSlug] = useState<string>("")
   const [authLoading, setAuthLoading] = useState(true)
   // Seed with server-rendered data so crawlers see real article cards immediately.
   const [announcements, setAnnouncements] = useState<Announcement[]>(initialAnnouncements)
@@ -84,7 +82,6 @@ export default function NewsPageClient({ initialAnnouncements }: NewsPageClientP
         if (res.ok) {
           const user = await res.json()
           setUserRole(user.role)
-          setClientSlug(user.clientId || "rip")
         }
       } catch {
         // Ignore — unauthenticated visitors can still read news
@@ -279,8 +276,8 @@ export default function NewsPageClient({ initialAnnouncements }: NewsPageClientP
   const isSuperAdmin = userRole === "super_admin"
 
   return (
-    <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
-      <div className="container mx-auto py-8 px-4 max-w-3xl">
+    <>
+    <div className="container mx-auto py-8 px-4 max-w-3xl">
 
         {/* Header */}
         <div className="flex items-center justify-between mb-10">
@@ -396,8 +393,6 @@ export default function NewsPageClient({ initialAnnouncements }: NewsPageClientP
             ))}
           </div>
         )}
-      </div>
-
       {/* Create / Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open && !saving) setDialogOpen(false) }}>
         <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
@@ -584,6 +579,6 @@ export default function NewsPageClient({ initialAnnouncements }: NewsPageClientP
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AppLayout>
+    </>
   )
 }

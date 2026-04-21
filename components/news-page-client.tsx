@@ -2,9 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
   DialogContent,
@@ -25,9 +23,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, Plus, Pencil, Trash2, Upload, X, Megaphone, ArrowRight, Bold, Italic, ImagePlus, List, Code2 } from "lucide-react"
+import { Loader2, Plus, Pencil, Trash2, Upload, X, Bold, Italic, ImagePlus, List, Code2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { format, differenceInDays } from "date-fns"
 
 interface Announcement {
   id: string
@@ -40,8 +37,6 @@ interface Announcement {
   updatedAt: string
 }
 
-const NEW_THRESHOLD_DAYS = 7
-
 interface NewsPageClientProps {
   initialAnnouncements: Announcement[]
 }
@@ -52,9 +47,7 @@ export default function NewsPageClient({ initialAnnouncements }: NewsPageClientP
 
   const [userRole, setUserRole] = useState<string | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
-  // Seed with server-rendered data so crawlers see real article cards immediately.
   const [announcements, setAnnouncements] = useState<Announcement[]>(initialAnnouncements)
-  const [loading, setLoading] = useState(false)
 
   // Create / edit dialog
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -95,14 +88,11 @@ export default function NewsPageClient({ initialAnnouncements }: NewsPageClientP
   // Re-fetch when auth resolves for admin users (to get unpublished drafts etc.)
   const fetchAnnouncements = useCallback(async (role: string | null) => {
     try {
-      setLoading(true)
       const url = role ? "/api/announcements" : "/api/announcements?public=1"
       const res = await fetch(url, { credentials: "include" })
       if (res.ok) setAnnouncements(await res.json())
     } catch {
       toast({ title: "Error", description: "Failed to load announcements", variant: "destructive" })
-    } finally {
-      setLoading(false)
     }
   }, [toast])
 
@@ -272,128 +262,21 @@ export default function NewsPageClient({ initialAnnouncements }: NewsPageClientP
     }
   }
 
-  const isNew = (dateStr: string) => differenceInDays(new Date(), new Date(dateStr)) < NEW_THRESHOLD_DAYS
   const isSuperAdmin = userRole === "super_admin"
 
+  // Admin-only: floating "New Post" button rendered after hydration.
+  // The article feed is server-rendered in page.tsx — this component only
+  // handles create/edit/delete dialogs so they don't block SSR.
   return (
     <>
-    <div className="container mx-auto py-8 px-4 max-w-3xl">
-
-        {/* Header */}
-        <div className="flex items-center justify-between mb-10">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <Megaphone size={22} className="text-[#dc2a28]" />
-              <h1 className="text-2xl font-bold tracking-tight">{"What's New"}</h1>
-            </div>
-            <p className="text-sm text-muted-foreground">Updates, improvements, and new features from the Inbox.GOP team</p>
-          </div>
-          {isSuperAdmin && (
-            <Button onClick={openCreate} className="bg-[#dc2a28] hover:bg-[#dc2a28]/90 text-white gap-2">
-              <Plus size={15} />
-              New Post
-            </Button>
-          )}
+      {isSuperAdmin && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <Button onClick={openCreate} className="bg-[#dc2a28] hover:bg-[#dc2a28]/90 text-white gap-2 shadow-lg">
+            <Plus size={15} />
+            New Post
+          </Button>
         </div>
-
-        {/* Feed */}
-        {loading ? (
-          <div className="flex justify-center py-24">
-            <Loader2 className="h-8 w-8 animate-spin text-[#dc2a28]" />
-          </div>
-        ) : announcements.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
-            <Megaphone size={40} className="text-muted-foreground/30" />
-            <p className="text-muted-foreground">No posts yet.</p>
-            {isSuperAdmin && (
-              <Button onClick={openCreate} variant="outline" size="sm" className="mt-2 gap-2">
-                <Plus size={13} />
-                Publish the first post
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {announcements.map((a, idx) => (
-              <article key={a.id} className="group rounded-xl border border-border bg-card overflow-hidden hover:border-[#dc2a28]/40 hover:shadow-md transition-all">
-
-                {/* Image banner */}
-                {a.imageUrl ? (
-                  <div className="relative w-full aspect-[16/6] overflow-hidden bg-muted">
-                    <img
-                      src={a.imageUrl}
-                      alt={a.title}
-                      className="w-full h-full object-cover"
-                    />
-                    {idx === 0 && isNew(a.publishedAt) && (
-                      <span className="absolute top-3 left-3 bg-[#dc2a28] text-white text-[11px] font-semibold px-2 py-0.5 rounded">
-                        New!
-                      </span>
-                    )}
-                    {isSuperAdmin && (
-                      <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button variant="secondary" size="icon" className="h-7 w-7" onClick={(e) => openEdit(a, e)}>
-                          <Pencil size={13} />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleteTarget(a) }}
-                        >
-                          <Trash2 size={13} />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="relative w-full bg-[#dc2a28]/10 border-b border-border px-6 py-5 flex items-center justify-between">
-                    {idx === 0 && isNew(a.publishedAt) && (
-                      <span className="bg-[#dc2a28] text-white text-[11px] font-semibold px-2 py-0.5 rounded">
-                        New!
-                      </span>
-                    )}
-                    {isSuperAdmin && (
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => openEdit(a, e)}>
-                          <Pencil size={13} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleteTarget(a) }}
-                        >
-                          <Trash2 size={13} />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Card body */}
-                <div className="px-5 py-4">
-                  <time dateTime={new Date(a.publishedAt).toISOString()} className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wide block">
-                    {format(new Date(a.publishedAt), "MMMM d, yyyy")}
-                  </time>
-                  <h2 className="text-lg font-bold leading-snug mb-2 group-hover:text-[#dc2a28] transition-colors text-balance">
-                    <a href={`/news/${a.slug}`} className="hover:underline">{a.title}</a>
-                  </h2>
-                  <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2 mb-4">
-                    {a.body.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()}
-                  </p>
-                  <Link href={`/news/${a.slug}`} aria-label={`Continue reading ${a.title}`}>
-                    <Button className="bg-[#dc2a28] hover:bg-[#dc2a28]/90 text-white gap-2 rounded-lg">
-                      Continue Reading
-                      <ArrowRight size={14} />
-                    </Button>
-                  </Link>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-    </div>
+      )}
 
       {/* Create / Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open && !saving) setDialogOpen(false) }}>

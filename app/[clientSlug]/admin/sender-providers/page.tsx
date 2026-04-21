@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Dialog,
   DialogContent,
@@ -28,14 +29,30 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Loader2, Plus, Pencil, Trash2, RefreshCw } from "lucide-react"
 import AppLayout from "@/components/app-layout"
 
-type Mapping = {
+// ── Types ──────────────────────────────────────────────────────────────────
+
+type DkimMapping = {
   id: string
   selectorValue: string
   friendlyName: string
   notes: string | null
   createdAt: string
-  updatedAt: string
 }
+
+type IpMapping = {
+  id: string
+  ip: string
+  cidr: string | null
+  orgName: string | null
+  friendlyName: string | null
+  reverseDns: string | null
+  rdapChecked: boolean
+  lastLookedUpAt: string | null
+  notes: string | null
+  createdAt: string
+}
+
+// ── Page ───────────────────────────────────────────────────────────────────
 
 export default function SenderProvidersPage() {
   const router = useRouter()
@@ -45,26 +62,38 @@ export default function SenderProvidersPage() {
 
   const [isLoading, setIsLoading] = useState(true)
   const [isAuthorized, setIsAuthorized] = useState(false)
-  const [mappings, setMappings] = useState<Mapping[]>([])
-  const [tableLoading, setTableLoading] = useState(true)
 
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [editTarget, setEditTarget] = useState<Mapping | null>(null)
-  const [selectorValue, setSelectorValue] = useState("")
-  const [friendlyName, setFriendlyName] = useState("")
-  const [notes, setNotes] = useState("")
-  const [saving, setSaving] = useState(false)
-
-  const [deleteTarget, setDeleteTarget] = useState<Mapping | null>(null)
+  // ── DKIM state ────────────────────────────────────────────────────────
+  const [dkimMappings, setDkimMappings] = useState<DkimMapping[]>([])
+  const [dkimTableLoading, setDkimTableLoading] = useState(true)
+  const [dkimDialogOpen, setDkimDialogOpen] = useState(false)
+  const [dkimEditTarget, setDkimEditTarget] = useState<DkimMapping | null>(null)
+  const [dkimSelectorValue, setDkimSelectorValue] = useState("")
+  const [dkimFriendlyName, setDkimFriendlyName] = useState("")
+  const [dkimNotes, setDkimNotes] = useState("")
+  const [dkimSaving, setDkimSaving] = useState(false)
+  const [dkimDeleteTarget, setDkimDeleteTarget] = useState<DkimMapping | null>(null)
   const [backfilling, setBackfilling] = useState(false)
 
+  // ── IP state ──────────────────────────────────────────────────────────
+  const [ipMappings, setIpMappings] = useState<IpMapping[]>([])
+  const [ipTableLoading, setIpTableLoading] = useState(true)
+  const [ipDialogOpen, setIpDialogOpen] = useState(false)
+  const [ipEditTarget, setIpEditTarget] = useState<IpMapping | null>(null)
+  const [ipAddress, setIpAddress] = useState("")
+  const [ipFriendlyName, setIpFriendlyName] = useState("")
+  const [ipOrgName, setIpOrgName] = useState("")
+  const [ipCidr, setIpCidr] = useState("")
+  const [ipReverseDns, setIpReverseDns] = useState("")
+  const [ipNotes, setIpNotes] = useState("")
+  const [ipSaving, setIpSaving] = useState(false)
+  const [ipDeleteTarget, setIpDeleteTarget] = useState<IpMapping | null>(null)
+
+  // ── Auth check ────────────────────────────────────────────────────────
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        if (clientSlug !== "rip") {
-          router.push(`/${clientSlug}/ci/campaigns`)
-          return
-        }
+        if (clientSlug !== "rip") { router.push(`/${clientSlug}/ci/campaigns`); return }
         const response = await fetch("/api/auth/me")
         if (!response.ok) { router.push("/login"); return }
         const user = await response.json()
@@ -79,23 +108,39 @@ export default function SenderProvidersPage() {
     checkAuth()
   }, [router, clientSlug])
 
-  const fetchMappings = async () => {
+  // ── Fetch functions ───────────────────────────────────────────────────
+  const fetchDkimMappings = async () => {
     try {
-      setTableLoading(true)
+      setDkimTableLoading(true)
       const res = await fetch("/api/admin/dkim-mappings")
-      if (res.ok) setMappings(await res.json())
-    } catch (error) {
-      console.error("Error fetching DKIM mappings:", error)
-      toast({ title: "Error", description: "Failed to fetch mappings", variant: "destructive" })
+      if (res.ok) setDkimMappings(await res.json())
+    } catch {
+      toast({ title: "Error", description: "Failed to fetch DKIM mappings", variant: "destructive" })
     } finally {
-      setTableLoading(false)
+      setDkimTableLoading(false)
+    }
+  }
+
+  const fetchIpMappings = async () => {
+    try {
+      setIpTableLoading(true)
+      const res = await fetch("/api/admin/ip-sender-mappings")
+      if (res.ok) setIpMappings(await res.json())
+    } catch {
+      toast({ title: "Error", description: "Failed to fetch IP mappings", variant: "destructive" })
+    } finally {
+      setIpTableLoading(false)
     }
   }
 
   useEffect(() => {
-    if (isAuthorized) fetchMappings()
+    if (isAuthorized) {
+      fetchDkimMappings()
+      fetchIpMappings()
+    }
   }, [isAuthorized])
 
+  // ── DKIM handlers ─────────────────────────────────────────────────────
   const handleBackfill = async () => {
     setBackfilling(true)
     try {
@@ -113,63 +158,59 @@ export default function SenderProvidersPage() {
     }
   }
 
-  const openAddDialog = () => {
-    setEditTarget(null)
-    setSelectorValue("")
-    setFriendlyName("")
-    setNotes("")
-    setDialogOpen(true)
+  const openDkimAddDialog = () => {
+    setDkimEditTarget(null)
+    setDkimSelectorValue("")
+    setDkimFriendlyName("")
+    setDkimNotes("")
+    setDkimDialogOpen(true)
   }
 
-  const openEditDialog = (mapping: Mapping) => {
-    setEditTarget(mapping)
-    setSelectorValue(mapping.selectorValue)
-    setFriendlyName(mapping.friendlyName)
-    setNotes(mapping.notes ?? "")
-    setDialogOpen(true)
+  const openDkimEditDialog = (m: DkimMapping) => {
+    setDkimEditTarget(m)
+    setDkimSelectorValue(m.selectorValue)
+    setDkimFriendlyName(m.friendlyName)
+    setDkimNotes(m.notes ?? "")
+    setDkimDialogOpen(true)
   }
 
-  const handleSave = async () => {
-    if (!selectorValue.trim() || !friendlyName.trim()) {
-      toast({ title: "Error", description: "Selector value and friendly name are required", variant: "destructive" })
+  const handleDkimSave = async () => {
+    if (!dkimSelectorValue.trim() || !dkimFriendlyName.trim()) {
+      toast({ title: "Error", description: "Selector value and provider name are required", variant: "destructive" })
       return
     }
-    setSaving(true)
+    setDkimSaving(true)
     try {
-      const url = editTarget
-        ? `/api/admin/dkim-mappings/${editTarget.id}`
-        : "/api/admin/dkim-mappings"
-      const method = editTarget ? "PATCH" : "POST"
-
+      const url = dkimEditTarget ? `/api/admin/dkim-mappings/${dkimEditTarget.id}` : "/api/admin/dkim-mappings"
+      const method = dkimEditTarget ? "PATCH" : "POST"
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ selectorValue, friendlyName, notes }),
+        body: JSON.stringify({ selectorValue: dkimSelectorValue, friendlyName: dkimFriendlyName, notes: dkimNotes }),
       })
       const data = await res.json()
-
       if (res.ok) {
-        toast({ title: editTarget ? "Mapping updated" : "Mapping added", description: `${selectorValue} → ${friendlyName}` })
-        setDialogOpen(false)
-        fetchMappings()
+        toast({ title: dkimEditTarget ? "Mapping updated" : "Mapping added", description: `${dkimSelectorValue} → ${dkimFriendlyName}` })
+        setDkimDialogOpen(false)
+        fetchDkimMappings()
       } else {
-        toast({ title: "Error", description: data.error || "Failed to save mapping", variant: "destructive" })
+        toast({ title: "Error", description: data.error || "Failed to save", variant: "destructive" })
       }
     } catch {
       toast({ title: "Error", description: "Failed to save mapping", variant: "destructive" })
     } finally {
-      setSaving(false)
+      setDkimSaving(false)
     }
   }
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return
+  const handleDkimDelete = async () => {
+    if (!dkimDeleteTarget) return
     try {
-      const res = await fetch(`/api/admin/dkim-mappings/${deleteTarget.id}`, { method: "DELETE" })
+      const res = await fetch(`/api/admin/dkim-mappings/${dkimDeleteTarget.id}`, { method: "DELETE" })
       if (res.ok) {
-        toast({ title: "Mapping deleted", description: `Removed ${deleteTarget.selectorValue}` })
-        setDeleteTarget(null)
-        fetchMappings()
+        toast({ title: "Mapping deleted", description: `Removed ${dkimDeleteTarget.selectorValue}` })
+        setDkimDeleteTarget(null)
+        fetchDkimMappings()
       } else {
         toast({ title: "Error", description: "Failed to delete mapping", variant: "destructive" })
       }
@@ -178,6 +219,78 @@ export default function SenderProvidersPage() {
     }
   }
 
+  // ── IP handlers ───────────────────────────────────────────────────────
+  const openIpAddDialog = () => {
+    setIpEditTarget(null)
+    setIpAddress("")
+    setIpFriendlyName("")
+    setIpOrgName("")
+    setIpCidr("")
+    setIpReverseDns("")
+    setIpNotes("")
+    setIpDialogOpen(true)
+  }
+
+  const openIpEditDialog = (m: IpMapping) => {
+    setIpEditTarget(m)
+    setIpAddress(m.ip)
+    setIpFriendlyName(m.friendlyName ?? "")
+    setIpOrgName(m.orgName ?? "")
+    setIpCidr(m.cidr ?? "")
+    setIpReverseDns(m.reverseDns ?? "")
+    setIpNotes(m.notes ?? "")
+    setIpDialogOpen(true)
+  }
+
+  const handleIpSave = async () => {
+    if (!ipAddress.trim()) {
+      toast({ title: "Error", description: "IP address is required", variant: "destructive" })
+      return
+    }
+    setIpSaving(true)
+    try {
+      const url = ipEditTarget ? `/api/admin/ip-sender-mappings/${ipEditTarget.id}` : "/api/admin/ip-sender-mappings"
+      const method = ipEditTarget ? "PATCH" : "POST"
+      const body = ipEditTarget
+        ? { friendlyName: ipFriendlyName, orgName: ipOrgName, cidr: ipCidr, reverseDns: ipReverseDns, notes: ipNotes }
+        : { ip: ipAddress, friendlyName: ipFriendlyName, orgName: ipOrgName, cidr: ipCidr, reverseDns: ipReverseDns, notes: ipNotes }
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast({ title: ipEditTarget ? "Mapping updated" : "Mapping added", description: `${ipAddress} saved` })
+        setIpDialogOpen(false)
+        fetchIpMappings()
+      } else {
+        toast({ title: "Error", description: data.error || "Failed to save", variant: "destructive" })
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to save mapping", variant: "destructive" })
+    } finally {
+      setIpSaving(false)
+    }
+  }
+
+  const handleIpDelete = async () => {
+    if (!ipDeleteTarget) return
+    try {
+      const res = await fetch(`/api/admin/ip-sender-mappings/${ipDeleteTarget.id}`, { method: "DELETE" })
+      if (res.ok) {
+        toast({ title: "Mapping deleted", description: `Removed ${ipDeleteTarget.ip}` })
+        setIpDeleteTarget(null)
+        fetchIpMappings()
+      } else {
+        toast({ title: "Error", description: "Failed to delete mapping", variant: "destructive" })
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to delete mapping", variant: "destructive" })
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -192,139 +305,315 @@ export default function SenderProvidersPage() {
     <AppLayout clientSlug="admin" isAdminView={true}>
       <div className="container mx-auto py-8 px-4">
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold">Sender Providers</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Map DKIM selector values (the <code className="text-xs bg-muted px-1 py-0.5 rounded">.s=</code> field) to friendly provider names shown on emails.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={handleBackfill} disabled={backfilling}>
-                {backfilling ? <Loader2 size={16} className="mr-2 animate-spin" /> : <RefreshCw size={16} className="mr-2" />}
-                Backfill Providers
-              </Button>
-              <Button className="bg-rip-red hover:bg-rip-red/90 text-white" onClick={openAddDialog}>
-                <Plus size={16} className="mr-2" />
-                Add Mapping
-              </Button>
-            </div>
+          <div>
+            <h2 className="text-2xl font-bold">Sender Providers</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Map sending IPs and DKIM selectors to friendly provider names shown on emails.
+            </p>
           </div>
 
-          <div className="border rounded-md">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Selector (.s= value)</TableHead>
-                  <TableHead>Provider Name</TableHead>
-                  <TableHead>Notes</TableHead>
-                  <TableHead>Added</TableHead>
-                  <TableHead className="w-[100px] text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tableLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-12">
-                      <div className="flex justify-center">
-                        <Loader2 size={24} className="animate-spin text-rip-red" />
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : mappings.length > 0 ? (
-                  mappings.map((mapping) => (
-                    <TableRow key={mapping.id}>
-                      <TableCell className="font-mono text-sm">{mapping.selectorValue}</TableCell>
-                      <TableCell className="font-medium">{mapping.friendlyName}</TableCell>
-                      <TableCell className="text-muted-foreground">{mapping.notes || "—"}</TableCell>
-                      <TableCell>{new Date(mapping.createdAt).toLocaleDateString()}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => openEditDialog(mapping)}>
-                            <Pencil size={15} className="text-muted-foreground" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(mapping)}>
-                            <Trash2 size={15} className="text-red-500" />
-                          </Button>
-                        </div>
-                      </TableCell>
+          <Tabs defaultValue="ip">
+            <TabsList>
+              <TabsTrigger value="ip">IP Mappings</TabsTrigger>
+              <TabsTrigger value="dkim">DKIM Selectors</TabsTrigger>
+            </TabsList>
+
+            {/* ── IP Tab ──────────────────────────────────────────────── */}
+            <TabsContent value="ip" className="space-y-4 mt-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Map sending IPs (auto-resolved by the hourly cron via ARIN RDAP) to friendly provider names.
+                  IPs already discovered automatically appear here — manually add any you need to override or pre-populate.
+                </p>
+                <Button className="bg-rip-red hover:bg-rip-red/90 text-white shrink-0 ml-4" onClick={openIpAddDialog}>
+                  <Plus size={16} className="mr-2" />
+                  Add IP Mapping
+                </Button>
+              </div>
+
+              <div className="border rounded-md">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>IP Address</TableHead>
+                      <TableHead>Friendly Name</TableHead>
+                      <TableHead>Org Name (RDAP)</TableHead>
+                      <TableHead>CIDR</TableHead>
+                      <TableHead>Reverse DNS</TableHead>
+                      <TableHead>Notes</TableHead>
+                      <TableHead>Added</TableHead>
+                      <TableHead className="w-[80px] text-right">Actions</TableHead>
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
-                      No mappings yet. Add one to start identifying email providers.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  </TableHeader>
+                  <TableBody>
+                    {ipTableLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-12">
+                          <div className="flex justify-center">
+                            <Loader2 size={24} className="animate-spin text-rip-red" />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : ipMappings.length > 0 ? (
+                      ipMappings.map((m) => (
+                        <TableRow key={m.id}>
+                          <TableCell className="font-mono text-sm">{m.ip}</TableCell>
+                          <TableCell className="font-medium">{m.friendlyName || <span className="text-muted-foreground">—</span>}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{m.orgName || "—"}</TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground">{m.cidr || "—"}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{m.reverseDns || "—"}</TableCell>
+                          <TableCell className="text-muted-foreground text-sm">{m.notes || "—"}</TableCell>
+                          <TableCell className="text-sm">{new Date(m.createdAt).toLocaleDateString()}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => openIpEditDialog(m)}>
+                                <Pencil size={15} className="text-muted-foreground" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => setIpDeleteTarget(m)}>
+                                <Trash2 size={15} className="text-red-500" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                          No IP mappings yet. The hourly cron will auto-populate these as emails come in.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+
+            {/* ── DKIM Tab ─────────────────────────────────────────────── */}
+            <TabsContent value="dkim" className="space-y-4 mt-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Map DKIM <code className="text-xs bg-muted px-1 py-0.5 rounded">.s=</code> selector values to friendly provider names.
+                </p>
+                <div className="flex items-center gap-2 shrink-0 ml-4">
+                  <Button variant="outline" onClick={handleBackfill} disabled={backfilling}>
+                    {backfilling ? <Loader2 size={16} className="mr-2 animate-spin" /> : <RefreshCw size={16} className="mr-2" />}
+                    Backfill Providers
+                  </Button>
+                  <Button className="bg-rip-red hover:bg-rip-red/90 text-white" onClick={openDkimAddDialog}>
+                    <Plus size={16} className="mr-2" />
+                    Add Mapping
+                  </Button>
+                </div>
+              </div>
+
+              <div className="border rounded-md">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Selector (.s= value)</TableHead>
+                      <TableHead>Provider Name</TableHead>
+                      <TableHead>Notes</TableHead>
+                      <TableHead>Added</TableHead>
+                      <TableHead className="w-[100px] text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {dkimTableLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-12">
+                          <div className="flex justify-center">
+                            <Loader2 size={24} className="animate-spin text-rip-red" />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : dkimMappings.length > 0 ? (
+                      dkimMappings.map((m) => (
+                        <TableRow key={m.id}>
+                          <TableCell className="font-mono text-sm">{m.selectorValue}</TableCell>
+                          <TableCell className="font-medium">{m.friendlyName}</TableCell>
+                          <TableCell className="text-muted-foreground">{m.notes || "—"}</TableCell>
+                          <TableCell>{new Date(m.createdAt).toLocaleDateString()}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => openDkimEditDialog(m)}>
+                                <Pencil size={15} className="text-muted-foreground" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => setDkimDeleteTarget(m)}>
+                                <Trash2 size={15} className="text-red-500" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                          No DKIM mappings yet. Add one to start identifying email providers.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
 
-      {/* Add / Edit dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {/* ── IP Add/Edit Dialog ─────────────────────────────────────────── */}
+      <Dialog open={ipDialogOpen} onOpenChange={setIpDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editTarget ? "Edit Mapping" : "Add Mapping"}</DialogTitle>
+            <DialogTitle>{ipEditTarget ? "Edit IP Mapping" : "Add IP Mapping"}</DialogTitle>
             <DialogDescription>
-              The selector value comes from the <code className="text-xs bg-muted px-1 py-0.5 rounded">s=</code> field in the DKIM-Signature header of a raw email (e.g. <code className="text-xs bg-muted px-1 py-0.5 rounded">gears</code>, <code className="text-xs bg-muted px-1 py-0.5 rounded">s1</code>, <code className="text-xs bg-muted px-1 py-0.5 rounded">k1</code>).
+              Manually add or override a sending IP. The hourly cron auto-populates org names via ARIN RDAP — use the friendly name to override generic entries like &quot;Amazon.com, Inc.&quot;
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="selector">Selector value *</Label>
+              <Label htmlFor="ip">IP Address *</Label>
               <Input
-                id="selector"
-                placeholder="e.g. gears, s1, k1"
-                value={selectorValue}
-                onChange={(e) => setSelectorValue(e.target.value)}
+                id="ip"
+                placeholder="e.g. 63.143.59.236"
+                value={ipAddress}
+                onChange={(e) => setIpAddress(e.target.value)}
+                disabled={!!ipEditTarget}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="friendlyName">Provider name *</Label>
+              <Label htmlFor="ipFriendlyName">Friendly Name <span className="text-muted-foreground text-xs">(override)</span></Label>
               <Input
-                id="friendlyName"
-                placeholder="e.g. Message Gears, SendGrid, Klaviyo"
-                value={friendlyName}
-                onChange={(e) => setFriendlyName(e.target.value)}
+                id="ipFriendlyName"
+                placeholder="e.g. MessageGears, Acoustic, Sailthru"
+                value={ipFriendlyName}
+                onChange={(e) => setIpFriendlyName(e.target.value)}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="notes">Notes (optional)</Label>
+              <Label htmlFor="ipOrgName">Org Name <span className="text-muted-foreground text-xs">(from RDAP)</span></Label>
               <Input
-                id="notes"
-                placeholder="Any internal notes about this provider"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                id="ipOrgName"
+                placeholder="e.g. MessageGears, LLC"
+                value={ipOrgName}
+                onChange={(e) => setIpOrgName(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="ipCidr">CIDR Block</Label>
+                <Input
+                  id="ipCidr"
+                  placeholder="e.g. 63.143.59.128/25"
+                  value={ipCidr}
+                  onChange={(e) => setIpCidr(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ipReverseDns">Reverse DNS (PTR)</Label>
+                <Input
+                  id="ipReverseDns"
+                  placeholder="e.g. mail.messagegears.net"
+                  value={ipReverseDns}
+                  onChange={(e) => setIpReverseDns(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ipNotes">Notes</Label>
+              <Input
+                id="ipNotes"
+                placeholder="Any internal notes"
+                value={ipNotes}
+                onChange={(e) => setIpNotes(e.target.value)}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving} className="bg-rip-red hover:bg-rip-red/90 text-white">
-              {saving && <Loader2 size={14} className="mr-2 animate-spin" />}
-              {editTarget ? "Save Changes" : "Add Mapping"}
+            <Button variant="outline" onClick={() => setIpDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleIpSave} disabled={ipSaving} className="bg-rip-red hover:bg-rip-red/90 text-white">
+              {ipSaving && <Loader2 size={14} className="mr-2 animate-spin" />}
+              {ipEditTarget ? "Save Changes" : "Add Mapping"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirmation */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      {/* ── DKIM Add/Edit Dialog ───────────────────────────────────────── */}
+      <Dialog open={dkimDialogOpen} onOpenChange={setDkimDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{dkimEditTarget ? "Edit DKIM Mapping" : "Add DKIM Mapping"}</DialogTitle>
+            <DialogDescription>
+              The selector value comes from the <code className="text-xs bg-muted px-1 py-0.5 rounded">s=</code> field in the DKIM-Signature header (e.g. <code className="text-xs bg-muted px-1 py-0.5 rounded">gears</code>, <code className="text-xs bg-muted px-1 py-0.5 rounded">s1</code>, <code className="text-xs bg-muted px-1 py-0.5 rounded">k1</code>).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="dkimSelector">Selector value *</Label>
+              <Input
+                id="dkimSelector"
+                placeholder="e.g. gears, s1, k1"
+                value={dkimSelectorValue}
+                onChange={(e) => setDkimSelectorValue(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="dkimFriendlyName">Provider name *</Label>
+              <Input
+                id="dkimFriendlyName"
+                placeholder="e.g. Message Gears, SendGrid, Klaviyo"
+                value={dkimFriendlyName}
+                onChange={(e) => setDkimFriendlyName(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="dkimNotes">Notes (optional)</Label>
+              <Input
+                id="dkimNotes"
+                placeholder="Any internal notes about this provider"
+                value={dkimNotes}
+                onChange={(e) => setDkimNotes(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDkimDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleDkimSave} disabled={dkimSaving} className="bg-rip-red hover:bg-rip-red/90 text-white">
+              {dkimSaving && <Loader2 size={14} className="mr-2 animate-spin" />}
+              {dkimEditTarget ? "Save Changes" : "Add Mapping"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── IP Delete Confirmation ─────────────────────────────────────── */}
+      <AlertDialog open={!!ipDeleteTarget} onOpenChange={(open) => !open && setIpDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Mapping</AlertDialogTitle>
+            <AlertDialogTitle>Delete IP Mapping</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the mapping for <strong>{deleteTarget?.selectorValue}</strong>? Emails with this selector will no longer show a provider name.
+              Are you sure you want to delete the mapping for <strong>{ipDeleteTarget?.ip}</strong>? The cron will re-create it automatically on the next run if emails from this IP are still coming in.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600">
-              Delete
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleIpDelete} className="bg-red-500 hover:bg-red-600">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── DKIM Delete Confirmation ───────────────────────────────────── */}
+      <AlertDialog open={!!dkimDeleteTarget} onOpenChange={(open) => !open && setDkimDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete DKIM Mapping</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the mapping for <strong>{dkimDeleteTarget?.selectorValue}</strong>? Emails with this selector will no longer show a provider name.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDkimDelete} className="bg-red-500 hover:bg-red-600">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

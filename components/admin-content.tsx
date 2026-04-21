@@ -59,6 +59,16 @@ export function AdminContent({ user }: AdminContentProps) {
   const [isRedactingEmailLinks, setIsRedactingEmailLinks] = useState(false)
   const [redactCampaignId, setRedactCampaignId] = useState("")
 
+  const [isDkimAuditing, setIsDkimAuditing] = useState(false)
+  const [dkimAuditResults, setDkimAuditResults] = useState<{
+    results: Array<{ selector: string; count: number; percentage: number; mappedTo: string | null }>
+    totalEmails: number
+    uniqueSelectors: number
+    unmappedCount: number
+  } | null>(null)
+  const [addingSelector, setAddingSelector] = useState<string | null>(null)
+  const [dkimNewName, setDkimNewName] = useState<Record<string, string>>({})
+
   const [isAutoPopulatingWinRed, setIsAutoPopulatingWinRed] = useState(false)
   const [isAutoPopulatingAnedot, setIsAutoPopulatingAnedot] = useState(false)
   const [isAutoPopulatingActBlue, setIsAutoPopulatingActBlue] = useState(false)
@@ -1451,6 +1461,64 @@ const downloadActBluePatterns = () => {
       toast.error("Backfill failed")
     } finally {
       setIsBackfillingPlatform(false)
+    }
+  }
+
+  const handleDkimAudit = async () => {
+    setIsDkimAuditing(true)
+    setDkimAuditResults(null)
+    try {
+      const res = await fetch("/api/admin/dkim-selector-audit")
+      const data = await res.json()
+      if (res.ok) {
+        setDkimAuditResults(data)
+        toast.success(`Found ${data.uniqueSelectors} unique DKIM selectors across ${data.totalEmails.toLocaleString()} emails`)
+      } else {
+        toast.error(data.error || "Audit failed")
+      }
+    } catch {
+      toast.error("Audit failed")
+    } finally {
+      setIsDkimAuditing(false)
+    }
+  }
+
+  const handleAddDkimMapping = async (selector: string) => {
+    const name = dkimNewName[selector]?.trim()
+    if (!name) {
+      toast.error("Enter a provider name first")
+      return
+    }
+    setAddingSelector(selector)
+    try {
+      const res = await fetch("/api/admin/dkim-mappings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectorValue: selector, friendlyName: name }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(`Added: ${selector} → ${name}`)
+        // Update local results to reflect the new mapping
+        setDkimAuditResults((prev) =>
+          prev
+            ? {
+                ...prev,
+                unmappedCount: prev.unmappedCount - 1,
+                results: prev.results.map((r) =>
+                  r.selector === selector ? { ...r, mappedTo: name } : r
+                ),
+              }
+            : prev
+        )
+        setDkimNewName((prev) => { const n = { ...prev }; delete n[selector]; return n })
+      } else {
+        toast.error(data.error || "Failed to add mapping")
+      }
+    } catch {
+      toast.error("Failed to add mapping")
+    } finally {
+      setAddingSelector(null)
     }
   }
 
@@ -2982,6 +3050,80 @@ const downloadActBluePatterns = () => {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Sending IP Audit */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Sending IP Audit</CardTitle>
+          <CardDescription>
+            Scan all emails with raw headers and count unique sending IPs (from <code className="text-xs bg-muted px-1 py-0.5 rounded">Received-SPF</code> / <code className="text-xs bg-muted px-1 py-0.5 rounded">Authentication-Results</code>). Use this to identify which ESPs are being used.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button
+            onClick={handleDkimAudit}
+            disabled={isDkimAuditing}
+            variant="outline"
+          >
+            {isDkimAuditing ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Play size={14} className="mr-2" />}
+            {isDkimAuditing ? "Scanning..." : "Run Audit"}
+          </Button>
+
+          {dkimAuditResults && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex gap-6 text-sm">
+                  <div><span className="text-muted-foreground">Emails scanned:</span> <strong>{dkimAuditResults.totalEmails.toLocaleString()}</strong></div>
+                  <div><span className="text-muted-foreground">With IP:</span> <strong>{(dkimAuditResults.totalWithIp ?? dkimAuditResults.totalEmails).toLocaleString()}</strong></div>
+                  <div><span className="text-muted-foreground">Unique IPs:</span> <strong>{dkimAuditResults.uniqueIps ?? dkimAuditResults.uniqueSelectors}</strong></div>
+                  {(dkimAuditResults.noIpCount ?? 0) > 0 && (
+                    <div><span className="text-muted-foreground">No IP found:</span> <strong className="text-amber-500">{dkimAuditResults.noIpCount}</strong></div>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const rows = [
+                      ["Sending IP", "Count", "Percentage of Total"],
+                      ...dkimAuditResults.results.map((r: any) => [
+                        r.ip ?? r.selector,
+                        r.count,
+                        `${r.percentage}%`,
+                      ]),
+                    ]
+                    const csv = rows.map((r) => r.map((v: any) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n")
+                    const blob = new Blob([csv], { type: "text/csv" })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement("a")
+                    a.href = url
+                    a.download = `sending-ip-audit-${new Date().toISOString().slice(0, 10)}.csv`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  }}
+                >
+                  Export CSV
+                </Button>
+              </div>
+
+              <div className="border rounded-md divide-y">
+                <div className="grid grid-cols-[1fr_100px_80px] gap-3 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
+                  <span>Sending IP</span>
+                  <span className="text-right">Count</span>
+                  <span className="text-right">%</span>
+                </div>
+                {dkimAuditResults.results.map((r: any) => (
+                  <div key={r.ip ?? r.selector} className="grid grid-cols-[1fr_100px_80px] gap-3 px-3 py-2 items-center text-sm">
+                    <span className="font-mono text-xs">{r.ip ?? r.selector}</span>
+                    <span className="text-right tabular-nums">{r.count.toLocaleString()}</span>
+                    <span className="text-right tabular-nums text-muted-foreground">{r.percentage}%</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </CardContent>

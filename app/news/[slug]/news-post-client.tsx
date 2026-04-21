@@ -33,15 +33,16 @@ interface Announcement {
 
 const NEW_THRESHOLD_DAYS = 7
 
-export default function NewsPostClient({ slug }: { slug: string }) {
+export default function NewsPostClient({ slug, initialPost }: { slug: string; initialPost?: Announcement | null }) {
   const router = useRouter()
   const { toast } = useToast()
 
   const [userRole, setUserRole] = useState<string | null>(null)
   const [clientSlug, setClientSlug] = useState<string>("")
   const [authLoading, setAuthLoading] = useState(true)
-  const [post, setPost] = useState<Announcement | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Seed with server-rendered data so the article body is in the initial HTML.
+  const [post, setPost] = useState<Announcement | null>(initialPost ?? null)
+  const [loading, setLoading] = useState(!initialPost)
   const [notFound, setNotFound] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -66,10 +67,10 @@ export default function NewsPostClient({ slug }: { slug: string }) {
   }, [router])
 
   useEffect(() => {
-    if (authLoading) return
+    // Skip the client fetch entirely if the server already provided the post.
+    if (initialPost || authLoading) return
     const fetchPost = async () => {
       try {
-        // Use ?public=1 for unauthenticated visitors, authenticated path for logged-in users
         const url = userRole
           ? `/api/announcements/by-slug/${slug}`
           : `/api/announcements/by-slug/${slug}?public=1`
@@ -83,7 +84,7 @@ export default function NewsPostClient({ slug }: { slug: string }) {
       }
     }
     fetchPost()
-  }, [authLoading, slug, userRole])
+  }, [authLoading, slug, userRole, initialPost])
 
   const handleDelete = async () => {
     if (!post) return
@@ -114,7 +115,8 @@ export default function NewsPostClient({ slug }: { slug: string }) {
   const isNew = (dateStr: string) => differenceInDays(new Date(), new Date(dateStr)) < NEW_THRESHOLD_DAYS
   const isSuperAdmin = userRole === "super_admin"
 
-  if (authLoading || loading) {
+  // Only block on loading if we don't already have server-rendered data.
+  if ((authLoading && !initialPost) || loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-[#dc2a28]" />
@@ -163,9 +165,12 @@ export default function NewsPostClient({ slug }: { slug: string }) {
 
         {/* Meta */}
         <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <p className="text-xs text-muted-foreground uppercase tracking-wide">
+          <time
+            dateTime={new Date(post.publishedAt).toISOString()}
+            className="text-xs text-muted-foreground uppercase tracking-wide"
+          >
             {format(new Date(post.publishedAt), "MMMM d, yyyy")}
-          </p>
+          </time>
           {isNew(post.publishedAt) && (
             <Badge className="bg-[#dc2a28] text-white text-[10px] px-1.5 py-0">New!</Badge>
           )}

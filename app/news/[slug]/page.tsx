@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const plainText = stripHtml(post.body)
     const description = plainText.slice(0, 160).trim()
     const url = `${BASE_URL}/news/${post.slug}`
-    const publishedTime = new Date(post.publishedAt).toISOString()
+    const publishedTime = new Date(post.publishedAt!).toISOString()
     const ogImageUrl = post.imageUrl ?? `${url}/opengraph-image`
 
     return {
@@ -56,6 +56,45 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-export default function NewsPostPage({ params }: Props) {
-  return <NewsPostClient slug={params.slug} />
+export default async function NewsPostPage({ params }: Props) {
+  // Pre-fetch the post server-side so the full article body is present in the
+  // initial HTML — crawlers and social scrapers read real content, not a spinner.
+  let initialPost: {
+    id: string
+    slug: string
+    title: string
+    body: string
+    imageUrl: string | null
+    publishedAt: string
+    createdBy: string
+    updatedAt: string
+  } | null = null
+
+  try {
+    const row = await prisma.announcement.findUnique({
+      where: { slug: params.slug },
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        body: true,
+        imageUrl: true,
+        publishedAt: true,
+        createdBy: true,
+        updatedAt: true,
+      },
+    })
+
+    if (row) {
+      initialPost = {
+        ...row,
+        publishedAt: row.publishedAt?.toISOString() ?? new Date().toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+      }
+    }
+  } catch (err) {
+    console.error("[NewsPostPage] failed to pre-fetch post:", err)
+  }
+
+  return <NewsPostClient slug={params.slug} initialPost={initialPost} />
 }

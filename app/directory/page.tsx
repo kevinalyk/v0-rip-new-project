@@ -2,6 +2,7 @@ import { cookies } from "next/headers"
 import { verifyToken } from "@/lib/auth"
 import AppLayout from "@/components/app-layout"
 import { CiDirectoryContent } from "@/components/ci-directory-content"
+import { getAllEntitiesWithCounts } from "@/lib/ci-entity-utils"
 
 export default async function PublicDirectoryPage() {
   // Resolve clientSlug server-side so the page ships with pre-rendered HTML
@@ -22,9 +23,18 @@ export default async function PublicDirectoryPage() {
     // unauthenticated visitor — no-op
   }
 
+  // Pre-fetch the first page of entities server-side so the HTML response
+  // contains real content for crawlers rather than a "Loading…" placeholder.
+  const initialResult = await getAllEntitiesWithCounts({ page: 1, pageSize: 50 })
+
   return (
     <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
-      <CiDirectoryContent clientSlug={clientSlug} isPublic={!clientSlug} />
+      <CiDirectoryContent
+        clientSlug={clientSlug}
+        isPublic={!clientSlug}
+        initialEntities={initialResult.entities}
+        initialPagination={initialResult.pagination}
+      />
     </AppLayout>
   )
 }

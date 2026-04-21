@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import useSWR from "swr"
@@ -80,9 +80,18 @@ function nameToSlug(name: string): string {
     .replace(/\s+/g, "-")
 }
 
+interface PaginationState {
+  page: number
+  pageSize: number
+  totalCount: number
+  totalPages: number
+}
+
 interface CiDirectoryContentProps {
   clientSlug: string
   isPublic?: boolean
+  initialEntities?: Entity[]
+  initialPagination?: PaginationState
 }
 
 interface Entity {
@@ -100,11 +109,12 @@ interface Entity {
   }
 }
 
-export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectoryContentProps) {
+export function CiDirectoryContent({ clientSlug, isPublic = false, initialEntities, initialPagination }: CiDirectoryContentProps) {
   const apiBase = isPublic ? "/api/public/ci-entities" : "/api/ci-entities"
   const router = useRouter()
-  const [entities, setEntities] = useState<Entity[]>([])
-  const [loading, setLoading] = useState(true)
+  // Seed with server-rendered data so crawlers see real content immediately.
+  const [entities, setEntities] = useState<Entity[]>(initialEntities ?? [])
+  const [loading, setLoading] = useState(!initialEntities)
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [filterParty, setFilterParty] = useState<string>("all")
@@ -114,12 +124,9 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
   // const [staticTotalCount, setStaticTotalCount] = useState(0)
   // const [totalCampaignCount, setTotalCampaignCount] = useState(0)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [pagination, setPagination] = useState({
-    page: 1,
-    pageSize: 50,
-    totalCount: 0,
-    totalPages: 0,
-  })
+  const [pagination, setPagination] = useState<PaginationState>(
+    initialPagination ?? { page: 1, pageSize: 50, totalCount: 0, totalPages: 0 }
+  )
 
   // Map state — drives both the map highlight and the entity filter
   const [selectedMapState, setSelectedMapState] = useState<string | null>(null)
@@ -207,7 +214,18 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
     return () => clearTimeout(timer)
   }, [searchQuery])
 
+  // Track whether we've already rendered from server-provided initial data.
+  // On the very first render (no filter changes yet) we skip the client fetch
+  // so crawlers and users both see real content without a loading flash.
+  const initialFetchSkipped = useRef(!!initialEntities)
+
   useEffect(() => {
+    // Skip the very first client-side fetch if server pre-seeded the data.
+    if (initialFetchSkipped.current) {
+      initialFetchSkipped.current = false
+      return
+    }
+
     const fetchEntities = async () => {
       try {
         setLoading(true)
@@ -738,16 +756,18 @@ export function CiDirectoryContent({ clientSlug, isPublic = false }: CiDirectory
           </Select>
 
           <span className="text-sm text-muted-foreground whitespace-nowrap">
-            {pagination.totalCount === 0
+            {!loading && pagination.totalCount === 0
               ? "No entities match"
-              : <>Showing {(pagination.page - 1) * pagination.pageSize + 1}–{Math.min(pagination.page * pagination.pageSize, pagination.totalCount)} of {pagination.totalCount}</>
+              : pagination.totalCount > 0
+                ? <>Showing {(pagination.page - 1) * pagination.pageSize + 1}–{Math.min(pagination.page * pagination.pageSize, pagination.totalCount)} of {pagination.totalCount}</>
+                : null
             }
           </span>
         </div>
 
         <Card>
           <CardContent className="p-0">
-            {loading ? (
+            {loading && entities.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">Loading entities...</div>
             ) : entities.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">No entities found. Try adjusting your filters.</div>

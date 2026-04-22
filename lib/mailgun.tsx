@@ -1,4 +1,269 @@
 // Mailgun email sending utility
+
+const ADMIN_NOTIFICATION_EMAIL = "kevinalyk@gmail.com"
+
+async function sendMailgunEmail(subject: string, html: string, text: string): Promise<boolean> {
+  const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
+  const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN
+
+  if (!MAILGUN_API_KEY || !MAILGUN_DOMAIN) {
+    console.error("Mailgun credentials not configured")
+    return false
+  }
+
+  const formData = new FormData()
+  formData.append("from", `Inbox.GOP Alerts <inbox@${MAILGUN_DOMAIN}>`)
+  formData.append("to", ADMIN_NOTIFICATION_EMAIL)
+  formData.append("subject", subject)
+  formData.append("html", html)
+  formData.append("text", text)
+
+  try {
+    const response = await fetch(`https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`api:${MAILGUN_API_KEY}`).toString("base64")}`,
+      },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("Mailgun admin notification error:", response.status, errorText)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error sending admin notification email:", error)
+    return false
+  }
+}
+
+export async function sendNewSignupNotification(params: {
+  firstName: string
+  lastName: string
+  email: string
+  clientId: string
+  clientName: string
+  clientSlug: string
+  signupAt: Date
+  ipAddress?: string
+}): Promise<boolean> {
+  const { firstName, lastName, email, clientId, clientName, clientSlug, signupAt, ipAddress } = params
+
+  const formattedDate = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+    timeZone: "America/New_York",
+  }).format(signupAt)
+
+  const profileUrl = `https://app.rip-tool.com/${clientSlug}`
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 560px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
+        <div style="background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="background: #dc2626; padding: 24px 28px;">
+            <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Inbox.GOP</p>
+            <h1 style="margin: 4px 0 0 0; color: white; font-size: 22px; font-weight: 700;">New Account Signup</h1>
+          </div>
+          <div style="padding: 28px;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; width: 38%; vertical-align: top;">Name</td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; font-weight: 600;">${firstName} ${lastName}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; vertical-align: top;">Email</td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px;"><a href="mailto:${email}" style="color: #dc2626; text-decoration: none;">${email}</a></td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; vertical-align: top;">Organization</td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; font-weight: 600;">${clientName}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; vertical-align: top;">Client ID</td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; font-family: monospace; color: #555;">${clientId}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; vertical-align: top;">Signed Up</td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px;">${formattedDate}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; vertical-align: top;">Plan</td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px;"><span style="background: #f3f4f6; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; color: #555;">Free Trial</span></td>
+              </tr>
+              ${ipAddress ? `
+              <tr>
+                <td style="padding: 10px 0; font-size: 13px; color: #666; vertical-align: top;">IP Address</td>
+                <td style="padding: 10px 0; font-size: 14px; font-family: monospace; color: #888;">${ipAddress}</td>
+              </tr>` : ""}
+            </table>
+            <div style="margin-top: 24px; text-align: center;">
+              <a href="${profileUrl}" style="display: inline-block; background: #dc2626; color: white; text-decoration: none; padding: 11px 24px; border-radius: 6px; font-size: 14px; font-weight: 600;">View Account Dashboard</a>
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `
+
+  const text = `
+New Account Signup — Inbox.GOP
+
+Name:         ${firstName} ${lastName}
+Email:        ${email}
+Organization: ${clientName}
+Client ID:    ${clientId}
+Signed Up:    ${formattedDate}
+Plan:         Free Trial
+${ipAddress ? `IP Address:   ${ipAddress}` : ""}
+
+View account: ${profileUrl}
+  `.trim()
+
+  return sendMailgunEmail("New Signup: " + clientName, html, text)
+}
+
+export async function sendNewPaymentNotification(params: {
+  clientId: string
+  clientName?: string
+  customerEmail?: string
+  planName: string
+  amountCents: number
+  currency: string
+  stripeSessionId: string
+  stripeCustomerId: string
+  subscriptionId: string
+  paidAt: Date
+  periodEnd: Date
+}): Promise<boolean> {
+  const {
+    clientId,
+    clientName,
+    customerEmail,
+    planName,
+    amountCents,
+    currency,
+    stripeSessionId,
+    stripeCustomerId,
+    subscriptionId,
+    paidAt,
+    periodEnd,
+  } = params
+
+  const amountFormatted = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).format(amountCents / 100)
+
+  const formattedPaidAt = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+    timeZone: "America/New_York",
+  }).format(paidAt)
+
+  const formattedPeriodEnd = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(periodEnd)
+
+  const stripeUrl = `https://dashboard.stripe.com/customers/${stripeCustomerId}`
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 560px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
+        <div style="background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="background: #16a34a; padding: 24px 28px;">
+            <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Inbox.GOP</p>
+            <h1 style="margin: 4px 0 0 0; color: white; font-size: 22px; font-weight: 700;">New Subscription Payment</h1>
+            <p style="margin: 6px 0 0 0; color: rgba(255,255,255,0.9); font-size: 28px; font-weight: 800; letter-spacing: -0.5px;">${amountFormatted}</p>
+          </div>
+          <div style="padding: 28px;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; width: 38%; vertical-align: top;">Client ID</td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; font-family: monospace; font-weight: 600;">${clientId}</td>
+              </tr>
+              ${clientName ? `
+              <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; vertical-align: top;">Organization</td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; font-weight: 600;">${clientName}</td>
+              </tr>` : ""}
+              ${customerEmail ? `
+              <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; vertical-align: top;">Customer Email</td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px;"><a href="mailto:${customerEmail}" style="color: #16a34a; text-decoration: none;">${customerEmail}</a></td>
+              </tr>` : ""}
+              <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; vertical-align: top;">Plan</td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px;"><span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 700;">${planName}</span></td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; vertical-align: top;">Amount</td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 16px; font-weight: 700; color: #16a34a;">${amountFormatted}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; vertical-align: top;">Paid At</td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px;">${formattedPaidAt}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; vertical-align: top;">Renews</td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px;">${formattedPeriodEnd}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; vertical-align: top;">Subscription ID</td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 12px; font-family: monospace; color: #888;">${subscriptionId}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 0; font-size: 13px; color: #666; vertical-align: top;">Session ID</td>
+                <td style="padding: 10px 0; font-size: 12px; font-family: monospace; color: #888;">${stripeSessionId}</td>
+              </tr>
+            </table>
+            <div style="margin-top: 24px; text-align: center;">
+              <a href="${stripeUrl}" style="display: inline-block; background: #16a34a; color: white; text-decoration: none; padding: 11px 24px; border-radius: 6px; font-size: 14px; font-weight: 600;">View in Stripe Dashboard</a>
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `
+
+  const text = `
+New Subscription Payment — Inbox.GOP
+
+Amount:          ${amountFormatted}
+Client ID:       ${clientId}
+${clientName ? `Organization:    ${clientName}` : ""}
+${customerEmail ? `Customer Email:  ${customerEmail}` : ""}
+Plan:            ${planName}
+Paid At:         ${formattedPaidAt}
+Renews:          ${formattedPeriodEnd}
+Subscription ID: ${subscriptionId}
+Session ID:      ${stripeSessionId}
+
+Stripe Dashboard: ${stripeUrl}
+  `.trim()
+
+  return sendMailgunEmail(`New Payment: ${amountFormatted} — ${clientId}`, html, text)
+}
+
 export async function sendPasswordResetEmail(email: string, resetToken: string): Promise<boolean> {
   const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
   const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN

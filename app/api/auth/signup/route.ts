@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import bcryptjs from "bcryptjs"
 import { prisma } from "@/lib/prisma"
+import { sendNewSignupNotification } from "@/lib/mailgun"
 
 const signupAttempts = new Map<string, { count: number; resetTime: number }>()
 const MAX_ATTEMPTS = 3
@@ -175,6 +176,18 @@ export async function POST(request: NextRequest) {
 
       return { client, user }
     })
+
+    // Fire admin notification non-blocking — don't let email failure affect signup
+    sendNewSignupNotification({
+      firstName,
+      lastName,
+      email,
+      clientId: result.client.id,
+      clientName: result.client.name,
+      clientSlug: result.client.slug,
+      signupAt: new Date(),
+      ipAddress: ip !== "unknown" ? ip : undefined,
+    }).catch((err) => console.error("[Signup] Admin notification failed:", err))
 
     return NextResponse.json(
       {

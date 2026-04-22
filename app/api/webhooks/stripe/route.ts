@@ -5,7 +5,7 @@ import { headers } from "next/headers"
 import type { SubscriptionPlan } from "@/lib/subscription-utils"
 import { unassignClientSeeds } from "@/lib/seed-utils"
 import { getPlanLimits, formatPlanName, getUserSeatsIncluded } from "@/lib/subscription-utils"
-import { sendSubscriptionCancellationWarning } from "@/lib/mailgun"
+import { sendSubscriptionCancellationWarning, sendNewPaymentNotification } from "@/lib/mailgun"
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
@@ -275,6 +275,35 @@ export async function POST(req: NextRequest) {
             data: updateData,
           })
           console.log("[Stripe Webhook] Updated client subscription:", clientId, updateData)
+
+          // Resolve customer email and client name for the admin notification
+          let customerEmailForNotif: string | undefined
+          let clientNameForNotif: string | undefined
+          try {
+            const [stripeCustomer, clientRecord] = await Promise.all([
+              stripe.customers.retrieve(session.customer as string),
+              prisma.client.findUnique({ where: { id: clientId }, select: { name: true } }),
+            ])
+            customerEmailForNotif = !stripeCustomer.deleted ? (stripeCustomer.email ?? undefined) : undefined
+            clientNameForNotif = clientRecord?.name
+          } catch { /* non-critical */ }
+
+          // Fire admin notification non-blocking
+          sendNewPaymentNotification({
+            clientId,
+            clientName: clientNameForNotif,
+            customerEmail: customerEmailForNotif,
+            planName: updateData.subscriptionPlan
+              ? String(updateData.subscriptionPlan)
+              : (plan ?? "unknown"),
+            amountCents: session.amount_total ?? 0,
+            currency: session.currency ?? "usd",
+            stripeSessionId: session.id,
+            stripeCustomerId: session.customer as string,
+            subscriptionId: session.subscription as string,
+            paidAt: new Date(),
+            periodEnd: new Date(subscription.current_period_end * 1000),
+          }).catch((err) => console.error("[Stripe Webhook] Admin payment notification failed:", err))
         }
         break
       }

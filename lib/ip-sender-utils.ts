@@ -48,40 +48,77 @@ export function extractSendingIp(rawHeaders: string): string | null {
 }
 
 /**
+ * Extract org name from an RDAP network object's entities array.
+ * Prefers the "registrant" role, falls back to any entity with a name.
+ */
+function extractOrgNameFromEntities(entities: any[]): string | null {
+  if (!Array.isArray(entities)) return null
+
+  // First pass: registrant role only
+  for (const entity of entities) {
+    if (Array.isArray(entity.roles) && entity.roles.includes("registrant")) {
+      const vcards = entity.vcardArray?.[1] ?? []
+      const fn = vcards.find((v: any[]) => v[0] === "fn")
+      if (fn?.[3]) return fn[3]
+      // Some ARIN entities use handle as the name
+      if (entity.handle) return entity.handle
+    }
+  }
+
+  // Second pass: any entity with a vcard fn
+  for (const entity of entities) {
+    const vcards = entity.vcardArray?.[1] ?? []
+    const fn = vcards.find((v: any[]) => v[0] === "fn")
+    if (fn?.[3]) return fn[3]
+  }
+
+  return null
+}
+
+/**
  * Look up ARIN RDAP for an IP and return org name + CIDR.
+ *
+ * ARIN returns the MOST SPECIFIC network block for the queried IP as the
+ * top-level object. For reassigned IPs (e.g. a /25 inside a /19), the
+ * top-level data IS the most specific record (e.g. MessageGears), not the
+ * parent allocation (e.g. Limestone Networks).
+ *
+ * We extract orgName from the top-level entities first. If that yields only
+ * abuse/tech contacts and no registrant, we also check the `networks` array
+ * that ARIN sometimes includes for parent context, but we still prefer the
+ * top-level (most specific) result.
+ *
  * Returns null if the lookup fails or times out.
  */
 export async function lookupRdap(ip: string): Promise<{ orgName: string | null; cidr: string | null } | null> {
   try {
     const res = await fetch(`https://rdap.arin.net/registry/ip/${ip}`, {
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/rdap+json, application/json" },
       signal: AbortSignal.timeout(8000),
     })
     if (!res.ok) return null
     const data = await res.json()
 
-    // OrgName lives in entities[].vcardArray or entities[].handle
-    let orgName: string | null = null
-    if (Array.isArray(data.entities)) {
-      for (const entity of data.entities) {
-        if (Array.isArray(entity.roles) && entity.roles.includes("registrant")) {
-          // vcardArray: [["vcard", [["fn", {}, "text", "OrgName"], ...]]]
-          const vcards = entity.vcardArray?.[1] ?? []
-          const fn = vcards.find((v: any[]) => v[0] === "fn")
-          if (fn?.[3]) { orgName = fn[3]; break }
-        }
-      }
-      // Fallback: first entity with a name
-      if (!orgName) {
-        for (const entity of data.entities) {
-          const vcards = entity.vcardArray?.[1] ?? []
-          const fn = vcards.find((v: any[]) => v[0] === "fn")
-          if (fn?.[3]) { orgName = fn[3]; break }
-        }
+    // The top-level `data` object is the most specific network for this IP.
+    // Extract orgName from its entities (registrant preferred).
+    let orgName = extractOrgNameFromEntities(data.entities ?? [])
+
+    // If no registrant found in top-level entities, check if ARIN embedded
+    // child network records in a `networks` array (some RDAP implementations).
+    if (!orgName && Array.isArray(data.networks)) {
+      for (const network of data.networks) {
+        const candidate = extractOrgNameFromEntities(network.entities ?? [])
+        if (candidate) { orgName = candidate; break }
       }
     }
 
-    // CIDR from handle or cidr0 extension
+    // Last resort: use the NetName field (data.name) which is always the
+    // most-specific network name (e.g. "MESSAGEGEARS-1")
+    if (!orgName && data.name) {
+      orgName = data.name
+    }
+
+    // CIDR: prefer cidr0 extension (most accurate), fall back to handle
     const cidr: string | null = data.cidr0_cidrs?.[0]
       ? `${data.cidr0_cidrs[0].v4prefix}/${data.cidr0_cidrs[0].length}`
       : data.handle ?? null

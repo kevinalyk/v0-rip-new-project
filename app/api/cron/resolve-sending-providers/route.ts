@@ -99,18 +99,31 @@ export async function GET(request: Request) {
       stats.providerAssigned++
     }
 
-    // ── Step 3: Re-check any emails whose provider is the raw IP (RDAP may have failed before) ──
-    // Only do this for IPs that haven't been checked via RDAP yet
+    // ── Step 3: Re-resolve any IP mappings not yet checked via RDAP ──
+    // This covers: (a) newly added IPs with rdapChecked=false, and
+    // (b) IPs reset by the admin "Reset & Re-resolve All" action
     const uncheckedMappings = await prisma.ipSenderMapping.findMany({
       where: { rdapChecked: false },
       select: { ip: true },
-      take: 50,
+      take: 100,
     })
 
     for (const { ip } of uncheckedMappings) {
       try {
-        await ensureIpMapping(ip)
+        // Delete the stale row so ensureIpMapping creates a fresh one with the
+        // corrected lookupRdap logic (most-specific RDAP network block)
+        await prisma.ipSenderMapping.delete({ where: { ip } }).catch(() => {})
+        const mapping = await ensureIpMapping(ip)
+
+        // Re-assign sendingProvider on all campaigns that use this IP and
+        // currently have no provider set (cleared by the re-resolve action)
+        const providerName = resolveProviderName(mapping)
+        await prisma.competitiveInsightCampaign.updateMany({
+          where: { sendingIp: ip, sendingProvider: null },
+          data: { sendingProvider: providerName },
+        })
         stats.rdapLookedUp++
+        stats.providerAssigned++
       } catch {
         stats.errors++
       }

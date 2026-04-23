@@ -278,10 +278,17 @@ export default function SenderProvidersPage() {
   const handleReResolve = async () => {
     setReResolving(true)
     try {
-      const res = await fetch("/api/admin/ip-sender-mappings/re-resolve", { method: "POST" })
+      const res = await fetch("/api/admin/ip-sender-mappings/re-resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: true }),
+      })
       const data = await res.json()
       if (res.ok) {
-        toast({ title: "Reset complete", description: data.message })
+        toast({
+          title: "Full reset complete",
+          description: data.message,
+        })
         fetchIpMappings()
       } else {
         toast({ title: "Reset failed", description: data.error || "Something went wrong", variant: "destructive" })
@@ -347,7 +354,7 @@ export default function SenderProvidersPage() {
                 <div className="flex items-center gap-2 shrink-0 ml-4">
                   <Button variant="outline" onClick={handleReResolve} disabled={reResolving}>
                     {reResolving ? <Loader2 size={16} className="mr-2 animate-spin" /> : <RefreshCw size={16} className="mr-2" />}
-                    Reset &amp; Re-resolve All
+                    {reResolving ? "Resetting..." : "Full Reset & Backfill All"}
                   </Button>
                   <Button className="bg-rip-red hover:bg-rip-red/90 text-white" onClick={openIpAddDialog}>
                     <Plus size={16} className="mr-2" />

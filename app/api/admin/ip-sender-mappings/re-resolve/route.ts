@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
 
     const where = force ? {} : { friendlyName: null }
 
+    // Reset all IP mappings so cron re-resolves with updated lookupRdap logic
     const { count } = await prisma.ipSenderMapping.updateMany({
       where,
       data: {
@@ -31,10 +32,18 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // Also clear sendingProvider on all campaigns so they get re-assigned
+    // on the next cron run with the freshly resolved orgNames
+    const { count: campaignCount } = await prisma.competitiveInsightCampaign.updateMany({
+      where: { sendingProvider: { not: null } },
+      data: { sendingProvider: null },
+    })
+
     return NextResponse.json({
       success: true,
       reset: count,
-      message: `Reset ${count} IP mapping${count !== 1 ? "s" : ""}. The next cron run will re-resolve them.`,
+      campaignsCleared: campaignCount,
+      message: `Reset ${count} IP mapping${count !== 1 ? "s" : ""} and cleared sendingProvider on ${campaignCount} campaign${campaignCount !== 1 ? "s" : ""}. The next cron run will re-resolve everything.`,
     })
   } catch (error) {
     console.error("Error resetting IP mappings:", error)

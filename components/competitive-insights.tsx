@@ -339,6 +339,7 @@ export function CompetitiveInsights({
 
   // Quick-assign state (super_admin only)
   const [assignPopoverCampaignId, setAssignPopoverCampaignId] = useState<string | number | null>(null)
+  const [assignDialogCampaign, setAssignDialogCampaign] = useState<Campaign | null>(null)
   const [assignEntitySearch, setAssignEntitySearch] = useState("")
   const [assigningCampaignId, setAssigningCampaignId] = useState<string | number | null>(null)
 
@@ -1903,66 +1904,13 @@ export function CompetitiveInsights({
                                           </>
                                         )}
                                         {resolvedUser?.role === "super_admin" && !isDomainMappedToEntity(campaign) && (
-                                          <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
-                                            {assignPopoverCampaignId === campaign.id ? (
-                                              <div className="flex flex-col gap-1.5 p-2 border rounded-md bg-background shadow-md w-56">
-                                                <input
-                                                  autoFocus
-                                                  placeholder="Search entity..."
-                                                  value={assignEntitySearch}
-                                                  onChange={(e) => setAssignEntitySearch(e.target.value)}
-                                                  className="text-xs border rounded px-2 py-1 w-full outline-none focus:ring-1 focus:ring-ring"
-                                                />
-                                                <div className="max-h-40 overflow-y-auto flex flex-col gap-0.5">
-                                                  {allEntities
-                                                    .filter((e) =>
-                                                      e.name.toLowerCase().includes(assignEntitySearch.toLowerCase())
-                                                    )
-                                                    .slice(0, 20)
-                                                    .map((entity) => (
-                                                      <button
-                                                        key={entity.id}
-                                                        disabled={assigningCampaignId === campaign.id}
-                                                        onClick={() => handleQuickAssign(campaign, entity.id)}
-                                                        className="text-left text-xs px-2 py-1 rounded hover:bg-muted truncate disabled:opacity-50"
-                                                      >
-                                                        {assigningCampaignId === campaign.id ? (
-                                                          <Loader2 className="h-3 w-3 animate-spin inline mr-1" />
-                                                        ) : null}
-                                                        {entity.name}
-                                                        {entity.party && (
-                                                          <span className="text-muted-foreground ml-1">
-                                                            · {entity.party}
-                                                          </span>
-                                                        )}
-                                                      </button>
-                                                    ))}
-                                                  {allEntities.filter((e) =>
-                                                    e.name.toLowerCase().includes(assignEntitySearch.toLowerCase())
-                                                  ).length === 0 && (
-                                                    <p className="text-xs text-muted-foreground px-2 py-1">No entities found</p>
-                                                  )}
-                                                </div>
-                                                <button
-                                                  onClick={() => {
-                                                    setAssignPopoverCampaignId(null)
-                                                    setAssignEntitySearch("")
-                                                  }}
-                                                  className="text-xs text-muted-foreground hover:text-foreground text-left px-1"
-                                                >
-                                                  Cancel
-                                                </button>
-                                              </div>
-                                            ) : (
-                                              <button
-                                                onClick={() => setAssignPopoverCampaignId(campaign.id)}
-                                                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border rounded px-1.5 py-0.5 hover:bg-muted transition-colors"
-                                              >
-                                                <UserPlus className="h-3 w-3" />
-                                                Assign sender
-                                              </button>
-                                            )}
-                                          </div>
+                                          <button
+                                            className="mt-1.5 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border rounded px-1.5 py-0.5 hover:bg-muted transition-colors"
+                                            onClick={(e) => { e.stopPropagation(); setAssignDialogCampaign(campaign); setAssignPopoverCampaignId(campaign.id); setAssignEntitySearch("") }}
+                                          >
+                                            <UserPlus className="h-3 w-3" />
+                                            Assign sender
+                                          </button>
                                         )}
                                       </>
                                     ) : (
@@ -1989,69 +1937,13 @@ export function CompetitiveInsights({
                                           {campaign.type === "sms" ? campaign.phoneNumber : campaign.senderEmail}
                                         </div>
                                         {resolvedUser?.role === "super_admin" && (
-                                          <div
-                                            className="mt-1.5"
-                                            onClick={(e) => e.stopPropagation()}
+                                          <button
+                                            className="mt-1.5 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border rounded px-1.5 py-0.5 hover:bg-muted transition-colors"
+                                            onClick={(e) => { e.stopPropagation(); setAssignDialogCampaign(campaign); setAssignPopoverCampaignId(campaign.id); setAssignEntitySearch("") }}
                                           >
-                                            {assignPopoverCampaignId === campaign.id ? (
-                                              <div className="flex flex-col gap-1.5 p-2 border rounded-md bg-background shadow-md w-56">
-                                                <input
-                                                  autoFocus
-                                                  placeholder="Search entity..."
-                                                  value={assignEntitySearch}
-                                                  onChange={(e) => setAssignEntitySearch(e.target.value)}
-                                                  className="text-xs border rounded px-2 py-1 w-full outline-none focus:ring-1 focus:ring-ring"
-                                                />
-                                                <div className="max-h-40 overflow-y-auto flex flex-col gap-0.5">
-                                                  {allEntities
-                                                    .filter((e) =>
-                                                      e.name.toLowerCase().includes(assignEntitySearch.toLowerCase())
-                                                    )
-                                                    .slice(0, 20)
-                                                    .map((entity) => (
-                                                      <button
-                                                        key={entity.id}
-                                                        disabled={assigningCampaignId === campaign.id}
-                                                        onClick={() => handleQuickAssign(campaign, entity.id)}
-                                                        className="text-left text-xs px-2 py-1 rounded hover:bg-muted truncate disabled:opacity-50"
-                                                      >
-                                                        {assigningCampaignId === campaign.id ? (
-                                                          <Loader2 className="h-3 w-3 animate-spin inline mr-1" />
-                                                        ) : null}
-                                                        {entity.name}
-                                                        {entity.party && (
-                                                          <span className="text-muted-foreground ml-1">
-                                                            · {entity.party}
-                                                          </span>
-                                                        )}
-                                                      </button>
-                                                    ))}
-                                                  {allEntities.filter((e) =>
-                                                    e.name.toLowerCase().includes(assignEntitySearch.toLowerCase())
-                                                  ).length === 0 && (
-                                                    <p className="text-xs text-muted-foreground px-2 py-1">No entities found</p>
-                                                  )}
-                                                </div>
-                                                <button
-                                                  onClick={() => {
-                                                    setAssignPopoverCampaignId(null)
-                                                    setAssignEntitySearch("")
-                                                  }}
-                                                  className="text-xs text-muted-foreground hover:text-foreground text-left px-1"
-                                                >
-                                                  Cancel
-                                                </button>
-                                              </div>
-                                            ) : (
-                                              <button
-                                                onClick={() => setAssignPopoverCampaignId(campaign.id)}
-                                                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border rounded px-1.5 py-0.5 hover:bg-muted transition-colors"
-                                              >
-                                                <UserPlus className="h-3 w-3" />
-                                                Assign to entity
-                                              </button>
-                                            )}
-                                          </div>
+                                            <UserPlus className="h-3 w-3" />
+                                            Assign to entity
+                                          </button>
                                         )}
                                       </>
                                     )}
@@ -2449,6 +2341,80 @@ export function CompetitiveInsights({
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Quick-assign Dialog — super_admin only */}
+      <Dialog
+        open={!!assignPopoverCampaignId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAssignPopoverCampaignId(null)
+            setAssignDialogCampaign(null)
+            setAssignEntitySearch("")
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-4 w-4" />
+              Assign to Entity
+            </DialogTitle>
+            <DialogDescription>
+              {assignDialogCampaign && (
+                <>
+                  Assign{" "}
+                  <span className="font-mono text-xs font-medium text-foreground">
+                    {assignDialogCampaign.type === "sms"
+                      ? assignDialogCampaign.phoneNumber
+                      : assignDialogCampaign.senderEmail}
+                  </span>{" "}
+                  to an entity and create a permanent mapping.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 pt-1">
+            <input
+              autoFocus
+              placeholder="Search entity..."
+              value={assignEntitySearch}
+              onChange={(e) => setAssignEntitySearch(e.target.value)}
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground"
+            />
+            <div className="max-h-64 overflow-y-auto flex flex-col divide-y divide-border rounded-md border">
+              {allEntities
+                .filter((e) => e.name.toLowerCase().includes(assignEntitySearch.toLowerCase()))
+                .slice(0, 30)
+                .map((entity) => (
+                  <button
+                    key={entity.id}
+                    disabled={!!assigningCampaignId}
+                    onClick={() => assignDialogCampaign && handleQuickAssign(assignDialogCampaign, entity.id)}
+                    className="flex items-center justify-between px-3 py-2 text-sm hover:bg-muted disabled:opacity-50 text-left transition-colors"
+                  >
+                    <span className="font-medium">{entity.name}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {entity.party && (
+                        <span className="text-xs text-muted-foreground">{entity.party}</span>
+                      )}
+                      {entity.state && (
+                        <span className="text-xs text-muted-foreground">{entity.state}</span>
+                      )}
+                      {assigningCampaignId === assignDialogCampaign?.id && (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      )}
+                    </div>
+                  </button>
+                ))}
+              {allEntities.filter((e) =>
+                e.name.toLowerCase().includes(assignEntitySearch.toLowerCase())
+              ).length === 0 && (
+                <p className="px-3 py-4 text-sm text-muted-foreground text-center">No entities found</p>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

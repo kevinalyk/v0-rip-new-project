@@ -32,6 +32,8 @@ import {
   Star,
   Phone,
   Info,
+  UserPlus,
+  Loader2,
 } from "lucide-react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -334,6 +336,12 @@ export function CompetitiveInsights({
   const resolvedUser = currentUser ?? fetchedUser
   const [subscribedEntityIds, setSubscribedEntityIds] = useState<string[]>([])
   const [allEntities, setAllEntities] = useState<{ id: string; name: string; party?: string | null; state?: string | null }[]>([])
+
+  // Quick-assign state (super_admin only)
+  const [assignPopoverCampaignId, setAssignPopoverCampaignId] = useState<string | number | null>(null)
+  const [assignDialogCampaign, setAssignDialogCampaign] = useState<Campaign | null>(null)
+  const [assignEntitySearch, setAssignEntitySearch] = useState("")
+  const [assigningCampaignId, setAssigningCampaignId] = useState<string | number | null>(null)
 
   // Pre-select entity from URL ?sender= param (e.g. navigating from Directory)
   useEffect(() => {
@@ -940,6 +948,33 @@ export function CompetitiveInsights({
 
   const handleRefresh = () => {
     fetchCampaigns(true) // Call fetchCampaigns with isRefresh = true
+  }
+
+  const handleQuickAssign = async (campaign: Campaign, entityId: string) => {
+    setAssigningCampaignId(campaign.id)
+    try {
+      const body =
+        campaign.type === "sms"
+          ? { smsIds: [campaign.id], entityId, createMapping: true }
+          : { campaignIds: [campaign.id], entityId, createMapping: true }
+
+      const res = await fetch("/api/ci-entities/assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+
+      if (!res.ok) throw new Error("Failed to assign")
+
+      toast({ title: "Assigned", description: "Message assigned and mapping created." })
+      setAssignPopoverCampaignId(null)
+      setAssignEntitySearch("")
+      fetchCampaigns()
+    } catch {
+      toast({ title: "Error", description: "Failed to assign message.", variant: "destructive" })
+    } finally {
+      setAssigningCampaignId(null)
+    }
   }
 
   const ciAccessLevel = resolvedPlan
@@ -1868,6 +1903,15 @@ export function CompetitiveInsights({
                                             </div>
                                           </>
                                         )}
+                                        {resolvedUser?.role === "super_admin" && !isDomainMappedToEntity(campaign) && (
+                                          <button
+                                            className="mt-1.5 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border rounded px-1.5 py-0.5 hover:bg-muted transition-colors"
+                                            onClick={(e) => { e.stopPropagation(); setAssignDialogCampaign(campaign); setAssignPopoverCampaignId(campaign.id); setAssignEntitySearch("") }}
+                                          >
+                                            <UserPlus className="h-3 w-3" />
+                                            Assign sender
+                                          </button>
+                                        )}
                                       </>
                                     ) : (
                                       <>
@@ -1892,6 +1936,15 @@ export function CompetitiveInsights({
                                         <div className="text-xs text-muted-foreground truncate">
                                           {campaign.type === "sms" ? campaign.phoneNumber : campaign.senderEmail}
                                         </div>
+                                        {resolvedUser?.role === "super_admin" && (
+                                          <button
+                                            className="mt-1.5 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border rounded px-1.5 py-0.5 hover:bg-muted transition-colors"
+                                            onClick={(e) => { e.stopPropagation(); setAssignDialogCampaign(campaign); setAssignPopoverCampaignId(campaign.id); setAssignEntitySearch("") }}
+                                          >
+                                            <UserPlus className="h-3 w-3" />
+                                            Assign to entity
+                                          </button>
+                                        )}
                                       </>
                                     )}
                                   </div>
@@ -2288,6 +2341,80 @@ export function CompetitiveInsights({
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Quick-assign Dialog — super_admin only */}
+      <Dialog
+        open={!!assignPopoverCampaignId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAssignPopoverCampaignId(null)
+            setAssignDialogCampaign(null)
+            setAssignEntitySearch("")
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-4 w-4" />
+              Assign to Entity
+            </DialogTitle>
+            <DialogDescription>
+              {assignDialogCampaign && (
+                <>
+                  Assign{" "}
+                  <span className="font-mono text-xs font-medium text-foreground">
+                    {assignDialogCampaign.type === "sms"
+                      ? assignDialogCampaign.phoneNumber
+                      : assignDialogCampaign.senderEmail}
+                  </span>{" "}
+                  to an entity and create a permanent mapping.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 pt-1">
+            <input
+              autoFocus
+              placeholder="Search entity..."
+              value={assignEntitySearch}
+              onChange={(e) => setAssignEntitySearch(e.target.value)}
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground"
+            />
+            <div className="max-h-64 overflow-y-auto flex flex-col divide-y divide-border rounded-md border">
+              {allEntities
+                .filter((e) => e.name.toLowerCase().includes(assignEntitySearch.toLowerCase()))
+                .slice(0, 30)
+                .map((entity) => (
+                  <button
+                    key={entity.id}
+                    disabled={!!assigningCampaignId}
+                    onClick={() => assignDialogCampaign && handleQuickAssign(assignDialogCampaign, entity.id)}
+                    className="flex items-center justify-between px-3 py-2 text-sm hover:bg-muted disabled:opacity-50 text-left transition-colors"
+                  >
+                    <span className="font-medium">{entity.name}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {entity.party && (
+                        <span className="text-xs text-muted-foreground">{entity.party}</span>
+                      )}
+                      {entity.state && (
+                        <span className="text-xs text-muted-foreground">{entity.state}</span>
+                      )}
+                      {assigningCampaignId === assignDialogCampaign?.id && (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      )}
+                    </div>
+                  </button>
+                ))}
+              {allEntities.filter((e) =>
+                e.name.toLowerCase().includes(assignEntitySearch.toLowerCase())
+              ).length === 0 && (
+                <p className="px-3 py-4 text-sm text-muted-foreground text-center">No entities found</p>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

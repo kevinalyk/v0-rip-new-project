@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Twitter/X Automation Gameplan — Inbox.GOP</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 13px;
+      line-height: 1.7;
+      color: #1a1a1a;
+      background: #f4f4f5;
+      padding: 40px 20px;
+    }
+
+    .page {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 4px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+      overflow: hidden;
+    }
+
+    /* Header */
+    .header {
+      background: #dc2626;
+      padding: 36px 48px 32px;
+      color: white;
+    }
+    .header .label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      opacity: 0.75;
+      margin-bottom: 8px;
+    }
+    .header h1 {
+      font-size: 26px;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 10px;
+    }
+    .header .meta {
+      font-size: 12px;
+      opacity: 0.8;
+      display: flex;
+      gap: 24px;
+    }
+
+    /* Body */
+    .body {
+      padding: 40px 48px 48px;
+    }
+
+    /* Section */
+    .section {
+      margin-bottom: 36px;
+    }
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #dc2626;
+      margin-bottom: 14px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid #fecaca;
+    }
+
+    h2 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: #111;
+    }
+    h3 {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: #1a1a1a;
+    }
+
+    p {
+      color: #374151;
+      margin-bottom: 10px;
+    }
+    p:last-child { margin-bottom: 0; }
+
+    /* Cards */
+    .card-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 4px;
+    }
+    .card {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 16px;
+    }
+    .card h3 {
+      margin-bottom: 6px;
+    }
+    .card p {
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    /* Steps */
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-top: 4px;
+    }
+    .step {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .step-num {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #dc2626;
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .step-content h3 {
+      margin-bottom: 3px;
+    }
+    .step-content p {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 0;
+    }
+
+    /* Code block */
+    .code {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      font-family: 'Courier New', monospace;
+      font-size: 11.5px;
+      line-height: 1.8;
+      border-radius: 6px;
+      padding: 16px 20px;
+      margin: 10px 0;
+      white-space: pre;
+      overflow-x: auto;
+    }
+    .code .comment { color: #6a9955; }
+    .code .key { color: #9cdcfe; }
+    .code .val { color: #ce9178; }
+
+    /* Caption examples */
+    .caption-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .caption-item {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-left: 3px solid #16a34a;
+      border-radius: 4px;
+      padding: 10px 14px;
+      font-size: 12.5px;
+      color: #14532d;
+      font-style: italic;
+    }
+
+    /* Status table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6px;
+      font-size: 12px;
+    }
+    th {
+      text-align: left;
+      padding: 8px 12px;
+      background: #f3f4f6;
+      font-weight: 600;
+      color: #374151;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    td {
+      padding: 9px 12px;
+      border-bottom: 1px solid #f0f0f0;
+      color: #374151;
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .badge-yellow { background: #fef9c3; color: #854d0e; }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-gray { background: #f3f4f6; color: #4b5563; }
+
+    /* Callout */
+    .callout {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-left: 3px solid #f59e0b;
+      border-radius: 4px;
+      padding: 14px 16px;
+      font-size: 12.5px;
+      color: #92400e;
+      margin-top: 10px;
+    }
+    .callout strong { color: #78350f; }
+
+    /* Info callout */
+    .callout-blue {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-left: 3px solid #3b82f6;
+      border-radius: 4px;
+      padding: 14px 16px;
+      font-size: 12.5px;
+      color: #1e3a8a;
+      margin-top: 10px;
+    }
+
+    /* Footer */
+    .footer {
+      border-top: 1px solid #f0f0f0;
+      padding: 18px 48px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: #9ca3af;
+    }
+
+    @media print {
+      body { background: white; padding: 0; }
+      .page { box-shadow: none; border-radius: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="label">Inbox.GOP — Internal Strategy Document</div>
+      <h1>Twitter/X Automation Gameplan</h1>
+      <div class="meta">
+        <span>Version 1.0</span>
+        <span>Status: Pending Twitter API + Ad Approval</span>
+        <span>April 2026</span>
+      </div>
+    </div>
+
+    <div class="body">
+
+      <!-- Overview -->
+      <div class="section">
+        <div class="section-title">Overview</div>
+        <p>This document outlines the plan to build an automated Twitter/X posting system for Inbox.GOP. The goal is to drive daily organic traffic to public-facing pages by surfacing real political fundraising messages — emails and SMS — that candidates send to their supporters. Each post links back to a shareable, public URL on our platform, which will carry Google Ads once approved.</p>
+        <p>The system posts once per day, randomly selecting from messages sent within the last 24 hours that have not yet been posted. Only candidates are eligible (they have profile photos, summaries, and working directory links). No message is ever posted twice.</p>
+      </div>
+
+      <!-- Why this works -->
+      <div class="section">
+        <div class="section-title">Why This Works</div>
+        <div class="card-grid">
+          <div class="card">
+            <h3>Ad Revenue Potential</h3>
+            <p>Share page URLs are public and will carry Google Ads. A single viral tweet from a prominent candidate could send thousands of pageviews to an ad-enabled URL in hours.</p>
+          </div>
+          <div class="card">
+            <h3>Zero Marginal Cost</h3>
+            <p>Content already exists in our database. The bot surfaces it automatically with no editorial effort. One post per day, fully automated once built.</p>
+          </div>
+          <div class="card">
+            <h3>Inherent Virality</h3>
+            <p>Political fundraising messages are often outrage-inducing, funny, or alarming by design. They perform well on political Twitter without any additional editorializing.</p>
+          </div>
+          <div class="card">
+            <h3>SEO & Backlinks</h3>
+            <p>Each tweet links to a canonical public URL on our domain. As posts get shared, we accumulate organic backlinks — which directly supports the Google Ads approval goal.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- What Gets Posted -->
+      <div class="section">
+        <div class="section-title">Content Selection Rules</div>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <h3>Source: Emails and SMS Messages Only</h3>
+              <p>Query both the Campaign (email) and SmsMessage tables. Entity-only posts are excluded for now — messaging content is more interesting and shareable.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <h3>Candidates Only</h3>
+              <p>Filter to entities with type "candidate". These have profile photos, Ballotpedia summaries, party/state info, and working directory links — all of which make the share page rich and ad-friendly.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <h3>Sent Within the Last 24 Hours</h3>
+              <p>Only messages where receivedAt (or createdAt) is within the past 24 hours are eligible. This keeps the content fresh and timely, which performs better on Twitter.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <h3>Never Repeat</h3>
+              <p>A new boolean column — twitterPosted — is added to both tables. Once a message is posted, it is marked true and is permanently excluded from future selection.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-content">
+              <h3>Random Selection</h3>
+              <p>Among all eligible messages, one is chosen at random. This ensures variety across candidates, parties, and states rather than always surfacing the same high-volume sender.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Share Token + Public URL -->
+      <div class="section">
+        <div class="section-title">Share Token URL System</div>
+        <p>Each posted tweet links to a <strong>share token URL</strong> — a public, permanent link to a single email or SMS message. These URLs are already planned as part of the broader share feature. Example:</p>
+        <div class="code"><span class="comment"># Email share URL</span>
+https://app.rip-tool.com/share/email/<span class="val">abc123def456</span>
+
+<span class="comment"># SMS share URL</span>
+https://app.rip-tool.com/share/sms/<span class="val">xyz789ghi012</span></div>
+        <p>The share token is generated on first post if one does not already exist. The page it links to should be public, SEO-optimized (SSR), and carry Google Ads units — making every tweet a potential ad impression funnel.</p>
+        <div class="callout-blue">
+          <strong>Note:</strong> The share page feature (generating token URLs + public share pages) needs to be built before the Twitter bot can go live. The bot code can be written in parallel; it just needs the share URL generation function to be available at runtime.
+        </div>
+      </div>
+
+      <!-- Caption Format -->
+      <div class="section">
+        <div class="section-title">Tweet Caption Format</div>
+        <p>Captions are generated dynamically using the candidate's name, party, and message type. They are short, punchy, and include a direct link. Below are example formats:</p>
+        <div class="caption-list">
+          <div class="caption-item">👀 See what Tom Emmer (R-MN) just sent to supporters → https://app.rip-tool.com/share/email/abc123</div>
+          <div class="caption-item">🚨 Ted Cruz's campaign is texting voters. Here's exactly what they said → https://app.rip-tool.com/share/sms/xyz789</div>
+          <div class="caption-item">📬 Fresh from the Ron DeSantis fundraising inbox → https://app.rip-tool.com/share/email/def456</div>
+          <div class="caption-item">💰 This is what [Candidate Name] is sending out RIGHT NOW. Wild. → https://app.rip-tool.com/share/email/ghi012</div>
+        </div>
+        <p style="margin-top: 12px;">Caption templates are stored as an array and selected randomly or rotated. Party (R/D) and state abbreviation are pulled from the entity record. Hashtags like <strong>#MAGA</strong>, <strong>#2026</strong>, or <strong>#PoliticalFundraising</strong> can optionally be appended to improve discoverability.</p>
+      </div>
+
+      <!-- Technical Architecture -->
+      <div class="section">
+        <div class="section-title">Technical Architecture</div>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <h3>Vercel Cron Job</h3>
+              <p>A scheduled route at /api/cron/twitter-post runs once daily at 10:00am EST via vercel.json cron config. Requires Vercel Pro plan (already on it).</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <h3>Twitter API v2</h3>
+              <p>Uses the POST /2/tweets endpoint with OAuth 1.0a credentials. The twitter-api-v2 npm package handles authentication. Requires a Twitter Developer App with Read+Write permissions.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <h3>Database Schema Change</h3>
+              <p>Add twitterPosted: Boolean (default false) and twitterPostedAt: DateTime? to both the Campaign and SmsMessage Prisma models. One migration script required.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <h3>Environment Variables</h3>
+              <p>Four new env vars added to Vercel: TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET. Stored securely, never in code.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-content">
+              <h3>Cron Security</h3>
+              <p>The cron endpoint is protected by a CRON_SECRET header that Vercel injects automatically. Unauthenticated requests return 401.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="code" style="margin-top: 16px;"><span class="comment">// vercel.json — cron config</span>
+{
+  <span class="key">"crons"</span>: [
+    {
+      <span class="key">"path"</span>: <span class="val">"/api/cron/twitter-post"</span>,
+      <span class="key">"schedule"</span>: <span class="val">"0 15 * * *"</span>  <span class="comment">// 10am EST = 15:00 UTC</span>
+    }
+  ]
+}</div>
+      </div>
+
+      <!-- Execution Flow -->
+      <div class="section">
+        <div class="section-title">Execution Flow (Daily)</div>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <h3>Cron fires at 10:00am EST</h3>
+              <p>Vercel calls /api/cron/twitter-post with the CRON_SECRET header.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <h3>Query eligible messages</h3>
+              <p>Prisma queries Campaign and SmsMessage for records where: receivedAt is within last 24 hours, twitterPosted is false, and the associated entity is a candidate.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <h3>Random selection</h3>
+              <p>One message is chosen at random from the combined result set. If no eligible messages exist, the cron exits gracefully with a 200 and logs a "nothing to post" message.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <h3>Generate or retrieve share token</h3>
+              <p>If the message already has a shareToken, use it. If not, generate one (uuid), save it to the DB, and construct the public URL.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-content">
+              <h3>Build caption and post tweet</h3>
+              <p>Select a caption template, inject entity name, party, and share URL. Post via Twitter API v2. On success, mark the message as twitterPosted: true and record twitterPostedAt.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">6</div>
+            <div class="step-content">
+              <h3>Log result</h3>
+              <p>Success and failure are both logged to the server console (visible in Vercel logs). No retries on failure — next day's cron will pick a different message.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ad Revenue Angle -->
+      <div class="section">
+        <div class="section-title">Ad Revenue on Share Pages</div>
+        <p>Share pages (e.g. /share/email/abc123) are fully public, SSR-rendered, and not gated behind login. This makes them eligible for Google AdSense placements. Each tweet that performs well drives traffic directly to these pages, where ad impressions are recorded.</p>
+        <table>
+          <tr>
+            <th>Scenario</th>
+            <th>Est. Impressions/Day</th>
+            <th>Notes</th>
+          </tr>
+          <tr>
+            <td>Quiet day, niche candidate</td>
+            <td>50–300</td>
+            <td>Still generates backlinks and crawl signals</td>
+          </tr>
+          <tr>
+            <td>Active news cycle, midsize candidate</td>
+            <td>500–3,000</td>
+            <td>Solid ad revenue at CPM of $2–5</td>
+          </tr>
+          <tr>
+            <td>Viral tweet, major candidate (Trump, DeSantis, Cruz)</td>
+            <td>10,000–100,000+</td>
+            <td>Significant revenue event; also great for AdSense approval signals</td>
+          </tr>
+        </table>
+        <div class="callout">
+          <strong>Important:</strong> Share pages must have Google Ads units placed on them before going live with the Twitter bot. The bot is the traffic driver — ads need to be ready to capture that traffic the moment it arrives.
+        </div>
+      </div>
+
+      <!-- Prerequisites Checklist -->
+      <div class="section">
+        <div class="section-title">Prerequisites Before Launch</div>
+        <table>
+          <tr>
+            <th>Item</th>
+            <th>Owner</th>
+            <th>Status</th>
+          </tr>
+          <tr>
+            <td>Google AdSense approval</td>
+            <td>Kevin</td>
+            <td><span class="badge badge-yellow">In Progress</span></td>
+          </tr>
+          <tr>
+            <td>Twitter Developer App created</td>
+            <td>Kevin</td>
+            <td><span class="badge badge-yellow">Pending</span></td>
+          </tr>
+          <tr>
+            <td>Twitter API credentials (Read+Write)</td>
+            <td>Kevin</td>
+            <td><span class="badge badge-yellow">Pending</span></td>
+          </tr>
+          <tr>
+            <td>Share token URL system built</td>
+            <td>Dev</td>
+            <td><span class="badge badge-yellow">Pending</span></td>
+          </tr>
+          <tr>
+            <td>Public share pages (SSR, ad-ready)</td>
+            <td>Dev</td>
+            <td><span class="badge badge-yellow">Pending</span></td>
+          </tr>
+          <tr>
+            <td>DB migration: twitterPosted columns</td>
+            <td>Dev</td>
+            <td><span class="badge badge-gray">Queued</span></td>
+          </tr>
+          <tr>
+            <td>Cron job route + Twitter API integration</td>
+            <td>Dev</td>
+            <td><span class="badge badge-gray">Queued</span></td>
+          </tr>
+          <tr>
+            <td>Ad units placed on share pages</td>
+            <td>Kevin + Dev</td>
+            <td><span class="badge badge-gray">Queued</span></td>
+          </tr>
+          <tr>
+            <td>End-to-end test on staging</td>
+            <td>Dev</td>
+            <td><span class="badge badge-gray">Queued</span></td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Future Enhancements -->
+      <div class="section">
+        <div class="section-title">Future Enhancements (Post-Launch)</div>
+        <div class="card-grid">
+          <div class="card">
+            <h3>Multiple Posts Per Day</h3>
+            <p>Scale to 2–3 posts per day once the account has followers and engagement. Spread across morning, afternoon, and evening EST windows.</p>
+          </div>
+          <div class="card">
+            <h3>Entity Spotlight Posts</h3>
+            <p>Once messaging posts are running well, add a weekly "entity spotlight" post: candidate photo, stats (X emails, Y SMS), and link to directory profile.</p>
+          </div>
+          <div class="card">
+            <h3>Trend Detection</h3>
+            <p>If a candidate sends an unusually high volume of messages in a short period, trigger an out-of-schedule post: "Ted Cruz has sent 12 emails in 6 hours. See why."</p>
+          </div>
+          <div class="card">
+            <h3>Reply Engagement</h3>
+            <p>Monitor reply sentiment on posted tweets. Popular posts can be quote-retweeted with follow-up context to extend the engagement cycle.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <span>Inbox.GOP — Confidential</span>
+      <span>Twitter/X Automation Gameplan v1.0</span>
+      <span>April 2026</span>
+    </div>
+
+  </div>
+</body>
+</html>

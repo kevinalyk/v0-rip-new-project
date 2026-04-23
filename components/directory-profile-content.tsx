@@ -230,6 +230,16 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
     <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
       <div className="container mx-auto py-8 px-4 max-w-3xl">
 
+        {/* Back navigation */}
+        <div className="mb-6">
+          <Link href="/directory">
+            <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground -ml-2">
+              <ArrowLeft size={14} />
+              Back to Directory
+            </Button>
+          </Link>
+        </div>
+
         {/* Profile hero */}
         <div className="flex items-start gap-6 mb-8">
           <div className="flex-shrink-0 w-32 h-40 rounded-2xl bg-muted flex items-center justify-center text-muted-foreground overflow-hidden">

@@ -32,6 +32,8 @@ import {
   Star,
   Phone,
   Info,
+  UserPlus,
+  Loader2,
 } from "lucide-react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -334,6 +336,11 @@ export function CompetitiveInsights({
   const resolvedUser = currentUser ?? fetchedUser
   const [subscribedEntityIds, setSubscribedEntityIds] = useState<string[]>([])
   const [allEntities, setAllEntities] = useState<{ id: string; name: string; party?: string | null; state?: string | null }[]>([])
+
+  // Quick-assign state (super_admin only)
+  const [assignPopoverCampaignId, setAssignPopoverCampaignId] = useState<string | number | null>(null)
+  const [assignEntitySearch, setAssignEntitySearch] = useState("")
+  const [assigningCampaignId, setAssigningCampaignId] = useState<string | number | null>(null)
 
   // Pre-select entity from URL ?sender= param (e.g. navigating from Directory)
   useEffect(() => {
@@ -940,6 +947,33 @@ export function CompetitiveInsights({
 
   const handleRefresh = () => {
     fetchCampaigns(true) // Call fetchCampaigns with isRefresh = true
+  }
+
+  const handleQuickAssign = async (campaign: Campaign, entityId: string) => {
+    setAssigningCampaignId(campaign.id)
+    try {
+      const body =
+        campaign.type === "sms"
+          ? { smsIds: [campaign.id], entityId, createMapping: true }
+          : { campaignIds: [campaign.id], entityId, createMapping: true }
+
+      const res = await fetch("/api/ci-entities/assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+
+      if (!res.ok) throw new Error("Failed to assign")
+
+      toast({ title: "Assigned", description: "Message assigned and mapping created." })
+      setAssignPopoverCampaignId(null)
+      setAssignEntitySearch("")
+      fetchCampaigns()
+    } catch {
+      toast({ title: "Error", description: "Failed to assign message.", variant: "destructive" })
+    } finally {
+      setAssigningCampaignId(null)
+    }
   }
 
   const ciAccessLevel = resolvedPlan
@@ -1892,6 +1926,71 @@ export function CompetitiveInsights({
                                         <div className="text-xs text-muted-foreground truncate">
                                           {campaign.type === "sms" ? campaign.phoneNumber : campaign.senderEmail}
                                         </div>
+                                        {resolvedUser?.role === "super_admin" && (
+                                          <div
+                                            className="mt-1.5"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            {assignPopoverCampaignId === campaign.id ? (
+                                              <div className="flex flex-col gap-1.5 p-2 border rounded-md bg-background shadow-md w-56">
+                                                <input
+                                                  autoFocus
+                                                  placeholder="Search entity..."
+                                                  value={assignEntitySearch}
+                                                  onChange={(e) => setAssignEntitySearch(e.target.value)}
+                                                  className="text-xs border rounded px-2 py-1 w-full outline-none focus:ring-1 focus:ring-ring"
+                                                />
+                                                <div className="max-h-40 overflow-y-auto flex flex-col gap-0.5">
+                                                  {allEntities
+                                                    .filter((e) =>
+                                                      e.name.toLowerCase().includes(assignEntitySearch.toLowerCase())
+                                                    )
+                                                    .slice(0, 20)
+                                                    .map((entity) => (
+                                                      <button
+                                                        key={entity.id}
+                                                        disabled={assigningCampaignId === campaign.id}
+                                                        onClick={() => handleQuickAssign(campaign, entity.id)}
+                                                        className="text-left text-xs px-2 py-1 rounded hover:bg-muted truncate disabled:opacity-50"
+                                                      >
+                                                        {assigningCampaignId === campaign.id ? (
+                                                          <Loader2 className="h-3 w-3 animate-spin inline mr-1" />
+                                                        ) : null}
+                                                        {entity.name}
+                                                        {entity.party && (
+                                                          <span className="text-muted-foreground ml-1">
+                                                            · {entity.party}
+                                                          </span>
+                                                        )}
+                                                      </button>
+                                                    ))}
+                                                  {allEntities.filter((e) =>
+                                                    e.name.toLowerCase().includes(assignEntitySearch.toLowerCase())
+                                                  ).length === 0 && (
+                                                    <p className="text-xs text-muted-foreground px-2 py-1">No entities found</p>
+                                                  )}
+                                                </div>
+                                                <button
+                                                  onClick={() => {
+                                                    setAssignPopoverCampaignId(null)
+                                                    setAssignEntitySearch("")
+                                                  }}
+                                                  className="text-xs text-muted-foreground hover:text-foreground text-left px-1"
+                                                >
+                                                  Cancel
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <button
+                                                onClick={() => setAssignPopoverCampaignId(campaign.id)}
+                                                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border rounded px-1.5 py-0.5 hover:bg-muted transition-colors"
+                                              >
+                                                <UserPlus className="h-3 w-3" />
+                                                Assign to entity
+                                              </button>
+                                            )}
+                                          </div>
+                                        )}
                                       </>
                                     )}
                                   </div>

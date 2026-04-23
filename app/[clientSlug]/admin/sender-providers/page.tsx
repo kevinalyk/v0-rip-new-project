@@ -88,6 +88,7 @@ export default function SenderProvidersPage() {
   const [ipNotes, setIpNotes] = useState("")
   const [ipSaving, setIpSaving] = useState(false)
   const [ipDeleteTarget, setIpDeleteTarget] = useState<IpMapping | null>(null)
+  const [reResolving, setReResolving] = useState(false)
 
   // ── Auth check ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -274,6 +275,24 @@ export default function SenderProvidersPage() {
     }
   }
 
+  const handleReResolve = async () => {
+    setReResolving(true)
+    try {
+      const res = await fetch("/api/admin/ip-sender-mappings/re-resolve", { method: "POST" })
+      const data = await res.json()
+      if (res.ok) {
+        toast({ title: "Reset complete", description: data.message })
+        fetchIpMappings()
+      } else {
+        toast({ title: "Reset failed", description: data.error || "Something went wrong", variant: "destructive" })
+      }
+    } catch {
+      toast({ title: "Reset failed", description: "Something went wrong", variant: "destructive" })
+    } finally {
+      setReResolving(false)
+    }
+  }
+
   const handleIpDelete = async () => {
     if (!ipDeleteTarget) return
     try {
@@ -325,10 +344,16 @@ export default function SenderProvidersPage() {
                   Map sending IPs (auto-resolved by the hourly cron via ARIN RDAP) to friendly provider names.
                   IPs already discovered automatically appear here — manually add any you need to override or pre-populate.
                 </p>
-                <Button className="bg-rip-red hover:bg-rip-red/90 text-white shrink-0 ml-4" onClick={openIpAddDialog}>
-                  <Plus size={16} className="mr-2" />
-                  Add IP Mapping
-                </Button>
+                <div className="flex items-center gap-2 shrink-0 ml-4">
+                  <Button variant="outline" onClick={handleReResolve} disabled={reResolving}>
+                    {reResolving ? <Loader2 size={16} className="mr-2 animate-spin" /> : <RefreshCw size={16} className="mr-2" />}
+                    Reset &amp; Re-resolve All
+                  </Button>
+                  <Button className="bg-rip-red hover:bg-rip-red/90 text-white" onClick={openIpAddDialog}>
+                    <Plus size={16} className="mr-2" />
+                    Add IP Mapping
+                  </Button>
+                </div>
               </div>
 
               <div className="border rounded-md">

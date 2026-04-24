@@ -59,9 +59,15 @@ export async function resolveUnsubProvider(domain: string): Promise<string | nul
   if (existing) return existing.friendlyName ?? null
 
   // New domain — record it for manual assignment, no provider yet
-  await prisma.unsubDomainMapping.create({
-    data: { domain },
-  }).catch(() => {}) // ignore duplicate race conditions
+  try {
+    await prisma.unsubDomainMapping.create({ data: { domain } })
+    console.log(`[resolveUnsubProvider] New domain inserted: ${domain}`)
+  } catch (err: any) {
+    // P2002 = unique constraint violation — already exists, safe to ignore
+    if (err?.code !== "P2002") {
+      console.error(`[resolveUnsubProvider] Failed to insert domain ${domain}:`, err)
+    }
+  }
 
   return null
 }

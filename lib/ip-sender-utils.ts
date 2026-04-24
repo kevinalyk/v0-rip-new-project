@@ -3,14 +3,41 @@ import { prisma } from "@/lib/prisma"
 // ── Tier 1: DKIM selector (.s=) ─────────────────────────────────────────────
 
 /**
+ * Extract the plain text value from a header line that may be JSON-wrapped.
+ * Headers are stored as:  headername: {"value":[...],"html":"...","text":"raw value"}
+ * Falls back to treating the raw line value as plain text if JSON parse fails.
+ */
+function extractHeaderText(rawHeaders: string, headerName: string): string | null {
+  const normalized = rawHeaders.replace(/\r\n/g, "\n").replace(/\n[ \t]/g, " ")
+  const escaped = headerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const lineMatch = normalized.match(new RegExp(`^${escaped}:[ \\t]*(.+)$`, "im"))
+  if (!lineMatch) return null
+  const raw = lineMatch[1].trim()
+
+  // Try to parse as JSON — headers stored by mailparser are JSON objects
+  try {
+    const parsed = JSON.parse(raw)
+    // mailparser format: { value: [...], text: "raw string" }
+    if (typeof parsed?.text === "string") return parsed.text
+    // Some headers store value as an array of objects with text/value fields
+    if (Array.isArray(parsed?.value)) {
+      return parsed.value.map((v: any) => v.text ?? v.value ?? "").join(", ")
+    }
+    return JSON.stringify(parsed)
+  } catch {
+    // Not JSON — return as-is (plain text header)
+    return raw
+  }
+}
+
+/**
  * Extract the DKIM selector value from the DKIM-Signature header.
  * e.g. "DKIM-Signature: v=1; a=rsa-sha256; s=gears; ..." → "gears"
  */
 export function extractDkimSelector(rawHeaders: string): string | null {
-  const normalized = rawHeaders.replace(/\r\n/g, "\n").replace(/\n[ \t]/g, " ")
-  const lineMatch = normalized.match(/^DKIM-Signature:[ \t]*(.+)$/im)
-  if (!lineMatch) return null
-  const sMatch = lineMatch[1].match(/\bs=([^;\s]+)/i)
+  const value = extractHeaderText(rawHeaders, "DKIM-Signature")
+  if (!value) return null
+  const sMatch = value.match(/\bs=([^;\s]+)/i)
   return sMatch ? sMatch[1].toLowerCase().trim() : null
 }
 
@@ -30,23 +57,15 @@ export async function resolveDkimProvider(selector: string): Promise<string | nu
 
 /**
  * Extract the host from the List-Unsubscribe header's HTTP URL.
- * e.g. "List-Unsubscribe: <https://djt.nucleusemail.com/amplify/u/...>" → "nucleusemail.com"
- *
- * Stores the full hostname so admins can identify and assign providers accurately.
- * Handles both \r\n and \n line endings, and tab-continuation folded headers.
+ * Handles both plain-text and JSON-wrapped header formats.
+ * Returns the full hostname (e.g. "unsubscribe.spmta.com") for accurate manual assignment.
  */
 export function extractUnsubDomain(rawHeaders: string): string | null {
-  // Normalize line endings and unfold tab-continued headers
-  const normalized = rawHeaders.replace(/\r\n/g, "\n").replace(/\n[ \t]/g, " ")
-
-  // Find the List-Unsubscribe header line
-  const lineMatch = normalized.match(/^List-Unsubscribe:[ \t]*(.+)$/im)
-  if (!lineMatch) return null
-
-  const headerValue = lineMatch[1]
+  const value = extractHeaderText(rawHeaders, "List-Unsubscribe")
+  if (!value) return null
 
   // Extract the first https:// URL — skip mailto: entries
-  const urlMatch = headerValue.match(/https?:\/\/([^\/>\s,]+)/i)
+  const urlMatch = value.match(/https?:\/\/([^\/>\s,]+)/i)
   if (!urlMatch) return null
 
   return urlMatch[1].toLowerCase().trim()

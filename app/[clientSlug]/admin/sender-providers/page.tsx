@@ -39,6 +39,14 @@ type DkimMapping = {
   createdAt: string
 }
 
+type UnsubMapping = {
+  id: string
+  domain: string
+  friendlyName: string | null
+  notes: string | null
+  createdAt: string
+}
+
 type IpMapping = {
   id: string
   ip: string
@@ -75,6 +83,17 @@ export default function SenderProvidersPage() {
   const [dkimDeleteTarget, setDkimDeleteTarget] = useState<DkimMapping | null>(null)
   const [backfilling, setBackfilling] = useState(false)
 
+  // ── Unsub Domain state ────────────────────────────────────────────────
+  const [unsubMappings, setUnsubMappings] = useState<UnsubMapping[]>([])
+  const [unsubTableLoading, setUnsubTableLoading] = useState(true)
+  const [unsubDialogOpen, setUnsubDialogOpen] = useState(false)
+  const [unsubEditTarget, setUnsubEditTarget] = useState<UnsubMapping | null>(null)
+  const [unsubDomain, setUnsubDomain] = useState("")
+  const [unsubFriendlyName, setUnsubFriendlyName] = useState("")
+  const [unsubNotes, setUnsubNotes] = useState("")
+  const [unsubSaving, setUnsubSaving] = useState(false)
+  const [unsubDeleteTarget, setUnsubDeleteTarget] = useState<UnsubMapping | null>(null)
+
   // ── IP state ──────────────────────────────────────────────────────────
   const [ipMappings, setIpMappings] = useState<IpMapping[]>([])
   const [ipTableLoading, setIpTableLoading] = useState(true)
@@ -88,6 +107,7 @@ export default function SenderProvidersPage() {
   const [ipNotes, setIpNotes] = useState("")
   const [ipSaving, setIpSaving] = useState(false)
   const [ipDeleteTarget, setIpDeleteTarget] = useState<IpMapping | null>(null)
+  const [reResolving, setReResolving] = useState(false)
 
   // ── Auth check ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -133,10 +153,23 @@ export default function SenderProvidersPage() {
     }
   }
 
+  const fetchUnsubMappings = async () => {
+    try {
+      setUnsubTableLoading(true)
+      const res = await fetch("/api/admin/unsub-domain-mappings")
+      if (res.ok) setUnsubMappings(await res.json())
+    } catch {
+      toast({ title: "Error", description: "Failed to fetch unsub domain mappings", variant: "destructive" })
+    } finally {
+      setUnsubTableLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (isAuthorized) {
       fetchDkimMappings()
       fetchIpMappings()
+      fetchUnsubMappings()
     }
   }, [isAuthorized])
 
@@ -274,6 +307,31 @@ export default function SenderProvidersPage() {
     }
   }
 
+  const handleReResolve = async () => {
+    setReResolving(true)
+    try {
+      const res = await fetch("/api/admin/ip-sender-mappings/re-resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: true }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast({
+          title: "Full reset complete",
+          description: data.message,
+        })
+        fetchIpMappings()
+      } else {
+        toast({ title: "Reset failed", description: data.error || "Something went wrong", variant: "destructive" })
+      }
+    } catch {
+      toast({ title: "Reset failed", description: "Something went wrong", variant: "destructive" })
+    } finally {
+      setReResolving(false)
+    }
+  }
+
   const handleIpDelete = async () => {
     if (!ipDeleteTarget) return
     try {
@@ -282,6 +340,67 @@ export default function SenderProvidersPage() {
         toast({ title: "Mapping deleted", description: `Removed ${ipDeleteTarget.ip}` })
         setIpDeleteTarget(null)
         fetchIpMappings()
+      } else {
+        toast({ title: "Error", description: "Failed to delete mapping", variant: "destructive" })
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to delete mapping", variant: "destructive" })
+    }
+  }
+
+  // ── Unsub Domain handlers ─────────────────────────────────────────────
+  const openUnsubAddDialog = () => {
+    setUnsubEditTarget(null)
+    setUnsubDomain("")
+    setUnsubFriendlyName("")
+    setUnsubNotes("")
+    setUnsubDialogOpen(true)
+  }
+
+  const openUnsubEditDialog = (m: UnsubMapping) => {
+    setUnsubEditTarget(m)
+    setUnsubDomain(m.domain)
+    setUnsubFriendlyName(m.friendlyName ?? "")
+    setUnsubNotes(m.notes ?? "")
+    setUnsubDialogOpen(true)
+  }
+
+  const handleUnsubSave = async () => {
+    if (!unsubEditTarget && !unsubDomain.trim()) {
+      toast({ title: "Error", description: "Domain is required", variant: "destructive" })
+      return
+    }
+    setUnsubSaving(true)
+    try {
+      const url = unsubEditTarget ? `/api/admin/unsub-domain-mappings/${unsubEditTarget.id}` : "/api/admin/unsub-domain-mappings"
+      const method = unsubEditTarget ? "PATCH" : "POST"
+      const body = unsubEditTarget
+        ? { friendlyName: unsubFriendlyName, notes: unsubNotes }
+        : { domain: unsubDomain, friendlyName: unsubFriendlyName, notes: unsubNotes }
+      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      const data = await res.json()
+      if (res.ok) {
+        toast({ title: unsubEditTarget ? "Mapping updated" : "Mapping added", description: `${unsubEditTarget?.domain ?? unsubDomain} saved` })
+        setUnsubDialogOpen(false)
+        fetchUnsubMappings()
+      } else {
+        toast({ title: "Error", description: data.error || "Failed to save", variant: "destructive" })
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to save mapping", variant: "destructive" })
+    } finally {
+      setUnsubSaving(false)
+    }
+  }
+
+  const handleUnsubDelete = async () => {
+    if (!unsubDeleteTarget) return
+    try {
+      const res = await fetch(`/api/admin/unsub-domain-mappings/${unsubDeleteTarget.id}`, { method: "DELETE" })
+      if (res.ok) {
+        toast({ title: "Mapping deleted", description: `Removed ${unsubDeleteTarget.domain}` })
+        setUnsubDeleteTarget(null)
+        fetchUnsubMappings()
       } else {
         toast({ title: "Error", description: "Failed to delete mapping", variant: "destructive" })
       }
@@ -316,6 +435,7 @@ export default function SenderProvidersPage() {
             <TabsList>
               <TabsTrigger value="ip">IP Mappings</TabsTrigger>
               <TabsTrigger value="dkim">DKIM Selectors</TabsTrigger>
+              <TabsTrigger value="unsub">Unsub Domains</TabsTrigger>
             </TabsList>
 
             {/* ── IP Tab ──────────────────────────────────────────────── */}
@@ -325,10 +445,16 @@ export default function SenderProvidersPage() {
                   Map sending IPs (auto-resolved by the hourly cron via ARIN RDAP) to friendly provider names.
                   IPs already discovered automatically appear here — manually add any you need to override or pre-populate.
                 </p>
-                <Button className="bg-rip-red hover:bg-rip-red/90 text-white shrink-0 ml-4" onClick={openIpAddDialog}>
-                  <Plus size={16} className="mr-2" />
-                  Add IP Mapping
-                </Button>
+                <div className="flex items-center gap-2 shrink-0 ml-4">
+                  <Button variant="outline" onClick={handleReResolve} disabled={reResolving}>
+                    {reResolving ? <Loader2 size={16} className="mr-2 animate-spin" /> : <RefreshCw size={16} className="mr-2" />}
+                    {reResolving ? "Resetting..." : "Full Reset & Backfill All"}
+                  </Button>
+                  <Button className="bg-rip-red hover:bg-rip-red/90 text-white" onClick={openIpAddDialog}>
+                    <Plus size={16} className="mr-2" />
+                    Add IP Mapping
+                  </Button>
+                </div>
               </div>
 
               <div className="border rounded-md">
@@ -449,6 +575,73 @@ export default function SenderProvidersPage() {
                       <TableRow>
                         <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
                           No DKIM mappings yet. Add one to start identifying email providers.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+
+            {/* ── Unsub Domains Tab ──────────────────────────────────────── */}
+            <TabsContent value="unsub" className="space-y-4 mt-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Unsub domains are auto-collected from{" "}
+                  <code className="text-xs bg-muted px-1 py-0.5 rounded">List-Unsubscribe</code> headers.
+                  Assign a provider name to use them for Tier 2 resolution.
+                </p>
+                <Button className="bg-rip-red hover:bg-rip-red/90 text-white shrink-0 ml-4" onClick={openUnsubAddDialog}>
+                  <Plus size={16} className="mr-2" />
+                  Add Mapping
+                </Button>
+              </div>
+
+              <div className="border rounded-md">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Domain</TableHead>
+                      <TableHead>Provider Name</TableHead>
+                      <TableHead>Notes</TableHead>
+                      <TableHead>First Seen</TableHead>
+                      <TableHead className="w-[100px] text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {unsubTableLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-12">
+                          <div className="flex justify-center">
+                            <Loader2 size={24} className="animate-spin text-rip-red" />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : unsubMappings.length > 0 ? (
+                      unsubMappings.map((m) => (
+                        <TableRow key={m.id}>
+                          <TableCell className="font-mono text-sm">{m.domain}</TableCell>
+                          <TableCell className="font-medium">
+                            {m.friendlyName ?? <span className="text-muted-foreground italic">Unassigned</span>}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">{m.notes || "—"}</TableCell>
+                          <TableCell className="text-sm">{new Date(m.createdAt).toLocaleDateString()}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => openUnsubEditDialog(m)}>
+                                <Pencil size={15} className="text-muted-foreground" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => setUnsubDeleteTarget(m)}>
+                                <Trash2 size={15} className="text-red-500" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                          No unsub domains collected yet. They will appear here automatically as emails are processed.
                         </TableCell>
                       </TableRow>
                     )}
@@ -614,6 +807,73 @@ export default function SenderProvidersPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDkimDelete} className="bg-red-500 hover:bg-red-600">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {/* ── Unsub Add/Edit Dialog ──────────────────────────────────────── */}
+      <Dialog open={unsubDialogOpen} onOpenChange={setUnsubDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{unsubEditTarget ? "Edit Unsub Domain Mapping" : "Add Unsub Domain Mapping"}</DialogTitle>
+            <DialogDescription>
+              {unsubEditTarget
+                ? "Assign or update the provider name for this unsub domain."
+                : "Manually add an unsub domain. Domains are also auto-collected by the cron from List-Unsubscribe headers."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="unsubDomain">Domain *</Label>
+              <Input
+                id="unsubDomain"
+                placeholder="e.g. nucleusemail.com"
+                value={unsubDomain}
+                onChange={(e) => setUnsubDomain(e.target.value)}
+                disabled={!!unsubEditTarget}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="unsubFriendlyName">Provider Name</Label>
+              <Input
+                id="unsubFriendlyName"
+                placeholder="e.g. Nucleus, Sailthru, Klaviyo"
+                value={unsubFriendlyName}
+                onChange={(e) => setUnsubFriendlyName(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="unsubNotes">Notes (optional)</Label>
+              <Input
+                id="unsubNotes"
+                placeholder="Any internal notes"
+                value={unsubNotes}
+                onChange={(e) => setUnsubNotes(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUnsubDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleUnsubSave} disabled={unsubSaving} className="bg-rip-red hover:bg-rip-red/90 text-white">
+              {unsubSaving && <Loader2 size={14} className="mr-2 animate-spin" />}
+              {unsubEditTarget ? "Save Changes" : "Add Mapping"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Unsub Delete Confirmation ──────────────────────────────────── */}
+      <AlertDialog open={!!unsubDeleteTarget} onOpenChange={(open) => !open && setUnsubDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Unsub Domain Mapping</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the mapping for <strong>{unsubDeleteTarget?.domain}</strong>?
+              The domain will be re-collected automatically on the next cron run if emails with this unsub URL come in.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleUnsubDelete} className="bg-red-500 hover:bg-red-600">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

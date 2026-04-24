@@ -301,7 +301,8 @@ model CompetitiveInsightCampaign {
   rawHeaders          String?  @db.Text // Raw email headers for compliance checking
   dkimSelector        String?  // Raw parsed .s= value from DKIM-Signature header (e.g. "gears", "s1")
   sendingIp           String?  // Parsed sending IP from rawHeaders (client-ip= / Received-SPF)
-  sendingProvider     String?  // Resolved friendly name from IpSenderMapping (e.g. "MessageGears")
+  sendingProvider     String?  // Resolved friendly name — set by cron via DKIM → Unsub URL → IP tier
+  unsubDomain         String?  // Extracted List-Unsubscribe domain (e.g. "nucleusemail.com")
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -655,6 +656,17 @@ model DkimProviderMapping {
   updatedAt    DateTime @updatedAt
 
   @@index([selector])
+}
+
+model UnsubDomainMapping {
+  id           String   @id @default(cuid())
+  domain       String   @unique // e.g. "nucleusemail.com", "list.sailthru.com"
+  friendlyName String?           // Human-readable provider name — null until manually assigned
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([friendlyName])
 }
 
 model IpSenderMapping {

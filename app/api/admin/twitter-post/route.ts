@@ -82,11 +82,10 @@ export async function POST(request: NextRequest) {
     // ── Score and pick best email from last 24h ───────────────────────────
     const emailCandidates = await prisma.competitiveInsightCampaign.findMany({
       where: {
-        twitterPosted: false,
+        twitterPostedAt: null,
         isDeleted: false,
         createdAt: { gte: since },
         entityId: { not: null },
-        type: "email",
       },
       select: {
         id: true,
@@ -109,7 +108,7 @@ export async function POST(request: NextRequest) {
     // ── Score and pick best SMS from last 24h ─────────────────────────────
     const smsCandidates = await prisma.smsQueue.findMany({
       where: {
-        twitterPosted: false,
+        twitterPostedAt: null,
         isDeleted: false,
         createdAt: { gte: since },
         entityId: { not: null },
@@ -176,7 +175,7 @@ export async function POST(request: NextRequest) {
     const templates = winner.isSms ? SMS_TEMPLATES : EMAIL_TEMPLATES
     const tweetText = pickTemplate(templates, entityName, shareUrl)
 
-    // ── Post to Twitter v2 ────────────────────────────────────────────────
+    // ── Post to Twitter v2 ─────────────────────────��──────────────────────
     const twitterUrl = "https://api.twitter.com/2/tweets"
     const oauthHeader = buildOauthHeader("POST", twitterUrl, consumerKey, consumerSecret, accessToken, accessSecret)
 
@@ -199,9 +198,9 @@ export async function POST(request: NextRequest) {
     // ── Mark as posted ────────────────────────────────────────────────────
     const now = new Date()
     if (winner.isSms) {
-      await prisma.smsQueue.update({ where: { id: winner.id }, data: { twitterPosted: true, twitterPostedAt: now } })
+      await prisma.smsQueue.update({ where: { id: winner.id }, data: { twitterPostedAt: now } })
     } else {
-      await prisma.competitiveInsightCampaign.update({ where: { id: winner.id }, data: { twitterPosted: true, twitterPostedAt: now } })
+      await prisma.competitiveInsightCampaign.update({ where: { id: winner.id }, data: { twitterPostedAt: now } })
     }
 
     const tweetId = twitterData.data?.id

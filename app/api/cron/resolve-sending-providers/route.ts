@@ -69,15 +69,26 @@ export async function GET(request: Request) {
     })
     console.log(`[resolve-sending-providers] Step 1b: ${unparsedUnsub.length} campaigns need unsub domain parsing`)
 
+    // Diagnostic: log the first campaign's rawHeaders snippet to verify format
+    if (unparsedUnsub.length > 0 && unparsedUnsub[0].rawHeaders) {
+      const sample = unparsedUnsub[0].rawHeaders.substring(0, 500)
+      console.log(`[resolve-sending-providers] Step 1b sample rawHeaders (first 500 chars): ${sample}`)
+      const hasUnsub = unparsedUnsub[0].rawHeaders.toLowerCase().includes("list-unsubscribe")
+      console.log(`[resolve-sending-providers] Step 1b sample contains List-Unsubscribe: ${hasUnsub}`)
+    }
+
+    let unsubNoHeader = 0
     for (const campaign of unparsedUnsub) {
       if (!campaign.rawHeaders) continue
       const domain = extractUnsubDomain(campaign.rawHeaders)
       if (domain) {
         await prisma.competitiveInsightCampaign.update({ where: { id: campaign.id }, data: { unsubDomain: domain } })
         stats.unsubDomainParsed++
+      } else {
+        unsubNoHeader++
       }
     }
-    console.log(`[resolve-sending-providers] Step 1b done: unsubDomainParsed=${stats.unsubDomainParsed}`)
+    console.log(`[resolve-sending-providers] Step 1b done: unsubDomainParsed=${stats.unsubDomainParsed} noUnsubHeader=${unsubNoHeader}`)
 
     // ── Step 2: 3-tier provider resolution for unresolved campaigns ─────────
     const unresolved = await prisma.competitiveInsightCampaign.findMany({

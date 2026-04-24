@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Loader2, Play, X, Mail, MessageSquare, TrendingUp, CalendarIcon } from "lucide-react"
+import { Loader2, Play, X, Mail, MessageSquare, TrendingUp, CalendarIcon, Twitter } from "lucide-react"
 import { toast } from "sonner"
 import { CampaignDetectionDialog } from "@/components/campaign-detection-dialog"
 import { CompetitiveInsightsDetectionDialog } from "@/components/competitive-insights-detection-dialog"
@@ -58,6 +58,16 @@ export function AdminContent({ user }: AdminContentProps) {
   const [isSanitizingEmailLinks, setIsSanitizingEmailLinks] = useState(false)
   const [isRedactingEmailLinks, setIsRedactingEmailLinks] = useState(false)
   const [redactCampaignId, setRedactCampaignId] = useState("")
+  const [isPostingTweet, setIsPostingTweet] = useState(false)
+  const [tweetResult, setTweetResult] = useState<{
+    tweetUrl: string | null
+    tweetText: string
+    entity: string
+    type: string
+    score: number
+    shareUrl: string
+    candidatesEvaluated: number
+  } | null>(null)
 
   const [isDkimAuditing, setIsDkimAuditing] = useState(false)
   const [dkimAuditResults, setDkimAuditResults] = useState<{
@@ -3124,6 +3134,79 @@ const downloadActBluePatterns = () => {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Twitter/X Post ─────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Twitter size={18} />
+            Post to Twitter/X
+          </CardTitle>
+          <CardDescription>
+            Scores all emails and SMS from the last 24 hours by engagement (share views, shares, views, follower count in system) and posts the top result to Twitter/X.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button
+            onClick={async () => {
+              setIsPostingTweet(true)
+              setTweetResult(null)
+              try {
+                const res = await fetch("/api/admin/twitter-post", { method: "POST" })
+                const data = await res.json()
+                if (res.ok) {
+                  setTweetResult(data)
+                  toast.success(`Posted tweet for ${data.entity}`)
+                } else {
+                  toast.error(data.error || "Failed to post tweet")
+                }
+              } catch {
+                toast.error("Failed to post tweet")
+              } finally {
+                setIsPostingTweet(false)
+              }
+            }}
+            disabled={isPostingTweet}
+            className="gap-2"
+          >
+            {isPostingTweet ? <Loader2 size={15} className="animate-spin" /> : <Twitter size={15} />}
+            {isPostingTweet ? "Selecting & posting..." : "Post Best Tweet Now"}
+          </Button>
+
+          {tweetResult && (
+            <div className="rounded-md border p-4 space-y-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-foreground">Tweet posted successfully</span>
+                <span className="text-xs text-muted-foreground capitalize bg-muted px-2 py-0.5 rounded">{tweetResult.type}</span>
+              </div>
+              <div className="bg-muted/50 rounded p-3 text-sm italic text-foreground leading-relaxed">
+                {tweetResult.tweetText}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                <div><span className="font-medium text-foreground">Entity:</span> {tweetResult.entity}</div>
+                <div><span className="font-medium text-foreground">Score:</span> {tweetResult.score}</div>
+                <div><span className="font-medium text-foreground">Candidates evaluated:</span> {tweetResult.candidatesEvaluated}</div>
+                <div>
+                  <a href={tweetResult.shareUrl} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">
+                    Share page
+                  </a>
+                </div>
+              </div>
+              {tweetResult.tweetUrl && (
+                <a
+                  href={tweetResult.tweetUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-blue-500 hover:underline"
+                >
+                  <Twitter size={12} />
+                  View tweet on X
+                </a>
+              )}
             </div>
           )}
         </CardContent>

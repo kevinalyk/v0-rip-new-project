@@ -58,7 +58,7 @@ function pickTemplate(templates: Array<(n: string, u: string) => string>, name: 
   return templates[Math.floor(Math.random() * templates.length)](name, url)
 }
 
-// ── Main handler ─────────────────────────────────────────────────────────────
+// ── Main handler — scores last 24h candidates and posts top result ────────────
 
 export async function POST(request: NextRequest) {
   try {

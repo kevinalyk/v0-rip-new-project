@@ -69,12 +69,15 @@ export async function GET(request: Request) {
     })
     console.log(`[resolve-sending-providers] Step 1b: ${unparsedUnsub.length} campaigns need unsub domain parsing`)
 
-    // Diagnostic: log the first campaign's rawHeaders snippet to verify format
+    // Diagnostic: log the exact List-Unsubscribe line to debug parsing
     if (unparsedUnsub.length > 0 && unparsedUnsub[0].rawHeaders) {
-      const sample = unparsedUnsub[0].rawHeaders.substring(0, 500)
-      console.log(`[resolve-sending-providers] Step 1b sample rawHeaders (first 500 chars): ${sample}`)
-      const hasUnsub = unparsedUnsub[0].rawHeaders.toLowerCase().includes("list-unsubscribe")
-      console.log(`[resolve-sending-providers] Step 1b sample contains List-Unsubscribe: ${hasUnsub}`)
+      const raw = unparsedUnsub[0].rawHeaders
+      const normalized = raw.replace(/\r\n/g, "\n").replace(/\n[ \t]/g, " ")
+      const lineMatch = normalized.match(/^list-unsubscribe:[ \t]*(.+)$/im)
+      console.log(`[resolve-sending-providers] Step 1b List-Unsubscribe line found: ${!!lineMatch}`)
+      if (lineMatch) {
+        console.log(`[resolve-sending-providers] Step 1b List-Unsubscribe value (first 300): ${lineMatch[1].substring(0, 300)}`)
+      }
     }
 
     let unsubNoHeader = 0
@@ -153,8 +156,6 @@ export async function GET(request: Request) {
           })
           stats.providerAssigned++
           console.log(`[resolve-sending-providers] Assigned "${providerName}" to campaign ${campaign.id} via ${tier}`)
-        } else {
-          console.log(`[resolve-sending-providers] Could not resolve provider for campaign ${campaign.id} (ip=${campaign.sendingIp}, unsub=${campaign.unsubDomain})`)
         }
       } catch (err) {
         console.error(`[resolve-sending-providers] Error resolving campaign ${campaign.id}:`, err)

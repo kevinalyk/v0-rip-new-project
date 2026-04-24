@@ -40,40 +40,56 @@ export async function GET(request: Request) {
       errors: 0,
     }
 
-    // ── Step 1: Parse sendingIp + unsubDomain from rawHeaders ──────────────
-    const unparsed = await prisma.competitiveInsightCampaign.findMany({
-      where: {
-        rawHeaders: { not: null },
-        sendingIp: null,
-        isDeleted: false,
-      },
+    // ── Step 1a: Parse sendingIp from campaigns that don't have it yet ─────
+    const unparsedIp = await prisma.competitiveInsightCampaign.findMany({
+      where: { rawHeaders: { not: null }, sendingIp: null, isDeleted: false },
       select: { id: true, rawHeaders: true },
       take: 2000,
     })
+    console.log(`[resolve-sending-providers] Step 1a: ${unparsedIp.length} campaigns need IP parsing`)
 
-    for (const campaign of unparsed) {
+    for (const campaign of unparsedIp) {
       if (!campaign.rawHeaders) continue
       const ip = extractSendingIp(campaign.rawHeaders)
-      const unsubDomain = extractUnsubDomain(campaign.rawHeaders)
-      const updates: Record<string, string | null> = {}
-      if (ip) { updates.sendingIp = ip; stats.ipParsed++ }
-      else stats.noIpFound++
-      if (unsubDomain) { updates.unsubDomain = unsubDomain; stats.unsubDomainParsed++ }
-      if (Object.keys(updates).length > 0) {
-        await prisma.competitiveInsightCampaign.update({ where: { id: campaign.id }, data: updates })
+      if (ip) {
+        await prisma.competitiveInsightCampaign.update({ where: { id: campaign.id }, data: { sendingIp: ip } })
+        stats.ipParsed++
+      } else {
+        stats.noIpFound++
       }
     }
+    console.log(`[resolve-sending-providers] Step 1a done: ipParsed=${stats.ipParsed} noIpFound=${stats.noIpFound}`)
+
+    // ── Step 1b: Parse unsubDomain from campaigns that don't have it yet ───
+    // This runs separately so existing campaigns (already have sendingIp) also get their unsub domain extracted.
+    const unparsedUnsub = await prisma.competitiveInsightCampaign.findMany({
+      where: { rawHeaders: { not: null }, unsubDomain: null, isDeleted: false },
+      select: { id: true, rawHeaders: true },
+      take: 2000,
+    })
+    console.log(`[resolve-sending-providers] Step 1b: ${unparsedUnsub.length} campaigns need unsub domain parsing`)
+
+    for (const campaign of unparsedUnsub) {
+      if (!campaign.rawHeaders) continue
+      const domain = extractUnsubDomain(campaign.rawHeaders)
+      if (domain) {
+        await prisma.competitiveInsightCampaign.update({ where: { id: campaign.id }, data: { unsubDomain: domain } })
+        stats.unsubDomainParsed++
+      }
+    }
+    console.log(`[resolve-sending-providers] Step 1b done: unsubDomainParsed=${stats.unsubDomainParsed}`)
 
     // ── Step 2: 3-tier provider resolution for unresolved campaigns ─────────
-    // Fetch campaigns that need a provider. Include rawHeaders for DKIM + unsub parsing.
     const unresolved = await prisma.competitiveInsightCampaign.findMany({
       where: { sendingProvider: null, isDeleted: false, rawHeaders: { not: null } },
       select: { id: true, sendingIp: true, unsubDomain: true, rawHeaders: true },
       take: 1000,
     })
+    console.log(`[resolve-sending-providers] Step 2: ${unresolved.length} campaigns need provider resolution`)
 
     // Pre-build IP mapping cache (unique IPs only → one RDAP call per IP)
     const uniqueIps = [...new Set(unresolved.map((c) => c.sendingIp).filter(Boolean) as string[])]
+    console.log(`[resolve-sending-providers] Step 2: ${uniqueIps.length} unique IPs to look up via RDAP`)
     const ipMappingCache = new Map<string, { friendlyName: string | null; orgName: string | null; reverseDns: string | null; ip: string }>()
     for (const ip of uniqueIps) {
       try {
@@ -89,13 +105,14 @@ export async function GET(request: Request) {
     for (const campaign of unresolved) {
       try {
         let providerName: string | null = null
+        let tier: string | null = null
 
         // Tier 1: DKIM selector (.s= value)
-        if (!providerName && campaign.rawHeaders) {
+        if (campaign.rawHeaders) {
           const selector = extractDkimSelector(campaign.rawHeaders)
           if (selector) {
             providerName = await resolveDkimProvider(selector)
-            if (providerName) stats.dkimResolved++
+            if (providerName) { stats.dkimResolved++; tier = `dkim:${selector}` }
           }
         }
 
@@ -104,14 +121,18 @@ export async function GET(request: Request) {
           const domain = campaign.unsubDomain ?? (campaign.rawHeaders ? extractUnsubDomain(campaign.rawHeaders) : null)
           if (domain) {
             providerName = await resolveUnsubProvider(domain)
-            if (providerName) stats.unsubResolved++
+            if (providerName) { stats.unsubResolved++; tier = `unsub:${domain}` }
+            else {
+              // Domain was new — log that it was recorded for manual assignment
+              console.log(`[resolve-sending-providers] New unsub domain recorded for manual assignment: ${domain} (campaign ${campaign.id})`)
+            }
           }
         }
 
         // Tier 3: IP RDAP (catch-all)
         if (!providerName && campaign.sendingIp) {
           const mapping = ipMappingCache.get(campaign.sendingIp)
-          if (mapping) providerName = resolveProviderName(mapping)
+          if (mapping) { providerName = resolveProviderName(mapping); tier = `rdap:${campaign.sendingIp}` }
         }
 
         if (providerName) {
@@ -120,6 +141,9 @@ export async function GET(request: Request) {
             data: { sendingProvider: providerName },
           })
           stats.providerAssigned++
+          console.log(`[resolve-sending-providers] Assigned "${providerName}" to campaign ${campaign.id} via ${tier}`)
+        } else {
+          console.log(`[resolve-sending-providers] Could not resolve provider for campaign ${campaign.id} (ip=${campaign.sendingIp}, unsub=${campaign.unsubDomain})`)
         }
       } catch (err) {
         console.error(`[resolve-sending-providers] Error resolving campaign ${campaign.id}:`, err)

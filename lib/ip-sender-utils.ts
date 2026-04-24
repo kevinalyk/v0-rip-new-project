@@ -7,10 +7,10 @@ import { prisma } from "@/lib/prisma"
  * e.g. "DKIM-Signature: v=1; a=rsa-sha256; s=gears; ..." → "gears"
  */
 export function extractDkimSelector(rawHeaders: string): string | null {
-  const match = rawHeaders.match(/DKIM-Signature:[^\r\n]*(?:\r?\n[ \t][^\r\n]*)*/i)
-  if (!match) return null
-  const sigBlock = match[0].replace(/\r?\n[ \t]/g, " ")
-  const sMatch = sigBlock.match(/\bs=([^;\s]+)/i)
+  const normalized = rawHeaders.replace(/\r\n/g, "\n").replace(/\n[ \t]/g, " ")
+  const lineMatch = normalized.match(/^DKIM-Signature:[ \t]*(.+)$/im)
+  if (!lineMatch) return null
+  const sMatch = lineMatch[1].match(/\bs=([^;\s]+)/i)
   return sMatch ? sMatch[1].toLowerCase().trim() : null
 }
 
@@ -29,21 +29,27 @@ export async function resolveDkimProvider(selector: string): Promise<string | nu
 // ── Tier 2: Unsubscribe URL domain ──────────────────────────────────────────
 
 /**
- * Extract the domain from the List-Unsubscribe header's HTTP URL.
+ * Extract the host from the List-Unsubscribe header's HTTP URL.
  * e.g. "List-Unsubscribe: <https://djt.nucleusemail.com/amplify/u/...>" → "nucleusemail.com"
- * Strips subdomains to return the registrable domain (last two parts).
+ *
+ * Stores the full hostname so admins can identify and assign providers accurately.
+ * Handles both \r\n and \n line endings, and tab-continuation folded headers.
  */
 export function extractUnsubDomain(rawHeaders: string): string | null {
-  const match = rawHeaders.match(/List-Unsubscribe:[^\r\n]*(?:\r?\n[ \t][^\r\n]*)*/i)
-  if (!match) return null
-  const block = match[0].replace(/\r?\n[ \t]/g, " ")
-  const urlMatch = block.match(/https?:\/\/([^\/>\s]+)/i)
+  // Normalize line endings and unfold tab-continued headers
+  const normalized = rawHeaders.replace(/\r\n/g, "\n").replace(/\n[ \t]/g, " ")
+
+  // Find the List-Unsubscribe header line
+  const lineMatch = normalized.match(/^List-Unsubscribe:[ \t]*(.+)$/im)
+  if (!lineMatch) return null
+
+  const headerValue = lineMatch[1]
+
+  // Extract the first https:// URL — skip mailto: entries
+  const urlMatch = headerValue.match(/https?:\/\/([^\/>\s,]+)/i)
   if (!urlMatch) return null
-  const host = urlMatch[1].toLowerCase()
-  // Return registrable domain (last two parts: e.g. "nucleusemail.com")
-  const parts = host.split(".")
-  if (parts.length < 2) return null
-  return parts.slice(-2).join(".")
+
+  return urlMatch[1].toLowerCase().trim()
 }
 
 /**

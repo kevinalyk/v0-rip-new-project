@@ -1,5 +1,73 @@
 import { prisma } from "@/lib/prisma"
 
+// ── Tier 1: DKIM selector (.s=) ─────────────────────────────────────────────
+
+/**
+ * Extract the DKIM selector value from the DKIM-Signature header.
+ * e.g. "DKIM-Signature: v=1; a=rsa-sha256; s=gears; ..." → "gears"
+ */
+export function extractDkimSelector(rawHeaders: string): string | null {
+  const match = rawHeaders.match(/DKIM-Signature:[^\r\n]*(?:\r?\n[ \t][^\r\n]*)*/i)
+  if (!match) return null
+  const sigBlock = match[0].replace(/\r?\n[ \t]/g, " ")
+  const sMatch = sigBlock.match(/\bs=([^;\s]+)/i)
+  return sMatch ? sMatch[1].toLowerCase().trim() : null
+}
+
+/**
+ * Look up a DKIM selector in the DkimSenderMapping table.
+ * Returns the friendly provider name if found, null otherwise.
+ */
+export async function resolveDkimProvider(selector: string): Promise<string | null> {
+  const mapping = await prisma.dkimSenderMapping.findUnique({
+    where: { selectorValue: selector },
+    select: { friendlyName: true },
+  })
+  return mapping?.friendlyName ?? null
+}
+
+// ── Tier 2: Unsubscribe URL domain ──────────────────────────────────────────
+
+/**
+ * Extract the domain from the List-Unsubscribe header's HTTP URL.
+ * e.g. "List-Unsubscribe: <https://djt.nucleusemail.com/amplify/u/...>" → "nucleusemail.com"
+ * Strips subdomains to return the registrable domain (last two parts).
+ */
+export function extractUnsubDomain(rawHeaders: string): string | null {
+  const match = rawHeaders.match(/List-Unsubscribe:[^\r\n]*(?:\r?\n[ \t][^\r\n]*)*/i)
+  if (!match) return null
+  const block = match[0].replace(/\r?\n[ \t]/g, " ")
+  const urlMatch = block.match(/https?:\/\/([^\/>\s]+)/i)
+  if (!urlMatch) return null
+  const host = urlMatch[1].toLowerCase()
+  // Return registrable domain (last two parts: e.g. "nucleusemail.com")
+  const parts = host.split(".")
+  if (parts.length < 2) return null
+  return parts.slice(-2).join(".")
+}
+
+/**
+ * Ensure the unsub domain is recorded in UnsubDomainMapping.
+ * Creates the row if it doesn't exist (with no friendlyName — manually assigned later).
+ * Returns the friendly name if one has been assigned, null otherwise.
+ */
+export async function resolveUnsubProvider(domain: string): Promise<string | null> {
+  const existing = await prisma.unsubDomainMapping.findUnique({
+    where: { domain },
+    select: { friendlyName: true },
+  })
+  if (existing) return existing.friendlyName ?? null
+
+  // New domain — record it for manual assignment, no provider yet
+  await prisma.unsubDomainMapping.create({
+    data: { domain },
+  }).catch(() => {}) // ignore duplicate race conditions
+
+  return null
+}
+
+// ── Private IP check ─────────────────────────────────────────────────────────
+
 /**
  * Returns true if the IP is a private/internal/loopback address that
  * should never be used as a sending provider IP.

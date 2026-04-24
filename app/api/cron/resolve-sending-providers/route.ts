@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { ensureDatabaseConnection } from "@/lib/prisma"
-import { extractSendingIp, ensureIpMapping, resolveProviderName } from "@/lib/ip-sender-utils"
+import {
+  extractSendingIp,
+  ensureIpMapping,
+  resolveProviderName,
+  extractDkimSelector,
+  resolveDkimProvider,
+  extractUnsubDomain,
+  resolveUnsubProvider,
+} from "@/lib/ip-sender-utils"
 
 export const runtime = "nodejs"
 // Allow up to 5 minutes — RDAP lookups for many new IPs can take time
@@ -23,14 +31,16 @@ export async function GET(request: Request) {
 
     const stats = {
       ipParsed: 0,
-      ipAlreadySet: 0,
+      unsubDomainParsed: 0,
+      dkimResolved: 0,
+      unsubResolved: 0,
       rdapLookedUp: 0,
       providerAssigned: 0,
       noIpFound: 0,
       errors: 0,
     }
 
-    // ── Step 1: Parse sendingIp from rawHeaders for emails that don't have it yet ──
+    // ── Step 1: Parse sendingIp + unsubDomain from rawHeaders ──────────────
     const unparsed = await prisma.competitiveInsightCampaign.findMany({
       where: {
         rawHeaders: { not: null },
@@ -44,40 +54,31 @@ export async function GET(request: Request) {
     for (const campaign of unparsed) {
       if (!campaign.rawHeaders) continue
       const ip = extractSendingIp(campaign.rawHeaders)
-      if (ip) {
-        await prisma.competitiveInsightCampaign.update({
-          where: { id: campaign.id },
-          data: { sendingIp: ip },
-        })
-        stats.ipParsed++
-      } else {
-        stats.noIpFound++
+      const unsubDomain = extractUnsubDomain(campaign.rawHeaders)
+      const updates: Record<string, string | null> = {}
+      if (ip) { updates.sendingIp = ip; stats.ipParsed++ }
+      else stats.noIpFound++
+      if (unsubDomain) { updates.unsubDomain = unsubDomain; stats.unsubDomainParsed++ }
+      if (Object.keys(updates).length > 0) {
+        await prisma.competitiveInsightCampaign.update({ where: { id: campaign.id }, data: updates })
       }
     }
 
-    // ── Step 2: For emails that have a sendingIp but no sendingProvider, resolve it ──
+    // ── Step 2: 3-tier provider resolution for unresolved campaigns ─────────
+    // Fetch campaigns that need a provider. Include rawHeaders for DKIM + unsub parsing.
     const unresolved = await prisma.competitiveInsightCampaign.findMany({
-      where: {
-        sendingIp: { not: null },
-        sendingProvider: null,
-        isDeleted: false,
-      },
-      select: { id: true, sendingIp: true },
+      where: { sendingProvider: null, isDeleted: false, rawHeaders: { not: null } },
+      select: { id: true, sendingIp: true, unsubDomain: true, rawHeaders: true },
       take: 1000,
     })
 
-    // Collect unique IPs so we only do one RDAP lookup per IP even if many emails share it
-    const uniqueIps = [...new Set(unresolved.map((c) => c.sendingIp as string))]
-
+    // Pre-build IP mapping cache (unique IPs only → one RDAP call per IP)
+    const uniqueIps = [...new Set(unresolved.map((c) => c.sendingIp).filter(Boolean) as string[])]
     const ipMappingCache = new Map<string, { friendlyName: string | null; orgName: string | null; reverseDns: string | null; ip: string }>()
-
     for (const ip of uniqueIps) {
       try {
         const mapping = await ensureIpMapping(ip)
         ipMappingCache.set(ip, mapping)
-        if (!ipMappingCache.get(ip)?.orgName && !ipMappingCache.get(ip)?.reverseDns) {
-          // RDAP returned nothing useful — still cached so we don't retry every hour
-        }
         stats.rdapLookedUp++
       } catch (err) {
         console.error(`[resolve-sending-providers] RDAP error for ${ip}:`, err)
@@ -85,18 +86,45 @@ export async function GET(request: Request) {
       }
     }
 
-    // Batch update campaigns with resolved provider name
     for (const campaign of unresolved) {
-      const ip = campaign.sendingIp as string
-      const mapping = ipMappingCache.get(ip)
-      if (!mapping) continue
+      try {
+        let providerName: string | null = null
 
-      const providerName = resolveProviderName(mapping)
-      await prisma.competitiveInsightCampaign.update({
-        where: { id: campaign.id },
-        data: { sendingProvider: providerName },
-      })
-      stats.providerAssigned++
+        // Tier 1: DKIM selector (.s= value)
+        if (!providerName && campaign.rawHeaders) {
+          const selector = extractDkimSelector(campaign.rawHeaders)
+          if (selector) {
+            providerName = await resolveDkimProvider(selector)
+            if (providerName) stats.dkimResolved++
+          }
+        }
+
+        // Tier 2: Unsubscribe URL domain
+        if (!providerName) {
+          const domain = campaign.unsubDomain ?? (campaign.rawHeaders ? extractUnsubDomain(campaign.rawHeaders) : null)
+          if (domain) {
+            providerName = await resolveUnsubProvider(domain)
+            if (providerName) stats.unsubResolved++
+          }
+        }
+
+        // Tier 3: IP RDAP (catch-all)
+        if (!providerName && campaign.sendingIp) {
+          const mapping = ipMappingCache.get(campaign.sendingIp)
+          if (mapping) providerName = resolveProviderName(mapping)
+        }
+
+        if (providerName) {
+          await prisma.competitiveInsightCampaign.update({
+            where: { id: campaign.id },
+            data: { sendingProvider: providerName },
+          })
+          stats.providerAssigned++
+        }
+      } catch (err) {
+        console.error(`[resolve-sending-providers] Error resolving campaign ${campaign.id}:`, err)
+        stats.errors++
+      }
     }
 
     // ── Step 3: Re-resolve any IP mappings not yet checked via RDAP ──

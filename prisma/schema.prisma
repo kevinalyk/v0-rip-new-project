@@ -303,6 +303,8 @@ model CompetitiveInsightCampaign {
   sendingIp           String?  // Parsed sending IP from rawHeaders (client-ip= / Received-SPF)
   sendingProvider     String?  // Resolved friendly name — set by cron via DKIM → Unsub URL → IP tier
   unsubDomain         String?  // Extracted List-Unsubscribe domain (e.g. "nucleusemail.com")
+  twitterPosted       Boolean  @default(false) // Whether this email has been posted to Twitter/X
+  twitterPostedAt     DateTime? // When it was posted to Twitter/X
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -459,6 +461,8 @@ model SmsQueue {
   deletedAt           DateTime? // When it was deleted
   deletedBy           String?  // Which admin deleted it
   dedupHash           String?  @unique // SHA256(phoneNumber + normalizedMessage) for race-safe dedup
+  twitterPosted       Boolean  @default(false) // Whether this SMS has been posted to Twitter/X
+  twitterPostedAt     DateTime? // When it was posted to Twitter/X
   createdAt          DateTime  @default(now())
   processedAt        DateTime?
 

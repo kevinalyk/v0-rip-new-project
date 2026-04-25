@@ -12,24 +12,28 @@ function extractHeaderText(rawHeaders: string, headerName: string): string | nul
 
   // Headers may be stored as:
   //   A) One per newline:  "Header-Name: value\nNext-Header: value"
-  //   B) All on one line:  "header-name: {JSON} next-header: {JSON}"
-  //      (mailparser format — each value is a JSON object)
+  //   B) All on one line (mailparser format):
+  //      "header-name: {"value":[...],"text":"..."} next-header: {...}"
+  //
+  // Critical: must NOT match header names appearing inside DKIM h= parameter
+  // (e.g. "h=list-unsubscribe:mime-version:subject"). We require that the
+  // header name is followed by ": {" or ": <" — never ": another-header-name:".
 
-  // Try newline-based matching first (handles \r\n and \n)
+  // Strategy A: newline-separated — require whitespace before OR start of string,
+  // and the value must start with { or < or a non-header-name character
   const normalized = rawHeaders.replace(/\r\n/g, "\n").replace(/\n[ \t]/g, " ")
-  const newlineMatch = normalized.match(new RegExp(`^${escaped}:[ \\t]*(.+)$`, "im"))
+  const newlineMatch = normalized.match(new RegExp(`(?:^|\\n)${escaped}:\\s*([\\s\\S]+?)(?=\\n[a-zA-Z][a-zA-Z0-9-]*:|$)`, "i"))
   if (newlineMatch) {
     return parseHeaderValue(newlineMatch[1].trim())
   }
 
-  // Fall back: single-line format where headers are separated by JSON object boundaries.
-  // Pattern: "headername: {JSON} nextheader: " — match from "headername: " up to the
-  // next " wordchars: " boundary (case-insensitive).
-  const singleLineMatch = rawHeaders.match(
-    new RegExp(`(?:^|\\s)${escaped}:\\s*(\\{[^}]+\\}|[^\\s{][^\\n]*)(?=\\s+[a-z][a-z0-9-]*:|$)`, "i")
+  // Strategy B: single-line JSON format — header value MUST start with "{"
+  // This avoids false matches inside DKIM h= chains where colons follow immediately
+  const jsonMatch = rawHeaders.match(
+    new RegExp(`(?:^|\\s)${escaped}:\\s*(\\{(?:[^{}]|\\{[^{}]*\\})*\\})`, "i")
   )
-  if (singleLineMatch) {
-    return parseHeaderValue(singleLineMatch[1].trim())
+  if (jsonMatch) {
+    return parseHeaderValue(jsonMatch[1].trim())
   }
 
   return null

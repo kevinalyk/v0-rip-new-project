@@ -8,32 +8,21 @@ import { prisma } from "@/lib/prisma"
  * Falls back to treating the raw line value as plain text if JSON parse fails.
  */
 function extractHeaderText(rawHeaders: string, headerName: string): string | null {
-  const escaped = headerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const nameLower = headerName.toLowerCase()
 
-  // Headers may be stored as:
-  //   A) One per newline:  "Header-Name: value\nNext-Header: value"
-  //   B) All on one line (mailparser format):
-  //      "header-name: {"value":[...],"text":"..."} next-header: {...}"
-  //
-  // Critical: must NOT match header names appearing inside DKIM h= parameter
-  // (e.g. "h=list-unsubscribe:mime-version:subject"). We require that the
-  // header name is followed by ": {" or ": <" — never ": another-header-name:".
+  // Normalize line endings, then unfold folded headers (RFC 2822 continuation lines start with whitespace)
+  const normalized = rawHeaders.replace(/\r\n/g, "\n").replace(/\n[ \t]+/g, " ")
 
-  // Strategy A: newline-separated — require whitespace before OR start of string,
-  // and the value must start with { or < or a non-header-name character
-  const normalized = rawHeaders.replace(/\r\n/g, "\n").replace(/\n[ \t]/g, " ")
-  const newlineMatch = normalized.match(new RegExp(`(?:^|\\n)${escaped}:\\s*([\\s\\S]+?)(?=\\n[a-zA-Z][a-zA-Z0-9-]*:|$)`, "i"))
-  if (newlineMatch) {
-    return parseHeaderValue(newlineMatch[1].trim())
-  }
-
-  // Strategy B: single-line JSON format — header value MUST start with "{"
-  // This avoids false matches inside DKIM h= chains where colons follow immediately
-  const jsonMatch = rawHeaders.match(
-    new RegExp(`(?:^|\\s)${escaped}:\\s*(\\{(?:[^{}]|\\{[^{}]*\\})*\\})`, "i")
-  )
-  if (jsonMatch) {
-    return parseHeaderValue(jsonMatch[1].trim())
+  // Split into individual lines and find the one whose header name matches exactly.
+  // This avoids false matches inside DKIM h= chains like "h=list-unsubscribe:mime-version:..."
+  // because those lines start with "dkim-signature:" not "list-unsubscribe:".
+  for (const line of normalized.split("\n")) {
+    const colonIdx = line.indexOf(":")
+    if (colonIdx === -1) continue
+    const name = line.substring(0, colonIdx).trim().toLowerCase()
+    if (name !== nameLower) continue
+    const value = line.substring(colonIdx + 1).trim()
+    return parseHeaderValue(value)
   }
 
   return null

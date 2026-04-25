@@ -185,9 +185,21 @@ export function extractSendingIp(rawHeaders: string): string | null {
     if (!isPrivateIp(m[1])) return m[1]
   }
 
-  // Received: from hostname ([1.2.3.4]) — walk all hops, return first public IP
-  const receivedMatches = [...rawHeaders.matchAll(/Received:[^\n]*\[([\d.]+)\]/gi)]
-  for (const m of receivedMatches) {
+  // Received: from 1.2.3.4 (EHLO ...) — bare IP directly after "from "
+  const receivedFromBare = [...rawHeaders.matchAll(/[Rr]eceived:[^\n]*\bfrom\s+([\d]{1,3}\.[\d]{1,3}\.[\d]{1,3}\.[\d]{1,3})\b/gi)]
+  for (const m of receivedFromBare) {
+    if (!isPrivateIp(m[1])) return m[1]
+  }
+
+  // Received: from hostname ([1.2.3.4]) — IP in brackets
+  const receivedBracket = [...rawHeaders.matchAll(/[Rr]eceived:[^\n]*\[([\d]{1,3}\.[\d]{1,3}\.[\d]{1,3}\.[\d]{1,3})\]/gi)]
+  for (const m of receivedBracket) {
+    if (!isPrivateIp(m[1])) return m[1]
+  }
+
+  // Last resort: any public IP anywhere in the headers
+  const anyIp = [...rawHeaders.matchAll(/\b([\d]{1,3}\.[\d]{1,3}\.[\d]{1,3}\.[\d]{1,3})\b/g)]
+  for (const m of anyIp) {
     if (!isPrivateIp(m[1])) return m[1]
   }
 

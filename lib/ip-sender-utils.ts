@@ -8,28 +8,58 @@ import { prisma } from "@/lib/prisma"
  * Falls back to treating the raw line value as plain text if JSON parse fails.
  */
 function extractHeaderText(rawHeaders: string, headerName: string): string | null {
-  const escaped = headerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const nameLower = headerName.toLowerCase()
+  const searchKey = nameLower + ":"
 
-  // Headers may be stored as:
-  //   A) One per newline:  "Header-Name: value\nNext-Header: value"
-  //   B) All on one line:  "header-name: {JSON} next-header: {JSON}"
-  //      (mailparser format — each value is a JSON object)
-
-  // Try newline-based matching first (handles \r\n and \n)
-  const normalized = rawHeaders.replace(/\r\n/g, "\n").replace(/\n[ \t]/g, " ")
-  const newlineMatch = normalized.match(new RegExp(`^${escaped}:[ \\t]*(.+)$`, "im"))
-  if (newlineMatch) {
-    return parseHeaderValue(newlineMatch[1].trim())
+  // ── Format A: multi-line MIME text (plain RFC 2822) ──────────────────────
+  // e.g. "List-Unsubscribe: <https://...>\nMIME-Version: 1.0\n..."
+  // Normalize CRLF → LF, unfold continuation lines (lines starting with whitespace)
+  const normalized = rawHeaders.replace(/\r\n/g, "\n").replace(/\n[ \t]+/g, " ")
+  for (const line of normalized.split("\n")) {
+    const colonIdx = line.indexOf(":")
+    if (colonIdx === -1) continue
+    const name = line.substring(0, colonIdx).trim().toLowerCase()
+    if (name !== nameLower) continue
+    const value = line.substring(colonIdx + 1).trim()
+    return parseHeaderValue(value)
   }
 
-  // Fall back: single-line format where headers are separated by JSON object boundaries.
-  // Pattern: "headername: {JSON} nextheader: " — match from "headername: " up to the
-  // next " wordchars: " boundary (case-insensitive).
-  const singleLineMatch = rawHeaders.match(
-    new RegExp(`(?:^|\\s)${escaped}:\\s*(\\{[^}]+\\}|[^\\s{][^\\n]*)(?=\\s+[a-z][a-z0-9-]*:|$)`, "i")
-  )
-  if (singleLineMatch) {
-    return parseHeaderValue(singleLineMatch[1].trim())
+  // ── Format B: single-line JSON (mailparser stored format) ────────────────
+  // e.g. "delivered-to: {"value":[...],"text":"..."} list-unsubscribe: {"value":[...],"text":"<https://...>"} ..."
+  // Find the exact header key surrounded by whitespace (or start), followed by a JSON object.
+  // We use indexOf on the lowercased string to find the position, then extract the JSON blob.
+  const lower = rawHeaders.toLowerCase()
+  let searchIdx = 0
+  while (searchIdx < lower.length) {
+    const keyIdx = lower.indexOf(searchKey, searchIdx)
+    if (keyIdx === -1) break
+
+    // Ensure this is a real header start — character before must be whitespace or start of string
+    const charBefore = keyIdx === 0 ? " " : lower[keyIdx - 1]
+    if (charBefore !== " " && charBefore !== "\n" && charBefore !== "\t") {
+      searchIdx = keyIdx + 1
+      continue
+    }
+
+    // Find the start of the value (after "headername: ")
+    const valueStart = rawHeaders.indexOf(":", keyIdx) + 1
+    const trimmedStart = rawHeaders.substring(valueStart).trimStart()
+    const offset = valueStart + (rawHeaders.substring(valueStart).length - trimmedStart.length)
+
+    if (trimmedStart.startsWith("{")) {
+      // Extract the JSON blob by counting braces
+      let depth = 0
+      let end = offset
+      for (let i = offset; i < rawHeaders.length; i++) {
+        if (rawHeaders[i] === "{") depth++
+        else if (rawHeaders[i] === "}") { depth--; if (depth === 0) { end = i + 1; break } }
+      }
+      const jsonBlob = rawHeaders.substring(offset, end)
+      const result = parseHeaderValue(jsonBlob)
+      if (result) return result
+    }
+
+    searchIdx = keyIdx + 1
   }
 
   return null

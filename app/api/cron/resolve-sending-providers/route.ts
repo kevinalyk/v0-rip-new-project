@@ -57,12 +57,20 @@ export async function GET(request: Request) {
     // Diagnostic: log the first campaign's raw state
     if (unresolved.length > 0) {
       const s = unresolved[0]
-      const rawSnippet = s.rawHeaders?.substring(0, 300) ?? "null"
+      const raw = s.rawHeaders ?? ""
       console.log(`[resolve-sending-providers] Sample campaign ${s.id}: ip=${s.sendingIp} unsub=${s.unsubDomain}`)
-      console.log(`[resolve-sending-providers] Sample rawHeaders (300): ${rawSnippet}`)
-      const dkim = extractDkimSelector(s.rawHeaders!)
-      const unsub = extractUnsubDomain(s.rawHeaders!)
-      const ip = extractSendingIp(s.rawHeaders!)
+      console.log(`[resolve-sending-providers] Sample rawHeaders length: ${raw.length}`)
+      console.log(`[resolve-sending-providers] Sample rawHeaders (600): ${raw.substring(0, 600)}`)
+      // Show the exact List-Unsubscribe line if present
+      const unsubIdx = raw.toLowerCase().indexOf("list-unsubscribe:")
+      if (unsubIdx !== -1) {
+        console.log(`[resolve-sending-providers] List-Unsubscribe raw (200): ${raw.substring(unsubIdx, unsubIdx + 200)}`)
+      } else {
+        console.log(`[resolve-sending-providers] No List-Unsubscribe header found in rawHeaders`)
+      }
+      const dkim = extractDkimSelector(raw)
+      const unsub = extractUnsubDomain(raw)
+      const ip = extractSendingIp(raw)
       console.log(`[resolve-sending-providers] Sample parsed: dkim=${dkim} unsub=${unsub} ip=${ip}`)
     }
 

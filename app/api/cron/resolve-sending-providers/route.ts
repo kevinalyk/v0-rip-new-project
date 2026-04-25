@@ -54,6 +54,18 @@ export async function GET(request: Request) {
     })
     console.log(`[resolve-sending-providers] ${unresolved.length} campaigns need provider resolution`)
 
+    // Diagnostic: log the first campaign's raw state
+    if (unresolved.length > 0) {
+      const s = unresolved[0]
+      const rawSnippet = s.rawHeaders?.substring(0, 300) ?? "null"
+      console.log(`[resolve-sending-providers] Sample campaign ${s.id}: ip=${s.sendingIp} unsub=${s.unsubDomain}`)
+      console.log(`[resolve-sending-providers] Sample rawHeaders (300): ${rawSnippet}`)
+      const dkim = extractDkimSelector(s.rawHeaders!)
+      const unsub = extractUnsubDomain(s.rawHeaders!)
+      const ip = extractSendingIp(s.rawHeaders!)
+      console.log(`[resolve-sending-providers] Sample parsed: dkim=${dkim} unsub=${unsub} ip=${ip}`)
+    }
+
     // Pre-collect all unique IPs we already know about so we can batch RDAP lookups.
     // We only look up IPs that aren't already in IpSenderMapping.
     const knownIps = new Set(
@@ -152,6 +164,8 @@ export async function GET(request: Request) {
         stats.errors++
       }
     }
+
+    console.log(`[resolve-sending-providers] Loop done: dkimResolved=${stats.dkimResolved} unsubRecorded=${stats.unsubDomainsRecorded} unsubResolved=${stats.unsubResolved} ipParsed=${stats.ipParsed} noIpFound=${stats.noIpFound} providerAssigned=${stats.providerAssigned} errors=${stats.errors}`)
 
     // ── Step 2: Re-resolve any IP mappings not yet checked via RDAP ──────────
     // Covers IPs reset by the admin "Reset & Re-resolve All" action.

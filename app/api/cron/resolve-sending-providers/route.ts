@@ -69,14 +69,17 @@ export async function GET(request: Request) {
     })
     console.log(`[resolve-sending-providers] Step 1b: ${unparsedUnsub.length} campaigns need unsub domain parsing`)
 
-    // Diagnostic: log the exact List-Unsubscribe line to debug parsing
+    // Diagnostic: confirm parsing works on first sample
     if (unparsedUnsub.length > 0 && unparsedUnsub[0].rawHeaders) {
       const raw = unparsedUnsub[0].rawHeaders
-      const normalized = raw.replace(/\r\n/g, "\n").replace(/\n[ \t]/g, " ")
-      const lineMatch = normalized.match(/^list-unsubscribe:[ \t]*(.+)$/im)
-      console.log(`[resolve-sending-providers] Step 1b List-Unsubscribe line found: ${!!lineMatch}`)
-      if (lineMatch) {
-        console.log(`[resolve-sending-providers] Step 1b List-Unsubscribe value (first 300): ${lineMatch[1].substring(0, 300)}`)
+      const hasUnsub = raw.toLowerCase().includes("list-unsubscribe")
+      console.log(`[resolve-sending-providers] Step 1b sample has List-Unsubscribe: ${hasUnsub}`)
+      if (hasUnsub) {
+        const extracted = extractUnsubDomain(raw)
+        console.log(`[resolve-sending-providers] Step 1b sample extracted domain: ${extracted ?? "null"}`)
+        // Show the raw chunk around the header for debugging
+        const idx = raw.toLowerCase().indexOf("list-unsubscribe")
+        console.log(`[resolve-sending-providers] Step 1b raw around List-Unsubscribe (200 chars): ${raw.substring(idx, idx + 200)}`)
       }
     }
 

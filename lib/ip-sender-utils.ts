@@ -8,24 +8,42 @@ import { prisma } from "@/lib/prisma"
  * Falls back to treating the raw line value as plain text if JSON parse fails.
  */
 function extractHeaderText(rawHeaders: string, headerName: string): string | null {
-  const normalized = rawHeaders.replace(/\r\n/g, "\n").replace(/\n[ \t]/g, " ")
   const escaped = headerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  const lineMatch = normalized.match(new RegExp(`^${escaped}:[ \\t]*(.+)$`, "im"))
-  if (!lineMatch) return null
-  const raw = lineMatch[1].trim()
 
-  // Try to parse as JSON — headers stored by mailparser are JSON objects
+  // Headers may be stored as:
+  //   A) One per newline:  "Header-Name: value\nNext-Header: value"
+  //   B) All on one line:  "header-name: {JSON} next-header: {JSON}"
+  //      (mailparser format — each value is a JSON object)
+
+  // Try newline-based matching first (handles \r\n and \n)
+  const normalized = rawHeaders.replace(/\r\n/g, "\n").replace(/\n[ \t]/g, " ")
+  const newlineMatch = normalized.match(new RegExp(`^${escaped}:[ \\t]*(.+)$`, "im"))
+  if (newlineMatch) {
+    return parseHeaderValue(newlineMatch[1].trim())
+  }
+
+  // Fall back: single-line format where headers are separated by JSON object boundaries.
+  // Pattern: "headername: {JSON} nextheader: " — match from "headername: " up to the
+  // next " wordchars: " boundary (case-insensitive).
+  const singleLineMatch = rawHeaders.match(
+    new RegExp(`(?:^|\\s)${escaped}:\\s*(\\{[^}]+\\}|[^\\s{][^\\n]*)(?=\\s+[a-z][a-z0-9-]*:|$)`, "i")
+  )
+  if (singleLineMatch) {
+    return parseHeaderValue(singleLineMatch[1].trim())
+  }
+
+  return null
+}
+
+function parseHeaderValue(raw: string): string | null {
   try {
     const parsed = JSON.parse(raw)
-    // mailparser format: { value: [...], text: "raw string" }
     if (typeof parsed?.text === "string") return parsed.text
-    // Some headers store value as an array of objects with text/value fields
     if (Array.isArray(parsed?.value)) {
       return parsed.value.map((v: any) => v.text ?? v.value ?? "").join(", ")
     }
     return JSON.stringify(parsed)
   } catch {
-    // Not JSON — return as-is (plain text header)
     return raw
   }
 }

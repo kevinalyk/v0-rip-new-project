@@ -9,13 +9,12 @@ import { prisma } from "@/lib/prisma"
  */
 function extractHeaderText(rawHeaders: string, headerName: string): string | null {
   const nameLower = headerName.toLowerCase()
+  const searchKey = nameLower + ":"
 
-  // Normalize line endings, then unfold folded headers (RFC 2822 continuation lines start with whitespace)
+  // ── Format A: multi-line MIME text (plain RFC 2822) ──────────────────────
+  // e.g. "List-Unsubscribe: <https://...>\nMIME-Version: 1.0\n..."
+  // Normalize CRLF → LF, unfold continuation lines (lines starting with whitespace)
   const normalized = rawHeaders.replace(/\r\n/g, "\n").replace(/\n[ \t]+/g, " ")
-
-  // Split into individual lines and find the one whose header name matches exactly.
-  // This avoids false matches inside DKIM h= chains like "h=list-unsubscribe:mime-version:..."
-  // because those lines start with "dkim-signature:" not "list-unsubscribe:".
   for (const line of normalized.split("\n")) {
     const colonIdx = line.indexOf(":")
     if (colonIdx === -1) continue
@@ -23,6 +22,44 @@ function extractHeaderText(rawHeaders: string, headerName: string): string | nul
     if (name !== nameLower) continue
     const value = line.substring(colonIdx + 1).trim()
     return parseHeaderValue(value)
+  }
+
+  // ── Format B: single-line JSON (mailparser stored format) ────────────────
+  // e.g. "delivered-to: {"value":[...],"text":"..."} list-unsubscribe: {"value":[...],"text":"<https://...>"} ..."
+  // Find the exact header key surrounded by whitespace (or start), followed by a JSON object.
+  // We use indexOf on the lowercased string to find the position, then extract the JSON blob.
+  const lower = rawHeaders.toLowerCase()
+  let searchIdx = 0
+  while (searchIdx < lower.length) {
+    const keyIdx = lower.indexOf(searchKey, searchIdx)
+    if (keyIdx === -1) break
+
+    // Ensure this is a real header start — character before must be whitespace or start of string
+    const charBefore = keyIdx === 0 ? " " : lower[keyIdx - 1]
+    if (charBefore !== " " && charBefore !== "\n" && charBefore !== "\t") {
+      searchIdx = keyIdx + 1
+      continue
+    }
+
+    // Find the start of the value (after "headername: ")
+    const valueStart = rawHeaders.indexOf(":", keyIdx) + 1
+    const trimmedStart = rawHeaders.substring(valueStart).trimStart()
+    const offset = valueStart + (rawHeaders.substring(valueStart).length - trimmedStart.length)
+
+    if (trimmedStart.startsWith("{")) {
+      // Extract the JSON blob by counting braces
+      let depth = 0
+      let end = offset
+      for (let i = offset; i < rawHeaders.length; i++) {
+        if (rawHeaders[i] === "{") depth++
+        else if (rawHeaders[i] === "}") { depth--; if (depth === 0) { end = i + 1; break } }
+      }
+      const jsonBlob = rawHeaders.substring(offset, end)
+      const result = parseHeaderValue(jsonBlob)
+      if (result) return result
+    }
+
+    searchIdx = keyIdx + 1
   }
 
   return null

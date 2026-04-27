@@ -43,6 +43,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { format } from "date-fns"
+import { cn } from "@/lib/utils"
+import { SlidersHorizontal } from "lucide-react"
 import { PaywallOverlay } from "@/components/paywall-overlay"
 import { hasCompetitiveInsightsAccess, type SubscriptionPlan, type SubscriptionStatus } from "@/lib/subscription-utils"
 import {
@@ -302,6 +304,7 @@ export function CompetitiveInsights({
   const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined })
   const [isFromCalendarOpen, setIsFromCalendarOpen] = useState(false)
   const [isToCalendarOpen, setIsToCalendarOpen] = useState(false)
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [showAutocomplete, setShowAutocomplete] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
@@ -1384,10 +1387,172 @@ export function CompetitiveInsights({
                 </div>
               </div>
 
-              {/* Second row - Filters */}
+              {/* ── Mobile-only: active filter chips (horizontal scroll) ──── */}
+              {(() => {
+                type Chip = { key: string; label: string; onRemove: () => void }
+                const chips: Chip[] = []
+                if (searchTerm) {
+                  chips.push({
+                    key: "search",
+                    label: `"${searchTerm.length > 24 ? searchTerm.slice(0, 24) + "…" : searchTerm}"`,
+                    onRemove: () => handleSearchChange(""),
+                  })
+                }
+                selectedSender.forEach((s) => {
+                  chips.push({
+                    key: `sender:${s}`,
+                    label: s,
+                    onRemove: () => setSelectedSender((prev) => prev.filter((x) => x !== s)),
+                  })
+                })
+                if (selectedPartyFilter !== "all") {
+                  const label =
+                    selectedPartyFilter === "republican"
+                      ? "Republican"
+                      : selectedPartyFilter === "democrat"
+                      ? "Democrat"
+                      : "Independent"
+                  chips.push({ key: "party", label, onRemove: () => setSelectedPartyFilter("all") })
+                }
+                if (selectedStateFilter !== "all") {
+                  chips.push({ key: "state", label: selectedStateFilter, onRemove: () => setSelectedStateFilter("all") })
+                }
+                selectedMessageFilters.forEach((f) => {
+                  const label =
+                    f === "email" ? "Email" : f === "sms" ? "SMS" : f === "third_party" ? "Third Party" : "House File"
+                  chips.push({
+                    key: `msg:${f}`,
+                    label,
+                    onRemove: () => {
+                      const next = selectedMessageFilters.filter((x) => x !== f)
+                      setSelectedMessageFilters(next)
+                      setShowThirdParty(next.includes("third_party"))
+                      setShowHouseFileOnly(next.includes("house_file"))
+                      const emailOnly = next.includes("email") && !next.includes("sms")
+                      const smsOnly = next.includes("sms") && !next.includes("email")
+                      setSelectedMessageType(emailOnly ? "email" : smsOnly ? "sms" : "all")
+                    },
+                  })
+                })
+                if (selectedDonationPlatform !== "all") {
+                  chips.push({
+                    key: "platform",
+                    label: selectedDonationPlatform.charAt(0).toUpperCase() + selectedDonationPlatform.slice(1),
+                    onRemove: () => setSelectedDonationPlatform("all"),
+                  })
+                }
+                if (dateRange.from || dateRange.to) {
+                  const f = dateRange.from ? format(dateRange.from, "MMM d") : "…"
+                  const t = dateRange.to ? format(dateRange.to, "MMM d") : "…"
+                  chips.push({ key: "date", label: `${f} – ${t}`, onRemove: clearDateRange })
+                }
+
+                const activeCount = chips.length
+
+                return (
+                  <>
+                    {/* Active filter chips — mobile only */}
+                    {activeCount > 0 && (
+                      <div className="md:hidden -mx-1 mb-3 overflow-x-auto">
+                        <div className="flex gap-2 px-1 pb-1 w-max">
+                          {chips.map((chip) => (
+                            <Badge
+                              key={chip.key}
+                              variant="secondary"
+                              className="flex items-center gap-1 px-3 py-1 whitespace-nowrap"
+                            >
+                              {chip.label}
+                              <button
+                                onClick={chip.onRemove}
+                                className="ml-1 hover:text-destructive"
+                                aria-label={`Remove ${chip.label}`}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Filters trigger + Refresh — mobile only */}
+                    <div className="md:hidden flex items-center gap-2 mb-1">
+                      <Button
+                        variant="outline"
+                        className="flex-1 justify-center bg-transparent"
+                        onClick={() => setMobileFiltersOpen(true)}
+                        disabled={shouldShowPaywall || shouldShowPreview}
+                      >
+                        <SlidersHorizontal className="mr-2 h-4 w-4" />
+                        Filters
+                        {activeCount > 0 && (
+                          <Badge
+                            variant="secondary"
+                            className="ml-2 h-5 min-w-5 rounded-full px-1.5 text-xs"
+                          >
+                            {activeCount}
+                          </Badge>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={handleRefresh}
+                        disabled={shouldShowPaywall || shouldShowPreview || refreshing}
+                        aria-label="Refresh"
+                        className="bg-transparent"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                      </Button>
+                      {activeCount > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={resetFilters}
+                          aria-label="Reset filters"
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                )
+              })()}
+
+              {/* Mobile bottom sheet backdrop */}
+              {mobileFiltersOpen && (
+                <div
+                  className="md:hidden fixed inset-0 z-40 bg-black/60"
+                  onClick={() => setMobileFiltersOpen(false)}
+                  aria-hidden="true"
+                />
+              )}
+
+              {/* Second row - Filters
+                  Desktop: inline flex-wrap row (original layout)
+                  Mobile: bottom sheet that slides up when mobileFiltersOpen=true */}
               <div
-                className={`flex flex-wrap gap-2 items-center ${subscriptionPlan === "free" && !hasAdminAccess ? "blur-sm pointer-events-none" : ""}`}
+                className={cn(
+                  // Desktop layout (md+)
+                  "md:relative md:z-auto md:inset-auto md:transform-none md:rounded-none md:border-0 md:bg-transparent md:p-0 md:max-h-none md:overflow-visible md:flex md:flex-row md:flex-wrap md:gap-2 md:items-center md:transition-none md:translate-y-0",
+                  // Mobile bottom sheet
+                  "fixed inset-x-0 bottom-0 z-50 bg-background border-t border-border rounded-t-2xl p-4 pb-8 max-h-[85vh] overflow-y-auto flex flex-col gap-3 transition-transform duration-300 ease-in-out shadow-2xl",
+                  mobileFiltersOpen ? "translate-y-0" : "translate-y-full",
+                  subscriptionPlan === "free" && !hasAdminAccess ? "blur-sm pointer-events-none" : "",
+                )}
               >
+                {/* Mobile sheet header */}
+                <div className="md:hidden flex items-center justify-between sticky top-0 -mx-4 -mt-4 px-4 py-3 bg-background border-b border-border z-10">
+                  <h3 className="font-semibold text-base">Filters</h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMobileFiltersOpen(false)}
+                    className="font-medium"
+                  >
+                    Done
+                  </Button>
+                </div>
                 {/* Entity filter — temporarily hidden on reporting view, re-enable by removing the !isReportingView condition */}
                 {!isReportingView && (
                 <Popover>

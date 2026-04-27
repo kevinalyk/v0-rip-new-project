@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Image from "next/image"
 import { Menu, X } from "lucide-react"
 import { Sidebar } from "@/components/sidebar"
 import { MainContent } from "@/components/main-content"
@@ -57,8 +58,18 @@ export function Dashboard({ clientSlug, isAdminView = false }: DashboardProps) {
       {/* Main column */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         {/* Mobile top bar */}
-        <header className="flex md:hidden items-center justify-between px-4 py-3 border-b border-border bg-background sticky top-0 z-30">
+        <header className="flex md:hidden items-center gap-3 px-4 py-3 border-b border-border bg-background sticky top-0 z-30">
           <Logo collapsed={false} variant="icon" />
+          <div className="flex-1 flex items-center justify-center min-w-0">
+            <Image
+              src="/images/rip-wordmark.png"
+              alt="Republican Inboxing Protocol"
+              width={420}
+              height={84}
+              priority
+              className="h-8 w-auto max-w-full object-contain"
+            />
+          </div>
           <Button
             variant="ghost"
             size="icon"

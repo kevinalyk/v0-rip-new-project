@@ -104,11 +104,11 @@ export function CiAnalyticsView({
 
   const StatCard = ({ label, value, sub }: { label: string; value: string | number; sub: string }) => (
     <Card>
-      <CardHeader className="pb-2">
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-3xl">{value}</CardTitle>
+      <CardHeader className="pb-1 md:pb-2 p-4 md:p-6">
+        <CardDescription className="text-xs md:text-sm">{label}</CardDescription>
+        <CardTitle className="text-2xl md:text-3xl">{value}</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-4 pt-0 md:p-6 md:pt-0">
         <p className="text-xs text-muted-foreground">{sub}</p>
       </CardContent>
     </Card>
@@ -297,19 +297,19 @@ export function CiAnalyticsView({
                 <CardDescription>Email and SMS volume by day of the week</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-7 gap-2">
+                <div className="grid grid-cols-7 gap-1 md:gap-2">
                   {data.dayOfWeekData.map((dayData) => {
                     const bgOpacity = Math.max(0.08, dayData.intensity)
                     const backgroundColor = `rgba(239, 68, 68, ${bgOpacity})`
                     return (
                       <div
                         key={dayData.day}
-                        className="flex flex-col items-center justify-center p-3 rounded-lg border transition-all hover:scale-105"
+                        className="flex flex-col items-center justify-center p-1.5 md:p-3 rounded-lg border transition-all hover:scale-105"
                         style={{ backgroundColor }}
                       >
-                        <div className="text-xs font-medium text-foreground mb-1">{dayData.day.slice(0, 3)}</div>
-                        <div className="text-xl font-bold text-foreground">{dayData.count}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">sends</div>
+                        <div className="text-[10px] md:text-xs font-medium text-foreground mb-0.5 md:mb-1">{dayData.day.slice(0, 3)}</div>
+                        <div className="text-sm md:text-xl font-bold text-foreground tabular-nums">{dayData.count}</div>
+                        <div className="text-[10px] md:text-xs text-muted-foreground mt-0.5">sends</div>
                       </div>
                     )
                   })}
@@ -363,7 +363,7 @@ export function CiAnalyticsView({
                         className="relative flex flex-col items-center justify-center rounded-sm transition-all group cursor-default"
                         style={{ height: 40, backgroundColor: `rgba(239, 68, 68, ${bgOpacity})` }}
                       >
-                        <span className="text-xs font-bold text-white leading-none">{h.count > 0 ? h.count : ""}</span>
+                        <span className="hidden md:inline text-xs font-bold text-white leading-none">{h.count > 0 ? h.count : ""}</span>
                         {/* Tooltip */}
                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:flex flex-col items-center z-20 pointer-events-none">
                           <div className="bg-popover border rounded px-2 py-1 text-xs whitespace-nowrap shadow-md">

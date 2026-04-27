@@ -21,12 +21,16 @@ function AppLayout({ children, clientSlug, isAdminView = false, defaultCollapsed
 
   return (
     <div className="flex h-screen bg-background">
-      {/* ── Desktop sidebar — hidden on mobile ─────────────────────── */}
-      <div className="hidden md:block">
-        <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} clientSlug={clientSlug} isAdminView={isAdminView} />
-      </div>
+      {/* ── Desktop sidebar — hidden on mobile via its own root class ─ */}
+      <Sidebar
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        clientSlug={clientSlug}
+        isAdminView={isAdminView}
+        className="hidden md:flex"
+      />
 
-      {/* ── Mobile overlay drawer ───────────────────────────────────── */}
+      {/* ── Mobile overlay backdrop ─────────────────────────────────── */}
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/60 md:hidden"
@@ -34,23 +38,24 @@ function AppLayout({ children, clientSlug, isAdminView = false, defaultCollapsed
           aria-hidden="true"
         />
       )}
-      <div
-        className={`fixed top-0 left-0 h-full z-50 md:hidden transition-transform duration-300 ease-in-out ${
+
+      {/* ── Mobile sidebar drawer ───────────────────────────────────── */}
+      <Sidebar
+        collapsed={false}
+        setCollapsed={() => {}}
+        clientSlug={clientSlug}
+        isAdminView={isAdminView}
+        onNavigate={() => setMobileOpen(false)}
+        className={`md:hidden transition-transform duration-300 ease-in-out ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
-      >
-        <Sidebar
-          collapsed={false}
-          setCollapsed={() => {}}
-          clientSlug={clientSlug}
-          isAdminView={isAdminView}
-          onNavigate={() => setMobileOpen(false)}
-        />
-      </div>
+      />
 
       {/* ── Main content area ───────────────────────────────────────── */}
       <div
-        className={`flex flex-col flex-1 min-w-0 overflow-hidden transition-all duration-300 md:${collapsed ? "pl-16" : "pl-64"}`}
+        className={`flex flex-col flex-1 min-w-0 overflow-hidden transition-all duration-300 ${
+          collapsed ? "md:pl-16" : "md:pl-64"
+        }`}
       >
         {/* Mobile top bar */}
         <header className="flex md:hidden items-center justify-between px-4 py-3 border-b border-border bg-background sticky top-0 z-30">

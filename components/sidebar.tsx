@@ -60,9 +60,10 @@ interface SidebarProps {
   isAdminView?: boolean
   clientSlug?: string
   onNavigate?: () => void
+  className?: string
 }
 
-export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNavigate }: SidebarProps) {
+export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNavigate, className }: SidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
@@ -242,6 +243,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
         className={cn(
           "fixed left-0 top-0 h-full bg-background border-r border-border transition-all duration-300 ease-in-out flex flex-col z-50",
           collapsed ? "w-16" : "w-64",
+          className,
         )}
       >
         <div className="p-4 flex justify-between items-center">
@@ -313,6 +315,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
       className={cn(
         "fixed left-0 top-0 h-full bg-background border-r border-border transition-all duration-300 ease-in-out flex flex-col z-50",
         collapsed ? "w-16" : "w-64",
+        className,
       )}
     >
       <div className="flex flex-col flex-grow">

@@ -10,6 +10,10 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/images") ||
     request.nextUrl.pathname === "/favicon.ico" ||
     request.nextUrl.pathname === "/favicon.png" ||
+    request.nextUrl.pathname === "/robots.txt" ||
+    request.nextUrl.pathname === "/sitemap.xml" ||
+    /^\/google[a-f0-9]+\.html$/.test(request.nextUrl.pathname) ||
+    /^\/login\/google[a-f0-9]+\.html$/.test(request.nextUrl.pathname) ||
     request.nextUrl.pathname === "/api/health" ||
     request.nextUrl.pathname === "/api/auth/me" ||
     request.nextUrl.pathname.startsWith("/api/auth/login") ||

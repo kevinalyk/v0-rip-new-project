@@ -984,8 +984,53 @@ export function CompetitiveInsights({
       const isMobile = window.matchMedia("(max-width: 767px)").matches
       // Reset to a sensible default based on viewport so the 600px email fits
       setEmailZoom(isMobile ? 60 : 100)
+      // Reset measured iframe height when opening a new campaign
+      setIframeContentHeight(800)
     }
   }, [selectedCampaign])
+
+  // Measured natural height of the rendered email iframe content
+  const [iframeContentHeight, setIframeContentHeight] = useState<number>(800)
+  const handleEmailIframeLoad = (e: React.SyntheticEvent<HTMLIFrameElement>) => {
+    try {
+      const iframe = e.currentTarget
+      const doc = iframe.contentDocument
+      if (!doc || !doc.body) return
+      const measure = () => {
+        const body = doc.body
+        const html = doc.documentElement
+        const h = Math.max(
+          body.scrollHeight,
+          body.offsetHeight,
+          html.scrollHeight,
+          html.offsetHeight,
+        )
+        if (h > 0) setIframeContentHeight(Math.min(Math.max(h + 24, 400), 8000))
+      }
+      // Initial measure + remeasure after images load
+      measure()
+      const imgs = doc.images
+      let pending = imgs.length
+      if (pending === 0) return
+      Array.from(imgs).forEach((img) => {
+        if (img.complete) {
+          pending -= 1
+          if (pending === 0) measure()
+        } else {
+          img.addEventListener("load", () => {
+            pending -= 1
+            if (pending <= 0) measure()
+          })
+          img.addEventListener("error", () => {
+            pending -= 1
+            if (pending <= 0) measure()
+          })
+        }
+      })
+    } catch {
+      // Cross-origin or sandbox restriction — keep default height
+    }
+  }
 
   const handleGenerateShareLink = async (campaignId: number) => {
     try {
@@ -2500,7 +2545,7 @@ export function CompetitiveInsights({
                       <div className="flex-1 min-w-0 pr-8 md:pr-0">
                         <DialogTitle className="text-base md:text-xl break-words">{selectedCampaign.subject}</DialogTitle>
                         <DialogDescription asChild>
-                          <div className="flex flex-col gap-1 mt-2">
+                          <div className="flex flex-col gap-1 mt-2 text-left">
                             {/* Entity information */}
                             {selectedCampaign.entity && (
                               <div className="flex flex-col gap-1 mb-2">
@@ -2539,8 +2584,8 @@ export function CompetitiveInsights({
                               ) : (
                                 <Mail className="h-4 w-4 mt-0.5 flex-shrink-0" />
                               )}
-                              <div className="flex flex-col md:flex-row md:items-center md:gap-2 min-w-0 flex-1">
-                                <span className="font-medium truncate">{selectedCampaign.senderName}</span>
+                              <div className="flex flex-col md:flex-row md:items-center md:gap-2 min-w-0 flex-1 text-left">
+                                <span className="font-medium break-words">{selectedCampaign.senderName}</span>
                                 <span className="text-muted-foreground text-xs md:text-sm break-all">
                                   {selectedCampaign.type === "sms"
                                     ? selectedCampaign.phoneNumber
@@ -2655,19 +2700,28 @@ export function CompetitiveInsights({
                           </div>
                         </div>
                       ) : selectedCampaign.emailContent ? (
-                        <div className="rounded-lg border bg-white overflow-x-auto overflow-y-hidden">
+                        <div
+                          className="rounded-lg border bg-white overflow-x-auto overflow-y-hidden"
+                          style={{
+                            // Outer wrapper uses the visually-scaled height so there's
+                            // no phantom whitespace below the scaled iframe.
+                            height: `${(iframeContentHeight * emailZoom) / 100}px`,
+                          }}
+                        >
                           <div
                             style={{
                               transform: `scale(${emailZoom / 100})`,
                               transformOrigin: "top left",
                               width: `${10000 / emailZoom}%`,
-                              height: `${60000 / emailZoom}px`,
+                              height: `${iframeContentHeight}px`,
                             }}
                           >
                             <iframe
                               srcDoc={prepareEmailHtml(selectedCampaign.emailContent, selectedCampaign.senderEmail)}
                               sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation"
-                              className="w-full h-[600px] border-0"
+                              onLoad={handleEmailIframeLoad}
+                              style={{ width: "100%", height: `${iframeContentHeight}px` }}
+                              className="border-0 block"
                               title="Email Preview"
                             />
                           </div>

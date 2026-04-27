@@ -58,9 +58,12 @@ interface SidebarProps {
   collapsed: boolean
   setCollapsed: (collapsed: boolean) => void
   isAdminView?: boolean
+  clientSlug?: string
+  onNavigate?: () => void
+  className?: string
 }
 
-export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: SidebarProps) {
+export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNavigate, className }: SidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
@@ -202,6 +205,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
 
   const navigate = (path: string) => {
     router.push(path)
+    onNavigate?.()
   }
 
   const handleClientSwitch = (newClientSlug: string) => {
@@ -239,6 +243,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
         className={cn(
           "fixed left-0 top-0 h-full bg-background border-r border-border transition-all duration-300 ease-in-out flex flex-col z-50",
           collapsed ? "w-16" : "w-64",
+          className,
         )}
       >
         <div className="p-4 flex justify-between items-center">
@@ -310,6 +315,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
       className={cn(
         "fixed left-0 top-0 h-full bg-background border-r border-border transition-all duration-300 ease-in-out flex flex-col z-50",
         collapsed ? "w-16" : "w-64",
+        className,
       )}
     >
       <div className="flex flex-col flex-grow">

@@ -422,11 +422,11 @@ export default function AccountUsersPage() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="text-xs sm:text-sm text-muted-foreground order-2 sm:order-1">
               Last updated: <span className="font-medium">{lastUpdated}</span>
             </div>
-            <div className="relative w-full max-w-xs">
+            <div className="relative w-full sm:max-w-xs order-1 sm:order-2">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="search"
@@ -438,7 +438,147 @@ export default function AccountUsersPage() {
             </div>
           </div>
 
-          <div className="border rounded-md">
+          {/* Mobile card list */}
+          <div className="md:hidden border rounded-md divide-y">
+            {loading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 size={24} className="animate-spin text-rip-red" />
+              </div>
+            ) : filteredUsers.length === 0 ? (
+              <div className="text-center py-12 text-sm text-muted-foreground">No users found</div>
+            ) : (
+              filteredUsers.map((user) => (
+                <div key={user.id} className="p-3">
+                  <div className="flex items-start gap-3">
+                    <Avatar className="h-9 w-9 flex-shrink-0">
+                      <AvatarFallback className="bg-rip-red/10 text-rip-red text-xs">
+                        {user.firstName?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
+                        {user.lastName?.[0]?.toUpperCase() || ""}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm break-words">
+                        {user.firstName} {user.lastName}
+                      </div>
+                      <div className="text-xs text-muted-foreground break-all">{user.email}</div>
+                      {user.firstLogin === true && (
+                        <div className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">Pending invitation</div>
+                      )}
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="flex-shrink-0 -mr-2">
+                          <MoreHorizontal size={16} />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {(currentUser?.role === "super_admin" ||
+                          currentUser?.role === "owner" ||
+                          (currentUser?.role === "admin" &&
+                            user.role !== "admin" &&
+                            user.role !== "super_admin" &&
+                            user.role !== "owner")) && (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setEditRoleUserId(user.id)
+                              setEditRoleValue(user.role)
+                            }}
+                          >
+                            <Edit size={14} className="mr-2" />
+                            Edit Role
+                          </DropdownMenuItem>
+                        )}
+                        {currentUser?.role === "super_admin" && currentUser?.id !== user.id && (
+                          <DropdownMenuItem
+                            onClick={() => setForceResetUserId(user.id)}
+                            className="text-orange-600 focus:text-orange-600"
+                          >
+                            <RefreshCw size={14} className="mr-2" />
+                            Force Reset Password
+                          </DropdownMenuItem>
+                        )}
+                        {(currentUser?.role === "super_admin" ||
+                          (currentUser?.role === "owner" && user.role !== "owner" && user.role !== "super_admin") ||
+                          (currentUser?.role === "admin" &&
+                            user.role !== "admin" &&
+                            user.role !== "super_admin" &&
+                            user.role !== "owner")) && (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              if (confirm("Permanently delete this user? This cannot be undone.")) {
+                                handleDeleteUser(user.id)
+                              }
+                            }}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash size={14} className="mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 mt-2 pl-12 text-xs">
+                    <Badge
+                      variant={user.role === "admin" || user.role === "owner" ? "default" : "secondary"}
+                      className="capitalize text-xs"
+                    >
+                      {getRoleDisplay(user.role)}
+                    </Badge>
+                    <span className="text-muted-foreground">
+                      {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "N/A"}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Force reset password confirmation (mobile) */}
+          {forceResetUserId !== null && (
+            <AlertDialog open={forceResetUserId !== null} onOpenChange={(open) => !open && setForceResetUserId(null)}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Force Reset Password?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {(() => {
+                      const u = users.find((x) => x.id === forceResetUserId)
+                      if (!u) return null
+                      return (
+                        <>
+                          This will reset {u.firstName || u.email}&apos;s password to a temporary password and require
+                          them to change it on their next login. An email will be sent to <strong>{u.email}</strong>.
+                        </>
+                      )
+                    })()}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      const u = users.find((x) => x.id === forceResetUserId)
+                      if (u) handleForceResetPassword(u.id, u.email)
+                    }}
+                    className="bg-orange-600 hover:bg-orange-700"
+                    disabled={resettingPassword}
+                  >
+                    {resettingPassword ? (
+                      <>
+                        <Loader2 size={16} className="mr-2 animate-spin" />
+                        Resetting...
+                      </>
+                    ) : (
+                      "Reset Password"
+                    )}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+
+          {/* Desktop table */}
+          <div className="hidden md:block border rounded-md">
             <Table>
               <TableHeader>
                 <TableRow>

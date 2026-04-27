@@ -254,12 +254,12 @@ export default function InboxingPage() {
   return (
     <AppLayout clientSlug={clientSlug} isAdminView={clientSlug === "admin"}>
       <div className="container mx-auto px-4 py-6 space-y-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">Inboxing Report</h1>
-            <p className="text-muted-foreground">Email placement and deliverability analysis</p>
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl md:text-3xl font-bold">Inboxing Report</h1>
+            <p className="text-muted-foreground text-sm md:text-base">Email placement and deliverability analysis</p>
           </div>
-          <div className="flex items-center gap-1 text-xs border rounded-md overflow-hidden shrink-0">
+          <div className="flex items-center gap-1 text-xs border rounded-md overflow-hidden shrink-0 self-start">
             {([7, 30, 90, 365] as const).map((d) => (
               <button
                 key={d}
@@ -366,27 +366,27 @@ export default function InboxingPage() {
               )}
             </div>
 
-            {/* Refresh */}
-            <Button
-              variant="outline"
-              onClick={() => fetchData(true)}
-              className="w-full md:w-auto bg-transparent"
-              disabled={refreshing}
-            >
-              <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              {refreshing ? "Refreshing..." : "Refresh"}
-            </Button>
-
-            {/* Reset */}
-            <Button
-              variant="outline"
-              onClick={resetFilters}
-              className="w-full md:w-auto bg-transparent"
-              disabled={!isFiltersActive}
-            >
-              <RotateCcw className="mr-2 h-4 w-4" />
-              Reset Filters
-            </Button>
+            {/* Refresh + Reset — share a row on mobile */}
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <Button
+                variant="outline"
+                onClick={() => fetchData(true)}
+                className="flex-1 md:flex-none md:w-auto bg-transparent"
+                disabled={refreshing}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                {refreshing ? "Refreshing..." : "Refresh"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={resetFilters}
+                className="flex-1 md:flex-none md:w-auto bg-transparent"
+                disabled={!isFiltersActive}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Reset Filters
+              </Button>
+            </div>
           </div>
         </div>
 

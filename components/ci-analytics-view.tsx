@@ -51,6 +51,7 @@ export function CiAnalyticsView({
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<AnalyticsData | null>(null)
   const [localChartDays, setLocalChartDays] = useState<7 | 30 | 90 | 365>(7)
+  const [selectedHour, setSelectedHour] = useState<number | null>(null)
   // Use external value when provided (reporting view), otherwise use local state (CI feed)
   const chartDays = externalChartDays ?? localChartDays
   const setChartDays = externalChartDays !== undefined ? () => {} : setLocalChartDays
@@ -328,50 +329,97 @@ export function CiAnalyticsView({
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {/* Bar chart — fixed pixel height container with absolute-positioned bars */}
-                <div className="relative w-full mb-4" style={{ height: 112 }}>
-                  <div className="absolute inset-0 flex items-end gap-px">
-                    {data.hourOfDayData.map((h) => {
-                      const heightPx = Math.max(4, Math.round(h.intensity * 112))
-                      const bgOpacity = Math.max(0.18, h.intensity)
-                      return (
-                        <div key={h.hour} className="flex-1 relative group" style={{ height: heightPx }}>
-                          <div
-                            className="w-full h-full rounded-t transition-all"
-                            style={{ backgroundColor: `rgba(239, 68, 68, ${bgOpacity})` }}
-                          />
-                          {/* Tooltip */}
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:flex flex-col items-center z-20 pointer-events-none">
-                            <div className="bg-popover border rounded px-2 py-1 text-xs whitespace-nowrap shadow-md">
-                              <span className="font-medium">{h.label}</span>
-                              <span className="text-muted-foreground ml-1">— {h.count} sends</span>
-                            </div>
+                {/* Selected hour detail card */}
+                {(() => {
+                  if (selectedHour === null) return null
+                  const h = data.hourOfDayData.find((x) => x.hour === selectedHour)
+                  if (!h) return null
+                  const formatHour = (n: number) => {
+                    if (n === 0) return "12 AM"
+                    if (n === 12) return "12 PM"
+                    return n < 12 ? `${n} AM` : `${n - 12} PM`
+                  }
+                  const next = (selectedHour + 1) % 24
+                  const totalSends = data.hourOfDayData.reduce((sum, x) => sum + x.count, 0)
+                  const otherHoursAvg = totalSends > 0 ? Math.round((totalSends - h.count) / 23) : 0
+                  const pct = totalSends > 0 ? ((h.count / totalSends) * 100).toFixed(1) : "0"
+                  return (
+                    <div className="mb-4 rounded-lg border bg-muted/30 p-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-xs text-muted-foreground">Selected hour (EST)</div>
+                        <div className="text-base font-semibold">
+                          {formatHour(selectedHour)} – {formatHour(next)}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          <span className="font-medium text-foreground">{h.count.toLocaleString()}</span> sends
+                          {totalSends > 0 && <> · {pct}% of total · other hours avg: {otherHoursAvg.toLocaleString()}</>}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedHour(null)}
+                        className="text-xs text-muted-foreground hover:text-foreground border rounded px-2 py-1 flex-shrink-0"
+                        aria-label="Clear selected hour"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )
+                })()}
+
+                {/* Bar chart — full-height columns so the entire vertical area is tappable */}
+                <div className="flex items-end gap-px mb-4" style={{ height: 112 }}>
+                  {data.hourOfDayData.map((h) => {
+                    const heightPx = Math.max(4, Math.round(h.intensity * 112))
+                    const bgOpacity = Math.max(0.18, h.intensity)
+                    const isSelected = selectedHour === h.hour
+                    return (
+                      <button
+                        type="button"
+                        key={h.hour}
+                        onClick={() => setSelectedHour(isSelected ? null : h.hour)}
+                        className="flex-1 h-full flex items-end relative group cursor-pointer focus:outline-none"
+                        aria-label={`${h.label}, ${h.count} sends`}
+                      >
+                        <div
+                          className={`w-full rounded-t transition-all ${isSelected ? "ring-2 ring-offset-1 ring-offset-background ring-foreground/60" : ""}`}
+                          style={{ height: heightPx, backgroundColor: `rgba(239, 68, 68, ${bgOpacity})` }}
+                        />
+                        {/* Hover tooltip (desktop) */}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden md:group-hover:flex flex-col items-center z-20 pointer-events-none">
+                          <div className="bg-popover border rounded px-2 py-1 text-xs whitespace-nowrap shadow-md">
+                            <span className="font-medium">{h.label}</span>
+                            <span className="text-muted-foreground ml-1">— {h.count} sends</span>
                           </div>
                         </div>
-                      )
-                    })}
-                  </div>
+                      </button>
+                    )
+                  })}
                 </div>
 
-                {/* Heat map row — 24 cells with count on hover */}
+                {/* Heat map row — also tappable */}
                 <div className="grid gap-px mb-1" style={{ gridTemplateColumns: "repeat(24, minmax(0, 1fr))" }}>
                   {data.hourOfDayData.map((h) => {
                     const bgOpacity = Math.max(0.1, h.intensity)
+                    const isSelected = selectedHour === h.hour
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={h.hour}
-                        className="relative flex flex-col items-center justify-center rounded-sm transition-all group cursor-default"
+                        onClick={() => setSelectedHour(isSelected ? null : h.hour)}
+                        className={`relative flex flex-col items-center justify-center rounded-sm transition-all group cursor-pointer focus:outline-none ${isSelected ? "ring-2 ring-offset-1 ring-offset-background ring-foreground/60" : ""}`}
                         style={{ height: 40, backgroundColor: `rgba(239, 68, 68, ${bgOpacity})` }}
+                        aria-label={`${h.label}, ${h.count} sends`}
                       >
                         <span className="hidden md:inline text-xs font-bold text-white leading-none">{h.count > 0 ? h.count : ""}</span>
-                        {/* Tooltip */}
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:flex flex-col items-center z-20 pointer-events-none">
+                        {/* Hover tooltip (desktop) */}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden md:group-hover:flex flex-col items-center z-20 pointer-events-none">
                           <div className="bg-popover border rounded px-2 py-1 text-xs whitespace-nowrap shadow-md">
                             <span className="font-medium">{h.label}</span>
                             <span className="text-muted-foreground ml-1">{h.count} sends</span>
                           </div>
                         </div>
-                      </div>
+                      </button>
                     )
                   })}
                 </div>

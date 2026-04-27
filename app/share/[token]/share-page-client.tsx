@@ -1,5 +1,6 @@
 "use client"
 
+import type React from "react"
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -40,11 +41,21 @@ export default function SharePageClient() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [emailZoom, setEmailZoom] = useState(100)
   const [dialogOpen, setDialogOpen] = useState(true)
+  const [iframeContentHeight, setIframeContentHeight] = useState<number>(800)
 
   useEffect(() => {
     checkAuth()
     fetchSharedCampaign()
   }, [token])
+
+  // Auto-fit zoom on mobile when an email campaign loads
+  useEffect(() => {
+    if (campaign && campaign.type !== "sms" && typeof window !== "undefined") {
+      const isMobile = window.matchMedia("(max-width: 767px)").matches
+      setEmailZoom(isMobile ? 60 : 100)
+      setIframeContentHeight(800)
+    }
+  }, [campaign])
 
   const checkAuth = async () => {
     try {
@@ -99,6 +110,41 @@ export default function SharePageClient() {
       return html.replace("<html>", `<html><head><base target="_blank">${noLinkStyle}</head>`)
     } else {
       return `<head><base target="_blank">${noLinkStyle}</head>${html}`
+    }
+  }
+
+  const handleEmailIframeLoad = (e: React.SyntheticEvent<HTMLIFrameElement>) => {
+    try {
+      const iframe = e.currentTarget
+      const doc = iframe.contentDocument
+      if (!doc || !doc.body) return
+      const measure = () => {
+        const body = doc.body
+        const html = doc.documentElement
+        const h = Math.max(body.scrollHeight, body.offsetHeight, html.scrollHeight, html.offsetHeight)
+        if (h > 0) setIframeContentHeight(Math.min(Math.max(h + 24, 400), 8000))
+      }
+      measure()
+      const imgs = doc.images
+      let pending = imgs.length
+      if (pending === 0) return
+      Array.from(imgs).forEach((img) => {
+        if (img.complete) {
+          pending -= 1
+          if (pending === 0) measure()
+        } else {
+          img.addEventListener("load", () => {
+            pending -= 1
+            if (pending <= 0) measure()
+          })
+          img.addEventListener("error", () => {
+            pending -= 1
+            if (pending <= 0) measure()
+          })
+        }
+      })
+    } catch {
+      // Cross-origin or sandbox restriction — keep default height
     }
   }
 
@@ -172,49 +218,65 @@ export default function SharePageClient() {
           }
         }}
       >
-        <DialogContent className="!max-w-[1400px] !w-[85vw] max-h-[85vh] overflow-y-auto">
+        <DialogContent className="!max-w-[1400px] !w-[95vw] md:!w-[85vw] max-h-[90vh] md:max-h-[85vh] overflow-y-auto p-4 md:p-6">
           <DialogHeader>
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <DialogTitle className="text-xl">{campaign.subject}</DialogTitle>
-                <DialogDescription>
-                  <div className="flex flex-col gap-1 mt-2">
-                    <div className="flex items-center gap-2">
-                      {campaign.type === "sms" ? <Smartphone className="h-4 w-4" /> : <Mail className="h-4 w-4" />}
-                      {campaign.entity ? (
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{campaign.entity.name}</span>
-                          {(campaign.entity.party || campaign.entity.state) && (
-                            <div className="flex gap-1">
-                              {campaign.entity.party && (
-                                <Badge variant={getPartyColor(campaign.entity.party)} className="text-xs capitalize">
-                                  {campaign.entity.party}
-                                </Badge>
-                              )}
-                              {campaign.entity.state && (
-                                <Badge variant="outline" className="text-xs">
-                                  {campaign.entity.state}
-                                </Badge>
-                              )}
-                            </div>
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
+              <div className="flex-1 min-w-0 pr-8 md:pr-0">
+                <DialogTitle className="text-base md:text-xl break-words">{campaign.subject}</DialogTitle>
+                <DialogDescription asChild>
+                  <div className="flex flex-col gap-1 mt-2 text-left">
+                    {/* Entity name + party badge row (stacked above sender) */}
+                    {campaign.entity && (
+                      <div className="flex flex-col gap-1 mb-2">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="font-semibold text-foreground break-words">{campaign.entity.name}</span>
+                          {campaign.entity.type && (
+                            <span className="text-muted-foreground text-sm">
+                              ({campaign.entity.type.replace(/_/g, " ")})
+                            </span>
                           )}
                         </div>
+                        {(campaign.entity.party || campaign.entity.state) && (
+                          <div className="flex flex-wrap gap-1">
+                            {campaign.entity.party && (
+                              <Badge variant={getPartyColor(campaign.entity.party)} className="text-xs capitalize">
+                                {campaign.entity.party}
+                              </Badge>
+                            )}
+                            {campaign.entity.state && (
+                              <Badge variant="outline" className="text-xs">
+                                {campaign.entity.state}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Icon + sender name + email/phone inline (wrap on overflow) */}
+                    <div className="flex items-start gap-2 text-sm min-w-0">
+                      {campaign.type === "sms" ? (
+                        <Smartphone className="h-4 w-4 mt-0.5 flex-shrink-0" />
                       ) : (
-                        <span className="font-medium">{campaign.senderName}</span>
+                        <Mail className="h-4 w-4 mt-0.5 flex-shrink-0" />
                       )}
-                      <span className="text-muted-foreground">
-                        ({campaign.type === "sms" ? campaign.phoneNumber : campaign.senderEmail})
-                      </span>
+                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0 flex-1 text-left">
+                        <span className="font-medium break-words">{campaign.senderName}</span>
+                        <span className="text-muted-foreground text-xs md:text-sm break-all">
+                          {campaign.type === "sms" ? campaign.phoneNumber : campaign.senderEmail}
+                        </span>
+                      </div>
                     </div>
+
                     <div className="flex items-center gap-2 text-sm">
-                      <Calendar className="h-4 w-4" />
+                      <Calendar className="h-4 w-4 flex-shrink-0" />
                       {new Date(campaign.dateReceived).toLocaleDateString()}
                     </div>
                   </div>
                 </DialogDescription>
               </div>
               {campaign.type === "email" && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Button variant="outline" size="sm" onClick={handleZoomOut} disabled={emailZoom <= 50}>
                     <ZoomOut className="h-4 w-4" />
                   </Button>
@@ -237,31 +299,38 @@ export default function SharePageClient() {
 
             <TabsContent value="preview" className="mt-4">
               {campaign.type === "sms" ? (
-                <div className="rounded-lg border bg-white p-6">
+                <div className="rounded-lg border bg-white p-4 md:p-6">
                   <div className="space-y-4">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Phone className="h-4 w-4" />
                       <span>From: {campaign.phoneNumber}</span>
                     </div>
-                    <div className="text-base text-black whitespace-pre-wrap">
+                    <div className="text-base text-black whitespace-pre-wrap break-words">
                       {renderMessageWithLinks(campaign.message || "No message content")}
                     </div>
                   </div>
                 </div>
               ) : campaign.emailContent ? (
-                <div className="rounded-lg border bg-white overflow-auto">
+                <div
+                  className="rounded-lg border bg-white overflow-x-auto overflow-y-hidden"
+                  style={{
+                    height: `${(iframeContentHeight * emailZoom) / 100}px`,
+                  }}
+                >
                   <div
                     style={{
                       transform: `scale(${emailZoom / 100})`,
                       transformOrigin: "top left",
                       width: `${10000 / emailZoom}%`,
-                      height: `${60000 / emailZoom}px`,
+                      height: `${iframeContentHeight}px`,
                     }}
                   >
                     <iframe
                       srcDoc={prepareEmailHtml(campaign.emailContent)}
                       sandbox="allow-same-origin allow-popups"
-                      className="w-full h-[600px] border-0"
+                      onLoad={handleEmailIframeLoad}
+                      style={{ width: "100%", height: `${iframeContentHeight}px` }}
+                      className="border-0 block"
                       title="Email Preview"
                     />
                   </div>
@@ -281,21 +350,23 @@ export default function SharePageClient() {
 
                     return (
                       <div key={idx} className="rounded-lg border bg-muted/20 p-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <a
-                              href={bestUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-start gap-2 text-sm text-rip-red hover:underline break-all"
-                            >
-                              <ExternalLink className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                              <span>{bestUrl}</span>
-                            </a>
-                          </div>
-                          <Badge variant="secondary" className="capitalize flex-shrink-0">
-                            {link.type}
-                          </Badge>
+                        <div className="flex flex-col gap-2">
+                          {link.type && (
+                            <div>
+                              <Badge variant="secondary" className="capitalize">
+                                {link.type}
+                              </Badge>
+                            </div>
+                          )}
+                          <a
+                            href={bestUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-start gap-2 text-sm text-rip-red hover:underline break-all min-w-0"
+                          >
+                            <ExternalLink className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                            <span className="min-w-0 break-all">{bestUrl}</span>
+                          </a>
                         </div>
                       </div>
                     )

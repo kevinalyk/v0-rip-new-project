@@ -305,6 +305,20 @@ export function CompetitiveInsights({
   const [isFromCalendarOpen, setIsFromCalendarOpen] = useState(false)
   const [isToCalendarOpen, setIsToCalendarOpen] = useState(false)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+
+  // ── Mobile filter draft state ────────────────────────────────────────────
+  // While the mobile filter sheet is open, controls inside it write to these
+  // draft values instead of the applied state. The user commits via the
+  // "Apply Filters" button (which copies draft → applied and closes the sheet)
+  // or discards via Cancel/backdrop tap. This prevents a refetch on every
+  // single filter change while the sheet is open.
+  const [draftSender, setDraftSender] = useState<string[]>([])
+  const [draftPartyFilter, setDraftPartyFilter] = useState<string>("all")
+  const [draftStateFilter, setDraftStateFilter] = useState<string>("all")
+  const [draftMessageFilters, setDraftMessageFilters] = useState<string[]>([])
+  const [draftDonationPlatform, setDraftDonationPlatform] = useState<string>("all")
+  const [draftDateRange, setDraftDateRange] = useState<DateRange>({ from: undefined, to: undefined })
+
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [showAutocomplete, setShowAutocomplete] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
@@ -883,6 +897,54 @@ export function CompetitiveInsights({
 
   const clearDateRange = () => {
     setDateRange({ from: undefined, to: undefined })
+    setIsFromCalendarOpen(false)
+    setIsToCalendarOpen(false)
+  }
+
+  // ── Mobile filter sheet: snapshot, commit, reset, clear-date helpers ──
+  // Snapshot applied → draft each time the sheet opens
+  useEffect(() => {
+    if (mobileFiltersOpen) {
+      setDraftSender(selectedSender)
+      setDraftPartyFilter(selectedPartyFilter)
+      setDraftStateFilter(selectedStateFilter)
+      setDraftMessageFilters(selectedMessageFilters)
+      setDraftDonationPlatform(selectedDonationPlatform)
+      setDraftDateRange(dateRange)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mobileFiltersOpen])
+
+  // Commit drafts → applied state, close sheet → triggers a single refetch
+  const applyMobileFilters = () => {
+    setSelectedSender(draftSender)
+    setSelectedPartyFilter(draftPartyFilter)
+    setSelectedStateFilter(draftStateFilter)
+    setSelectedMessageFilters(draftMessageFilters)
+    // Sync legacy state for analytics view & API params
+    setShowThirdParty(draftMessageFilters.includes("third_party"))
+    setShowHouseFileOnly(draftMessageFilters.includes("house_file"))
+    const emailOnly = draftMessageFilters.includes("email") && !draftMessageFilters.includes("sms")
+    const smsOnly = draftMessageFilters.includes("sms") && !draftMessageFilters.includes("email")
+    setSelectedMessageType(emailOnly ? "email" : smsOnly ? "sms" : "all")
+    setSelectedDonationPlatform(draftDonationPlatform)
+    setDateRange(draftDateRange)
+    setMobileFiltersOpen(false)
+  }
+
+  // Reset draft filters only (used by Reset Filters button inside the sheet)
+  const resetDraftFilters = () => {
+    setDraftSender([])
+    setDraftPartyFilter("all")
+    setDraftStateFilter("all")
+    setDraftMessageFilters([])
+    setDraftDonationPlatform("all")
+    setDraftDateRange({ from: undefined, to: undefined })
+  }
+
+  // Clear the draft date range (used when sheet is open)
+  const clearDraftDateRange = () => {
+    setDraftDateRange({ from: undefined, to: undefined })
     setIsFromCalendarOpen(false)
     setIsToCalendarOpen(false)
   }
@@ -1541,20 +1603,24 @@ export function CompetitiveInsights({
                   subscriptionPlan === "free" && !hasAdminAccess ? "blur-sm pointer-events-none" : "",
                 )}
               >
-                {/* Mobile sheet header */}
+                {/* Mobile sheet header — Cancel discards drafts */}
                 <div className="md:hidden flex items-center justify-between sticky top-0 -mx-4 -mt-4 px-4 py-3 bg-background border-b border-border z-10">
                   <h3 className="font-semibold text-base">Filters</h3>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setMobileFiltersOpen(false)}
-                    className="font-medium"
+                    className="font-medium text-muted-foreground"
                   >
-                    Done
+                    Cancel
                   </Button>
                 </div>
                 {/* Entity filter — temporarily hidden on reporting view, re-enable by removing the !isReportingView condition */}
-                {!isReportingView && (
+                {!isReportingView && (() => {
+                  // Inside the mobile filter sheet, bind to draft state. Otherwise applied state.
+                  const senderValue = mobileFiltersOpen ? draftSender : selectedSender
+                  const setSenderValue = mobileFiltersOpen ? setDraftSender : setSelectedSender
+                  return (
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -1562,9 +1628,9 @@ export function CompetitiveInsights({
                       className="w-full md:w-[200px] justify-between"
                       disabled={shouldShowPaywall || shouldShowPreview}
                     >
-                      {selectedSender.length === 0
+                      {senderValue.length === 0
                         ? "Filter by entity"
-                        : `${selectedSender.length} selected`}
+                        : `${senderValue.length} selected`}
                       <ChevronRight className="ml-2 h-4 w-4 opacity-50" />
                     </Button>
                   </PopoverTrigger>
@@ -1579,14 +1645,14 @@ export function CompetitiveInsights({
                       />
                     </div>
                     <div className="max-h-[240px] overflow-y-auto p-2">
-                      {selectedSender.length > 0 && (
+                      {senderValue.length > 0 && (
                         <Button
                           variant="ghost"
                           size="sm"
                           className="w-full mb-2 text-xs"
-                          onClick={() => setSelectedSender([])}
+                          onClick={() => setSenderValue([])}
                         >
-                          Clear all ({selectedSender.length})
+                          Clear all ({senderValue.length})
                         </Button>
                       )}
                       {filteredSenders
@@ -1596,7 +1662,7 @@ export function CompetitiveInsights({
                             key={sender}
                             className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer"
                             onClick={() => {
-                              setSelectedSender(prev =>
+                              setSenderValue(prev =>
                                 prev.includes(sender)
                                   ? prev.filter(s => s !== sender)
                                   : [...prev, sender]
@@ -1604,7 +1670,7 @@ export function CompetitiveInsights({
                             }}
                           >
                             <Checkbox
-                              checked={selectedSender.includes(sender)}
+                              checked={senderValue.includes(sender)}
                               onCheckedChange={() => { }}
                             />
                             <span className="flex-1 truncate text-sm">{sender}</span>
@@ -1624,11 +1690,12 @@ export function CompetitiveInsights({
                     </div>
                   </PopoverContent>
                 </Popover>
-                )}
+                  )
+                })()}
 
                 <Select
-                  value={selectedPartyFilter} // Use renamed state
-                  onValueChange={setSelectedPartyFilter}
+                  value={mobileFiltersOpen ? draftPartyFilter : selectedPartyFilter}
+                  onValueChange={mobileFiltersOpen ? setDraftPartyFilter : setSelectedPartyFilter}
                   disabled={shouldShowPaywall || shouldShowPreview}
                 >
                   <SelectTrigger className="w-full md:w-[180px]">
@@ -1643,8 +1710,8 @@ export function CompetitiveInsights({
                 </Select>
 
                 <Select
-                  value={selectedStateFilter}
-                  onValueChange={setSelectedStateFilter}
+                  value={mobileFiltersOpen ? draftStateFilter : selectedStateFilter}
+                  onValueChange={mobileFiltersOpen ? setDraftStateFilter : setSelectedStateFilter}
                   disabled={shouldShowPaywall || shouldShowPreview}
                 >
                   <SelectTrigger className="w-full md:w-[180px]">
@@ -1661,12 +1728,17 @@ export function CompetitiveInsights({
                 </Select>
 
                 {/* Multi-select message type filter */}
+                {(() => {
+                  // Inside the mobile filter sheet: read/write draft. Otherwise: applied.
+                  const messageFiltersValue = mobileFiltersOpen ? draftMessageFilters : selectedMessageFilters
+                  const setMessageFiltersValue = mobileFiltersOpen ? setDraftMessageFilters : setSelectedMessageFilters
+                  return (
                 <Popover
                   open={isMessageFilterOpen}
                   onOpenChange={(open) => {
                     if (open) {
-                      // Sync pending to current applied filters when opening
-                      setPendingMessageFilters(selectedMessageFilters)
+                      // Sync pending to current (draft when in sheet, applied otherwise)
+                      setPendingMessageFilters(messageFiltersValue)
                     }
                     setIsMessageFilterOpen(open)
                   }}
@@ -1677,9 +1749,9 @@ export function CompetitiveInsights({
                       className="w-full md:w-auto bg-transparent justify-between gap-2"
                       disabled={shouldShowPaywall || shouldShowPreview}
                     >
-                      {selectedMessageFilters.length === 0
+                      {messageFiltersValue.length === 0
                         ? "All Messages"
-                        : selectedMessageFilters
+                        : messageFiltersValue
                             .map((f) =>
                               f === "email"
                                 ? "Email"
@@ -1690,9 +1762,9 @@ export function CompetitiveInsights({
                                 : "House File"
                             )
                             .join(", ")}
-                      {selectedMessageFilters.length > 0 && (
+                      {messageFiltersValue.length > 0 && (
                         <Badge variant="secondary" className="ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
-                          {selectedMessageFilters.length}
+                          {messageFiltersValue.length}
                         </Badge>
                       )}
                     </Button>
@@ -1727,13 +1799,16 @@ export function CompetitiveInsights({
                         className="flex-1 h-8 text-xs"
                         onClick={() => {
                           const next = pendingMessageFilters
-                          setSelectedMessageFilters(next)
-                          // Sync legacy state for CiAnalyticsView and API params
-                          setShowThirdParty(next.includes("third_party"))
-                          setShowHouseFileOnly(next.includes("house_file"))
-                          const emailOnly = next.includes("email") && !next.includes("sms")
-                          const smsOnly = next.includes("sms") && !next.includes("email")
-                          setSelectedMessageType(emailOnly ? "email" : smsOnly ? "sms" : "all")
+                          setMessageFiltersValue(next)
+                          // Only sync legacy state when committing directly to applied state.
+                          // When in the mobile sheet, the sheet's "Apply Filters" button does the syncing.
+                          if (!mobileFiltersOpen) {
+                            setShowThirdParty(next.includes("third_party"))
+                            setShowHouseFileOnly(next.includes("house_file"))
+                            const emailOnly = next.includes("email") && !next.includes("sms")
+                            const smsOnly = next.includes("sms") && !next.includes("email")
+                            setSelectedMessageType(emailOnly ? "email" : smsOnly ? "sms" : "all")
+                          }
                           setIsMessageFilterOpen(false)
                         }}
                       >
@@ -1750,10 +1825,15 @@ export function CompetitiveInsights({
                     </div>
                   </PopoverContent>
                 </Popover>
+                  )
+                })()}
 
                 {/* Platform Filter - Conditional rendering */}
                 {(currentUserClient === "winred" || currentUserClient === "RIP") && (
-                  <Select value={selectedDonationPlatform} onValueChange={setSelectedDonationPlatform}>
+                  <Select
+                    value={mobileFiltersOpen ? draftDonationPlatform : selectedDonationPlatform}
+                    onValueChange={mobileFiltersOpen ? setDraftDonationPlatform : setSelectedDonationPlatform}
+                  >
                     <SelectTrigger className="w-full sm:w-[180px]">
                       <SelectValue placeholder="All Platforms" />
                     </SelectTrigger>
@@ -1770,6 +1850,12 @@ export function CompetitiveInsights({
                 )}
 
                 {/* Date Range Filter (hidden on reporting view) */}
+                {(() => {
+                  // Inside the mobile filter sheet: read/write draftDateRange. Otherwise: applied dateRange.
+                  const dateRangeValue = mobileFiltersOpen ? draftDateRange : dateRange
+                  const setDateRangeValue = mobileFiltersOpen ? setDraftDateRange : setDateRange
+                  const clearDateRangeValue = mobileFiltersOpen ? clearDraftDateRange : clearDateRange
+                  return (
                 <div className={`flex items-center gap-2 ${isReportingView ? "hidden" : ""}`}>
                   <Popover open={isFromCalendarOpen} onOpenChange={setIsFromCalendarOpen}>
                     <PopoverTrigger asChild>
@@ -1779,8 +1865,8 @@ export function CompetitiveInsights({
                         disabled={shouldShowPaywall || shouldShowPreview}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateRange.from ? (
-                          format(dateRange.from, "MMM d, yyyy")
+                        {dateRangeValue.from ? (
+                          format(dateRangeValue.from, "MMM d, yyyy")
                         ) : (
                           <span className="text-muted-foreground">From</span>
                         )}
@@ -1789,9 +1875,9 @@ export function CompetitiveInsights({
                     <PopoverContent className="w-auto p-0" align="start">
                       <CalendarComponent
                         mode="single"
-                        selected={dateRange.from}
+                        selected={dateRangeValue.from}
                         onSelect={(date) => {
-                          setDateRange((prev) => ({ ...prev, from: date }))
+                          setDateRangeValue((prev) => ({ ...prev, from: date }))
                           setIsFromCalendarOpen(false)
                         }}
                         numberOfMonths={1}
@@ -1810,8 +1896,8 @@ export function CompetitiveInsights({
                         disabled={shouldShowPaywall || shouldShowPreview}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateRange.to ? (
-                          format(dateRange.to, "MMM d, yyyy")
+                        {dateRangeValue.to ? (
+                          format(dateRangeValue.to, "MMM d, yyyy")
                         ) : (
                           <span className="text-muted-foreground">To</span>
                         )}
@@ -1820,13 +1906,13 @@ export function CompetitiveInsights({
                     <PopoverContent className="w-auto p-0" align="start">
                       <CalendarComponent
                         mode="single"
-                        selected={dateRange.to}
+                        selected={dateRangeValue.to}
                         onSelect={(date) => {
-                          setDateRange((prev) => ({ ...prev, to: date }))
+                          setDateRangeValue((prev) => ({ ...prev, to: date }))
                           setIsToCalendarOpen(false)
                         }}
                         disabled={(date) => {
-                          if (dateRange.from) return date < dateRange.from
+                          if (dateRangeValue.from) return date < dateRangeValue.from
                           return false
                         }}
                         numberOfMonths={1}
@@ -1835,12 +1921,14 @@ export function CompetitiveInsights({
                     </PopoverContent>
                   </Popover>
 
-                  {(dateRange.from || dateRange.to) && (
-                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={clearDateRange}>
+                  {(dateRangeValue.from || dateRangeValue.to) && (
+                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={clearDateRangeValue}>
                       <X className="h-4 w-4" />
                     </Button>
                   )}
                 </div>
+                  )
+                })()}
 
                 <Button
                   variant="outline"
@@ -1854,23 +1942,42 @@ export function CompetitiveInsights({
 
                 <Button
                   variant="outline"
-                  onClick={resetFilters}
+                  onClick={mobileFiltersOpen ? resetDraftFilters : resetFilters}
                   className="w-full md:w-auto bg-transparent"
                   disabled={
                     shouldShowPaywall ||
                     shouldShowPreview ||
-                    (!searchTerm && // Check searchTerm for visual state, not debouncedSearchTerm
-                      !dateRange.from &&
-                      !dateRange.to &&
-                      selectedSender.length === 0 &&
-                      selectedPartyFilter === "all" &&
-                      selectedMessageFilters.length === 0 &&
-                      selectedDonationPlatform === "all")
+                    (mobileFiltersOpen
+                      ? !draftDateRange.from &&
+                        !draftDateRange.to &&
+                        draftSender.length === 0 &&
+                        draftPartyFilter === "all" &&
+                        draftStateFilter === "all" &&
+                        draftMessageFilters.length === 0 &&
+                        draftDonationPlatform === "all"
+                      : !searchTerm &&
+                        !dateRange.from &&
+                        !dateRange.to &&
+                        selectedSender.length === 0 &&
+                        selectedPartyFilter === "all" &&
+                        selectedMessageFilters.length === 0 &&
+                        selectedDonationPlatform === "all")
                   }
                 >
                   <RotateCcw className="mr-2 h-4 w-4" />
                   Reset Filters
                 </Button>
+
+                {/* Mobile sheet — sticky Apply Filters footer */}
+                <div className="md:hidden sticky bottom-0 -mx-4 -mb-8 px-4 pt-3 pb-6 bg-background border-t border-border mt-2">
+                  <Button
+                    onClick={applyMobileFilters}
+                    className="w-full"
+                    disabled={shouldShowPaywall || shouldShowPreview}
+                  >
+                    Apply Filters
+                  </Button>
+                </div>
               </div>
 
               {/* Display selected entities as badges */}

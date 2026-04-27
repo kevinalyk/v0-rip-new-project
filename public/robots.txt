@@ -1,8 +1,6 @@
 User-agent: *
 Allow: /directory
 Allow: /directory/
-Allow: /news
-Allow: /news/
 
 # Disallow authenticated/private areas
 Disallow: /api/
@@ -10,5 +8,9 @@ Disallow: /login
 Disallow: /signup
 Disallow: /reset-password
 Disallow: /set-password
+Disallow: /account/
+Disallow: /reports/
+Disallow: /campaigns/
+Disallow: /admin/
 
 Sitemap: https://app.rip-tool.com/sitemap.xml

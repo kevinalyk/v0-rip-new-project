@@ -58,9 +58,11 @@ interface SidebarProps {
   collapsed: boolean
   setCollapsed: (collapsed: boolean) => void
   isAdminView?: boolean
+  clientSlug?: string
+  onNavigate?: () => void
 }
 
-export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: SidebarProps) {
+export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNavigate }: SidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
@@ -202,6 +204,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false }: Sideba
 
   const navigate = (path: string) => {
     router.push(path)
+    onNavigate?.()
   }
 
   const handleClientSwitch = (newClientSlug: string) => {

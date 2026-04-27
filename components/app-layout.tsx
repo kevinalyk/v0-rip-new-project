@@ -16,6 +16,7 @@ interface AppLayoutProps {
   defaultCollapsed?: boolean
 }
 
+// AppLayout renders the persistent shell: desktop sidebar, mobile drawer, and top bar.
 function AppLayout({ children, clientSlug, isAdminView = false, defaultCollapsed = false }: AppLayoutProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
   const [mobileOpen, setMobileOpen] = useState(false)

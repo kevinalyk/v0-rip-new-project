@@ -1,18 +1,15 @@
 User-agent: *
-Allow: /directory
-Allow: /directory/
-Allow: /news
-Allow: /news/
+Allow: /
 
-# Disallow authenticated/private areas
+# Block truly private areas (auth required, not useful in search)
 Disallow: /api/
-Disallow: /login
-Disallow: /signup
-Disallow: /reset-password
-Disallow: /set-password
 Disallow: /account/
 Disallow: /reports/
 Disallow: /campaigns/
 Disallow: /admin/
+
+# Note: /login, /signup, /reset-password, /set-password are crawlable so Google
+# can refresh their snippets, but each page sets `robots: noindex` in metadata
+# so they don't appear in search results.
 
 Sitemap: https://app.rip-tool.com/sitemap.xml

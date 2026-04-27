@@ -978,6 +978,15 @@ export function CompetitiveInsights({
     setEmailZoom(100)
   }
 
+  // Auto-fit email zoom on mobile when a campaign is opened
+  useEffect(() => {
+    if (selectedCampaign && selectedCampaign.type !== "sms" && typeof window !== "undefined") {
+      const isMobile = window.matchMedia("(max-width: 767px)").matches
+      // Reset to a sensible default based on viewport so the 600px email fits
+      setEmailZoom(isMobile ? 60 : 100)
+    }
+  }, [selectedCampaign])
+
   const handleGenerateShareLink = async (campaignId: number) => {
     try {
       setGeneratingShareLink(true)
@@ -2483,23 +2492,23 @@ export function CompetitiveInsights({
         {/* Campaign Detail Dialog */}
         {selectedCampaign && (
           <Dialog open={!!selectedCampaign} onOpenChange={() => setSelectedCampaign(null)}>
-            <DialogContent className="!max-w-[1400px] !w-[85vw] max-h-[85vh] overflow-y-auto">
+            <DialogContent className="!max-w-[1400px] !w-[95vw] md:!w-[85vw] max-h-[90vh] md:max-h-[85vh] overflow-y-auto p-4 md:p-6">
               {selectedCampaign && (
                 <>
                   <DialogHeader>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <DialogTitle className="text-xl">{selectedCampaign.subject}</DialogTitle>
-                        <DialogDescription>
+                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
+                      <div className="flex-1 min-w-0 pr-8 md:pr-0">
+                        <DialogTitle className="text-base md:text-xl break-words">{selectedCampaign.subject}</DialogTitle>
+                        <DialogDescription asChild>
                           <div className="flex flex-col gap-1 mt-2">
                             {/* Entity information */}
                             {selectedCampaign.entity && (
                               <div className="flex flex-col gap-1 mb-2">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-semibold text-foreground">
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                  <span className="font-semibold text-foreground break-words">
                                     {selectedCampaign.entity.name}
                                   </span>
-                                  <span className="text-muted-foreground">
+                                  <span className="text-muted-foreground text-sm">
                                     ({selectedCampaign.entity.type?.replace(/_/g, " ")})
                                   </span>
                                   <Button
@@ -2523,37 +2532,30 @@ export function CompetitiveInsights({
                                 )}
                               </div>
                             )}
-                            
-                            <div className="flex items-center gap-2">
+
+                            <div className="flex items-start gap-2 text-sm min-w-0">
                               {selectedCampaign.type === "sms" ? (
-                                <Smartphone className="h-4 w-4" />
+                                <Smartphone className="h-4 w-4 mt-0.5 flex-shrink-0" />
                               ) : (
-                                <Mail className="h-4 w-4" />
+                                <Mail className="h-4 w-4 mt-0.5 flex-shrink-0" />
                               )}
-                              <span className="font-medium">{selectedCampaign.senderName}</span>
-                              <span className="text-muted-foreground">
-                                (
-                                {selectedCampaign.type === "sms"
-                                  ? selectedCampaign.phoneNumber
-                                  : selectedCampaign.senderEmail}
-                                )
-                              </span>
+                              <div className="flex flex-col md:flex-row md:items-center md:gap-2 min-w-0 flex-1">
+                                <span className="font-medium truncate">{selectedCampaign.senderName}</span>
+                                <span className="text-muted-foreground text-xs md:text-sm break-all">
+                                  {selectedCampaign.type === "sms"
+                                    ? selectedCampaign.phoneNumber
+                                    : selectedCampaign.senderEmail}
+                                </span>
+                              </div>
                             </div>
                             <div className="flex items-center gap-2 text-sm">
-                              <Calendar className="h-4 w-4" />
+                              <Calendar className="h-4 w-4 flex-shrink-0" />
                               {new Date(selectedCampaign.dateReceived).toLocaleDateString()}
                             </div>
-                            {/* Temporarily hidden — sendingProvider display
-                            {selectedCampaign.type === "email" && selectedCampaign.sendingProvider && (
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <span>Sent by {selectedCampaign.sendingProvider}</span>
-                              </div>
-                            )}
-                            */}
                           </div>
                         </DialogDescription>
                       </div>
-                      <div className="flex items-center gap-3 mr-8">
+                      <div className="flex flex-wrap items-center gap-2 md:mr-8">
                         {resolvedUser?.role === "super_admin" && (
                           <Button
                             variant="outline"
@@ -2653,7 +2655,7 @@ export function CompetitiveInsights({
                           </div>
                         </div>
                       ) : selectedCampaign.emailContent ? (
-                        <div className="rounded-lg border bg-white overflow-auto">
+                        <div className="rounded-lg border bg-white overflow-x-auto overflow-y-hidden">
                           <div
                             style={{
                               transform: `scale(${emailZoom / 100})`,
@@ -2690,23 +2692,23 @@ export function CompetitiveInsights({
 
                             return (
                               <div key={idx} className="rounded-lg border bg-muted/20 p-3">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="flex-1 min-w-0">
-                                    <a
-                                      href={displayUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-start gap-2 text-rip-red hover:underline break-all"
-                                    >
-                                      <ExternalLink className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                                      <span>{displayUrl}</span>
-                                    </a>
-                                  </div>
+                                <div className="flex flex-col gap-2">
                                   {type && (
-                                    <Badge variant="secondary" className="capitalize flex-shrink-0">
-                                      {type}
-                                    </Badge>
+                                    <div>
+                                      <Badge variant="secondary" className="capitalize">
+                                        {type}
+                                      </Badge>
+                                    </div>
                                   )}
+                                  <a
+                                    href={displayUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-start gap-2 text-rip-red hover:underline break-all text-sm min-w-0"
+                                  >
+                                    <ExternalLink className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                                    <span className="min-w-0 break-all">{displayUrl}</span>
+                                  </a>
                                 </div>
                               </div>
                             )

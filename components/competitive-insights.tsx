@@ -978,6 +978,60 @@ export function CompetitiveInsights({
     setEmailZoom(100)
   }
 
+  // Auto-fit email zoom on mobile when a campaign is opened
+  useEffect(() => {
+    if (selectedCampaign && selectedCampaign.type !== "sms" && typeof window !== "undefined") {
+      const isMobile = window.matchMedia("(max-width: 767px)").matches
+      // Reset to a sensible default based on viewport so the 600px email fits
+      setEmailZoom(isMobile ? 60 : 100)
+      // Reset measured iframe height when opening a new campaign
+      setIframeContentHeight(800)
+    }
+  }, [selectedCampaign])
+
+  // Measured natural height of the rendered email iframe content
+  const [iframeContentHeight, setIframeContentHeight] = useState<number>(800)
+  const handleEmailIframeLoad = (e: React.SyntheticEvent<HTMLIFrameElement>) => {
+    try {
+      const iframe = e.currentTarget
+      const doc = iframe.contentDocument
+      if (!doc || !doc.body) return
+      const measure = () => {
+        const body = doc.body
+        const html = doc.documentElement
+        const h = Math.max(
+          body.scrollHeight,
+          body.offsetHeight,
+          html.scrollHeight,
+          html.offsetHeight,
+        )
+        if (h > 0) setIframeContentHeight(Math.min(Math.max(h + 24, 400), 8000))
+      }
+      // Initial measure + remeasure after images load
+      measure()
+      const imgs = doc.images
+      let pending = imgs.length
+      if (pending === 0) return
+      Array.from(imgs).forEach((img) => {
+        if (img.complete) {
+          pending -= 1
+          if (pending === 0) measure()
+        } else {
+          img.addEventListener("load", () => {
+            pending -= 1
+            if (pending <= 0) measure()
+          })
+          img.addEventListener("error", () => {
+            pending -= 1
+            if (pending <= 0) measure()
+          })
+        }
+      })
+    } catch {
+      // Cross-origin or sandbox restriction — keep default height
+    }
+  }
+
   const handleGenerateShareLink = async (campaignId: number) => {
     try {
       setGeneratingShareLink(true)
@@ -2070,7 +2124,142 @@ export function CompetitiveInsights({
               <div className={shouldShowPaywall ? "blur-md pointer-events-none" : ""}>
                 <Card>
                   <CardContent className="p-0">
-                    <div className="overflow-x-auto">
+                    {/* Mobile card list */}
+                    <div className="md:hidden divide-y">
+                      {currentPaginatedCampaigns.map((campaign, index) => {
+                        const isBlurred = shouldShowPreview && index >= previewLimit
+                        const preview =
+                          campaign.type !== "sms"
+                            ? cleanEmailPreview(campaign.emailPreview, campaign.emailContent)
+                            : ""
+                        return (
+                          <div
+                            key={campaign.id}
+                            className={`p-4 hover:bg-muted/30 cursor-pointer transition-colors ${isBlurred ? "blur-sm" : ""} ${campaign.isHidden && resolvedUser?.role === "super_admin" ? "opacity-60" : ""}`}
+                            onClick={() => {
+                              if (!shouldShowPreview || index < previewLimit) {
+                                setSelectedCampaign(campaign)
+                                fetch("/api/track-view", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ id: campaign.id, type: campaign.type }),
+                                }).catch(() => {})
+                              }
+                            }}
+                          >
+                            {/* Row 1: icon + sender + date */}
+                            <div className="flex items-start gap-2">
+                              {campaign.type === "sms" ? (
+                                <Smartphone className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                              ) : (
+                                <Mail className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                              )}
+                              <div className="font-medium text-sm truncate flex-1 min-w-0">
+                                {campaign.entity ? campaign.entity.name : campaign.senderName}
+                              </div>
+                              <div className="text-xs text-muted-foreground flex-shrink-0 text-right">
+                                <div>{new Date(campaign.dateReceived).toLocaleDateString()}</div>
+                                <div>
+                                  {new Date(campaign.dateReceived).toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Row 2: badges */}
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {campaign.isHidden && resolvedUser?.role === "super_admin" && (
+                                <Badge variant="outline" className="text-xs bg-muted">
+                                  <EyeOff className="h-3 w-3 mr-1" />
+                                  Hidden
+                                </Badge>
+                              )}
+                              {shouldShowPersonalBadge(campaign) && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs bg-blue-100 dark:bg-blue-900 border-blue-300 dark:border-blue-700"
+                                >
+                                  <User className="h-3 w-3 mr-1" />
+                                  Personal
+                                </Badge>
+                              )}
+                              {campaign.entity && shouldShowFollowingBadge(campaign) && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs bg-amber-100 dark:bg-amber-900 border-amber-300 dark:border-amber-700"
+                                >
+                                  <Star className="h-3 w-3 mr-1" />
+                                  Following
+                                </Badge>
+                              )}
+                              {campaign.entity && !isDomainMappedToEntity(campaign) && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
+                                >
+                                  <Info className="h-3 w-3 mr-1" />
+                                  Third Party
+                                </Badge>
+                              )}
+                              {campaign.entity?.party && (
+                                <Badge
+                                  variant={getPartyColor(campaign.entity.party)}
+                                  className={`text-xs capitalize ${getPartyBadgeClassName(campaign.entity.party)}`}
+                                >
+                                  {campaign.entity.party}
+                                </Badge>
+                              )}
+                              {campaign.entity?.state && (
+                                <Badge variant="outline" className="text-xs">
+                                  {campaign.entity.state}
+                                </Badge>
+                              )}
+                            </div>
+
+                            {/* Row 3: number/email */}
+                            <div className="text-xs text-muted-foreground truncate mt-2">
+                              {campaign.type === "sms" ? campaign.phoneNumber : campaign.senderEmail}
+                            </div>
+
+                            {/* Row 4: subject (clamp 2) */}
+                            {campaign.subject && (
+                              <div className="text-sm font-medium mt-2 line-clamp-2 break-words">
+                                {campaign.subject}
+                              </div>
+                            )}
+
+                            {/* Row 5: preview (clamp 2) */}
+                            {preview && (
+                              <div className="text-xs text-muted-foreground mt-1 line-clamp-2 break-words">
+                                {preview}
+                              </div>
+                            )}
+
+                            {/* Assign sender (super admin) */}
+                            {resolvedUser?.role === "super_admin" &&
+                              (campaign.entity ? !isDomainMappedToEntity(campaign) : true) && (
+                                <button
+                                  className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border rounded px-1.5 py-0.5 hover:bg-muted transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setAssignDialogCampaign(campaign)
+                                    setAssignPopoverCampaignId(campaign.id)
+                                    setAssignEntitySearch("")
+                                  }}
+                                >
+                                  <UserPlus className="h-3 w-3" />
+                                  {campaign.entity ? "Assign sender" : "Assign to entity"}
+                                </button>
+                              )}
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* Desktop table */}
+                    <div className="hidden md:block overflow-x-auto">
                       <table className="w-full">
                         <thead className="bg-muted/50 border-b">
                           <tr>
@@ -2348,23 +2537,23 @@ export function CompetitiveInsights({
         {/* Campaign Detail Dialog */}
         {selectedCampaign && (
           <Dialog open={!!selectedCampaign} onOpenChange={() => setSelectedCampaign(null)}>
-            <DialogContent className="!max-w-[1400px] !w-[85vw] max-h-[85vh] overflow-y-auto">
+            <DialogContent className="!max-w-[1400px] !w-[95vw] md:!w-[85vw] max-h-[90vh] md:max-h-[85vh] overflow-y-auto p-4 md:p-6">
               {selectedCampaign && (
                 <>
                   <DialogHeader>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <DialogTitle className="text-xl">{selectedCampaign.subject}</DialogTitle>
-                        <DialogDescription>
-                          <div className="flex flex-col gap-1 mt-2">
+                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
+                      <div className="flex-1 min-w-0 pr-8 md:pr-0">
+                        <DialogTitle className="text-base md:text-xl break-words">{selectedCampaign.subject}</DialogTitle>
+                        <DialogDescription asChild>
+                          <div className="flex flex-col gap-1 mt-2 text-left">
                             {/* Entity information */}
                             {selectedCampaign.entity && (
                               <div className="flex flex-col gap-1 mb-2">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-semibold text-foreground">
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                  <span className="font-semibold text-foreground break-words">
                                     {selectedCampaign.entity.name}
                                   </span>
-                                  <span className="text-muted-foreground">
+                                  <span className="text-muted-foreground text-sm">
                                     ({selectedCampaign.entity.type?.replace(/_/g, " ")})
                                   </span>
                                   <Button
@@ -2388,37 +2577,30 @@ export function CompetitiveInsights({
                                 )}
                               </div>
                             )}
-                            
-                            <div className="flex items-center gap-2">
+
+                            <div className="flex items-start gap-2 text-sm min-w-0">
                               {selectedCampaign.type === "sms" ? (
-                                <Smartphone className="h-4 w-4" />
+                                <Smartphone className="h-4 w-4 mt-0.5 flex-shrink-0" />
                               ) : (
-                                <Mail className="h-4 w-4" />
+                                <Mail className="h-4 w-4 mt-0.5 flex-shrink-0" />
                               )}
-                              <span className="font-medium">{selectedCampaign.senderName}</span>
-                              <span className="text-muted-foreground">
-                                (
-                                {selectedCampaign.type === "sms"
-                                  ? selectedCampaign.phoneNumber
-                                  : selectedCampaign.senderEmail}
-                                )
-                              </span>
+                              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0 flex-1 text-left">
+                                <span className="font-medium break-words">{selectedCampaign.senderName}</span>
+                                <span className="text-muted-foreground text-xs md:text-sm break-all">
+                                  {selectedCampaign.type === "sms"
+                                    ? selectedCampaign.phoneNumber
+                                    : selectedCampaign.senderEmail}
+                                </span>
+                              </div>
                             </div>
                             <div className="flex items-center gap-2 text-sm">
-                              <Calendar className="h-4 w-4" />
+                              <Calendar className="h-4 w-4 flex-shrink-0" />
                               {new Date(selectedCampaign.dateReceived).toLocaleDateString()}
                             </div>
-                            {/* Temporarily hidden — sendingProvider display
-                            {selectedCampaign.type === "email" && selectedCampaign.sendingProvider && (
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <span>Sent by {selectedCampaign.sendingProvider}</span>
-                              </div>
-                            )}
-                            */}
                           </div>
                         </DialogDescription>
                       </div>
-                      <div className="flex items-center gap-3 mr-8">
+                      <div className="flex flex-wrap items-center gap-2 md:mr-8">
                         {resolvedUser?.role === "super_admin" && (
                           <Button
                             variant="outline"
@@ -2518,19 +2700,28 @@ export function CompetitiveInsights({
                           </div>
                         </div>
                       ) : selectedCampaign.emailContent ? (
-                        <div className="rounded-lg border bg-white overflow-auto">
+                        <div
+                          className="rounded-lg border bg-white overflow-x-auto overflow-y-hidden"
+                          style={{
+                            // Outer wrapper uses the visually-scaled height so there's
+                            // no phantom whitespace below the scaled iframe.
+                            height: `${(iframeContentHeight * emailZoom) / 100}px`,
+                          }}
+                        >
                           <div
                             style={{
                               transform: `scale(${emailZoom / 100})`,
                               transformOrigin: "top left",
                               width: `${10000 / emailZoom}%`,
-                              height: `${60000 / emailZoom}px`,
+                              height: `${iframeContentHeight}px`,
                             }}
                           >
                             <iframe
                               srcDoc={prepareEmailHtml(selectedCampaign.emailContent, selectedCampaign.senderEmail)}
                               sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation"
-                              className="w-full h-[600px] border-0"
+                              onLoad={handleEmailIframeLoad}
+                              style={{ width: "100%", height: `${iframeContentHeight}px` }}
+                              className="border-0 block"
                               title="Email Preview"
                             />
                           </div>
@@ -2555,23 +2746,23 @@ export function CompetitiveInsights({
 
                             return (
                               <div key={idx} className="rounded-lg border bg-muted/20 p-3">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="flex-1 min-w-0">
-                                    <a
-                                      href={displayUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-start gap-2 text-rip-red hover:underline break-all"
-                                    >
-                                      <ExternalLink className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                                      <span>{displayUrl}</span>
-                                    </a>
-                                  </div>
+                                <div className="flex flex-col gap-2">
                                   {type && (
-                                    <Badge variant="secondary" className="capitalize flex-shrink-0">
-                                      {type}
-                                    </Badge>
+                                    <div>
+                                      <Badge variant="secondary" className="capitalize">
+                                        {type}
+                                      </Badge>
+                                    </div>
                                   )}
+                                  <a
+                                    href={displayUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-start gap-2 text-rip-red hover:underline break-all text-sm min-w-0"
+                                  >
+                                    <ExternalLink className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                                    <span className="min-w-0 break-all">{displayUrl}</span>
+                                  </a>
                                 </div>
                               </div>
                             )

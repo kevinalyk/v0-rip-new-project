@@ -328,12 +328,12 @@ export function CiDirectoryContent({ clientSlug, isPublic = false, initialEntiti
   return (
     <div className="flex flex-col h-full min-h-screen bg-background">
       {/* Page header */}
-      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
-        <div>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-4 md:px-6 pt-4 md:pt-6 pb-4 border-b border-border">
+        <div className="min-w-0">
           <h1 className="text-xl font-semibold tracking-tight">Directory</h1>
           <p className="text-sm text-muted-foreground mt-0.5 max-w-4xl">Our heat map shows you where the latest texts and emails were sent from and lets you browse all tracked campaigns and organizations in the system. Each red dot represents one email or SMS sent in the last 3 hours — more dots means more activity in that state.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {pagination.totalCount > 0 && (
             <Badge variant="outline" className="flex items-center gap-1.5 text-xs">
               <Users className="h-3 w-3" />
@@ -361,7 +361,7 @@ export function CiDirectoryContent({ clientSlug, isPublic = false, initialEntiti
             </>
           )}
           {selectedMapState && (
-            <div className="flex items-center gap-1.5 ml-2">
+            <div className="flex items-center gap-1.5 md:ml-2">
               <Badge variant="secondary" className="flex items-center gap-1.5 px-3 py-1 text-sm">
                 <MapPin className="h-3 w-3 text-[#EB3847]" />
                 {selectedMapState}
@@ -380,23 +380,26 @@ export function CiDirectoryContent({ clientSlug, isPublic = false, initialEntiti
       </div>
 
       {/* ── MAP + RIGHT PANEL ── */}
-      {/* ── MAP + RIGHT PANEL ── */}
-      <div className="flex gap-4 px-6 pt-4 pb-2" style={{ height: "calc(100vh - 260px)" }}>
+      {/* On mobile: map gets its own full-width row, then panels stack below.
+          On desktop: side-by-side with fixed height. */}
+      <div className="flex flex-col md:flex-row gap-4 px-4 md:px-6 pt-4 pb-2 md:h-[calc(100vh-260px)]">
         {/* Map */}
-        <div className="flex-1 min-w-0 h-full">
+        <div className="flex-1 min-w-0 w-full">
           <Card className="h-full">
             <CardContent className="p-3 h-full">
-              <USInteractiveMap
-                selectedState={selectedMapState}
-                onStateSelect={setSelectedMapState}
-                activityData={activity}
-              />
+              <div className="w-full aspect-[5/3] md:aspect-auto md:h-full">
+                <USInteractiveMap
+                  selectedState={selectedMapState}
+                  onStateSelect={setSelectedMapState}
+                  activityData={activity}
+                />
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Right panel */}
-        <div className="w-64 shrink-0 flex flex-col gap-3 overflow-y-auto h-full">
+        {/* Right panel — full width on mobile (under map), fixed sidebar on desktop */}
+        <div className="w-full md:w-64 md:shrink-0 grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-col gap-3 md:overflow-y-auto md:h-full">
           {selectedMapState ? (
             /* State detail: emails + SMS */
             <Card className="flex flex-col h-full">
@@ -701,10 +704,10 @@ export function CiDirectoryContent({ clientSlug, isPublic = false, initialEntiti
       */}
 
       {/* ── ENTITY TABLE ── */}
-      <div className="px-6 pb-6 pt-4">
-        {/* Search + filters bar — spread evenly across full width */}
-        <div className="flex items-center gap-4 mb-4">
-          <div className="relative flex-1">
+      <div className="px-4 md:px-6 pb-6 pt-4">
+        {/* Search + filters bar — wraps on mobile */}
+        <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 mb-4">
+          <div className="relative md:flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search entities..."
@@ -714,48 +717,50 @@ export function CiDirectoryContent({ clientSlug, isPublic = false, initialEntiti
             />
           </div>
 
-          <Select value={filterParty} onValueChange={(value) => handleFilterChange("party", value)}>
-            <SelectTrigger className="flex-1 h-9 text-sm">
-              <SelectValue placeholder="All Parties" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Parties</SelectItem>
-              <SelectItem value="republican">Republican</SelectItem>
-              <SelectItem value="democrat">Democrat</SelectItem>
-              <SelectItem value="independent">Independent</SelectItem>
-              <SelectItem value="unknown">Unknown</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="grid grid-cols-3 gap-2 md:contents">
+            <Select value={filterParty} onValueChange={(value) => handleFilterChange("party", value)}>
+              <SelectTrigger className="md:flex-1 h-9 text-sm">
+                <SelectValue placeholder="All Parties" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Parties</SelectItem>
+                <SelectItem value="republican">Republican</SelectItem>
+                <SelectItem value="democrat">Democrat</SelectItem>
+                <SelectItem value="independent">Independent</SelectItem>
+                <SelectItem value="unknown">Unknown</SelectItem>
+              </SelectContent>
+            </Select>
 
-          <Select value={filterState} onValueChange={(value) => handleFilterChange("state", value)}>
-            <SelectTrigger className="flex-1 h-9 text-sm">
-              <SelectValue placeholder="All States" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All States</SelectItem>
-              {US_STATES.map((state) => (
-                <SelectItem key={state} value={state}>{state}</SelectItem>
-              ))}
-              <SelectItem value="unknown">Unknown</SelectItem>
-            </SelectContent>
-          </Select>
+            <Select value={filterState} onValueChange={(value) => handleFilterChange("state", value)}>
+              <SelectTrigger className="md:flex-1 h-9 text-sm">
+                <SelectValue placeholder="All States" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All States</SelectItem>
+                {US_STATES.map((state) => (
+                  <SelectItem key={state} value={state}>{state}</SelectItem>
+                ))}
+                <SelectItem value="unknown">Unknown</SelectItem>
+              </SelectContent>
+            </Select>
 
-          <Select value={filterType} onValueChange={(value) => handleFilterChange("type", value)}>
-            <SelectTrigger className="flex-1 h-9 text-sm">
-              <SelectValue placeholder="All Types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="candidate">Candidate</SelectItem>
-              <SelectItem value="pac">PAC</SelectItem>
-              <SelectItem value="organization">Organization</SelectItem>
-              <SelectItem value="nonprofit">Nonprofit</SelectItem>
-              <SelectItem value="data_broker">Data Broker</SelectItem>
-              <SelectItem value="jfc">JFC</SelectItem>
-            </SelectContent>
-          </Select>
+            <Select value={filterType} onValueChange={(value) => handleFilterChange("type", value)}>
+              <SelectTrigger className="md:flex-1 h-9 text-sm">
+                <SelectValue placeholder="All Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="candidate">Candidate</SelectItem>
+                <SelectItem value="pac">PAC</SelectItem>
+                <SelectItem value="organization">Organization</SelectItem>
+                <SelectItem value="nonprofit">Nonprofit</SelectItem>
+                <SelectItem value="data_broker">Data Broker</SelectItem>
+                <SelectItem value="jfc">JFC</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-          <span className="text-sm text-muted-foreground whitespace-nowrap">
+          <span className="text-xs md:text-sm text-muted-foreground md:whitespace-nowrap">
             {!loading && pagination.totalCount === 0
               ? "No entities match"
               : pagination.totalCount > 0
@@ -773,65 +778,107 @@ export function CiDirectoryContent({ clientSlug, isPublic = false, initialEntiti
               <div className="text-center py-8 text-muted-foreground">No entities found. Try adjusting your filters.</div>
             ) : (
               <div className="rounded-lg overflow-hidden">
-                {/* Header row */}
-                <div className="grid grid-cols-[2fr_1fr_1fr_80px_120px_80px] items-center px-6 py-2.5 border-b bg-muted/40 text-xs font-medium text-muted-foreground">
-                  <span>Name</span>
-                  <span>Type</span>
-                  <span>Party</span>
-                  <span>State</span>
-                  <span className="text-right">{isAuthenticated ? "Follow" : ""}</span>
-                  <span></span>
-                </div>
-                {entities.map((entity) => (
-                  <div
-                    key={entity.id}
-                    className="grid grid-cols-[2fr_1fr_1fr_80px_120px_80px] items-center px-6 py-3 border-b last:border-b-0 hover:bg-accent/40 transition-colors cursor-pointer"
-                    onClick={(e) => {
-                      if ((e.target as HTMLElement).closest("[data-subscribe-button]")) return
-                      if ((e.target as HTMLElement).closest("[data-view-button]")) return
-                      router.push(`/directory/${nameToSlug(entity.name)}`)
-                    }}
-                  >
-                    <a
-                      href={`/directory/${nameToSlug(entity.name)}`}
-                      className="font-medium text-sm hover:underline"
-                      onClick={(e) => e.stopPropagation()}
+                {/* Mobile card list */}
+                <div className="md:hidden divide-y">
+                  {entities.map((entity) => (
+                    <div
+                      key={entity.id}
+                      className="p-4 hover:bg-accent/40 transition-colors cursor-pointer"
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest("[data-subscribe-button]")) return
+                        if ((e.target as HTMLElement).closest("[data-view-button]")) return
+                        router.push(`/directory/${nameToSlug(entity.name)}`)
+                      }}
                     >
-                      {entity.name}
-                    </a>
-                    <span>
-                      <Badge className={`${getTypeBadgeColor(entity.type)} text-xs`}>{formatType(entity.type)}</Badge>
-                    </span>
-                    <span>
-                      {entity.party
-                        ? <Badge className={`${getPartyBadgeClassName(entity.party)} text-xs capitalize`}>{entity.party}</Badge>
-                        : <span className="text-muted-foreground text-xs">—</span>
-                      }
-                    </span>
-                    <span className="text-sm text-muted-foreground">{entity.state ?? "—"}</span>
-                    <span className="flex justify-end">
-                      {isAuthenticated && (
-                        <div data-subscribe-button>
-                          <CiEntitySubscribeButton entityId={entity.id} entityName={entity.name} />
-                        </div>
-                      )}
-                    </span>
-                    <span className="flex justify-end" data-view-button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                        aria-label={`View ${entity.name} profile`}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          router.push(`/directory/${nameToSlug(entity.name)}`)
-                        }}
-                      >
-                        View <ArrowRight className="ml-1 h-3 w-3" />
-                      </Button>
-                    </span>
+                      <div className="flex items-start justify-between gap-3">
+                        <a
+                          href={`/directory/${nameToSlug(entity.name)}`}
+                          className="font-medium text-sm hover:underline break-words flex-1 min-w-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {entity.name}
+                        </a>
+                        {isAuthenticated && (
+                          <div data-subscribe-button className="flex-shrink-0">
+                            <CiEntitySubscribeButton entityId={entity.id} entityName={entity.name} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                        <Badge className={`${getTypeBadgeColor(entity.type)} text-xs`}>{formatType(entity.type)}</Badge>
+                        {entity.party && (
+                          <Badge className={`${getPartyBadgeClassName(entity.party)} text-xs capitalize`}>{entity.party}</Badge>
+                        )}
+                        {entity.state && (
+                          <Badge variant="outline" className="text-xs">{entity.state}</Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden md:block">
+                  {/* Header row */}
+                  <div className="grid grid-cols-[2fr_1fr_1fr_80px_120px_80px] items-center px-6 py-2.5 border-b bg-muted/40 text-xs font-medium text-muted-foreground">
+                    <span>Name</span>
+                    <span>Type</span>
+                    <span>Party</span>
+                    <span>State</span>
+                    <span className="text-right">{isAuthenticated ? "Follow" : ""}</span>
+                    <span></span>
                   </div>
-                ))}
+                  {entities.map((entity) => (
+                    <div
+                      key={entity.id}
+                      className="grid grid-cols-[2fr_1fr_1fr_80px_120px_80px] items-center px-6 py-3 border-b last:border-b-0 hover:bg-accent/40 transition-colors cursor-pointer"
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest("[data-subscribe-button]")) return
+                        if ((e.target as HTMLElement).closest("[data-view-button]")) return
+                        router.push(`/directory/${nameToSlug(entity.name)}`)
+                      }}
+                    >
+                      <a
+                        href={`/directory/${nameToSlug(entity.name)}`}
+                        className="font-medium text-sm hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {entity.name}
+                      </a>
+                      <span>
+                        <Badge className={`${getTypeBadgeColor(entity.type)} text-xs`}>{formatType(entity.type)}</Badge>
+                      </span>
+                      <span>
+                        {entity.party
+                          ? <Badge className={`${getPartyBadgeClassName(entity.party)} text-xs capitalize`}>{entity.party}</Badge>
+                          : <span className="text-muted-foreground text-xs">—</span>
+                        }
+                      </span>
+                      <span className="text-sm text-muted-foreground">{entity.state ?? "—"}</span>
+                      <span className="flex justify-end">
+                        {isAuthenticated && (
+                          <div data-subscribe-button>
+                            <CiEntitySubscribeButton entityId={entity.id} entityName={entity.name} />
+                          </div>
+                        )}
+                      </span>
+                      <span className="flex justify-end" data-view-button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                          aria-label={`View ${entity.name} profile`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            router.push(`/directory/${nameToSlug(entity.name)}`)
+                          }}
+                        >
+                          View <ArrowRight className="ml-1 h-3 w-3" />
+                        </Button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </CardContent>

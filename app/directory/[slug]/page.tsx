@@ -55,10 +55,124 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   }
 }
 
+function buildStructuredData(data: NonNullable<Awaited<ReturnType<typeof getEntityBySlug>>>) {
+  const { entity } = data
+  const url = `${APP_URL}/directory/${entity.slug}`
+  const isPerson = entity.type === "politician"
+
+  // sameAs: external authoritative profiles that confirm this entity's identity
+  const sameAs: string[] = []
+  if (entity.ballotpediaUrl) sameAs.push(entity.ballotpediaUrl)
+  const winredSlugs = entity.donationIdentifiers?.winred ?? []
+  for (const slug of winredSlugs) {
+    sameAs.push(`https://secure.winred.com/${slug}`)
+  }
+
+  const partyLabel = entity.party
+    ? entity.party.charAt(0).toUpperCase() + entity.party.slice(1) + " Party"
+    : undefined
+
+  const description =
+    entity.bio ||
+    entity.description ||
+    `${entity.name}${entity.office ? `, ${entity.office}` : ""}${entity.state ? ` (${entity.state})` : ""}. Email and SMS communications tracked by the Republican Inboxing Protocol.`
+
+  if (isPerson) {
+    return {
+      "@context": "https://schema.org",
+      "@type": "Person",
+      "@id": url,
+      name: entity.name,
+      description,
+      url,
+      ...(entity.imageUrl ? { image: entity.imageUrl } : {}),
+      ...(entity.office ? { jobTitle: entity.office } : {}),
+      ...(partyLabel ? { affiliation: { "@type": "Organization", name: partyLabel } } : {}),
+      ...(entity.state
+        ? {
+            homeLocation: {
+              "@type": "AdministrativeArea",
+              name: entity.state,
+            },
+          }
+        : {}),
+      ...(sameAs.length > 0 ? { sameAs } : {}),
+    }
+  }
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "@id": url,
+    name: entity.name,
+    description,
+    url,
+    ...(entity.imageUrl ? { logo: entity.imageUrl, image: entity.imageUrl } : {}),
+    ...(partyLabel
+      ? {
+          memberOf: { "@type": "Organization", name: partyLabel },
+        }
+      : {}),
+    ...(entity.state
+      ? {
+          areaServed: {
+            "@type": "AdministrativeArea",
+            name: entity.state,
+          },
+        }
+      : {}),
+    ...(sameAs.length > 0 ? { sameAs } : {}),
+  }
+}
+
+function buildBreadcrumbData(entityName: string, slug: string) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Directory",
+        item: `${APP_URL}/directory`,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: entityName,
+        item: `${APP_URL}/directory/${slug}`,
+      },
+    ],
+  }
+}
+
 export default async function DirectoryProfilePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
   // Fetch data server-side so the initial HTML response contains the full profile
   // content for crawlers and social media previews, not just a loading spinner.
   const initialData = await getEntityBySlug(slug)
-  return <DirectoryProfileContent slug={slug} initialData={initialData} />
+
+  // Inject JSON-LD structured data so Google can understand this entity as a
+  // Person (politician) or Organization (PAC/org) — enables rich results and
+  // helps with knowledge graph eligibility.
+  const structuredData = initialData ? buildStructuredData(initialData) : null
+  const breadcrumbData = initialData ? buildBreadcrumbData(initialData.entity.name, slug) : null
+
+  return (
+    <>
+      {structuredData && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        />
+      )}
+      {breadcrumbData && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbData) }}
+        />
+      )}
+      <DirectoryProfileContent slug={slug} initialData={initialData} />
+    </>
+  )
 }

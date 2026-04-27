@@ -20,9 +20,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "daily",
       priority: 0.9,
     },
+    {
+      url: `${APP_URL}/news`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.8,
+    },
   ]
 
   // Dynamic directory profile pages
+  let entityPages: MetadataRoute.Sitemap = []
   try {
     const entities = await prisma.ciEntity.findMany({
       where: { type: { not: "data_broker" } },
@@ -30,16 +37,37 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       orderBy: { name: "asc" },
     })
 
-    const entityPages: MetadataRoute.Sitemap = entities.map((entity) => ({
+    entityPages = entities.map((entity) => ({
       url: `${APP_URL}/directory/${nameToSlug(entity.name)}`,
       lastModified: entity.updatedAt ?? new Date(),
       changeFrequency: "weekly" as const,
       priority: 0.7,
     }))
-
-    return [...staticPages, ...entityPages]
   } catch {
-    // If DB is unavailable during build, return just static pages
-    return staticPages
+    // If DB is unavailable during build, fall back to just static pages
   }
+
+  // Dynamic news posts (only those that are actually published)
+  let newsPages: MetadataRoute.Sitemap = []
+  try {
+    const now = new Date()
+    const posts = await prisma.announcement.findMany({
+      where: {
+        publishedAt: { not: null, lte: now },
+      },
+      select: { slug: true, publishedAt: true, updatedAt: true },
+      orderBy: { publishedAt: "desc" },
+    })
+
+    newsPages = posts.map((post) => ({
+      url: `${APP_URL}/news/${post.slug}`,
+      lastModified: post.updatedAt ?? post.publishedAt ?? new Date(),
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    }))
+  } catch {
+    // If DB is unavailable during build, skip news pages
+  }
+
+  return [...staticPages, ...entityPages, ...newsPages]
 }

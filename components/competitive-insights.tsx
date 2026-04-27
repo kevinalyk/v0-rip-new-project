@@ -2584,7 +2584,7 @@ export function CompetitiveInsights({
                               ) : (
                                 <Mail className="h-4 w-4 mt-0.5 flex-shrink-0" />
                               )}
-                              <div className="flex flex-col md:flex-row md:items-center md:gap-2 min-w-0 flex-1 text-left">
+                              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0 flex-1 text-left">
                                 <span className="font-medium break-words">{selectedCampaign.senderName}</span>
                                 <span className="text-muted-foreground text-xs md:text-sm break-all">
                                   {selectedCampaign.type === "sms"

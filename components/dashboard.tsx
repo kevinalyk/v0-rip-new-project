@@ -1,8 +1,11 @@
 "use client"
 
 import { useState } from "react"
+import { Menu, X } from "lucide-react"
 import { Sidebar } from "@/components/sidebar"
 import { MainContent } from "@/components/main-content"
+import { Button } from "@/components/ui/button"
+import { Logo } from "@/components/logo"
 
 interface DashboardProps {
   clientSlug?: string
@@ -12,17 +15,64 @@ interface DashboardProps {
 export function Dashboard({ clientSlug, isAdminView = false }: DashboardProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState("campaigns")
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
     <div className="flex h-screen bg-background">
-      <Sidebar
-        collapsed={collapsed}
-        setCollapsed={setCollapsed}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        isAdminView={isAdminView}
-      />
-      <MainContent collapsed={collapsed} activeTab={activeTab} clientSlug={clientSlug} isAdminView={isAdminView} />
+      {/* Desktop sidebar */}
+      <div className="hidden md:block">
+        <Sidebar
+          collapsed={collapsed}
+          setCollapsed={setCollapsed}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          isAdminView={isAdminView}
+        />
+      </div>
+
+      {/* Mobile drawer + backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 md:hidden"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      <div
+        className={`fixed top-0 left-0 h-full z-50 md:hidden transition-transform duration-300 ease-in-out ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <Sidebar
+          collapsed={false}
+          setCollapsed={() => {}}
+          activeTab={activeTab}
+          setActiveTab={(t) => {
+            setActiveTab(t)
+            setMobileOpen(false)
+          }}
+          isAdminView={isAdminView}
+          onNavigate={() => setMobileOpen(false)}
+        />
+      </div>
+
+      {/* Main column */}
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        {/* Mobile top bar */}
+        <header className="flex md:hidden items-center justify-between px-4 py-3 border-b border-border bg-background sticky top-0 z-30">
+          <Logo collapsed={false} variant="icon" />
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            onClick={() => setMobileOpen((o) => !o)}
+          >
+            {mobileOpen ? <X size={22} /> : <Menu size={22} />}
+          </Button>
+        </header>
+
+        <MainContent collapsed={collapsed} activeTab={activeTab} clientSlug={clientSlug} isAdminView={isAdminView} />
+      </div>
     </div>
   )
 }

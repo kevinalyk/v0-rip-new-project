@@ -2070,7 +2070,142 @@ export function CompetitiveInsights({
               <div className={shouldShowPaywall ? "blur-md pointer-events-none" : ""}>
                 <Card>
                   <CardContent className="p-0">
-                    <div className="overflow-x-auto">
+                    {/* Mobile card list */}
+                    <div className="md:hidden divide-y">
+                      {currentPaginatedCampaigns.map((campaign, index) => {
+                        const isBlurred = shouldShowPreview && index >= previewLimit
+                        const preview =
+                          campaign.type !== "sms"
+                            ? cleanEmailPreview(campaign.emailPreview, campaign.emailContent)
+                            : ""
+                        return (
+                          <div
+                            key={campaign.id}
+                            className={`p-4 hover:bg-muted/30 cursor-pointer transition-colors ${isBlurred ? "blur-sm" : ""} ${campaign.isHidden && resolvedUser?.role === "super_admin" ? "opacity-60" : ""}`}
+                            onClick={() => {
+                              if (!shouldShowPreview || index < previewLimit) {
+                                setSelectedCampaign(campaign)
+                                fetch("/api/track-view", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ id: campaign.id, type: campaign.type }),
+                                }).catch(() => {})
+                              }
+                            }}
+                          >
+                            {/* Row 1: icon + sender + date */}
+                            <div className="flex items-start gap-2">
+                              {campaign.type === "sms" ? (
+                                <Smartphone className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                              ) : (
+                                <Mail className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                              )}
+                              <div className="font-medium text-sm truncate flex-1 min-w-0">
+                                {campaign.entity ? campaign.entity.name : campaign.senderName}
+                              </div>
+                              <div className="text-xs text-muted-foreground flex-shrink-0 text-right">
+                                <div>{new Date(campaign.dateReceived).toLocaleDateString()}</div>
+                                <div>
+                                  {new Date(campaign.dateReceived).toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Row 2: badges */}
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {campaign.isHidden && resolvedUser?.role === "super_admin" && (
+                                <Badge variant="outline" className="text-xs bg-muted">
+                                  <EyeOff className="h-3 w-3 mr-1" />
+                                  Hidden
+                                </Badge>
+                              )}
+                              {shouldShowPersonalBadge(campaign) && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs bg-blue-100 dark:bg-blue-900 border-blue-300 dark:border-blue-700"
+                                >
+                                  <User className="h-3 w-3 mr-1" />
+                                  Personal
+                                </Badge>
+                              )}
+                              {campaign.entity && shouldShowFollowingBadge(campaign) && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs bg-amber-100 dark:bg-amber-900 border-amber-300 dark:border-amber-700"
+                                >
+                                  <Star className="h-3 w-3 mr-1" />
+                                  Following
+                                </Badge>
+                              )}
+                              {campaign.entity && !isDomainMappedToEntity(campaign) && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
+                                >
+                                  <Info className="h-3 w-3 mr-1" />
+                                  Third Party
+                                </Badge>
+                              )}
+                              {campaign.entity?.party && (
+                                <Badge
+                                  variant={getPartyColor(campaign.entity.party)}
+                                  className={`text-xs capitalize ${getPartyBadgeClassName(campaign.entity.party)}`}
+                                >
+                                  {campaign.entity.party}
+                                </Badge>
+                              )}
+                              {campaign.entity?.state && (
+                                <Badge variant="outline" className="text-xs">
+                                  {campaign.entity.state}
+                                </Badge>
+                              )}
+                            </div>
+
+                            {/* Row 3: number/email */}
+                            <div className="text-xs text-muted-foreground truncate mt-2">
+                              {campaign.type === "sms" ? campaign.phoneNumber : campaign.senderEmail}
+                            </div>
+
+                            {/* Row 4: subject (clamp 2) */}
+                            {campaign.subject && (
+                              <div className="text-sm font-medium mt-2 line-clamp-2 break-words">
+                                {campaign.subject}
+                              </div>
+                            )}
+
+                            {/* Row 5: preview (clamp 2) */}
+                            {preview && (
+                              <div className="text-xs text-muted-foreground mt-1 line-clamp-2 break-words">
+                                {preview}
+                              </div>
+                            )}
+
+                            {/* Assign sender (super admin) */}
+                            {resolvedUser?.role === "super_admin" &&
+                              (campaign.entity ? !isDomainMappedToEntity(campaign) : true) && (
+                                <button
+                                  className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border rounded px-1.5 py-0.5 hover:bg-muted transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setAssignDialogCampaign(campaign)
+                                    setAssignPopoverCampaignId(campaign.id)
+                                    setAssignEntitySearch("")
+                                  }}
+                                >
+                                  <UserPlus className="h-3 w-3" />
+                                  {campaign.entity ? "Assign sender" : "Assign to entity"}
+                                </button>
+                              )}
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* Desktop table */}
+                    <div className="hidden md:block overflow-x-auto">
                       <table className="w-full">
                         <thead className="bg-muted/50 border-b">
                           <tr>

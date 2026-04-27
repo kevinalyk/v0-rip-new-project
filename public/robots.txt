@@ -1,6 +1,8 @@
 User-agent: *
 Allow: /directory
 Allow: /directory/
+Allow: /news
+Allow: /news/
 
 # Disallow authenticated/private areas
 Disallow: /api/

@@ -19,9 +19,19 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const partyLabel = entity.party ? ` · ${entity.party.charAt(0).toUpperCase() + entity.party.slice(1)}` : ""
   const stateLabel = entity.state ? ` · ${entity.state}` : ""
   const title = `${entity.name}${partyLabel}${stateLabel} | RIP Directory`
-  const description = entity.description
-    ? entity.description
-    : `Track ${entity.name}'s email and SMS communications. ${entity.counts.total} total messages captured.`
+  
+  // Generate SEO-optimized descriptions for candidates and PACs
+  let description: string
+  if (entity.type === "candidate" || entity.type === "politician") {
+    description = `See ${entity.name}'s campaign emails and texts. Track ${entity.type === "candidate" ? "their" : "his/her"} inbox strategy and communications. ${entity.counts.total} messages captured.`
+  } else if (entity.type === "pac") {
+    description = `View ${entity.name}'s fundraising emails and SMS campaigns. See how this PAC is communicating with supporters. ${entity.counts.total} messages tracked.`
+  } else {
+    // Default fallback for other entity types
+    description = entity.description
+      ? entity.description
+      : `Track ${entity.name}'s email and SMS communications. ${entity.counts.total} total messages captured.`
+  }
 
   // Only use the scraped image as the OG image if it's a public Blob URL —
   // private Blob URLs are inaccessible to social media crawlers.

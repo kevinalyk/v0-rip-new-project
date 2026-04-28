@@ -86,17 +86,16 @@ export function RelatedEntities({ entityId, entityName, party, state, inline = f
   }
 
   if (inline) {
-    // Render as small inline pills next to the stats
+    // Render as small inline links without wrapping (nowrap), no counts
     return (
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-3 items-center flex-nowrap overflow-x-auto">
         {links.map((link) => (
           <Link
             key={link.label}
             href={link.url}
-            className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border/50 hover:border-foreground/30 hover:bg-accent/30 transition-all text-sm"
+            className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border/50 hover:border-foreground/30 hover:bg-accent/30 transition-all text-sm whitespace-nowrap flex-shrink-0"
           >
-            <span className="font-medium text-foreground">{link.count.toLocaleString()}</span>
-            <span className="text-muted-foreground group-hover:text-foreground text-xs transition-colors">
+            <span className="text-foreground group-hover:text-foreground transition-colors">
               {link.label}
             </span>
             <ArrowRight className="h-3 w-3 text-muted-foreground group-hover:text-foreground flex-shrink-0 transition-colors" />

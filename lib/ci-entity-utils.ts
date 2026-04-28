@@ -317,6 +317,7 @@ export async function getAllEntitiesWithCounts(options?: {
   state?: string
   type?: string
   search?: string
+  ballotpedia?: string
 }) {
   try {
     const page = options?.page || 1
@@ -353,6 +354,17 @@ export async function getAllEntitiesWithCounts(options?: {
       where.name = {
         contains: options.search.trim(),
         mode: "insensitive",
+      }
+    }
+
+    // Filter for ballotpedia information
+    if (options?.ballotpedia && options.ballotpedia !== "all") {
+      if (options.ballotpedia === "missing") {
+        where.ballotpediaUrl = null
+      } else if (options.ballotpedia === "has") {
+        where.ballotpediaUrl = {
+          not: null,
+        }
       }
     }
 

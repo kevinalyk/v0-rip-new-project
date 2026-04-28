@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, Lock, Mail, MessageSquare, Building2, User, Users, ArrowLeft, Calendar, Smartphone, ExternalLink } from "lucide-react"
 import { CiEntitySubscribeButton } from "@/components/ci-entity-subscribe-button"
 import { nameToSlug } from "@/lib/directory"
+import { RelatedEntities } from "@/components/related-entities"
 
 interface Mapping {
   id: string
@@ -355,6 +356,14 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
             )}
           </div>
         )}
+
+        {/* Browse related entities */}
+        <RelatedEntities
+          entityId={entity.id}
+          entityName={entity.name}
+          party={entity.party}
+          state={entity.state}
+        />
 
         {/* Recent communications */}
         <div className="rounded-lg border border-border bg-card overflow-hidden mb-8">

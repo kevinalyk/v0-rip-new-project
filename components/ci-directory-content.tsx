@@ -21,6 +21,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination"
 import type { StateActivity } from "@/components/us-interactive-map"
+import { buildDirectoryUrl } from "@/lib/directory-routing"
 
 // Dynamically import map to avoid SSR issues
 const USInteractiveMap = dynamic(
@@ -92,6 +93,22 @@ interface CiDirectoryContentProps {
   isPublic?: boolean
   initialEntities?: Entity[]
   initialPagination?: PaginationState
+  /** Initial state filter (abbreviation, e.g. "TX"), or undefined for all */
+  initialState?: string
+  /** Initial party filter (lowercase value, e.g. "republican"), or undefined for all */
+  initialParty?: string
+  /** Initial entity-type filter, or undefined for all */
+  initialType?: string
+  /** Optional override for the page H1 (used by SEO landing pages) */
+  pageHeading?: string
+  /** Optional override for the descriptive subtitle under the H1 */
+  pageSubtitle?: string
+  /**
+   * If true, this component is rendered on a route that should keep its URL
+   * in sync with the active filters. When users change filters, we use
+   * router.replace to update the URL without a full page navigation.
+   */
+  syncUrlWithFilters?: boolean
 }
 
 interface Entity {
@@ -109,7 +126,18 @@ interface Entity {
   }
 }
 
-export function CiDirectoryContent({ clientSlug, isPublic = false, initialEntities, initialPagination }: CiDirectoryContentProps) {
+export function CiDirectoryContent({
+  clientSlug,
+  isPublic = false,
+  initialEntities,
+  initialPagination,
+  initialState,
+  initialParty,
+  initialType,
+  pageHeading,
+  pageSubtitle,
+  syncUrlWithFilters = false,
+}: CiDirectoryContentProps) {
   const apiBase = isPublic ? "/api/public/ci-entities" : "/api/ci-entities"
   const router = useRouter()
   // Seed with server-rendered data so crawlers see real content immediately.
@@ -117,9 +145,9 @@ export function CiDirectoryContent({ clientSlug, isPublic = false, initialEntiti
   const [loading, setLoading] = useState(!initialEntities)
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
-  const [filterParty, setFilterParty] = useState<string>("all")
-  const [filterState, setFilterState] = useState<string>("all")
-  const [filterType, setFilterType] = useState<string>("all")
+  const [filterParty, setFilterParty] = useState<string>(initialParty ?? "all")
+  const [filterState, setFilterState] = useState<string>(initialState ?? "all")
+  const [filterType, setFilterType] = useState<string>(initialType ?? "all")
   // Commented out for future use
   // const [staticTotalCount, setStaticTotalCount] = useState(0)
   // const [totalCampaignCount, setTotalCampaignCount] = useState(0)
@@ -128,8 +156,11 @@ export function CiDirectoryContent({ clientSlug, isPublic = false, initialEntiti
     initialPagination ?? { page: 1, pageSize: 50, totalCount: 0, totalPages: 0 }
   )
 
-  // Map state — drives both the map highlight and the entity filter
-  const [selectedMapState, setSelectedMapState] = useState<string | null>(null)
+  // Map state — drives both the map highlight and the entity filter.
+  // Seed from initialState if it was passed in (e.g. /directory/texas pre-fills Texas).
+  const [selectedMapState, setSelectedMapState] = useState<string | null>(
+    initialState && initialState !== "all" ? ABBREV_TO_FULL[initialState] ?? null : null
+  )
 
   const US_STATES = [
     "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
@@ -218,6 +249,35 @@ export function CiDirectoryContent({ clientSlug, isPublic = false, initialEntiti
   // On the very first render (no filter changes yet) we skip the client fetch
   // so crawlers and users both see real content without a loading flash.
   const initialFetchSkipped = useRef(!!initialEntities)
+
+  // Track whether to update the URL when filters change. We skip on first render
+  // (we're already at the right URL since the page was server-rendered for it).
+  const skipUrlUpdate = useRef(true)
+
+  // Sync URL with active filters so the browser bar always reflects what's
+  // being shown. Only enabled on the public directory routes that opt in via
+  // syncUrlWithFilters — we don't want to mess with admin or embedded contexts.
+  useEffect(() => {
+    if (!syncUrlWithFilters) return
+    if (skipUrlUpdate.current) {
+      skipUrlUpdate.current = false
+      return
+    }
+
+    const newUrl = buildDirectoryUrl({
+      state: filterState,
+      party: filterParty,
+      type: filterType,
+      search: debouncedSearch,
+    })
+
+    if (typeof window !== "undefined") {
+      const currentUrl = window.location.pathname + window.location.search
+      if (currentUrl !== newUrl) {
+        router.replace(newUrl, { scroll: false })
+      }
+    }
+  }, [filterState, filterParty, filterType, debouncedSearch, syncUrlWithFilters, router])
 
   useEffect(() => {
     // Skip the very first client-side fetch if server pre-seeded the data.
@@ -330,8 +390,11 @@ export function CiDirectoryContent({ clientSlug, isPublic = false, initialEntiti
       {/* Page header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-4 md:px-6 pt-4 md:pt-6 pb-4 border-b border-border">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight">Directory</h1>
-          <p className="text-sm text-muted-foreground mt-0.5 max-w-4xl">Our heat map shows you where the latest texts and emails were sent from and lets you browse all tracked campaigns and organizations in the system. Each red dot represents one email or SMS sent in the last 3 hours — more dots means more activity in that state.</p>
+          <h1 className="text-xl font-semibold tracking-tight">{pageHeading ?? "Directory"}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5 max-w-4xl">
+            {pageSubtitle ??
+              "Our heat map shows you where the latest texts and emails were sent from and lets you browse all tracked campaigns and organizations in the system. Each red dot represents one email or SMS sent in the last 3 hours — more dots means more activity in that state."}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {pagination.totalCount > 0 && (

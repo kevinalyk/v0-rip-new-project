@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, Lock, Mail, MessageSquare, Building2, User, Users, ArrowLeft, Calendar, Smartphone, ExternalLink } from "lucide-react"
 import { CiEntitySubscribeButton } from "@/components/ci-entity-subscribe-button"
 import { nameToSlug } from "@/lib/directory"
+import { RelatedEntities } from "@/components/related-entities"
 
 interface Mapping {
   id: string
@@ -292,24 +293,36 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
           )}
         </div>
 
-        {/* Inline stats row */}
-        <div className="flex items-center gap-6 mb-8 px-1">
-          <div className="flex items-center gap-2">
-            <Mail className="h-4 w-4 text-muted-foreground" />
-            <span className="text-2xl font-bold">{entity.counts.emails.toLocaleString()}</span>
-            <span className="text-sm text-muted-foreground">Email{entity.counts.emails !== 1 ? "s" : ""}</span>
+        {/* Inline stats row with related entities */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8 px-1">
+          {/* Stats */}
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-muted-foreground" />
+              <span className="text-2xl font-bold">{entity.counts.emails.toLocaleString()}</span>
+              <span className="text-sm text-muted-foreground">Email{entity.counts.emails !== 1 ? "s" : ""}</span>
+            </div>
+            <div className="h-5 w-px bg-border" />
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-muted-foreground" />
+              <span className="text-2xl font-bold">{entity.counts.sms.toLocaleString()}</span>
+              <span className="text-sm text-muted-foreground">SMS</span>
+            </div>
+            <div className="h-5 w-px bg-border" />
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-bold">{entity.counts.total.toLocaleString()}</span>
+              <span className="text-sm text-muted-foreground">Total</span>
+            </div>
           </div>
-          <div className="h-5 w-px bg-border" />
-          <div className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4 text-muted-foreground" />
-            <span className="text-2xl font-bold">{entity.counts.sms.toLocaleString()}</span>
-            <span className="text-sm text-muted-foreground">SMS</span>
-          </div>
-          <div className="h-5 w-px bg-border" />
-          <div className="flex items-center gap-2">
-            <span className="text-2xl font-bold">{entity.counts.total.toLocaleString()}</span>
-            <span className="text-sm text-muted-foreground">Total</span>
-          </div>
+
+          {/* Related entities inline */}
+          <RelatedEntities
+            entityId={entity.id}
+            entityName={entity.name}
+            party={entity.party}
+            state={entity.state}
+            inline={true}
+          />
         </div>
 
         {/* Bio */}

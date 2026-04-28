@@ -254,6 +254,31 @@ export function CiDirectoryContent({
   // (we're already at the right URL since the page was server-rendered for it).
   const skipUrlUpdate = useRef(true)
 
+  // Handle scrollToResults query param: scroll to the results section on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const params = new URLSearchParams(window.location.search)
+    if (params.has("scrollToResults")) {
+      // Small delay to ensure DOM is fully painted
+      setTimeout(() => {
+        // Calculate scroll position: we want to hide the map but show results.
+        // Scroll to approximately where the search/filter bar is.
+        const searchBarElement = document.querySelector("input[placeholder*='Search']")
+        if (searchBarElement) {
+          searchBarElement.scrollIntoView({ behavior: "smooth", block: "start" })
+        } else {
+          // Fallback: scroll to roughly where results start (map is ~70vh, add some buffer)
+          window.scrollTo({ top: Math.max(window.innerHeight * 0.6, 400), behavior: "smooth" })
+        }
+        // Remove the param from URL so it doesn't trigger again on refresh
+        params.delete("scrollToResults")
+        const newUrl = window.location.pathname + (params.toString() ? `?${params}` : "")
+        window.history.replaceState(window.history.state, "", newUrl)
+      }, 100)
+    }
+  }, [])
+
   // Sync URL with active filters so the browser bar always reflects what's
   // being shown. We use the native History API (window.history.replaceState)
   // instead of router.replace() because router.replace would trigger a Next.js

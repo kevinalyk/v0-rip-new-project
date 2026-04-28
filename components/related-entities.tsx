@@ -47,35 +47,18 @@ export function RelatedEntities({ entityId, entityName, party, state, inline = f
   }
 
   // Build links only for entities that have a count > 0
+  // Only show state + party combo link (no party-only or state-only)
   const links: Array<{
     label: string
     url: string
     count: number
   }> = []
 
-  // Party link (always available if party exists)
-  if (party && counts.partyCount > 0) {
-    links.push({
-      label: `See more ${party.toLowerCase()}s`,
-      url: buildDirectoryUrl({ party }),
-      count: counts.partyCount,
-    })
-  }
-
-  // State link (only if state exists and there are results)
-  if (state && counts.stateCount > 0) {
-    links.push({
-      label: `See more ${state} politicians`,
-      url: buildDirectoryUrl({ state }),
-      count: counts.stateCount,
-    })
-  }
-
-  // State + Party combo link (only if both exist and there are results)
+  // State + Party combo link ONLY (only if both exist and there are results)
   if (state && party && counts.statePartyCount > 0) {
     links.push({
       label: `See more ${state} ${party.toLowerCase()}s`,
-      url: buildDirectoryUrl({ state, party }),
+      url: buildDirectoryUrl({ state, party }) + "?scrollToResults=true",
       count: counts.statePartyCount,
     })
   }

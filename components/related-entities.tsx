@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Card, CardContent } from "@/components/ui/card"
 import { ArrowRight, Loader2 } from "lucide-react"
 import { buildDirectoryUrl } from "@/lib/directory-routing"
 
@@ -11,6 +10,8 @@ interface RelatedEntitiesProps {
   entityName: string
   party: string | null
   state: string | null
+  /** If true, render as inline badges/pills for display next to stats. If false, render as cards. */
+  inline?: boolean
 }
 
 interface RelatedCounts {
@@ -19,7 +20,7 @@ interface RelatedCounts {
   statePartyCount: number
 }
 
-export function RelatedEntities({ entityId, entityName, party, state }: RelatedEntitiesProps) {
+export function RelatedEntities({ entityId, entityName, party, state, inline = false }: RelatedEntitiesProps) {
   const [counts, setCounts] = useState<RelatedCounts | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -84,31 +85,26 @@ export function RelatedEntities({ entityId, entityName, party, state }: RelatedE
     return null
   }
 
-  return (
-    <div className="mb-8">
-      <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
+  if (inline) {
+    // Render as small inline pills next to the stats
+    return (
+      <div className="flex flex-wrap gap-2">
         {links.map((link) => (
           <Link
             key={link.label}
             href={link.url}
-            className="group"
+            className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border/50 hover:border-foreground/30 hover:bg-accent/30 transition-all text-sm"
           >
-            <Card className="h-full hover:border-foreground/50 hover:bg-accent/50 transition-all cursor-pointer">
-              <CardContent className="p-4 flex flex-col gap-2">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="text-sm font-medium text-foreground group-hover:text-foreground transition-colors line-clamp-2">
-                    {link.label}
-                  </span>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground flex-shrink-0 mt-0.5 transition-colors" />
-                </div>
-                <div className="text-2xl font-bold text-foreground">
-                  {link.count.toLocaleString()}
-                </div>
-              </CardContent>
-            </Card>
+            <span className="font-medium text-foreground">{link.count.toLocaleString()}</span>
+            <span className="text-muted-foreground group-hover:text-foreground text-xs transition-colors">
+              {link.label}
+            </span>
+            <ArrowRight className="h-3 w-3 text-muted-foreground group-hover:text-foreground flex-shrink-0 transition-colors" />
           </Link>
         ))}
       </div>
-    </div>
-  )
+    )
+  }
+
+  return null
 }

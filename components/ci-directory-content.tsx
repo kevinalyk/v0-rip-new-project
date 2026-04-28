@@ -255,8 +255,14 @@ export function CiDirectoryContent({
   const skipUrlUpdate = useRef(true)
 
   // Sync URL with active filters so the browser bar always reflects what's
-  // being shown. Only enabled on the public directory routes that opt in via
-  // syncUrlWithFilters — we don't want to mess with admin or embedded contexts.
+  // being shown. We use the native History API (window.history.replaceState)
+  // instead of router.replace() because router.replace would trigger a Next.js
+  // route transition between page files (e.g. /directory → /directory/minnesota
+  // are technically different pages), which re-runs server components and causes
+  // the brief flash + scroll-to-top that the user reported. The History API
+  // updates only the URL bar — the page stays mounted, the existing client-side
+  // filter effect still refetches the data, and back/forward buttons still work
+  // because we're using the standard History API.
   useEffect(() => {
     if (!syncUrlWithFilters) return
     if (skipUrlUpdate.current) {
@@ -274,10 +280,10 @@ export function CiDirectoryContent({
     if (typeof window !== "undefined") {
       const currentUrl = window.location.pathname + window.location.search
       if (currentUrl !== newUrl) {
-        router.replace(newUrl, { scroll: false })
+        window.history.replaceState(window.history.state, "", newUrl)
       }
     }
-  }, [filterState, filterParty, filterType, debouncedSearch, syncUrlWithFilters, router])
+  }, [filterState, filterParty, filterType, debouncedSearch, syncUrlWithFilters])
 
   useEffect(() => {
     // Skip the very first client-side fetch if server pre-seeded the data.

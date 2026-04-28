@@ -58,7 +58,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 function buildStructuredData(data: NonNullable<Awaited<ReturnType<typeof getEntityBySlug>>>) {
   const { entity } = data
   const url = `${APP_URL}/directory/${entity.slug}`
-  const isPerson = entity.type === "politician"
+  // Use Person schema for politicians and candidates, Organization for PACs/orgs/others
+  const isPerson = entity.type === "candidate" || entity.type === "politician"
 
   // sameAs: external authoritative profiles that confirm this entity's identity
   const sameAs: string[] = []

@@ -268,6 +268,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
   const [filterParty, setFilterParty] = useState<string>("all")
   const [filterState, setFilterState] = useState<string>("all")
   const [filterType, setFilterType] = useState<string>("all")
+  const [filterBallotpedia, setFilterBallotpedia] = useState<string>("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
 
@@ -393,6 +394,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
       if (filterParty !== "all") params.append("party", filterParty)
       if (filterState !== "all") params.append("state", filterState)
       if (filterType !== "all") params.append("type", filterType)
+      if (filterBallotpedia !== "all") params.append("ballotpedia", filterBallotpedia)
       if (debouncedSearch) params.append("search", debouncedSearch)
 
       const [entitiesRes, unassignedRes] = await Promise.all([
@@ -433,14 +435,15 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
 
   useEffect(() => {
     fetchData()
-  }, [pagination.page, filterParty, filterState, filterType, debouncedSearch]) // Added debouncedSearch to dependency array
+  }, [pagination.page, filterParty, filterState, filterType, filterBallotpedia, debouncedSearch]) // Added filterBallotpedia
 
-  const handleFilterChange = (type: "party" | "state" | "type", value: string) => {
+  const handleFilterChange = (type: "party" | "state" | "type" | "ballotpedia", value: string) => {
     setPagination((prev) => ({ ...prev, page: 1 }))
 
     if (type === "party") setFilterParty(value)
     if (type === "state") setFilterState(value)
     if (type === "type") setFilterType(value)
+    if (type === "ballotpedia") setFilterBallotpedia(value)
   }
 
   const handleCreateEntity = async () => {
@@ -1433,7 +1436,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                 </div>
 
                 {/* Filter Controls */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
                     <Label htmlFor="filter-party">Filter by Party</Label>
                     <Select value={filterParty} onValueChange={(val) => handleFilterChange("party", val)}>
@@ -1485,9 +1488,22 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div>
+                    <Label htmlFor="filter-ballotpedia">Ballotpedia Info</Label>
+                    <Select value={filterBallotpedia} onValueChange={(val) => handleFilterChange("ballotpedia", val)}>
+                      <SelectTrigger id="filter-ballotpedia">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="has">Has Info</SelectItem>
+                        <SelectItem value="missing">Missing Info</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
-                {(filterParty !== "all" || filterState !== "all" || filterType !== "all" || searchQuery) && (
+                {(filterParty !== "all" || filterState !== "all" || filterType !== "all" || filterBallotpedia !== "all" || searchQuery) && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -1495,6 +1511,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                       setFilterParty("all")
                       setFilterState("all")
                       setFilterType("all")
+                      setFilterBallotpedia("all")
                       setSearchQuery("")
                       setDebouncedSearch("") // Clear debounced search as well
                       setPagination((prev) => ({ ...prev, page: 1 }))

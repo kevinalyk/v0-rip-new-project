@@ -34,6 +34,7 @@ export default async function PublicDirectoryPage() {
         isPublic={!clientSlug}
         initialEntities={initialResult.entities}
         initialPagination={initialResult.pagination}
+        syncUrlWithFilters
       />
     </AppLayout>
   )

@@ -234,8 +234,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!bio && !imageUrl) {
-      // Only bail if BOTH bio AND image are missing (office is optional for orgs)
+    // All three (bio, imageUrl, office) are individually optional. We only bail
+    // out of the "save what we got" path if NONE of them were extracted.
+    if (!bio && !imageUrl && !office) {
       const isEmpty = entity.type === "pac" || entity.type === "organization"
       
       // Still update the database with the URL and fetch timestamp

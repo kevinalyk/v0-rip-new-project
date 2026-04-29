@@ -235,9 +235,18 @@ export async function POST(request: NextRequest) {
     }
 
     if (!bio && !imageUrl && !office) {
-      // For org/PAC entities, it's normal to find nothing; return success with nulls
-      // For person entities, this likely means extraction failed; return a warning
+      // For org/PAC entities, it's normal to find nothing; save the URL and return success
+      // For person entities, this likely means extraction failed; return a warning but still save the URL
       const isEmpty = entity.type === "pac" || entity.type === "organization"
+      
+      // Still update the database with the URL and fetch timestamp
+      await prisma.ciEntity.update({
+        where: { id: entityId },
+        data: {
+          ballotpediaUrl,
+          ballotpediaFetchedAt: new Date(),
+        },
+      })
       
       return NextResponse.json(
         {

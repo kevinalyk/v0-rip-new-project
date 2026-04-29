@@ -234,9 +234,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!bio && !imageUrl && !office) {
-      // For org/PAC entities, it's normal to find nothing; save the URL and return success
-      // For person entities, this likely means extraction failed; return a warning but still save the URL
+    if (!bio && !imageUrl) {
+      // Only bail if BOTH bio AND image are missing (office is optional for orgs)
       const isEmpty = entity.type === "pac" || entity.type === "organization"
       
       // Still update the database with the URL and fetch timestamp

@@ -170,13 +170,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Entity not found" }, { status: 404 })
     }
 
-    // Only supported types
-    if (!SUPPORTED_TYPES.includes(entity.type)) {
-      return NextResponse.json(
-        { error: `Ballotpedia enrichment is only supported for politician/candidate entities (got: ${entity.type})` },
-        { status: 400 }
-      )
-    }
+    // Attempt to enrich any entity type; extractors will gracefully return null for unsupported entity types (like orgs)
 
     // Use manually set URL if available, otherwise auto-construct from name
     const slug = nameToBallotpediaSlug(entity.name)
@@ -241,12 +235,23 @@ export async function POST(request: NextRequest) {
     }
 
     if (!bio && !imageUrl && !office) {
+      // For org/PAC entities, it's normal to find nothing; return success with nulls
+      // For person entities, this likely means extraction failed; return a warning
+      const isEmpty = entity.type === "pac" || entity.type === "organization"
+      
       return NextResponse.json(
         {
-          error: `Found the Ballotpedia page but could not extract any usable data. The page structure may be different for this entity.`,
+          success: true,
+          entityId: entity.id,
+          warning: isEmpty
+            ? `No enrichment data extracted for ${entity.type} type (this is normal).`
+            : `Found the Ballotpedia page but could not extract any usable data. The page structure may be different for this entity.`,
           ballotpediaUrl,
+          imageUrl: null,
+          bio: null,
+          office: null,
         },
-        { status: 422 }
+        { status: 200 }
       )
     }
 

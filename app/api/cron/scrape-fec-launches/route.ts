@@ -84,11 +84,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "FEC_API_KEY not configured" }, { status: 500 })
     }
 
-    // Pull candidates whose FEC first_file_date is within the last 24 hours.
+    // Pull candidates whose FEC first_file_date is within the last 7 days.
     // first_file_date = when the candidate originally filed for this cycle, NOT when
     // the record was last updated (which is what `load_date` tracks). Using first_file_date
     // means we only catch genuinely new launches, not refiles/address changes.
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    // 7-day window matches what the /directory/new-campaigns page displays and gives us
+    // recovery headroom if the cron misses a day or two.
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
     const sinceStr = since.toISOString().split("T")[0] // "YYYY-MM-DD"
 
     // Current election year — FEC data is scoped per election cycle

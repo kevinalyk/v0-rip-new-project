@@ -54,6 +54,10 @@
     {
       "path": "/api/cron/resolve-sending-providers",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/scrape-fec-launches",
+      "schedule": "0 6 * * *"
     }
   ]
 }

@@ -391,11 +391,12 @@ model CiEntity {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  campaigns   CompetitiveInsightCampaign[]
-  smsMessages SmsQueue[]
-  mappings    CiEntityMapping[]
-  subscriptions CiEntitySubscription[]
-  tags        EntityTag[] // Added relation to entity tags
+  campaigns       CompetitiveInsightCampaign[]
+  smsMessages     SmsQueue[]
+  mappings        CiEntityMapping[]
+  subscriptions   CiEntitySubscription[]
+  tags            EntityTag[]
+  campaignLaunches CampaignLaunch[]
   
   @@index([party])
   @@index([state])
@@ -552,6 +553,36 @@ model CronJobState {
   updatedAt             DateTime  @updatedAt
 
   @@index([jobName])
+}
+
+// Tracks newly-announced political campaigns from external sources (FEC, etc.)
+// This is an event log — separate from CiEntity which tracks comms senders.
+// A stub CiEntity is auto-created on import (name + state + party only),
+// and linkedEntityId ties the launch record to it for enrichment later.
+model CampaignLaunch {
+  id                 String    @id @default(cuid())
+  name               String                         // Candidate name
+  party              String?                        // "republican" | "democrat" | "independent"
+  state              String?                        // State abbreviation e.g. "CA"
+  office             String?                        // e.g. "U.S. House" | "U.S. Senate" | "Governor"
+  district           String?                        // e.g. "CA-45"
+  launchedAt         DateTime?                      // When they actually announced (may be unknown)
+  source             String                         // "fec" | "ballotpedia" | "manual"
+  sourceUrl          String?                        // Link back to source page for audit trail
+  sourceExternalId   String?                        // Source's own ID (e.g. FEC candidate_id) for dedup
+  linkedEntityId     String?                        // FK to CiEntity once auto-created
+  status             String    @default("active")   // "active" | "withdrawn" | "won" | "lost"
+  firstSeenAt        DateTime  @default(now())      // When we first pulled this record
+  updatedAt          DateTime  @updatedAt
+
+  linkedEntity       CiEntity? @relation(fields: [linkedEntityId], references: [id], onDelete: SetNull)
+
+  @@unique([source, sourceExternalId])              // prevent duplicate imports per source
+  @@index([source])
+  @@index([state])
+  @@index([party])
+  @@index([firstSeenAt])
+  @@index([linkedEntityId])
 }
 
 model Announcement {

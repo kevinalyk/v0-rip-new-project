@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { nameToSlug } from "@/lib/directory"
 
 export const runtime = "nodejs"
 // Allow up to 5 minutes — we may be fetching many candidates + creating entities
@@ -84,6 +83,41 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "FEC_API_KEY not configured" }, { status: 500 })
     }
 
+    // Diagnostics object — returned in the response so you can see exactly
+    // what happened at each step when hitting this endpoint manually.
+    const diagnostics: {
+      since: string
+      electionYears: number[]
+      queryUrlSample: string | null
+      totalFromApi: number
+      pagesFetched: number
+      droppedReasons: Record<string, number>
+      sampleRawCandidates: Array<{
+        name: string
+        office: string
+        state: string | null
+        party: string | null
+        candidate_status: string
+        first_file_date: string | null
+        load_date: string | null
+        election_years: number[]
+      }>
+      apiError: string | null
+    } = {
+      since: "",
+      electionYears: [],
+      queryUrlSample: null,
+      totalFromApi: 0,
+      pagesFetched: 0,
+      droppedReasons: {
+        unsupported_office: 0,
+        missing_first_file_date: 0,
+        first_file_date_too_old: 0,
+      },
+      sampleRawCandidates: [],
+      apiError: null,
+    }
+
     // Pull candidates whose FEC first_file_date is within the last 7 days.
     // first_file_date = when the candidate originally filed for this cycle, NOT when
     // the record was last updated (which is what `load_date` tracks). Using first_file_date
@@ -92,16 +126,19 @@ export async function GET(request: Request) {
     // recovery headroom if the cron misses a day or two.
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
     const sinceStr = since.toISOString().split("T")[0] // "YYYY-MM-DD"
+    diagnostics.since = sinceStr
 
-    // Current election year — FEC data is scoped per election cycle
-    const electionYear = new Date().getFullYear() % 2 === 0
-      ? new Date().getFullYear()
-      : new Date().getFullYear() + 1
+    // FEC scopes data per election cycle. We query BOTH the current and next
+    // cycle so we don't miss freshly-filed 2028 presidential candidates etc.
+    const currentYear = new Date().getFullYear()
+    const cycleYears = [
+      currentYear % 2 === 0 ? currentYear : currentYear + 1,    // nearest even year
+      currentYear % 2 === 0 ? currentYear + 2 : currentYear + 3, // following even year
+    ]
+    diagnostics.electionYears = cycleYears
 
-    console.log(`[fec-scraper] Fetching candidates filed since ${sinceStr} for ${electionYear} cycle`)
+    console.log(`[fec-scraper] Fetching candidates filed since ${sinceStr} for cycles ${cycleYears.join(", ")}`)
 
-    let page = 1
-    let totalPages = 1
     const newLaunches: Array<{
       fecId: string
       name: string
@@ -112,79 +149,134 @@ export async function GET(request: Request) {
       launchDate: string
     }> = []
 
-    // Paginate through all results
-    while (page <= totalPages) {
-      const url = new URLSearchParams({
-        api_key: apiKey,
-        election_year: String(electionYear),
-        first_file_date_min: sinceStr,
-        candidate_status: "C",         // confirmed candidates only
-        per_page: "100",
-        page: String(page),
-        sort: "-first_file_date",
-      })
+    // Iterate each election cycle and paginate through all results
+    for (const electionYear of cycleYears) {
+      let page = 1
+      let totalPages = 1
 
-      // Add each supported office as a separate param (FEC uses multi-value)
-      for (const office of SUPPORTED_OFFICES) {
-        url.append("office", office)
-      }
-
-      const res = await fetch(`https://api.open.fec.gov/v1/candidates/?${url}`, {
-        headers: { Accept: "application/json" },
-        next: { revalidate: 0 },
-      })
-
-      if (!res.ok) {
-        console.error(`[fec-scraper] FEC API error ${res.status}: ${await res.text()}`)
-        break
-      }
-
-      const data: FecApiResponse = await res.json()
-      totalPages = data.pagination.pages
-
-      for (const c of data.results) {
-        if (!SUPPORTED_OFFICES.has(c.office)) continue
-        // FEC's first_file_date_min filter is date-precise (not timestamp), so we
-        // re-check here to enforce a strict 24-hour rolling window. Skip records
-        // missing first_file_date entirely (very rare but defensive).
-        if (!c.first_file_date) continue
-        const filedAt = new Date(c.first_file_date)
-        if (filedAt < since) continue
-        newLaunches.push({
-          fecId: c.candidate_id,
-          name: c.name,
-          party: normalizeFecParty(c.party),
-          state: normalizeState(c.state),
-          office: fecOfficeLabel(c.office, normalizeState(c.state), c.district),
-          district: c.district || null,
-          launchDate: c.first_file_date,
+      while (page <= totalPages) {
+        const url = new URLSearchParams({
+          api_key: apiKey,
+          election_year: String(electionYear),
+          first_file_date_min: sinceStr,
+          per_page: "100",
+          page: String(page),
+          sort: "-first_file_date",
         })
-      }
 
-      page++
+        // Note: we intentionally DO NOT filter on candidate_status here. Newly
+        // filed candidates often start as "F" (Future) or "N" (Not yet) before
+        // reaching "C" (Statutory). Filtering on status was hiding fresh launches.
+
+        // Add each supported office as a separate param (FEC uses multi-value)
+        for (const office of SUPPORTED_OFFICES) {
+          url.append("office", office)
+        }
+
+        // Capture the first URL for diagnostics (with API key redacted)
+        if (!diagnostics.queryUrlSample) {
+          const redacted = new URLSearchParams(url)
+          redacted.set("api_key", "REDACTED")
+          diagnostics.queryUrlSample = `https://api.open.fec.gov/v1/candidates/?${redacted}`
+        }
+
+        const res = await fetch(`https://api.open.fec.gov/v1/candidates/?${url}`, {
+          headers: { Accept: "application/json" },
+          next: { revalidate: 0 },
+        })
+
+        if (!res.ok) {
+          const errText = await res.text()
+          console.error(`[fec-scraper] FEC API error ${res.status}: ${errText}`)
+          diagnostics.apiError = `${res.status}: ${errText.slice(0, 300)}`
+          break
+        }
+
+        const data: FecApiResponse = await res.json()
+        totalPages = data.pagination.pages
+        diagnostics.totalFromApi += data.pagination.count
+        diagnostics.pagesFetched += 1
+
+        for (const c of data.results) {
+          // Capture a sample of raw candidates so you can inspect what FEC sent back
+          if (diagnostics.sampleRawCandidates.length < 5) {
+            diagnostics.sampleRawCandidates.push({
+              name: c.name,
+              office: c.office,
+              state: c.state,
+              party: c.party,
+              candidate_status: c.candidate_status,
+              first_file_date: c.first_file_date ?? null,
+              load_date: c.load_date ?? null,
+              election_years: c.election_years,
+            })
+          }
+
+          if (!SUPPORTED_OFFICES.has(c.office)) {
+            diagnostics.droppedReasons.unsupported_office += 1
+            continue
+          }
+          if (!c.first_file_date) {
+            diagnostics.droppedReasons.missing_first_file_date += 1
+            continue
+          }
+          // FEC's first_file_date_min filter is date-precise (not timestamp), so we
+          // re-check here to enforce a strict rolling window.
+          const filedAt = new Date(c.first_file_date)
+          if (filedAt < since) {
+            diagnostics.droppedReasons.first_file_date_too_old += 1
+            continue
+          }
+          newLaunches.push({
+            fecId: c.candidate_id,
+            name: c.name,
+            party: normalizeFecParty(c.party),
+            state: normalizeState(c.state),
+            office: fecOfficeLabel(c.office, normalizeState(c.state), c.district),
+            district: c.district || null,
+            launchDate: c.first_file_date,
+          })
+        }
+
+        page++
+      }
     }
 
-    console.log(`[fec-scraper] Found ${newLaunches.length} candidates from FEC`)
+    console.log(`[fec-scraper] Found ${newLaunches.length} candidates from FEC after filtering`)
 
     if (newLaunches.length === 0) {
-      return NextResponse.json({ success: true, message: "No new candidates found", created: 0 })
+      return NextResponse.json({
+        success: true,
+        message: "No new candidates found",
+        created: 0,
+        diagnostics,
+      })
     }
+
+    // Deduplicate within this run by FEC ID (a candidate may appear in both cycles)
+    const seenFecIds = new Set<string>()
+    const dedupedLaunches = newLaunches.filter((c) => {
+      if (seenFecIds.has(c.fecId)) return false
+      seenFecIds.add(c.fecId)
+      return true
+    })
 
     // Check which FEC IDs are already in our database to avoid duplicates
     const existingLaunches = await prisma.campaignLaunch.findMany({
       where: {
         source: "fec",
-        sourceExternalId: { in: newLaunches.map((c) => c.fecId) },
+        sourceExternalId: { in: dedupedLaunches.map((c) => c.fecId) },
       },
       select: { sourceExternalId: true },
     })
     const existingIds = new Set(existingLaunches.map((l) => l.sourceExternalId))
 
-    const brandNew = newLaunches.filter((c) => !existingIds.has(c.fecId))
+    const brandNew = dedupedLaunches.filter((c) => !existingIds.has(c.fecId))
     console.log(`[fec-scraper] ${brandNew.length} genuinely new candidates to create`)
 
     let created = 0
     let skipped = 0
+    const createdNames: string[] = []
 
     for (const candidate of brandNew) {
       try {
@@ -215,6 +307,7 @@ export async function GET(request: Request) {
           },
         })
 
+        createdNames.push(formattedName)
         created++
       } catch (err) {
         console.error(`[fec-scraper] Failed to create launch for ${candidate.name}:`, err)
@@ -226,14 +319,20 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      totalFromFec: newLaunches.length,
+      totalFromFecAfterFilter: newLaunches.length,
+      afterDedupInRun: dedupedLaunches.length,
       alreadyTracked: existingIds.size,
       created,
       skipped,
+      createdNames,
+      diagnostics,
     })
   } catch (error) {
     console.error("[fec-scraper] Unexpected error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Internal server error", message: error instanceof Error ? error.message : String(error) },
+      { status: 500 },
+    )
   }
 }
 

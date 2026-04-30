@@ -51,8 +51,9 @@ interface FecCandidate {
   state: string | null
   district: string | null
   office: string
-  load_date: string        // ISO date string of when FEC received the filing
-  candidate_status: string // "C" = candidate, "F" = future, "N" = not yet, "P" = primary, "W" = winner
+  load_date: string         // when FEC last touched the record (refile, address change, etc.)
+  first_file_date: string   // when the candidate FIRST filed for this cycle — what we want
+  candidate_status: string  // "C" = candidate, "F" = future, "N" = not yet, "P" = primary, "W" = winner
   election_years: number[]
   incumbent_challenge: string | null
 }
@@ -83,8 +84,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "FEC_API_KEY not configured" }, { status: 500 })
     }
 
-    // Pull candidates whose FEC load_date is within the last 24 hours.
-    // The cron runs daily, so this is a tight, non-overlapping window.
+    // Pull candidates whose FEC first_file_date is within the last 24 hours.
+    // first_file_date = when the candidate originally filed for this cycle, NOT when
+    // the record was last updated (which is what `load_date` tracks). Using first_file_date
+    // means we only catch genuinely new launches, not refiles/address changes.
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
     const sinceStr = since.toISOString().split("T")[0] // "YYYY-MM-DD"
 
@@ -104,7 +107,7 @@ export async function GET(request: Request) {
       state: string | null
       office: string
       district: string | null
-      loadDate: string
+      launchDate: string
     }> = []
 
     // Paginate through all results
@@ -112,11 +115,11 @@ export async function GET(request: Request) {
       const url = new URLSearchParams({
         api_key: apiKey,
         election_year: String(electionYear),
-        load_date_range_min: sinceStr,
+        first_file_date_min: sinceStr,
         candidate_status: "C",         // confirmed candidates only
         per_page: "100",
         page: String(page),
-        sort: "-load_date",
+        sort: "-first_file_date",
       })
 
       // Add each supported office as a separate param (FEC uses multi-value)
@@ -139,10 +142,12 @@ export async function GET(request: Request) {
 
       for (const c of data.results) {
         if (!SUPPORTED_OFFICES.has(c.office)) continue
-        // FEC load_date_range_min is date-precise, so we re-check timestamp
-        // here to enforce a strict 24-hour window.
-        const loadedAt = new Date(c.load_date)
-        if (loadedAt < since) continue
+        // FEC's first_file_date_min filter is date-precise (not timestamp), so we
+        // re-check here to enforce a strict 24-hour rolling window. Skip records
+        // missing first_file_date entirely (very rare but defensive).
+        if (!c.first_file_date) continue
+        const filedAt = new Date(c.first_file_date)
+        if (filedAt < since) continue
         newLaunches.push({
           fecId: c.candidate_id,
           name: c.name,
@@ -150,7 +155,7 @@ export async function GET(request: Request) {
           state: normalizeState(c.state),
           office: fecOfficeLabel(c.office, normalizeState(c.state), c.district),
           district: c.district || null,
-          loadDate: c.load_date,
+          launchDate: c.first_file_date,
         })
       }
 
@@ -200,7 +205,7 @@ export async function GET(request: Request) {
             state: candidate.state,
             office: candidate.office,
             district: candidate.district,
-            launchedAt: new Date(candidate.loadDate),
+            launchedAt: new Date(candidate.launchDate),
             source: "fec",
             sourceUrl: `https://www.fec.gov/data/candidate/${candidate.fecId}/`,
             sourceExternalId: candidate.fecId,

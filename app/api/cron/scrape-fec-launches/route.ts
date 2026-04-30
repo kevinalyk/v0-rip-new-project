@@ -149,12 +149,17 @@ export async function GET(request: Request) {
       launchDate: string
     }> = []
 
+    // Hard cap: never fetch more than 10 pages per cycle (1000 candidates).
+    // If FEC ever returns more than that in a 7-day window we have bigger
+    // problems and the cron should bail rather than time out.
+    const MAX_PAGES_PER_CYCLE = 10
+
     // Iterate each election cycle and paginate through all results
     for (const electionYear of cycleYears) {
       let page = 1
       let totalPages = 1
 
-      while (page <= totalPages) {
+      while (page <= totalPages && page <= MAX_PAGES_PER_CYCLE) {
         const url = new URLSearchParams({
           api_key: apiKey,
           election_year: String(electionYear),
@@ -274,27 +279,33 @@ export async function GET(request: Request) {
     const brandNew = dedupedLaunches.filter((c) => !existingIds.has(c.fecId))
     console.log(`[fec-scraper] ${brandNew.length} genuinely new candidates to create`)
 
+    // Pre-format names and batch-fetch any matching CiEntities in ONE query
+    // (avoids N sequential findUnique roundtrips that cause timeouts).
+    const formattedCandidates = brandNew.map((c) => ({
+      ...c,
+      formattedName: formatFecName(c.name),
+    }))
+    const formattedNames = formattedCandidates.map((c) => c.formattedName)
+
+    const matchingEntities = formattedNames.length
+      ? await prisma.ciEntity.findMany({
+          where: { name: { in: formattedNames } },
+          select: { id: true, name: true },
+        })
+      : []
+    const entityIdByName = new Map(matchingEntities.map((e) => [e.name, e.id]))
+
+    // Bulk insert all launches in one createMany call. Skip-on-conflict via
+    // skipDuplicates handles any race where a record was inserted in parallel.
     let created = 0
     let skipped = 0
     const createdNames: string[] = []
 
-    for (const candidate of brandNew) {
+    if (formattedCandidates.length > 0) {
       try {
-        // FEC names are ALL CAPS (e.g. "SMITH, JOHN") — convert to Title Case
-        const formattedName = formatFecName(candidate.name)
-
-        // Try to link to an existing CiEntity by exact name match.
-        // We do NOT auto-create entities here — that produced too many
-        // duplicates from name spelling/format variations. Entities can
-        // be created and linked manually in the admin UI later.
-        const existingEntity = await prisma.ciEntity.findUnique({
-          where: { name: formattedName },
-          select: { id: true },
-        })
-
-        await prisma.campaignLaunch.create({
-          data: {
-            name: formattedName,
+        const result = await prisma.campaignLaunch.createMany({
+          data: formattedCandidates.map((candidate) => ({
+            name: candidate.formattedName,
             party: candidate.party,
             state: candidate.state,
             office: candidate.office,
@@ -303,15 +314,16 @@ export async function GET(request: Request) {
             source: "fec",
             sourceUrl: `https://www.fec.gov/data/candidate/${candidate.fecId}/`,
             sourceExternalId: candidate.fecId,
-            linkedEntityId: existingEntity?.id ?? null,
-          },
+            linkedEntityId: entityIdByName.get(candidate.formattedName) ?? null,
+          })),
+          skipDuplicates: true,
         })
-
-        createdNames.push(formattedName)
-        created++
+        created = result.count
+        skipped = formattedCandidates.length - result.count
+        createdNames.push(...formattedCandidates.map((c) => c.formattedName))
       } catch (err) {
-        console.error(`[fec-scraper] Failed to create launch for ${candidate.name}:`, err)
-        skipped++
+        console.error(`[fec-scraper] Bulk insert failed:`, err)
+        skipped = formattedCandidates.length
       }
     }
 

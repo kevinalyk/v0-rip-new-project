@@ -165,7 +165,10 @@ export default async function NewCampaignsPage() {
                 const bio = entity?.bio || null
                 const office = launch.office || entity?.office || null
                 const party = launch.party || entity?.party || null
-                const state = launch.state || entity?.state || null
+                // FEC sets state="US" for presidential candidates — hide the badge in that case
+                // since "US" isn't meaningful as a state for display.
+                const rawState = launch.state || entity?.state || null
+                const state = rawState && rawState !== "US" ? rawState : null
                 const name = launch.name
 
                 const cardContent = (

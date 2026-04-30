@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { put } from "@vercel/blob"
 import { verifyAuth } from "@/lib/auth"
+import prisma from "@/lib/prisma"
 import {
   getAllEntitiesWithCounts,
   getUnassignedCampaigns,
@@ -110,7 +112,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { id, name, type, description, party, state, donationIdentifiers, ballotpediaUrl } = body
+    const { id, name, type, description, party, state, donationIdentifiers, ballotpediaUrl, imageUrlOverride } = body
 
     if (!id || !name || !type) {
       return NextResponse.json({ error: "ID, name and type are required" }, { status: 400 })
@@ -122,8 +124,43 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: result.error }, { status: 400 })
     }
 
-    // Auto-trigger Ballotpedia scraper for any entity type (extractors handle missing data gracefully)
-    if (ballotpediaUrl && result.entity) {
+    // Image URL override — admin manually specifies the correct image. We download
+    // it and re-upload to our Blob storage (so we control hosting + CORS), then
+    // overwrite the entity's imageUrl. Done synchronously so it wins any race
+    // with the auto-scraper that may also try to set imageUrl.
+    if (imageUrlOverride && result.entity) {
+      try {
+        const imgRes = await fetch(imageUrlOverride, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (compatible; RIPTool/1.0; +https://app.rip-tool.com)",
+          },
+        })
+        if (imgRes.ok) {
+          const imgBuffer = await imgRes.arrayBuffer()
+          const contentType = imgRes.headers.get("content-type") || "image/jpeg"
+          const ext = contentType.includes("png") ? "png" : contentType.includes("gif") ? "gif" : "jpg"
+          const filename = `entity-photos/${id}-${Date.now()}.${ext}`
+          const blob = await put(filename, imgBuffer, {
+            access: "public",
+            contentType,
+          })
+          await prisma.ciEntity.update({
+            where: { id },
+            data: { imageUrl: blob.url },
+          })
+        } else {
+          console.error(`[ci-entities] Image override fetch failed: ${imgRes.status}`)
+        }
+      } catch (imgErr) {
+        console.error("[ci-entities] Image override upload failed:", imgErr)
+        // Don't fail the whole request — entity update already succeeded.
+      }
+    }
+
+    // Auto-trigger Ballotpedia scraper for any entity type (extractors handle missing data gracefully).
+    // Skip when admin provided an image override — they're explicitly choosing a different image
+    // than whatever the scraper would pick, and we don't want a race where the scraper overwrites it.
+    if (ballotpediaUrl && result.entity && !imageUrlOverride) {
       const baseUrl = request.nextUrl.origin
       fetch(`${baseUrl}/api/admin/scrape-ballotpedia`, {
         method: "POST",

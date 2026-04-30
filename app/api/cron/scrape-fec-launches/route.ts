@@ -64,11 +64,18 @@ interface FecApiResponse {
 
 export async function GET(request: Request) {
   try {
-    // Verify cron secret to prevent unauthorized triggers
-    const { searchParams } = new URL(request.url)
-    const cronSecret = searchParams.get("secret")
-    if (process.env.CRON_SECRET && cronSecret !== process.env.CRON_SECRET) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Allow this route in two ways:
+    // 1. Vercel Cron — identified by the `vercel-cron/1.0` user agent (set automatically)
+    // 2. Manual trigger — pass `?secret=<CRON_SECRET>` (only if CRON_SECRET is set)
+    const userAgent = request.headers.get("user-agent") || ""
+    const isVercelCron = userAgent.includes("vercel-cron")
+
+    if (!isVercelCron) {
+      const { searchParams } = new URL(request.url)
+      const cronSecret = searchParams.get("secret")
+      if (process.env.CRON_SECRET && cronSecret !== process.env.CRON_SECRET) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      }
     }
 
     const apiKey = process.env.FEC_API_KEY

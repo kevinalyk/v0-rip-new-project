@@ -283,24 +283,48 @@ export async function GET(request: Request) {
     const brandNew = dedupedLaunches.filter((c) => !existingIds.has(c.fecId))
     console.log(`[fec-scraper] ${brandNew.length} genuinely new candidates to create`)
 
-    // Pre-format names and batch-fetch any matching CiEntities in ONE query
-    // (avoids N sequential findUnique roundtrips that cause timeouts).
+    // Pre-format names so we can match/create CiEntities by their final display name.
     const formattedCandidates = brandNew.map((c) => ({
       ...c,
       formattedName: formatFecName(c.name),
     }))
     const formattedNames = formattedCandidates.map((c) => c.formattedName)
 
-    const matchingEntities = formattedNames.length
+    // Auto-create stub CiEntities for every new launch. `name` is unique on
+    // CiEntity, so skipDuplicates lets us insert without trampling pre-existing
+    // entities — they'll just be left alone and matched in the next step.
+    // Presidential candidates have FEC state="US" which isn't a real state, so
+    // we drop it on entity creation but keep it on the CampaignLaunch row for
+    // audit fidelity.
+    let entitiesCreated = 0
+    if (formattedCandidates.length > 0) {
+      const entityResult = await prisma.ciEntity.createMany({
+        data: formattedCandidates.map((c) => ({
+          name: c.formattedName,
+          type: "candidate",
+          party: c.party,
+          state: c.state === "US" ? null : c.state,
+        })),
+        skipDuplicates: true,
+      })
+      entitiesCreated = entityResult.count
+      console.log(`[fec-scraper] Created ${entitiesCreated} new stub entities`)
+    }
+
+    // Now look up every entity by name (existing + just-created) so we can
+    // populate linkedEntityId on each launch row. One query, regardless of
+    // batch size — avoids per-candidate roundtrips that caused the earlier
+    // function timeouts.
+    const allEntities = formattedNames.length
       ? await prisma.ciEntity.findMany({
           where: { name: { in: formattedNames } },
           select: { id: true, name: true },
         })
       : []
-    const entityIdByName = new Map(matchingEntities.map((e) => [e.name, e.id]))
+    const entityIdByName = new Map(allEntities.map((e) => [e.name, e.id]))
 
-    // Bulk insert all launches in one createMany call. Skip-on-conflict via
-    // skipDuplicates handles any race where a record was inserted in parallel.
+    // Bulk insert all launches in one createMany call. skipDuplicates handles
+    // any race where a record was inserted in parallel.
     let created = 0
     let skipped = 0
     const createdNames: string[] = []
@@ -331,7 +355,7 @@ export async function GET(request: Request) {
       }
     }
 
-    console.log(`[fec-scraper] Done — created: ${created}, skipped: ${skipped}`)
+    console.log(`[fec-scraper] Done — launches created: ${created}, entities created: ${entitiesCreated}`)
 
     return NextResponse.json({
       success: true,
@@ -339,6 +363,7 @@ export async function GET(request: Request) {
       afterDedupInRun: dedupedLaunches.length,
       alreadyTracked: existingIds.size,
       created,
+      entitiesCreated,
       skipped,
       createdNames,
       diagnostics,
@@ -356,6 +381,9 @@ export async function GET(request: Request) {
 // Strip them so display names read cleanly.
 const HONORIFICS = new Set(["MR", "MR.", "MRS", "MRS.", "MS", "MS.", "DR", "DR."])
 
+// Generational suffixes that should be PRESERVED (they're part of the legal name).
+const NAME_SUFFIXES = new Set(["JR", "JR.", "SR", "SR.", "II", "III", "IV", "V", "VI", "VII"])
+
 function stripHonorifics(name: string): string {
   return name
     .split(/\s+/)
@@ -364,18 +392,29 @@ function stripHonorifics(name: string): string {
     .trim()
 }
 
-// FEC returns names as "LAST, FIRST MIDDLE" in ALL CAPS.
-// Convert to "First Last" for display.
+// FEC stores names as "[LAST NAME], [FIRST] [MIDDLE...] [SUFFIX]" in ALL CAPS.
+// We convert to "First Last [Suffix]" — preserving multi-word last names
+// (e.g. "Axtell Schultz", "Van Buren") but DROPPING middle names and
+// initials so cards read cleanly.
 function formatFecName(fecName: string): string {
-  // Handle "LAST, FIRST" format
   if (fecName.includes(",")) {
     const [last, ...firstParts] = fecName.split(",")
-    const first = stripHonorifics(firstParts.join(" "))
+    const firstSection = stripHonorifics(firstParts.join(" "))
     const lastClean = stripHonorifics(last)
-    const formatted = `${titleCase(first)} ${titleCase(lastClean)}`.trim()
-    return formatted
+
+    const tokens = firstSection.split(/\s+/).filter(Boolean)
+    if (tokens.length === 0) {
+      return titleCase(lastClean)
+    }
+    // First token = the actual first name. Anything between that and a
+    // recognized suffix is treated as a middle name/initial and dropped.
+    const firstName = tokens[0]
+    const suffixes = tokens.slice(1).filter((t) => NAME_SUFFIXES.has(t.toUpperCase()))
+
+    const parts = [titleCase(firstName), titleCase(lastClean), ...suffixes.map((s) => titleCase(s))]
+    return parts.filter(Boolean).join(" ").trim()
   }
-  // Fallback: just title-case whatever we got
+  // Fallback: no comma — just title-case whatever we got
   return titleCase(stripHonorifics(fecName))
 }
 

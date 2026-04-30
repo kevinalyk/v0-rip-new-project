@@ -83,9 +83,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "FEC_API_KEY not configured" }, { status: 500 })
     }
 
-    // Pull candidates filed in the last 2 days (1 day buffer for timezone/lag)
-    const since = new Date()
-    since.setDate(since.getDate() - 2)
+    // Pull candidates whose FEC load_date is within the last 24 hours.
+    // The cron runs daily, so this is a tight, non-overlapping window.
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
     const sinceStr = since.toISOString().split("T")[0] // "YYYY-MM-DD"
 
     // Current election year — FEC data is scoped per election cycle
@@ -139,6 +139,10 @@ export async function GET(request: Request) {
 
       for (const c of data.results) {
         if (!SUPPORTED_OFFICES.has(c.office)) continue
+        // FEC load_date_range_min is date-precise, so we re-check timestamp
+        // here to enforce a strict 24-hour window.
+        const loadedAt = new Date(c.load_date)
+        if (loadedAt < since) continue
         newLaunches.push({
           fecId: c.candidate_id,
           name: c.name,
@@ -180,25 +184,15 @@ export async function GET(request: Request) {
         // FEC names are ALL CAPS (e.g. "SMITH, JOHN") — convert to Title Case
         const formattedName = formatFecName(candidate.name)
 
-        // Auto-create a stub CiEntity (name + state + party only, no client assigned)
-        // If the name already exists as an entity, skip entity creation but still
-        // record the launch so the page can reference it.
-        let entity = await prisma.ciEntity.findUnique({ where: { name: formattedName } })
+        // Try to link to an existing CiEntity by exact name match.
+        // We do NOT auto-create entities here — that produced too many
+        // duplicates from name spelling/format variations. Entities can
+        // be created and linked manually in the admin UI later.
+        const existingEntity = await prisma.ciEntity.findUnique({
+          where: { name: formattedName },
+          select: { id: true },
+        })
 
-        if (!entity) {
-          entity = await prisma.ciEntity.create({
-            data: {
-              name: formattedName,
-              type: "candidate",
-              party: candidate.party,
-              state: candidate.state,
-              // No client, no bio, no image — stub only
-            },
-          })
-          console.log(`[fec-scraper] Created stub entity: ${formattedName} (${entity.id})`)
-        }
-
-        // Insert the launch record
         await prisma.campaignLaunch.create({
           data: {
             name: formattedName,
@@ -210,7 +204,7 @@ export async function GET(request: Request) {
             source: "fec",
             sourceUrl: `https://www.fec.gov/data/candidate/${candidate.fecId}/`,
             sourceExternalId: candidate.fecId,
-            linkedEntityId: entity.id,
+            linkedEntityId: existingEntity?.id ?? null,
           },
         })
 

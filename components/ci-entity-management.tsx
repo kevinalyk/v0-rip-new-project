@@ -153,6 +153,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
   const [newEntityNationwide, setNewEntityNationwide] = useState(false)
   const [newEntityDonationIdentifiers, setNewEntityDonationIdentifiers] = useState<DonationIdentifiers>({})
   const [newEntityBallotpediaUrl, setNewEntityBallotpediaUrl] = useState("")
+  const [newEntityImageUrlOverride, setNewEntityImageUrlOverride] = useState("")
 
   const [donationIdentifierInputs, setDonationIdentifierInputs] = useState<{
     winred: string
@@ -487,6 +488,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
             tag: newEntityTag || undefined,
             donationIdentifiers: finalDonationIdentifiers,
             ballotpediaUrl: newEntityBallotpediaUrl.trim() || undefined,
+            imageUrlOverride: newEntityImageUrlOverride.trim() || undefined,
           }),
         })
 
@@ -502,6 +504,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
           setNewEntityNationwide(false)
           setNewEntityDonationIdentifiers({})
           setNewEntityBallotpediaUrl("")
+          setNewEntityImageUrlOverride("")
           setDonationIdentifierInputs({ winred: "", anedot: "", actblue: "", psqimpact: "", revv: "", engage: "", substack: "" }) // Reset raw inputs too
     fetchData()
     toast.success("Entity updated successfully!")
@@ -700,6 +703,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
     setNewEntityState(isNationwide ? "" : entity.state || "")
     setNewEntityDonationIdentifiers(entity.donationIdentifiers || {}) // Set donation identifiers
     setNewEntityBallotpediaUrl(entity.ballotpediaUrl || "")
+    setNewEntityImageUrlOverride("") // Override is single-use; never pre-populated
 
   // Initialize raw input state based on existing donation identifiers
   setDonationIdentifierInputs({
@@ -1873,6 +1877,21 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                   Set this manually for politicians with common names to avoid disambiguation pages.
                 </p>
               </div>
+              {editingEntityId && (
+                <div>
+                  <Label htmlFor="entity-image-override">Image URL Override (Optional)</Label>
+                  <Input
+                    id="entity-image-override"
+                    placeholder="e.g., https://ballotpedia.s3.amazonaws.com/.../logo.jpg"
+                    value={newEntityImageUrlOverride}
+                    onChange={(e) => setNewEntityImageUrlOverride(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Use this to manually replace the entity photo when the scraper picks the wrong image.
+                    Paste the direct image URL — it will be re-uploaded to our storage.
+                  </p>
+                </div>
+              )}
               {/* Added Tag input */}
               <div>
                 <Label htmlFor="entity-tag">Tag (Optional)</Label>

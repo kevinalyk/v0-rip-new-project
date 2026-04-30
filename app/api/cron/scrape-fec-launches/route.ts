@@ -17,6 +17,10 @@ function normalizeFecParty(fecParty: string | null): string | null {
   if (p === "REP" || p === "R") return "republican"
   if (p === "DEM" || p === "D") return "democrat"
   if (p === "IND" || p === "I") return "independent"
+  // NPA = "No Party Affiliation" — display as independent
+  if (p === "NPA") return "independent"
+  // W = "Write-in" — no party affiliation, leave null
+  if (p === "W") return null
   if (p === "LIB" || p === "L") return "libertarian"
   if (p === "GRE" || p === "G") return "green"
   return p.toLowerCase()
@@ -348,18 +352,31 @@ export async function GET(request: Request) {
   }
 }
 
+// FEC sometimes embeds honorifics inline with the name ("AXTELL SCHULTZ, DEBRA LEANNE MS").
+// Strip them so display names read cleanly.
+const HONORIFICS = new Set(["MR", "MR.", "MRS", "MRS.", "MS", "MS.", "DR", "DR."])
+
+function stripHonorifics(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter((token) => !HONORIFICS.has(token.toUpperCase()))
+    .join(" ")
+    .trim()
+}
+
 // FEC returns names as "LAST, FIRST MIDDLE" in ALL CAPS.
 // Convert to "First Last" for display.
 function formatFecName(fecName: string): string {
   // Handle "LAST, FIRST" format
   if (fecName.includes(",")) {
     const [last, ...firstParts] = fecName.split(",")
-    const first = firstParts.join(" ").trim()
-    const formatted = `${titleCase(first)} ${titleCase(last)}`.trim()
+    const first = stripHonorifics(firstParts.join(" "))
+    const lastClean = stripHonorifics(last)
+    const formatted = `${titleCase(first)} ${titleCase(lastClean)}`.trim()
     return formatted
   }
   // Fallback: just title-case whatever we got
-  return titleCase(fecName)
+  return titleCase(stripHonorifics(fecName))
 }
 
 function titleCase(str: string): string {

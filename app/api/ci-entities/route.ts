@@ -81,8 +81,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: result.error }, { status: 400 })
     }
 
-    // Auto-trigger Ballotpedia scraper if a URL was provided and type is supported
-    if (ballotpediaUrl && result.entity && ["candidate", "politician", "person"].includes(type)) {
+    // Auto-trigger Ballotpedia scraper for any entity type (extractors handle missing data gracefully)
+    if (ballotpediaUrl && result.entity) {
       const baseUrl = request.nextUrl.origin
       fetch(`${baseUrl}/api/admin/scrape-ballotpedia`, {
         method: "POST",
@@ -122,8 +122,8 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: result.error }, { status: 400 })
     }
 
-    // Auto-trigger Ballotpedia scraper if a URL was provided and type is supported
-    if (ballotpediaUrl && result.entity && ["candidate", "politician", "person"].includes(type)) {
+    // Auto-trigger Ballotpedia scraper for any entity type (extractors handle missing data gracefully)
+    if (ballotpediaUrl && result.entity) {
       const baseUrl = request.nextUrl.origin
       fetch(`${baseUrl}/api/admin/scrape-ballotpedia`, {
         method: "POST",

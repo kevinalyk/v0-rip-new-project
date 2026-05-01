@@ -318,6 +318,7 @@ export async function getAllEntitiesWithCounts(options?: {
   type?: string
   search?: string
   ballotpedia?: string
+  sortBy?: "name" | "newest" | "oldest"
 }) {
   try {
     const page = options?.page || 1
@@ -371,6 +372,14 @@ export async function getAllEntitiesWithCounts(options?: {
     // Get total count for pagination
     const totalCount = await prisma.ciEntity.count({ where })
 
+    const sortBy = options?.sortBy || "name"
+    const orderBy =
+      sortBy === "newest"
+        ? { createdAt: "desc" as const }
+        : sortBy === "oldest"
+          ? { createdAt: "asc" as const }
+          : { name: "asc" as const }
+
     const entities = await prisma.ciEntity.findMany({
       where,
       include: {
@@ -382,7 +391,7 @@ export async function getAllEntitiesWithCounts(options?: {
           },
         },
       },
-      orderBy: { name: "asc" },
+      orderBy,
       skip,
       take: pageSize,
     })

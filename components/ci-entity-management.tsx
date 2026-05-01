@@ -270,6 +270,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
   const [filterState, setFilterState] = useState<string>("all")
   const [filterType, setFilterType] = useState<string>("all")
   const [filterBallotpedia, setFilterBallotpedia] = useState<string>("all")
+  const [sortBy, setSortBy] = useState<"name" | "newest" | "oldest">("name")
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
 
@@ -397,6 +398,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
       if (filterType !== "all") params.append("type", filterType)
       if (filterBallotpedia !== "all") params.append("ballotpedia", filterBallotpedia)
       if (debouncedSearch) params.append("search", debouncedSearch)
+      if (sortBy !== "name") params.append("sort", sortBy)
 
       const [entitiesRes, unassignedRes] = await Promise.all([
         fetch(`/api/ci-entities?${params.toString()}`),
@@ -436,7 +438,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
 
   useEffect(() => {
     fetchData()
-  }, [pagination.page, filterParty, filterState, filterType, filterBallotpedia, debouncedSearch]) // Added filterBallotpedia
+  }, [pagination.page, filterParty, filterState, filterType, filterBallotpedia, debouncedSearch, sortBy])
 
   const handleFilterChange = (type: "party" | "state" | "type" | "ballotpedia", value: string) => {
     setPagination((prev) => ({ ...prev, page: 1 }))
@@ -1440,7 +1442,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                 </div>
 
                 {/* Filter Controls */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                   <div>
                     <Label htmlFor="filter-party">Filter by Party</Label>
                     <Select value={filterParty} onValueChange={(val) => handleFilterChange("party", val)}>
@@ -1505,9 +1507,28 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div>
+                    <Label htmlFor="sort-by">Sort by</Label>
+                    <Select
+                      value={sortBy}
+                      onValueChange={(val) => {
+                        setSortBy(val as "name" | "newest" | "oldest")
+                        setPagination((prev) => ({ ...prev, page: 1 }))
+                      }}
+                    >
+                      <SelectTrigger id="sort-by">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="name">Name (A–Z)</SelectItem>
+                        <SelectItem value="newest">Recently Created</SelectItem>
+                        <SelectItem value="oldest">Oldest First</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
-                {(filterParty !== "all" || filterState !== "all" || filterType !== "all" || filterBallotpedia !== "all" || searchQuery) && (
+                {(filterParty !== "all" || filterState !== "all" || filterType !== "all" || filterBallotpedia !== "all" || sortBy !== "name" || searchQuery) && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -1516,6 +1537,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                       setFilterState("all")
                       setFilterType("all")
                       setFilterBallotpedia("all")
+                      setSortBy("name")
                       setSearchQuery("")
                       setDebouncedSearch("") // Clear debounced search as well
                       setPagination((prev) => ({ ...prev, page: 1 }))

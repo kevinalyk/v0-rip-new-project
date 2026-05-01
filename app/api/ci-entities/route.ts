@@ -41,6 +41,9 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get("type") || undefined
     const search = searchParams.get("search") || undefined
     const ballotpedia = searchParams.get("ballotpedia") || undefined
+    const sortParam = searchParams.get("sort")
+    const sortBy =
+      sortParam === "newest" || sortParam === "oldest" || sortParam === "name" ? sortParam : undefined
 
     const result = await getAllEntitiesWithCounts({
       page,
@@ -50,6 +53,7 @@ export async function GET(request: NextRequest) {
       type,
       search,
       ballotpedia,
+      sortBy,
     })
 
     return NextResponse.json(result)

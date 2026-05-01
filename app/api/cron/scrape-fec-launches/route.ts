@@ -462,16 +462,28 @@ function nameToBallotpediaSlug(name: string): string {
 }
 
 // Validate that a Ballotpedia page is the RIGHT candidate by checking:
-//   1. Not a disambiguation page (multiple matches)
-//   2. State context appears (full state name)
-//   3. Office context appears (House/Senate/President)
+//   1. The page has an actual candidate infobox (strongest positive signal —
+//      disambiguation pages and stub pages don't have one)
+//   2. Not a disambiguation page (multiple matches)
+//   3. State context appears (full state name)
+//   4. Office context appears (House/Senate/President)
 // Returns false if any check fails — we'd rather skip than save a wrong URL.
 function isCleanBallotpediaPage(html: string, state: string | null, office: string): boolean {
-  // Disambiguation detection. Ballotpedia uses two patterns:
-  //   "<name> may refer to:" header followed by a bulleted list
-  //   "This disambiguation page lists articles with similar titles"
-  if (/may refer to:/i.test(html.slice(0, 8000))) return false
-  if (/disambiguation page lists/i.test(html)) return false
+  // Strip HTML tags before phrase checks. Ballotpedia wraps "disambiguation"
+  // in an <a> tag, which broke our literal "disambiguation page lists" regex
+  // when matched against raw HTML. Strip tags first to normalize the text.
+  const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")
+
+  // Disambiguation detection — fail closed on any of these markers
+  if (/may refer to:/i.test(text.slice(0, 4000))) return false
+  if (/disambiguation page lists/i.test(text)) return false
+  if (/this\s+disambiguation\s+page/i.test(text)) return false
+
+  // POSITIVE check: real Ballotpedia candidate pages always have a person
+  // infobox div. Disambiguation pages, redirect stubs, and "page not found"
+  // pages don't have one. This single check catches the majority of bad
+  // matches — a candidate page MUST have it to count as a clean match.
+  if (!/<div[^>]*class="[^"]*infobox[^"]*"/i.test(html)) return false
 
   // State match — only check if we know the state
   if (state) {
@@ -479,17 +491,17 @@ function isCleanBallotpediaPage(html: string, state: string | null, office: stri
     if (fullName) {
       // Word-boundary check so "New Mexico" doesn't accidentally match "Mexico"
       const stateRegex = new RegExp(`\\b${fullName.replace(/\s+/g, "\\s+")}\\b`, "i")
-      if (!stateRegex.test(html)) return false
+      if (!stateRegex.test(text)) return false
     }
   }
 
   // Office match — keyword check based on which office we're looking for
   if (/U\.S\.\s*House/i.test(office)) {
-    if (!/U\.?S\.?\s*House|House of Representatives/i.test(html)) return false
+    if (!/U\.?S\.?\s*House|House of Representatives/i.test(text)) return false
   } else if (/U\.S\.\s*Senate/i.test(office)) {
-    if (!/U\.?S\.?\s*Senate|United States Senate/i.test(html)) return false
+    if (!/U\.?S\.?\s*Senate|United States Senate/i.test(text)) return false
   } else if (/President/i.test(office)) {
-    if (!/President of the United States|U\.?S\.?\s*President/i.test(html)) return false
+    if (!/President of the United States|U\.?S\.?\s*President/i.test(text)) return false
   }
 
   return true

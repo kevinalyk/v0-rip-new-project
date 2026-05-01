@@ -318,10 +318,51 @@ export async function GET(request: Request) {
     const allEntities = formattedNames.length
       ? await prisma.ciEntity.findMany({
           where: { name: { in: formattedNames } },
-          select: { id: true, name: true },
+          select: { id: true, name: true, ballotpediaUrl: true },
         })
       : []
     const entityIdByName = new Map(allEntities.map((e) => [e.name, e.id]))
+
+    // For each entity that doesn't already have a Ballotpedia URL, try to
+    // discover one. We process in concurrency-limited batches (5 at a time)
+    // to be polite to ballotpedia.org and avoid hitting their rate limits.
+    // Failures (404, disambiguation, wrong person) are silently ignored —
+    // the URL stays null and an admin can fill it in manually later.
+    const candidatesToResolve = formattedCandidates.filter((c) => {
+      const entity = allEntities.find((e) => e.name === c.formattedName)
+      return entity && !entity.ballotpediaUrl
+    })
+
+    let ballotpediaUrlsFound = 0
+    const BATCH_SIZE = 5
+    for (let i = 0; i < candidatesToResolve.length; i += BATCH_SIZE) {
+      const batch = candidatesToResolve.slice(i, i + BATCH_SIZE)
+      const results = await Promise.all(
+        batch.map(async (c) => {
+          const url = await attemptFindBallotpediaUrl(c.formattedName, c.state, c.office)
+          return { name: c.formattedName, url }
+        }),
+      )
+
+      // Update any entities where we found a clean match
+      const updates = results.filter((r) => r.url !== null)
+      for (const { name, url } of updates) {
+        const id = entityIdByName.get(name)
+        if (!id) continue
+        try {
+          await prisma.ciEntity.update({
+            where: { id },
+            data: { ballotpediaUrl: url },
+          })
+          ballotpediaUrlsFound++
+          console.log(`[fec-scraper] Found Ballotpedia URL for ${name}: ${url}`)
+        } catch (err) {
+          console.error(`[fec-scraper] Failed to save Ballotpedia URL for ${name}:`, err)
+        }
+      }
+    }
+
+    console.log(`[fec-scraper] Resolved ${ballotpediaUrlsFound} Ballotpedia URLs out of ${candidatesToResolve.length} attempts`)
 
     // Bulk insert all launches in one createMany call. skipDuplicates handles
     // any race where a record was inserted in parallel.
@@ -364,6 +405,8 @@ export async function GET(request: Request) {
       alreadyTracked: existingIds.size,
       created,
       entitiesCreated,
+      ballotpediaUrlsFound,
+      ballotpediaUrlsAttempted: candidatesToResolve.length,
       skipped,
       createdNames,
       diagnostics,
@@ -374,6 +417,98 @@ export async function GET(request: Request) {
       { error: "Internal server error", message: error instanceof Error ? error.message : String(error) },
       { status: 500 },
     )
+  }
+}
+
+// State abbreviation → full name. Used to validate that a Ballotpedia page
+// resolved by name actually belongs to the right candidate (vs another person
+// with the same name in a different state).
+const STATE_FULL_NAMES: Record<string, string> = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri",
+  MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
+  NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio",
+  OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont",
+  VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
+  DC: "District of Columbia",
+}
+
+// Convert a candidate's display name into a Ballotpedia URL slug.
+// "Larry Marker" -> "Larry_Marker", "John Smith Jr" -> "John_Smith_Jr"
+function nameToBallotpediaSlug(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join("_")
+}
+
+// Validate that a Ballotpedia page is the RIGHT candidate by checking:
+//   1. Not a disambiguation page (multiple matches)
+//   2. State context appears (full state name)
+//   3. Office context appears (House/Senate/President)
+// Returns false if any check fails — we'd rather skip than save a wrong URL.
+function isCleanBallotpediaPage(html: string, state: string | null, office: string): boolean {
+  // Disambiguation detection. Ballotpedia uses two patterns:
+  //   "<name> may refer to:" header followed by a bulleted list
+  //   "This disambiguation page lists articles with similar titles"
+  if (/may refer to:/i.test(html.slice(0, 8000))) return false
+  if (/disambiguation page lists/i.test(html)) return false
+
+  // State match — only check if we know the state
+  if (state) {
+    const fullName = STATE_FULL_NAMES[state]
+    if (fullName) {
+      // Word-boundary check so "New Mexico" doesn't accidentally match "Mexico"
+      const stateRegex = new RegExp(`\\b${fullName.replace(/\s+/g, "\\s+")}\\b`, "i")
+      if (!stateRegex.test(html)) return false
+    }
+  }
+
+  // Office match — keyword check based on which office we're looking for
+  if (/U\.S\.\s*House/i.test(office)) {
+    if (!/U\.?S\.?\s*House|House of Representatives/i.test(html)) return false
+  } else if (/U\.S\.\s*Senate/i.test(office)) {
+    if (!/U\.?S\.?\s*Senate|United States Senate/i.test(html)) return false
+  } else if (/President/i.test(office)) {
+    if (!/President of the United States|U\.?S\.?\s*President/i.test(html)) return false
+  }
+
+  return true
+}
+
+// Try to discover a Ballotpedia URL for a candidate by:
+//   1. Constructing https://ballotpedia.org/<First_Last>
+//   2. Fetching it
+//   3. Validating it's the right person via state + office match
+// Returns the URL on a clean match, or null otherwise (404, disambiguation,
+// wrong state, network error). Failing closed is intentional — we'd rather
+// have a missing URL than a wrong one.
+async function attemptFindBallotpediaUrl(
+  name: string,
+  state: string | null,
+  office: string,
+): Promise<string | null> {
+  const slug = nameToBallotpediaSlug(name)
+  const url = `https://ballotpedia.org/${slug}`
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; RIPTool/1.0; +https://app.rip-tool.com)",
+        Accept: "text/html",
+      },
+    })
+    if (!res.ok) return null
+    const html = await res.text()
+    if (!isCleanBallotpediaPage(html, state, office)) return null
+    return url
+  } catch {
+    return null
   }
 }
 

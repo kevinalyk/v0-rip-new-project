@@ -516,9 +516,6 @@ async function attemptFindBallotpediaUrl(
 // Strip them so display names read cleanly.
 const HONORIFICS = new Set(["MR", "MR.", "MRS", "MRS.", "MS", "MS.", "DR", "DR."])
 
-// Generational suffixes that should be PRESERVED (they're part of the legal name).
-const NAME_SUFFIXES = new Set(["JR", "JR.", "SR", "SR.", "II", "III", "IV", "V", "VI", "VII"])
-
 function stripHonorifics(name: string): string {
   return name
     .split(/\s+/)
@@ -541,13 +538,12 @@ function formatFecName(fecName: string): string {
     if (tokens.length === 0) {
       return titleCase(lastClean)
     }
-    // First token = the actual first name. Anything between that and a
-    // recognized suffix is treated as a middle name/initial and dropped.
+    // We only keep the first token as the first name. Everything else
+    // (middle names, initials, generational suffixes like "II"/"Jr") is
+    // dropped — we want a clean "First Last" display name.
     const firstName = tokens[0]
-    const suffixes = tokens.slice(1).filter((t) => NAME_SUFFIXES.has(t.toUpperCase()))
 
-    const parts = [titleCase(firstName), titleCase(lastClean), ...suffixes.map((s) => titleCase(s))]
-    return parts.filter(Boolean).join(" ").trim()
+    return `${titleCase(firstName)} ${titleCase(lastClean)}`.trim()
   }
   // Fallback: no comma — just title-case whatever we got
   return titleCase(stripHonorifics(fecName))

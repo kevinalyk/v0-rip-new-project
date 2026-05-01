@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { enrichEntityFromBallotpedia } from "@/lib/ballotpedia-enrich"
 
 export const runtime = "nodejs"
 // Allow up to 5 minutes — we may be fetching many candidates + creating entities
@@ -334,35 +335,47 @@ export async function GET(request: Request) {
     })
 
     let ballotpediaUrlsFound = 0
+    let ballotpediaEntitiesEnriched = 0
     const BATCH_SIZE = 5
     for (let i = 0; i < candidatesToResolve.length; i += BATCH_SIZE) {
       const batch = candidatesToResolve.slice(i, i + BATCH_SIZE)
       const results = await Promise.all(
         batch.map(async (c) => {
-          const url = await attemptFindBallotpediaUrl(c.formattedName, c.state, c.office)
-          return { name: c.formattedName, url }
+          const found = await attemptFindBallotpediaUrl(c.formattedName, c.state, c.office)
+          return { name: c.formattedName, found }
         }),
       )
 
-      // Update any entities where we found a clean match
-      const updates = results.filter((r) => r.url !== null)
-      for (const { name, url } of updates) {
+      // For each clean match, run full enrichment (bio, office, image upload).
+      // We pass the prefetched HTML so we don't re-hit ballotpedia.org. Any
+      // partial extraction is fine — fields not found just stay null on the
+      // entity and an admin can fill them in manually later.
+      for (const { name, found } of results) {
+        if (!found) continue
         const id = entityIdByName.get(name)
         if (!id) continue
+        ballotpediaUrlsFound++
         try {
-          await prisma.ciEntity.update({
-            where: { id },
-            data: { ballotpediaUrl: url },
+          const enriched = await enrichEntityFromBallotpedia(id, found.url, {
+            prefetchedHtml: found.html,
           })
-          ballotpediaUrlsFound++
-          console.log(`[fec-scraper] Found Ballotpedia URL for ${name}: ${url}`)
+          if (enriched.success && !enriched.warning) {
+            ballotpediaEntitiesEnriched++
+            console.log(
+              `[fec-scraper] Enriched ${name} from Ballotpedia (bio: ${!!enriched.bio}, office: ${!!enriched.office}, image: ${!!enriched.imageUrl})`,
+            )
+          } else {
+            console.log(`[fec-scraper] Saved Ballotpedia URL for ${name} but no enrichment data: ${enriched.warning ?? enriched.error}`)
+          }
         } catch (err) {
-          console.error(`[fec-scraper] Failed to save Ballotpedia URL for ${name}:`, err)
+          console.error(`[fec-scraper] Enrichment failed for ${name}:`, err)
         }
       }
     }
 
-    console.log(`[fec-scraper] Resolved ${ballotpediaUrlsFound} Ballotpedia URLs out of ${candidatesToResolve.length} attempts`)
+    console.log(
+      `[fec-scraper] Found ${ballotpediaUrlsFound} URLs, fully enriched ${ballotpediaEntitiesEnriched} entities (out of ${candidatesToResolve.length} attempts)`,
+    )
 
     // Bulk insert all launches in one createMany call. skipDuplicates handles
     // any race where a record was inserted in parallel.
@@ -406,6 +419,7 @@ export async function GET(request: Request) {
       created,
       entitiesCreated,
       ballotpediaUrlsFound,
+      ballotpediaEntitiesEnriched,
       ballotpediaUrlsAttempted: candidatesToResolve.length,
       skipped,
       createdNames,
@@ -492,7 +506,7 @@ async function attemptFindBallotpediaUrl(
   name: string,
   state: string | null,
   office: string,
-): Promise<string | null> {
+): Promise<{ url: string; html: string } | null> {
   const slug = nameToBallotpediaSlug(name)
   const url = `https://ballotpedia.org/${slug}`
 
@@ -506,7 +520,7 @@ async function attemptFindBallotpediaUrl(
     if (!res.ok) return null
     const html = await res.text()
     if (!isCleanBallotpediaPage(html, state, office)) return null
-    return url
+    return { url, html }
   } catch {
     return null
   }

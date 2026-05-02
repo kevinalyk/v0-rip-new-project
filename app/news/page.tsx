@@ -12,11 +12,11 @@ import { Megaphone } from "lucide-react"
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
 export const metadata: Metadata = {
-  title: "What's New — Inbox.GOP",
-  description: "Updates, improvements, and new features from the Inbox.GOP team.",
+  title: "What's New | RIP Tool",
+  description: "Updates, improvements, and new features from the RIP Tool team — built for the Republican Inboxing Protocol.",
   openGraph: {
-    title: "What's New — Inbox.GOP",
-    description: "Updates, improvements, and new features from the Inbox.GOP team.",
+    title: "What's New | RIP Tool",
+    description: "Updates, improvements, and new features from the RIP Tool team — built for the Republican Inboxing Protocol.",
     url: `${BASE_URL}/news`,
     siteName: "RIP Tool",
     type: "website",
@@ -85,7 +85,7 @@ export default async function NewsPage() {
               <h1 className="text-2xl font-bold tracking-tight">{"What's New"}</h1>
             </div>
             <p className="text-sm text-muted-foreground">
-              Updates, improvements, and new features from the Inbox.GOP team
+              Updates, improvements, and new features from the RIP Tool team
             </p>
           </div>
         </div>

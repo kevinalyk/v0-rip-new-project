@@ -1,11 +1,16 @@
 import type { Metadata } from "next"
 
+const TITLE = "Political Email & SMS Directory | RIP Tool"
+const DESCRIPTION =
+  "Search and explore political candidates, PACs, and organizations tracked by the Republican Inboxing Protocol. Browse campaign emails, fundraising texts, and political messaging across the United States."
+
 export const metadata: Metadata = {
-  title: "Inbox.GOP Directory",
-  description: "Search and explore political candidates tracked by Inbox.GOP",
+  title: TITLE,
+  description: DESCRIPTION,
   openGraph: {
-    title: "Inbox.GOP Directory",
-    description: "Search and explore political candidates tracked by Inbox.GOP",
+    title: TITLE,
+    description: DESCRIPTION,
+    siteName: "RIP Tool",
     type: "website",
     url: "https://app.rip-tool.com/directory",
     images: [
@@ -13,13 +18,14 @@ export const metadata: Metadata = {
         url: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-NfWjmrBARpThJtdxGKQnSXfC9a1fps.png",
         width: 1200,
         height: 630,
+        alt: TITLE,
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Inbox.GOP Directory",
-    description: "Search and explore political candidates tracked by Inbox.GOP",
+    title: TITLE,
+    description: DESCRIPTION,
     images: ["https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-NfWjmrBARpThJtdxGKQnSXfC9a1fps.png"],
   },
 }

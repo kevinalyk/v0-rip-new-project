@@ -68,16 +68,16 @@ export async function generateMetadata({ params }: { params: { token: string } }
 
     if (!campaign) {
       return {
-        title: "Shared Campaign — Inbox.GOP",
-        description: "View this shared campaign on Inbox.GOP",
+        title: "Shared Campaign | RIP Tool",
+        description: "View this shared campaign on RIP Tool",
       }
     }
 
     const entityName = campaign.entity?.name || (isSms ? campaign.phoneNumber : campaign.senderName)
-    const title = `${entityName} — Inbox.GOP`
+    const title = `${entityName} | RIP Tool`
     const description = isSms
       ? (campaign as any).message?.slice(0, 160)
-      : campaign.subject?.slice(0, 160) || "View this campaign on Inbox.GOP"
+      : campaign.subject?.slice(0, 160) || "View this campaign on RIP Tool"
 
     return {
       title,
@@ -85,13 +85,14 @@ export async function generateMetadata({ params }: { params: { token: string } }
       openGraph: {
         title,
         description,
+        siteName: "RIP Tool",
         type: "website",
         images: [
           {
             url: `/api/og/share/${token}`,
             width: 1200,
             height: 630,
-            alt: `${entityName} on RIP`,
+            alt: `${entityName} on RIP Tool`,
           },
         ],
       },
@@ -105,8 +106,8 @@ export async function generateMetadata({ params }: { params: { token: string } }
   } catch (error) {
     console.error("[OG] Error generating share metadata:", error)
     return {
-      title: "Shared Campaign — Inbox.GOP",
-      description: "View this shared campaign on Inbox.GOP",
+      title: "Shared Campaign | RIP Tool",
+      description: "View this shared campaign on RIP Tool",
     }
   }
 }

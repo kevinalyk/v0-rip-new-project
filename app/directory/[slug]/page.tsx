@@ -19,8 +19,8 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 // ──────────────────────────────────────────────────────────────────────────────
 
 function buildStateMetadata(stateName: string, slug: string): Metadata {
-  const title = `${stateName} Political Email & SMS Communications | RIP Directory`
-  const description = `See campaign emails and texts from ${stateName} candidates, PACs, and political organizations. Track political messaging across ${stateName}.`
+  const title = `${stateName} Political Email & SMS Communications | RIP Tool`
+  const description = `See campaign emails and texts from ${stateName} candidates, PACs, and political organizations. Track political messaging across ${stateName} with the Republican Inboxing Protocol.`
   const url = `${APP_URL}/directory/${slug}`
   return {
     title,
@@ -31,16 +31,16 @@ function buildStateMetadata(stateName: string, slug: string): Metadata {
       url,
       siteName: "RIP Tool",
       type: "website",
-      images: [{ url: `${APP_URL}/og-image.png`, width: 1200, height: 630, alt: title }],
+      images: [{ url: `${APP_URL}/og-candidate-directory.png`, width: 1200, height: 630, alt: title }],
     },
-    twitter: { card: "summary_large_image", title, description, images: [`${APP_URL}/og-image.png`] },
+    twitter: { card: "summary_large_image", title, description, images: [`${APP_URL}/og-candidate-directory.png`] },
     alternates: { canonical: url },
   }
 }
 
 function buildPartyMetadata(partySlug: string, partyLabel: string): Metadata {
-  const title = `${partyLabel} - Campaign Emails & SMS Communications | RIP Directory`
-  const description = `Track ${partyLabel.toLowerCase()}' campaign emails, fundraising texts, and political messaging. See how ${partyLabel.toLowerCase()} are reaching voters.`
+  const title = `${partyLabel} - Campaign Emails & SMS Communications | RIP Tool`
+  const description = `Track ${partyLabel.toLowerCase()}' campaign emails, fundraising texts, and political messaging. See how ${partyLabel.toLowerCase()} are reaching voters via the Republican Inboxing Protocol.`
   const url = `${APP_URL}/directory/${partySlug}`
   return {
     title,
@@ -51,9 +51,9 @@ function buildPartyMetadata(partySlug: string, partyLabel: string): Metadata {
       url,
       siteName: "RIP Tool",
       type: "website",
-      images: [{ url: `${APP_URL}/og-image.png`, width: 1200, height: 630, alt: title }],
+      images: [{ url: `${APP_URL}/og-candidate-directory.png`, width: 1200, height: 630, alt: title }],
     },
-    twitter: { card: "summary_large_image", title, description, images: [`${APP_URL}/og-image.png`] },
+    twitter: { card: "summary_large_image", title, description, images: [`${APP_URL}/og-candidate-directory.png`] },
     alternates: { canonical: url },
   }
 }
@@ -62,7 +62,7 @@ function buildEntityMetadata(data: NonNullable<Awaited<ReturnType<typeof getEnti
   const { entity } = data
   const partyLabel = entity.party ? ` · ${entity.party.charAt(0).toUpperCase() + entity.party.slice(1)}` : ""
   const stateLabel = entity.state ? ` · ${entity.state}` : ""
-  const title = `${entity.name}${partyLabel}${stateLabel} | RIP Directory`
+  const title = `${entity.name}${partyLabel}${stateLabel} | RIP Tool`
 
   let description: string
   if (entity.type === "candidate" || entity.type === "politician") {
@@ -80,7 +80,7 @@ function buildEntityMetadata(data: NonNullable<Awaited<ReturnType<typeof getEnti
 
   const ogImage = isPublicBlobUrl(entity.imageUrl)
     ? { url: entity.imageUrl as string, width: 400, height: 500, alt: entity.name }
-    : { url: `${APP_URL}/og-image.png`, width: 1200, height: 630, alt: "RIP Tool" }
+    : { url: `${APP_URL}/og-candidate-directory.png`, width: 1200, height: 630, alt: "RIP Tool" }
 
   return {
     title,
@@ -122,8 +122,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const data = await getEntityBySlug(slug)
   if (!data) {
     return {
-      title: "Entity Not Found | RIP Directory",
-      description: "This entity could not be found in the RIP directory.",
+      title: "Entity Not Found | RIP Tool",
+      description: "This entity could not be found in the RIP Tool directory.",
     }
   }
   return buildEntityMetadata(data, slug)

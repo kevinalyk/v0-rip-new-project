@@ -35,7 +35,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const ogImageUrl = post.imageUrl ?? `${url}/opengraph-image`
 
     return {
-      title: `${post.title} — Inbox.GOP`,
+      title: `${post.title} | RIP Tool`,
       description,
       openGraph: {
         title: post.title,

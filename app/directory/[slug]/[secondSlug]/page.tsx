@@ -66,13 +66,13 @@ export async function generateMetadata({
 
   if (!combo) {
     return {
-      title: "Page Not Found | RIP Directory",
+      title: "Page Not Found | RIP Tool",
       description: "This directory page could not be found.",
     }
   }
 
-  const title = `${combo.stateName} ${combo.partyLabel} - Campaign Emails & SMS | RIP Directory`
-  const description = `Track campaign emails and texts from ${combo.stateName} ${combo.partyAdjective} candidates and officials. See how ${combo.stateName} ${combo.partyLabel.toLowerCase()} are communicating with voters.`
+  const title = `${combo.stateName} ${combo.partyLabel} - Campaign Emails & SMS | RIP Tool`
+  const description = `Track campaign emails and texts from ${combo.stateName} ${combo.partyAdjective} candidates and officials. See how ${combo.stateName} ${combo.partyLabel.toLowerCase()} are communicating with voters via the Republican Inboxing Protocol.`
   const url = `${APP_URL}/directory/${combo.stateSlug}/${combo.partySlug}`
 
   return {
@@ -84,9 +84,9 @@ export async function generateMetadata({
       url,
       siteName: "RIP Tool",
       type: "website",
-      images: [{ url: `${APP_URL}/og-image.png`, width: 1200, height: 630, alt: title }],
+      images: [{ url: `${APP_URL}/og-candidate-directory.png`, width: 1200, height: 630, alt: title }],
     },
-    twitter: { card: "summary_large_image", title, description, images: [`${APP_URL}/og-image.png`] },
+    twitter: { card: "summary_large_image", title, description, images: [`${APP_URL}/og-candidate-directory.png`] },
     alternates: { canonical: url },
   }
 }

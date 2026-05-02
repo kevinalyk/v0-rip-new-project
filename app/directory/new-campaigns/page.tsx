@@ -12,23 +12,26 @@ import { nameToSlug } from "@/lib/directory"
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
+const NC_TITLE = "Recently Launched Campaigns | RIP Tool"
+const NC_DESCRIPTION =
+  "Track political campaigns launched in the last 7 days. New House, Senate, and other federal candidates from across the United States, captured by the Republican Inboxing Protocol."
+
 export const metadata: Metadata = {
-  title: "Recently Launched Campaigns | RIP Directory",
-  description:
-    "Track political campaigns launched in the last 7 days. New House, Senate, and other federal candidates from across the United States.",
+  title: NC_TITLE,
+  description: NC_DESCRIPTION,
   openGraph: {
-    title: "Recently Launched Campaigns | RIP Directory",
-    description:
-      "Track political campaigns launched in the last 7 days. New House, Senate, and other federal candidates from across the United States.",
+    title: NC_TITLE,
+    description: NC_DESCRIPTION,
     url: `${APP_URL}/directory/new-campaigns`,
     siteName: "RIP Tool",
     type: "website",
+    images: [{ url: `${APP_URL}/og-candidate-directory.png`, width: 1200, height: 630, alt: NC_TITLE }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Recently Launched Campaigns | RIP Directory",
-    description:
-      "Track political campaigns launched in the last 7 days. New House, Senate, and other federal candidates from across the United States.",
+    title: NC_TITLE,
+    description: NC_DESCRIPTION,
+    images: [`${APP_URL}/og-candidate-directory.png`],
   },
   alternates: { canonical: `${APP_URL}/directory/new-campaigns` },
 }

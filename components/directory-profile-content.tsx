@@ -370,41 +370,57 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
         )}
 
         {/* Recent communications */}
-        <div className="rounded-lg border border-border bg-card overflow-hidden mb-8">
-          <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-            <h2 className="font-semibold text-sm">Recent Communications</h2>
-            <span className="text-xs text-muted-foreground">
-              {recentCampaigns.length + recentSms.length} previewed of {entity.counts.total}
-            </span>
-          </div>
+        {(() => {
+          // Merge emails and SMS into a single chronological feed (newest first), capped at 10.
+          // Items missing a date are pushed to the bottom by treating them as 0.
+          type CommItem =
+            | { kind: "email"; id: string; title: string; date: string | null; sortTs: number }
+            | { kind: "sms"; id: string; title: string; date: string | null; sortTs: number }
+          const emailItems: CommItem[] = recentCampaigns.map((c) => ({
+            kind: "email",
+            id: c.id,
+            title: c.subject || "No subject",
+            date: c.dateReceived,
+            sortTs: c.dateReceived ? new Date(c.dateReceived).getTime() : 0,
+          }))
+          const smsItems: CommItem[] = recentSms.map((s) => ({
+            kind: "sms",
+            id: s.id,
+            title: s.message?.substring(0, 80) || "SMS message",
+            date: s.createdAt,
+            sortTs: s.createdAt ? new Date(s.createdAt).getTime() : 0,
+          }))
+          const combined = [...emailItems, ...smsItems]
+            .sort((a, b) => b.sortTs - a.sortTs)
+            .slice(0, 10)
 
-          <div className={`divide-y divide-border relative${!isAuthenticated ? " min-h-[240px]" : ""}`}>
-            {recentCampaigns.slice(0, 5).map((campaign) => (
-              <div
-                key={campaign.id}
-                className={`px-4 py-3 flex items-center justify-between gap-4 ${isAuthenticated ? "cursor-pointer hover:bg-accent/50 transition-colors" : "blur-sm select-none pointer-events-none"}`}
-                onClick={() => isAuthenticated && handlePreviewClick(campaign.id, "email")}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <Mail className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                  <span className="text-sm truncate">{campaign.subject || "No subject"}</span>
-                </div>
-                <span className="text-xs text-muted-foreground flex-shrink-0">{formatDate(campaign.dateReceived)}</span>
+          return (
+            <div className="rounded-lg border border-border bg-card overflow-hidden mb-8">
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                <h2 className="font-semibold text-sm">Recent Communications</h2>
+                <span className="text-xs text-muted-foreground">
+                  {combined.length} previewed of {entity.counts.total}
+                </span>
               </div>
-            ))}
-            {recentSms.slice(0, 3).map((sms) => (
-              <div
-                key={sms.id}
-                className={`px-4 py-3 flex items-center justify-between gap-4 ${isAuthenticated ? "cursor-pointer hover:bg-accent/50 transition-colors" : "blur-sm select-none pointer-events-none"}`}
-                onClick={() => isAuthenticated && handlePreviewClick(sms.id, "sms")}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <MessageSquare className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                  <span className="text-sm truncate">{sms.message?.substring(0, 80) || "SMS message"}</span>
-                </div>
-                <span className="text-xs text-muted-foreground flex-shrink-0">{formatDate(sms.createdAt)}</span>
-              </div>
-            ))}
+
+              <div className={`divide-y divide-border relative${!isAuthenticated ? " min-h-[240px]" : ""}`}>
+                {combined.map((item) => (
+                  <div
+                    key={`${item.kind}-${item.id}`}
+                    className={`px-4 py-3 flex items-center justify-between gap-4 ${isAuthenticated ? "cursor-pointer hover:bg-accent/50 transition-colors" : "blur-sm select-none pointer-events-none"}`}
+                    onClick={() => isAuthenticated && handlePreviewClick(item.id, item.kind)}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      {item.kind === "email" ? (
+                        <Mail className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                      ) : (
+                        <MessageSquare className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                      )}
+                      <span className="text-sm truncate">{item.title}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground flex-shrink-0">{formatDate(item.date)}</span>
+                  </div>
+                ))}
 
             {/* Login gate overlay — only shown when not authenticated */}
             {!isAuthenticated && (
@@ -428,8 +444,10 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
                 </div>
               </div>
             )}
-          </div>
-        </div>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Preview loading indicator */}
         {previewLoading && (

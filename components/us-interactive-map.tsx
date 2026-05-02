@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { ComposableMap, Geographies, Geography, Marker } from "react-simple-maps"
+import { geoContains } from "d3-geo"
 
 const GEO_URL = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json"
 
@@ -27,6 +28,15 @@ const ABBREV_TO_FULL: Record<string, string> = {
   VA:"Virginia", WA:"Washington", WV:"West Virginia", WI:"Wisconsin", WY:"Wyoming",
   DC:"District of Columbia",
 }
+
+// Inverse lookup: full state name -> abbreviation (used to key features by abbrev)
+const FULL_TO_ABBREV: Record<string, string> = Object.entries(ABBREV_TO_FULL).reduce(
+  (acc, [abbrev, full]) => {
+    acc[full] = abbrev
+    return acc
+  },
+  {} as Record<string, string>,
+)
 
 // Approximate geographic centroids [longitude, latitude] for each state abbreviation
 const STATE_CENTROIDS: Record<string, [number, number]> = {
@@ -89,6 +99,9 @@ interface USInteractiveMapProps {
 export function USInteractiveMap({ selectedState, onStateSelect, activityData = [] }: USInteractiveMapProps) {
   const [hoveredState, setHoveredState] = useState<string | null>(null)
   const [tooltip, setTooltip] = useState<{ name: string; x: number; y: number } | null>(null)
+  // Map of state abbreviation -> GeoJSON feature, populated once geographies load.
+  // Used to constrain activity dots inside the actual state polygon.
+  const [stateFeatures, setStateFeatures] = useState<Record<string, any>>({})
 
   // Build a lookup map for fast access: state abbrev -> activity
   const activityByState = activityData.reduce<Record<string, StateActivity>>((acc, item) => {
@@ -152,8 +165,21 @@ export function USInteractiveMap({ selectedState, onStateSelect, activityData = 
         style={{ width: "100%", height: "100%" }}
       >
         <Geographies geography={GEO_URL}>
-          {({ geographies }) =>
-            geographies.map((geo) => {
+          {({ geographies }) => {
+            // Lazily build the abbrev -> feature lookup once geographies are loaded.
+            // Defer setState to a microtask to avoid "setState during render" warnings.
+            if (geographies.length > 0 && Object.keys(stateFeatures).length === 0) {
+              const map: Record<string, any> = {}
+              geographies.forEach((g: any) => {
+                const fullName = STATE_NAMES[g.id]
+                const abbrev = fullName ? FULL_TO_ABBREV[fullName] : undefined
+                if (abbrev) map[abbrev] = g
+              })
+              if (Object.keys(map).length > 0) {
+                queueMicrotask(() => setStateFeatures(map))
+              }
+            }
+            return geographies.map((geo) => {
               const name = STATE_NAMES[geo.id] ?? geo.id
               return (
                 <Geography
@@ -182,7 +208,7 @@ export function USInteractiveMap({ selectedState, onStateSelect, activityData = 
                 />
               )
             })
-          }
+          }}
         </Geographies>
 
         {/* Activity dots — one dot per email/SMS, scattered around the state centroid */}
@@ -208,19 +234,38 @@ export function USInteractiveMap({ selectedState, onStateSelect, activityData = 
             return ((z ^ (z >>> 14)) >>> 0) / 0x100000000
           }
 
+          // Spread radius varies by state size — larger states get wider scatter
+          const baseSpread = STATE_SPREAD[item.state] ?? 1.2
+          // Real GeoJSON polygon for this state, used to constrain dots inside borders
+          const feature = stateFeatures[item.state]
+
           for (let i = 0; i < total; i++) {
-            // Advance the RNG twice per dot for independent angle and distance
-            const r1 = rand()
-            const r2 = rand()
-            // Spread radius varies by state size — larger states get wider scatter
-            const spread = STATE_SPREAD[item.state] ?? 1.2
-            // Polar coords: angle 0-2π, distance scaled by sqrt for uniform distribution
-            const angle = r1 * Math.PI * 2
-            const dist  = Math.sqrt(r2) * spread
+            // Try several candidate points, shrinking the spread on each retry,
+            // and only accept ones that fall inside the actual state polygon.
+            // If we can't find one (e.g. odd-shaped state), fall back to centroid.
+            let lng = coords[0]
+            let lat = coords[1]
+            const maxAttempts = 25
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+              const r1 = rand()
+              const r2 = rand()
+              // Gradually shrink the spread to bias retries toward the centroid
+              const shrink = 1 - attempt / maxAttempts
+              const spread = baseSpread * shrink
+              const angle = r1 * Math.PI * 2
+              const dist = Math.sqrt(r2) * spread
+              const candLng = coords[0] + Math.cos(angle) * dist
+              const candLat = coords[1] + Math.sin(angle) * dist * 0.6
+              if (!feature || geoContains(feature, [candLng, candLat])) {
+                lng = candLng
+                lat = candLat
+                break
+              }
+            }
             dots.push({
               key: `${item.state}-${i}`,
-              lng: coords[0] + Math.cos(angle) * dist,
-              lat: coords[1] + Math.sin(angle) * dist * 0.6, // compress N/S to match map projection
+              lng,
+              lat,
               delay: (i * 0.15) % 1.8,
             })
           }

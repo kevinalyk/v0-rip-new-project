@@ -15,12 +15,22 @@ const BATCH_SIZE = 100
 // Delay between requests to avoid hammering Ballotpedia. They're a non-profit
 // and we don't want to look like a scraper bot.
 const DELAY_MS = 500
+// When true, images are refreshed for entities with imageUrlSource !== 'manual'.
+// Currently false — see header comment. Bio + office always refresh.
+const REFRESH_IMAGES = false
 
 // Refreshes Ballotpedia data for the BATCH_SIZE entities whose data is
 // stalest (oldest ballotpediaFetchedAt, with NULLs first so newly-linked
-// entities get processed before re-runs). Skips image updates for entities
-// whose imageUrl was set manually by an admin (imageUrlSource='manual'),
-// always refreshes bio + office regardless.
+// entities get processed before re-runs). Always refreshes bio + office.
+//
+// IMAGES ARE SKIPPED FOR EVERY ENTITY in this cron — see REFRESH_IMAGES
+// below. The image refresh path is functional in lib/ballotpedia-enrich.ts
+// (and the manual-vs-ballotpedia source tracking is in place) but we leave
+// images alone here until the placeholder-detection problem is solved.
+// Otherwise this cron would re-pull "Submit a photo" placeholders weekly
+// for entities that have one, and burn Blob storage re-uploading identical
+// headshots for everyone else. Flip REFRESH_IMAGES to true once that's
+// sorted; the manual-source skip logic will then kick in automatically.
 //
 // Designed to be idempotent + safe to re-run: each successful processing
 // stamps ballotpediaFetchedAt to NOW(), naturally rotating the entity to
@@ -63,8 +73,10 @@ export async function GET(request: NextRequest) {
     if (!entity.ballotpediaUrl) continue
     summary.processed++
 
-    const skipImage = entity.imageUrlSource === "manual"
-    if (skipImage) summary.imageSkippedManual++
+    // Skip images entirely while REFRESH_IMAGES is off; otherwise skip only
+    // entities with manually-curated photos.
+    const skipImage = !REFRESH_IMAGES || entity.imageUrlSource === "manual"
+    if (REFRESH_IMAGES && entity.imageUrlSource === "manual") summary.imageSkippedManual++
 
     try {
       const result = await enrichEntityFromBallotpedia(entity.id, entity.ballotpediaUrl, {

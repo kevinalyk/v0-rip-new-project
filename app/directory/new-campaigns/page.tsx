@@ -77,16 +77,23 @@ export default async function NewCampaignsPage() {
     // unauthenticated visitor — no-op
   }
 
-  // Fetch launches from the last 7 days, newest first, with linked entity data
+  // Fetch launches from the last 7 days, newest first, with linked entity data.
+  // Note: we filter and sort by `launchedAt` (the actual FEC filing date shown to users),
+  // not `firstSeenAt` (when our scraper picked them up). All rows in a single scrape
+  // batch share the same firstSeenAt, which is why sorting on it produced a scrambled
+  // order. We fall back to firstSeenAt only when launchedAt is missing.
   const since = new Date()
   since.setDate(since.getDate() - 7)
 
   const launches = await prisma.campaignLaunch.findMany({
     where: {
-      firstSeenAt: { gte: since },
       status: "active",
+      OR: [
+        { launchedAt: { gte: since } },
+        { AND: [{ launchedAt: null }, { firstSeenAt: { gte: since } }] },
+      ],
     },
-    orderBy: { firstSeenAt: "desc" },
+    orderBy: [{ launchedAt: "desc" }, { firstSeenAt: "desc" }],
     include: {
       linkedEntity: {
         select: {

@@ -127,12 +127,28 @@ export type EnrichResult = {
 }
 
 // Fetch a Ballotpedia page, extract bio/office/image, upload image to Blob,
-// and persist all of it on the entity. Used by both the admin POST endpoint
-// and the FEC cron auto-enrichment flow.
+// and persist all of it on the entity. Used by the admin POST endpoint, the
+// FEC cron auto-enrichment flow, and the weekly ballotpedia-refresh cron.
+//
+// Options:
+//   - prefetchedHtml: skip the HTTP fetch and use this HTML instead (used by
+//     the FEC cron, which already has the page body in hand).
+//   - skipImage: never touch the image (extract, upload, or save). Set by the
+//     refresh cron when the entity has imageUrlSource='manual', so we don't
+//     clobber a manually-curated image.
+//   - touchTimestampOnFailure: if the fetch fails, still update
+//     ballotpediaFetchedAt so the failed entity rotates to the back of the
+//     refresh queue instead of being retried every day. Set by the refresh
+//     cron; not set by admin scrapes (which want the user to see/retry the
+//     error immediately).
 export async function enrichEntityFromBallotpedia(
   entityId: string,
   ballotpediaUrl: string,
-  options: { prefetchedHtml?: string } = {},
+  options: {
+    prefetchedHtml?: string
+    skipImage?: boolean
+    touchTimestampOnFailure?: boolean
+  } = {},
 ): Promise<EnrichResult> {
   let html: string
 
@@ -147,6 +163,18 @@ export async function enrichEntityFromBallotpedia(
     })
 
     if (!res.ok) {
+      // For background refreshes, mark the entity as "tried" so a permanently
+      // broken URL doesn't camp at the front of the queue forever. For admin
+      // scrapes we leave the timestamp alone so retries keep working naturally.
+      if (options.touchTimestampOnFailure) {
+        await prisma.ciEntity
+          .update({
+            where: { id: entityId },
+            data: { ballotpediaFetchedAt: new Date() },
+          })
+          .catch((err) => console.error("[ballotpedia-enrich] Failed to touch timestamp:", err))
+      }
+
       return {
         success: false,
         status: res.status === 404 ? 404 : 502,
@@ -167,9 +195,10 @@ export async function enrichEntityFromBallotpedia(
   const bio = extractBio(html)
   const office = extractOffice(html)
 
-  // Extract and upload image
+  // Extract and upload image — skipped entirely when the caller has flagged
+  // the entity as having a manually-curated image (refresh cron path).
   let imageUrl: string | null = null
-  const imageSrc = extractInfoboxImage(html)
+  const imageSrc = options.skipImage ? null : extractInfoboxImage(html)
 
   if (imageSrc) {
     try {
@@ -221,11 +250,13 @@ export async function enrichEntityFromBallotpedia(
   }
 
   // Save what we got. We only overwrite fields we successfully extracted, so
-  // partial data doesn't wipe out manually-curated values.
+  // partial data doesn't wipe out manually-curated values. Whenever we DO
+  // write a new imageUrl, also stamp imageUrlSource='ballotpedia' so the
+  // weekly refresh cron knows it can replace the image on the next run.
   await prisma.ciEntity.update({
     where: { id: entityId },
     data: {
-      ...(imageUrl && { imageUrl }),
+      ...(imageUrl && { imageUrl, imageUrlSource: "ballotpedia" }),
       ...(bio && { bio }),
       ...(office && { office }),
       ballotpediaUrl,

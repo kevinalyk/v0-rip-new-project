@@ -35,11 +35,18 @@ const DELAY_MS = 500
 // lib's touchTimestampOnFailure flag) so a permanently broken URL doesn't
 // camp at the front forever.
 export async function GET(request: NextRequest) {
-  // Cron secret check — same pattern as scrape-fec-launches and other crons.
-  // Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`.
-  const authHeader = request.headers.get("authorization")
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Allow this route in two ways (mirrors scrape-fec-launches):
+  // 1. Vercel Cron — identified by the `vercel-cron/1.0` user agent (auto-set)
+  // 2. Manual trigger — pass `?secret=<CRON_SECRET>` (only if CRON_SECRET is set)
+  const userAgent = request.headers.get("user-agent") || ""
+  const isVercelCron = userAgent.includes("vercel-cron")
+
+  if (!isVercelCron) {
+    const { searchParams } = new URL(request.url)
+    const cronSecret = searchParams.get("secret")
+    if (process.env.CRON_SECRET && cronSecret !== process.env.CRON_SECRET) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
   }
 
   const startedAt = Date.now()

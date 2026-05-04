@@ -150,7 +150,7 @@ export async function PUT(request: NextRequest) {
           })
           await prisma.ciEntity.update({
             where: { id },
-            data: { imageUrl: blob.url },
+            data: { imageUrl: blob.url, imageUrlSource: "manual" },
           })
         } else {
           console.error(`[ci-entities] Image override fetch failed: ${imgRes.status}`)

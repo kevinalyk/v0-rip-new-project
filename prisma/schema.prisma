@@ -383,7 +383,8 @@ model CiEntity {
   party              String?  // "republican", "democrat", "independent"
   state              String?  // State abbreviation (e.g., "CA", "NY") or "Nationwide"
   donationIdentifiers Json?   // Platform-specific donation identifiers: {"winred": ["nrcc"], "anedot": ["jeff-hurd"], "actblue": ["elizabethwarren", "amy-for-america"]}
-  imageUrl           String?  // Headshot URL from Vercel Blob (scraped from Ballotpedia)
+  imageUrl           String?  // Headshot URL from Vercel Blob (scraped from Ballotpedia or manual override)
+  imageUrlSource     String?  // 'ballotpedia' = auto-scraped (refresh cron may overwrite); 'manual' = admin override (locked, refresh cron skips)
   bio                String?  // Short bio text scraped from Ballotpedia
   office             String?  // Office/title scraped from Ballotpedia infobox e.g. "Candidate, U.S. House New York District 23"
   ballotpediaUrl     String?  // The Ballotpedia URL that was scraped

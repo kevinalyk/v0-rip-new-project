@@ -19,20 +19,24 @@ const MAX_BATCH_SIZE = 500
 // historical mess from before placeholder detection was added to the enrich
 // path; the weekly refresh cron then naturally retries those entities.
 //
-// Trigger manually via:
-//   curl -H "Authorization: Bearer $CRON_SECRET" \
-//        "https://app.rip-tool.com/api/cron/cleanup-placeholder-images?limit=250"
-//
-// Re-run until {processed: 0} comes back. Idempotent — once an entity has
-// been moved to imageUrlSource='ballotpedia-placeholder' it falls out of the
-// scan query.
+// Trigger manually via either:
+//   curl "https://app.rip-tool.com/api/cron/cleanup-placeholder-images?secret=$CRON_SECRET&limit=250"
+// or paste the URL directly into a browser. Re-run until {processed: 0}
+// comes back. Idempotent — once an entity has been moved to
+// imageUrlSource='ballotpedia-placeholder' it falls out of the scan query.
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Allow Vercel Cron OR a `?secret=` query param (mirrors other crons).
+  const userAgent = request.headers.get("user-agent") || ""
+  const isVercelCron = userAgent.includes("vercel-cron")
+  const { searchParams } = new URL(request.url)
+
+  if (!isVercelCron) {
+    const cronSecret = searchParams.get("secret")
+    if (process.env.CRON_SECRET && cronSecret !== process.env.CRON_SECRET) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
   }
 
-  const { searchParams } = new URL(request.url)
   const limit = Math.min(
     Math.max(1, parseInt(searchParams.get("limit") ?? String(DEFAULT_BATCH_SIZE), 10) || DEFAULT_BATCH_SIZE),
     MAX_BATCH_SIZE,

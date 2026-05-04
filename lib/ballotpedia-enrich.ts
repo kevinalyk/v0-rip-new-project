@@ -1,5 +1,28 @@
-import { put } from "@vercel/blob"
+import { put, del } from "@vercel/blob"
+import { createHash } from "crypto"
 import prisma from "@/lib/prisma"
+
+// Known Ballotpedia placeholder image SHA-256 hashes. When the infobox image
+// matches one of these, the candidate doesn't have a real headshot on file —
+// Ballotpedia is just showing the "Submit a photo" silhouette or their BP
+// initials logo. We treat these as "no image yet" so a future scrape can
+// replace them once a real photo lands.
+//
+// Hashes confirmed byte-identical between the original Ballotpedia source and
+// our existing Blob copies on 2026-05-03.
+//   1. https://ballotpedia.s3.us-east-1.amazonaws.com/images/thumb/6/68/SubmitPhoto-150px.png
+//   2. https://cdn.ballotpedia.org/images/thumb/0/0c/BP-Initials-UPDATED.png/40px-BP-Initials-UPDATED.png
+//
+// To add new placeholders later, sha256sum the file and append the hex digest.
+export const PLACEHOLDER_IMAGE_HASHES: ReadonlySet<string> = new Set([
+  "e33a3211454a40f209c7f7dd198845c72cc4cf94eac10be3cd138927e3dce021", // SUBMIT PHOTO silhouette
+  "1603c8f12b657b66db7b5c9805fb31e17312a94d5341205c9ee2b4951f60db57", // BP initials logo
+])
+
+export function sha256Hex(buffer: ArrayBuffer | Buffer): string {
+  const buf = buffer instanceof ArrayBuffer ? Buffer.from(buffer) : buffer
+  return createHash("sha256").update(buf).digest("hex")
+}
 
 // Shared HTML text cleaner
 function cleanText(raw: string): string {
@@ -150,6 +173,14 @@ export async function enrichEntityFromBallotpedia(
     touchTimestampOnFailure?: boolean
   } = {},
 ): Promise<EnrichResult> {
+  // Pull the current image state up front — needed both to short-circuit if
+  // the entity already has a locked photo and to clean up the old Blob when
+  // we replace a placeholder with a real image.
+  const existing = await prisma.ciEntity.findUnique({
+    where: { id: entityId },
+    select: { imageUrl: true, imageUrlSource: true },
+  })
+
   let html: string
 
   if (options.prefetchedHtml) {
@@ -196,8 +227,18 @@ export async function enrichEntityFromBallotpedia(
   const office = extractOffice(html)
 
   // Extract and upload image — skipped entirely when the caller has flagged
-  // the entity as having a manually-curated image (refresh cron path).
+  // the entity as having a manually-curated or already-locked image (refresh
+  // cron path).
   let imageUrl: string | null = null
+  // True when we fetched an image but it matched a known placeholder hash —
+  // we deliberately don't store it but DO want to flag the entity so the
+  // refresh cron knows to re-check next cycle.
+  let imageWasPlaceholder = false
+  // If we successfully upload a NEW real image, the old Blob (if any) needs
+  // to be deleted. We capture the URL to delete here and call del() AFTER the
+  // DB update succeeds, so a partial failure can never leave us with an
+  // entity pointing at a deleted Blob.
+  let oldImageUrlToDelete: string | null = null
   const imageSrc = options.skipImage ? null : extractInfoboxImage(html)
 
   if (imageSrc) {
@@ -211,15 +252,33 @@ export async function enrichEntityFromBallotpedia(
 
       if (imgRes.ok) {
         const imgBuffer = await imgRes.arrayBuffer()
-        const contentType = imgRes.headers.get("content-type") || "image/jpeg"
-        const ext = contentType.includes("png") ? "png" : contentType.includes("gif") ? "gif" : "jpg"
-        const filename = `entity-photos/${entityId}-${Date.now()}.${ext}`
+        const hash = sha256Hex(imgBuffer)
 
-        const blob = await put(filename, imgBuffer, {
-          access: "public",
-          contentType,
-        })
-        imageUrl = blob.url
+        if (PLACEHOLDER_IMAGE_HASHES.has(hash)) {
+          // Ballotpedia is serving us their "no photo on file" placeholder.
+          // Don't waste Blob storage on it.
+          imageWasPlaceholder = true
+        } else {
+          const contentType = imgRes.headers.get("content-type") || "image/jpeg"
+          const ext = contentType.includes("png") ? "png" : contentType.includes("gif") ? "gif" : "jpg"
+          const filename = `entity-photos/${entityId}-${Date.now()}.${ext}`
+
+          const blob = await put(filename, imgBuffer, {
+            access: "public",
+            contentType,
+          })
+          imageUrl = blob.url
+
+          // Schedule the previous Blob (if any) for deletion. We never delete
+          // a manually-uploaded image — those are sacred. We also won't reach
+          // this branch when the existing source is 'ballotpedia' because the
+          // refresh cron sets skipImage=true in that case; but we double-check
+          // here so a manual admin re-scrape can't accidentally orphan a
+          // manual photo.
+          if (existing?.imageUrl && existing.imageUrlSource !== "manual") {
+            oldImageUrlToDelete = existing.imageUrl
+          }
+        }
       }
     } catch (imgErr) {
       console.error("[ballotpedia-enrich] Image upload failed:", imgErr)
@@ -228,13 +287,20 @@ export async function enrichEntityFromBallotpedia(
   }
 
   // If we got nothing useful, still record the URL + fetch timestamp so we
-  // don't keep retrying. Surface a warning the caller can show.
+  // don't keep retrying. Also flag a placeholder hit when we got one — that
+  // way the cron will re-check next cycle. We never downgrade an existing
+  // 'ballotpedia' (real) or 'manual' source to 'placeholder'.
   if (!bio && !imageUrl && !office) {
+    const canFlagPlaceholder =
+      imageWasPlaceholder &&
+      (!existing?.imageUrlSource || existing.imageUrlSource === "ballotpedia-placeholder")
+
     await prisma.ciEntity.update({
       where: { id: entityId },
       data: {
         ballotpediaUrl,
         ballotpediaFetchedAt: new Date(),
+        ...(canFlagPlaceholder && { imageUrlSource: "ballotpedia-placeholder" }),
       },
     })
 
@@ -250,19 +316,35 @@ export async function enrichEntityFromBallotpedia(
   }
 
   // Save what we got. We only overwrite fields we successfully extracted, so
-  // partial data doesn't wipe out manually-curated values. Whenever we DO
-  // write a new imageUrl, also stamp imageUrlSource='ballotpedia' so the
-  // weekly refresh cron knows it can replace the image on the next run.
+  // partial data doesn't wipe out manually-curated values. The image source
+  // logic:
+  //   - Real image stored → imageUrlSource='ballotpedia' (locks the photo)
+  //   - Placeholder detected & current source allows downgrade → 'ballotpedia-placeholder'
+  //   - Otherwise → don't touch imageUrlSource
+  const canFlagPlaceholder =
+    !imageUrl &&
+    imageWasPlaceholder &&
+    (!existing?.imageUrlSource || existing.imageUrlSource === "ballotpedia-placeholder")
+
   await prisma.ciEntity.update({
     where: { id: entityId },
     data: {
       ...(imageUrl && { imageUrl, imageUrlSource: "ballotpedia" }),
+      ...(canFlagPlaceholder && { imageUrlSource: "ballotpedia-placeholder" }),
       ...(bio && { bio }),
       ...(office && { office }),
       ballotpediaUrl,
       ballotpediaFetchedAt: new Date(),
     },
   })
+
+  // DB write succeeded — now safe to delete the old Blob. If this fails we
+  // just leak a Blob (cosmetic, not correctness) so we swallow the error.
+  if (oldImageUrlToDelete) {
+    await del(oldImageUrlToDelete).catch((err) =>
+      console.error("[ballotpedia-enrich] Failed to delete old Blob:", oldImageUrlToDelete, err),
+    )
+  }
 
   return {
     success: true,

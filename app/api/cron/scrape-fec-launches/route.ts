@@ -123,13 +123,15 @@ export async function GET(request: Request) {
       apiError: null,
     }
 
-    // Pull candidates whose FEC first_file_date is within the last 7 days.
+    // Pull candidates whose FEC first_file_date is within the last 14 days.
     // first_file_date = when the candidate originally filed for this cycle, NOT when
     // the record was last updated (which is what `load_date` tracks). Using first_file_date
     // means we only catch genuinely new launches, not refiles/address changes.
-    // 7-day window matches what the /directory/new-campaigns page displays and gives us
-    // recovery headroom if the cron misses a day or two.
-    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    // 14-day window (vs 7) accounts for the FEC's 24-48hr data publication lag and
+    // gives extra recovery headroom. De-duplication by FEC candidate ID prevents
+    // double-ingestion — already-tracked candidates are filtered out before any
+    // DB writes. The /directory/new-campaigns UI still displays only the last 7 days.
+    const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
     const sinceStr = since.toISOString().split("T")[0] // "YYYY-MM-DD"
     diagnostics.since = sinceStr
 

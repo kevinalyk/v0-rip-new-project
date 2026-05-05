@@ -9,7 +9,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { ArrowLeft, ArrowRight, Sparkles, Megaphone, MapPin, Building2 } from "lucide-react"
 import prisma from "@/lib/prisma"
 import { nameToSlug } from "@/lib/directory"
-import NewCampaignsFilters, { OFFICES } from "@/components/new-campaigns-filters"
+import NewCampaignsFilters from "@/components/new-campaigns-filters"
+import { OFFICES } from "@/lib/campaign-filter-options"
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 

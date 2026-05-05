@@ -4,27 +4,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { useCallback } from "react"
 import { X } from "lucide-react"
 
-const STATES = [
-  "AK","AL","AR","AZ","CA","CO","CT","DC","DE","FL","GA","HI","IA","ID","IL",
-  "IN","KS","KY","LA","MA","MD","ME","MI","MN","MO","MS","MT","NC","ND","NE",
-  "NH","NJ","NM","NV","NY","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT",
-  "VA","VT","WA","WI","WV","WY",
-]
-
-const PARTIES = [
-  { value: "republican",  label: "Republican"  },
-  { value: "democrat",    label: "Democrat"    },
-  { value: "independent", label: "Independent" },
-  { value: "libertarian", label: "Libertarian" },
-]
-
-// Office values are text-matched against the `office` column (e.g. "U.S. House — FL-14").
-// The `match` string is what we look for with a case-insensitive `contains`.
-const OFFICES = [
-  { value: "house",     label: "U.S. House",     match: "U.S. House"    },
-  { value: "senate",    label: "U.S. Senate",    match: "U.S. Senate"   },
-  { value: "president", label: "U.S. President", match: "U.S. President" },
-]
+import { STATES, PARTIES, OFFICES } from "@/lib/campaign-filter-options"
 
 interface Props {
   party?: string
@@ -134,5 +114,4 @@ export default function NewCampaignsFilters({
   )
 }
 
-// Exported so the server page can use them for its Prisma query
-export { OFFICES }
+

@@ -57,7 +57,7 @@
     },
     {
       "path": "/api/cron/scrape-fec-launches",
-      "schedule": "0 5,17 * * *"
+      "schedule": "0 14,22 * * *"
     },
     {
       "path": "/api/cron/refresh-ballotpedia",

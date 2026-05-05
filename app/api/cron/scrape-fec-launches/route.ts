@@ -11,20 +11,16 @@ export const maxDuration = 300
 // separate source (Ballotpedia / manual) in a future phase.
 const SUPPORTED_OFFICES = new Set(["H", "S", "P"]) // House, Senate, President
 
-// Map FEC party codes to your app's internal party strings
-function normalizeFecParty(fecParty: string | null): string | null {
-  if (!fecParty) return null
+// Map FEC party codes to the three canonical party values: republican,
+// democrat, or independent. Anything that isn't clearly Republican or
+// Democrat (Libertarian, Green, NPA, Write-in, unknown codes, etc.) is
+// treated as independent. This keeps the data clean for filtering.
+function normalizeFecParty(fecParty: string | null): string {
+  if (!fecParty) return "independent"
   const p = fecParty.toUpperCase()
   if (p === "REP" || p === "R") return "republican"
   if (p === "DEM" || p === "D") return "democrat"
-  if (p === "IND" || p === "I") return "independent"
-  // NPA = "No Party Affiliation" — display as independent
-  if (p === "NPA") return "independent"
-  // W = "Write-in" — no party affiliation, leave null
-  if (p === "W") return null
-  if (p === "LIB" || p === "L") return "libertarian"
-  if (p === "GRE" || p === "G") return "green"
-  return p.toLowerCase()
+  return "independent"
 }
 
 // Map FEC office code to a readable office string

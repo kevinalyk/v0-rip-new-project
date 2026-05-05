@@ -2,13 +2,15 @@ import type { Metadata } from "next"
 import { cookies } from "next/headers"
 import Link from "next/link"
 import Image from "next/image"
+import { Suspense } from "react"
 import { verifyToken } from "@/lib/auth"
 import AppLayout from "@/components/app-layout"
-import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { ArrowLeft, ArrowRight, Sparkles, Megaphone, MapPin, Building2 } from "lucide-react"
 import prisma from "@/lib/prisma"
 import { nameToSlug } from "@/lib/directory"
+import NewCampaignsFilters from "@/components/new-campaigns-filters"
+import { OFFICES } from "@/lib/campaign-filter-options"
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
@@ -63,7 +65,13 @@ function formatRelativeDate(date: Date | null): string {
   return `${diffDays} days ago`
 }
 
-export default async function NewCampaignsPage() {
+export default async function NewCampaignsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ party?: string; state?: string; office?: string }>
+}) {
+  const { party, state, office } = await searchParams
+
   // Resolve clientSlug server-side so sidebar renders correctly for authenticated users
   let clientSlug = ""
   try {
@@ -85,6 +93,11 @@ export default async function NewCampaignsPage() {
   const since = new Date()
   since.setDate(since.getDate() - 7)
 
+  // Resolve office filter to a text substring (e.g. "house" → "U.S. House")
+  const officeMatch = office
+    ? OFFICES.find((o) => o.value === office)?.match ?? null
+    : null
+
   const launches = await prisma.campaignLaunch.findMany({
     where: {
       status: "active",
@@ -92,6 +105,11 @@ export default async function NewCampaignsPage() {
         { launchedAt: { gte: since } },
         { AND: [{ launchedAt: null }, { firstSeenAt: { gte: since } }] },
       ],
+      // Party and state are exact columns on CampaignLaunch — filter at DB level
+      ...(party && { party }),
+      ...(state && { state }),
+      // Office is a free-text column — substring match
+      ...(officeMatch && { office: { contains: officeMatch, mode: "insensitive" } }),
     },
     orderBy: [{ launchedAt: "desc" }, { firstSeenAt: "desc" }],
     include: {
@@ -108,6 +126,19 @@ export default async function NewCampaignsPage() {
       },
     },
   })
+
+  // Total unfiltered count for the filter bar "X of Y" display
+  const totalBeforeFilter = (party || state || office)
+    ? await prisma.campaignLaunch.count({
+        where: {
+          status: "active",
+          OR: [
+            { launchedAt: { gte: since } },
+            { AND: [{ launchedAt: null }, { firstSeenAt: { gte: since } }] },
+          ],
+        },
+      })
+    : launches.length
 
   const isEmpty = launches.length === 0
 
@@ -133,12 +164,23 @@ export default async function NewCampaignsPage() {
               Profiles are enriched over time as more information becomes available.
             </p>
           </div>
-          {!isEmpty && (
+          {!isEmpty && !(party || state || office) && (
             <div className="flex-shrink-0 text-sm text-muted-foreground pt-1">
               {launches.length} new {launches.length === 1 ? "campaign" : "campaigns"} this week
             </div>
           )}
         </div>
+
+        {/* Filters */}
+        <Suspense fallback={null}>
+          <NewCampaignsFilters
+            party={party}
+            state={state}
+            office={office}
+            totalShown={launches.length}
+            totalBeforeFilter={totalBeforeFilter}
+          />
+        </Suspense>
 
         <div className="flex-1 px-4 md:px-6 py-6">
           {isEmpty ? (
@@ -149,10 +191,13 @@ export default async function NewCampaignsPage() {
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#EB3847]/10 border border-[#EB3847]/30">
                     <Megaphone className="h-6 w-6 text-[#EB3847]" />
                   </div>
-                  <h2 className="text-lg font-semibold">No new launches this week</h2>
+                  <h2 className="text-lg font-semibold">
+                    {party || state || office ? "No matching campaigns" : "No new launches this week"}
+                  </h2>
                   <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
-                    No federal campaign filings were detected in the last 7 days. The FEC scraper
-                    runs daily at 6am UTC — check back tomorrow for the latest filings.
+                    {party || state || office
+                      ? "No campaigns match the selected filters. Try adjusting or clearing the filters."
+                      : "No federal campaign filings were detected in the last 7 days. The FEC scraper runs daily — check back tomorrow for the latest filings."}
                   </p>
                   <Link
                     href="/directory"

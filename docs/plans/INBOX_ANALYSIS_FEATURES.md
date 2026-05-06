@@ -1,8 +1,19 @@
 # Inbox Analysis Features — Michael's Feedback (Apr 3)
 
 Five new analysis features proposed for the Inbox/CI views. Each maps to existing
-data we already collect — no new ingestion pipelines required, just new queries
-and UI surfaces.
+data we already collect — no new ingestion pipelines required, just new queries,
+classification logic, and UI surfaces.
+
+**AI strategy summary:** Not all five features need AI equally. Two (#3 subject
+line patterns, #4 competitive comparisons) are pure string/aggregation logic and
+should stay that way — fast, deterministic, free. Three (#1 messaging type, #2
+topic trends, #5 message repetition) either require AI or are substantially better
+with it. Details per feature below.
+
+**AI stack:** Groq (already integrated) for classification inference at ingest time.
+OpenAI `text-embedding-3-small` via the Vercel AI Gateway for embeddings. Both
+are called once per message at ingest and the result is stored — no re-processing
+on page load, no per-query AI cost.
 
 ---
 
@@ -12,244 +23,228 @@ and UI surfaces.
 match, news-driven, personalization, survey, fundraising ask, etc.) and surface
 counts + trend lines by type over time.
 
-**Where it lives:** A new "Message Types" tab or section inside the existing
-Competitive Insights analytics view (`components/ci-analytics-view.tsx`), or
-as a dedicated sub-page under the CI section.
+**Needs AI: Yes — LLM classifier at ingest time.**
 
-**How it works:**
+Regex can catch obvious signals ("MATCH!" in subject = urgency, "$" = fundraising
+ask) but fails on context. "We need you" is urgency or personalization depending
+on tone. A small Groq inference call reading subject + body excerpt and returning
+a JSON array of tags is far more reliable, costs fractions of a cent per message,
+and runs once at ingest (result stored, never re-run). Regex can be used as a
+cheap pre-filter to skip obvious cases before hitting the model.
 
-Tags are derived by scanning the subject line, preview text, and message body for
-signal patterns. This is classification logic, not a DB schema change for v1 — we
-classify at query time and cache the results.
-
-Classification rules (deterministic regex, not AI — fast and auditable):
-- **Urgency** — "deadline", "expires", "hours left", "last chance", "running out"
-- **Match** — "match", "matched", "double", "triple", "2x", "3x"
-- **News-driven** — references to a named news event, bill name, or public figure
-  (harder to automate; may start with a keyword list and expand)
-- **Personalization** — `{{first_name}}` tokens, "Hi [Name]", "Fellow [State]"
-  patterns in subject or body
-- **Survey / poll** — "survey", "poll", "take our", "weigh in", "your input"
+**Classification targets:**
+- **Urgency** — deadlines, countdown language, "last chance"
+- **Match** — matching gift offers, double/triple
+- **News-driven** — references a current event, bill, public figure action
+- **Personalization** — merge tokens, "Hi [Name]", "Fellow [State]"
+- **Survey / poll** — "weigh in", "take our poll", "your input"
 - **Fundraising ask** — explicit dollar amounts, "chip in", "donate", "contribute"
 
 **Schema change:**
-Add an optional `messageTypes String[]` (Postgres text array) column to
-`CompetitiveInsightCampaign`. A backfill script classifies existing rows. Going
-forward the ingest processor stamps it at insert time.
+Add `messageTypes String[]` (Postgres text array) to `CompetitiveInsightCampaign`.
+A backfill cron classifies existing rows in batches via Groq. Going forward the
+ingest processor stamps it at insert time. Both this column and `subjectPatterns`
+(#3) land in a single migration.
 
 **Display:**
 - Bar chart: volume by message type, stacked by party, filterable by date range
-- Trend line: message type share over time (e.g. "match" emails are up 22% this month)
-- Table: most recent examples per type, links to the full message
+- Trend line: message type share over time (e.g. "match emails up 22% this month")
+- Table: most recent examples per type, links to full message
 
 **Open questions:**
-- Do we want AI-assisted classification (e.g. call an LLM for the "news-driven"
-  category where regex is weak)? Cost is low per-message but adds latency to ingest.
-  Recommended: regex for v1, optional LLM enrichment as a cron later.
-- Should clients be able to define their own custom tags?
+- Should clients be able to define custom tags beyond the default set?
+- Backfill priority: most recent first (more useful) or oldest first (cheaper, avoids
+  re-classifying stale data)?
 
 ---
 
 ## #2 — Narrative and Topic Trends
 
-**What:** Show the top keywords and fastest-growing topics in messages each week.
-Provides context for volume spikes — "why did email volume double this week? Because
-everyone was messaging about the budget vote."
+**What:** Top keywords each week and fastest-growing topics. Provides context for
+volume spikes — "why did email volume double this week? Because everyone was
+messaging about the budget vote."
 
-**Where it lives:** New "Topics" section in the Trends report
-(`app/[clientSlug]/reports/trends/page.tsx`), likely below the existing volume chart.
+**Needs AI: Partially — hybrid approach.**
 
-**How it works:**
+TF-IDF is purely statistical and works well for raw keyword extraction (fast, free,
+no external calls). But grouping keywords into coherent named topics ("immigration
+rhetoric" vs. "border security" vs. "illegal aliens" being the same narrative
+cluster) requires embeddings + clustering. Without AI, this is just a word cloud —
+useful but not the "context behind spikes" that Michael described.
 
-Two complementary approaches:
-
-**A. TF-IDF keyword extraction** (no external dependencies):
-For each week, tokenize all subject lines + preview texts, strip stopwords, compute
-term frequency × inverse document frequency across the corpus. Surface the top 20
-terms by score. "Fastest growing" = compare this week's TF-IDF scores to last week's
-and rank by delta.
-
-**B. N-gram clustering** (phrases, not just single words):
-Extract 2–3 word phrases (bigrams/trigrams) to catch "border security", "tax cut",
-"matching gift" as single topics rather than fragmented single words.
-
-This can run as a nightly aggregation cron that writes results to a new
-`TopicTrendSnapshot { weekStart, term, count, delta, party? }` table. The UI then
-reads from that table — no expensive real-time computation on page load.
+**Approach:**
+- **Nightly TF-IDF batch** (no AI): tokenize all subject lines + preview texts,
+  compute term frequency × inverse document frequency across the weekly corpus,
+  surface top 20 terms and fastest-growing bigrams/trigrams. Written to a
+  `TopicTrendSnapshot` table. UI reads from the snapshot — no real-time computation.
+- **Weekly AI clustering pass** (Groq): take the top 50 raw keywords from the
+  week and ask the model to group them into 5–10 named topic clusters. Runs once
+  per week, stores cluster assignments alongside the keyword data.
 
 **Display:**
-- Top keywords this week (word cloud or ranked list with count badges)
+- Top keywords this week (ranked list with count badges)
 - Fastest growing topics (ranked list with delta arrows: "budget +340%")
-- Timeline: select a keyword, see its weekly volume over the past 90 days as a sparkline
+- Timeline: click a keyword/topic, see its weekly volume over the past 90 days
 
 **Open questions:**
-- Scope to subject lines only (fast, lower noise) vs. full body text (richer, slower)?
-  Recommended: subject + preview text for v1, full body opt-in later.
-- Should keywords be scoped per-client (only messages their committee received) or
-  across the full corpus? Both are useful — recommend "my inbox" as default, "all"
-  as a toggle.
+- Scope to subject lines only (lower noise) vs. full body text (richer)?
+  Recommended: subject + preview text for v1.
+- "My inbox" (client-scoped) vs. full corpus? Recommend client-scoped as default
+  with an "all" toggle.
 
 ---
 
 ## #3 — Subject Line Patterns
 
-**What:** Classify subject lines by structural pattern and surface aggregated stats
-on how common each pattern is, how it trends, and how it correlates with inbox
-placement.
+**What:** Classify subject lines by structural pattern and surface stats on how
+common each pattern is, how it trends, and how it correlates with inbox placement.
 
-**Where it lives:** New "Subject Lines" tab inside the CI analytics view, or a
-dedicated section in the Trends report alongside #2.
+**Needs AI: No — pure string logic, deterministic and fast.**
 
-**Patterns to detect** (deterministic, fast):
+Every pattern here is unambiguous and can be detected with a single regex or
+string check. AI would add latency and cost with zero accuracy benefit. This is
+the feature you can build fastest with the highest confidence in the output.
+
+**Patterns to detect:**
 - **All caps** — entire subject is uppercase
-- **All caps word(s)** — one or more ALL-CAPS words in an otherwise mixed-case subject
+- **All caps word(s)** — one or more ALL-CAPS words in mixed-case subject
 - **Question** — ends with `?`
 - **Exclamation** — ends with `!`
 - **Short** — under 30 characters
 - **Long** — over 70 characters
 - **Emoji present** — contains one or more Unicode emoji
-- **Personalization token** — contains a merge tag (`{{`, `[Name]`, etc.)
-- **Number / dollar amount** — contains `$X`, `Xx`, or a spelled-out match amount
-- **Deadline / urgency word** — see #1 list
+- **Personalization token** — contains `{{`, `[Name]`, or similar merge tag
+- **Number / dollar amount** — contains `$X`, `Xx`, or spelled-out match amount
+- **Deadline / urgency word** — "deadline", "expires", "hours left", "last chance"
 
-Classification is pure string logic — no ML needed. A single util function
-`classifySubjectLine(subject: string): string[]` returns an array of matched
-pattern labels.
+A single `classifySubjectLine(subject: string): string[]` util function handles
+all patterns. Used at ingest time and in the backfill script.
 
 **Schema change:**
-Add `subjectPatterns String[]` to `CompetitiveInsightCampaign`, populated by the
-same backfill + ingest-time logic as `messageTypes` above. Both columns can be
-added in a single migration.
+Add `subjectPatterns String[]` to `CompetitiveInsightCampaign`. Same migration
+as `messageTypes` (#1) above — both columns in one go, one backfill script.
 
 **Display:**
 - Breakdown chart: % of messages using each pattern, by party and date range
-- Correlation table: for each pattern, show average inbox rate, average spam rate.
-  This is the most actionable insight — "question subject lines inbox 12% better."
-- Examples panel: click a pattern to see the 10 most recent examples
-
-**Open questions:**
-- Do we want to cluster *similar* subject lines (e.g. all the "URGENT: X hours left"
-  variants) to show how templates spread across campaigns? That's closer to feature
-  #5 (message repetition) — could be unified.
+- Correlation table: for each pattern, average inbox rate vs. spam rate — the most
+  actionable output ("question subject lines inbox 12% better")
+- Examples panel: click any pattern to see the 10 most recent examples
 
 ---
 
 ## #4 — Competitive Comparisons
 
-**What:** Side-by-side breakdown of top senders with their key behavioral metrics:
-volume, channel mix (email vs SMS), send cadence, donation platform, inbox rate,
-and subject line patterns. Essentially a leaderboard with expandable detail per
-sender.
+**What:** Side-by-side breakdown of top senders with key behavioral metrics:
+volume, channel mix, send cadence, donation platform, inbox rate, and subject
+line patterns.
 
-**Where it lives:** New "Comparisons" view, most naturally as a new page under the
-CI section (`app/[clientSlug]/ci/comparisons/page.tsx`) or as a tab in the existing
-CI analytics view.
+**Needs AI: No — aggregation of data we already have.**
+
+Once #1 and #3 are built and messages are tagged, competitive comparisons are
+purely a grouping + counting exercise. The existing leaderboard API already does
+much of this — we extend it with the new classification columns. No model calls
+needed at any point.
 
 **How it works:**
-
-This is largely a re-aggregation of data we already have. The query:
 - Groups `CompetitiveInsightCampaign` by assigned entity
-- Computes per-entity: total emails, total SMS, email/SMS ratio, unique send dates
-  (cadence proxy), average inbox rate, most-used donation platform, most-used
-  subject pattern
+- Per entity: total emails, total SMS, email/SMS ratio, send dates (cadence proxy),
+  average inbox rate, most-used donation platform, most-used subject patterns,
+  most-used message types
 - Returns top N entities sorted by total volume or inbox rate (user-selectable)
 
-The API already does much of this for the leaderboard — we'd extend it with the
-new pattern/type columns once #1 and #3 are built.
-
 **Display:**
-- Comparison table: one row per sender, columns for each metric, sortable
-- Side-by-side modal or drawer: select two senders, see their metrics in a two-column
-  layout with sparkline history for each
-- "Strategy profile" chip row per sender: small badges for their dominant patterns
-  (e.g. "Heavy match", "Emoji subject lines", "High SMS volume")
+- Comparison table: one row per sender, all metric columns, sortable
+- Side-by-side detail: select two senders, see metrics in a two-column layout
+  with sparkline history for each
+- "Strategy profile" chips per sender: dominant pattern badges (e.g. "Heavy match",
+  "Emoji subject lines", "High SMS volume")
 
 **Open questions:**
-- Should clients only see entities in their CI feed, or should this be a cross-client
-  aggregate? Current architecture is per-client — recommend keeping it scoped.
-- Do we want a "compare my committee vs. top competitor" pre-built view?
+- Should this be scoped to the client's own CI feed or across the full corpus?
+  Recommend client-scoped as default, consistent with the rest of CI.
 
 ---
 
 ## #5 — Message Repetition
 
-**What:** Show what percentage of messages are exact duplicates or near-duplicates
-(slightly modified templates). Surfaces how heavily campaigns recycle content and
-helps identify "template families" — groups of messages that share a common ancestor.
+**What:** Show what percentage of messages are exact or near-duplicates. Surfaces
+how heavily campaigns recycle content and identifies "template families" — groups
+of messages sharing a common ancestor.
 
-**Where it lives:** New "Repetition" section in the CI analytics view or its own
-page. Could also surface inline as a badge on individual messages ("Used 12 times").
+**Needs AI: Yes — embeddings for near-duplicate detection.**
 
-**How it works:**
+Exact duplicates are trivial: hash the normalized body and group by hash. No AI
+needed. Near-duplicates (slightly reworded templates — "URGENT: donate now" vs.
+"URGENT: donate today") require text embeddings to compute semantic similarity.
+Levenshtein distance on subject lines is a usable v1 approximation for same-sender
+detection but breaks down cross-sender and misses body-level reuse.
 
-Two tiers of matching:
-
-**Exact duplicates:**
-We already have `rawSubject` and body content. Hash the normalized body (lowercase,
-strip punctuation, strip merge tags) and group by hash. We essentially already do
-this for dedup during ingest — the insight layer is just surfacing the stats
-rather than hiding them.
-
-**Near-duplicates (fuzzy matching):**
-Use MinHash / Locality-Sensitive Hashing (LSH) on the body text to find messages
-with >85% token overlap. This scales well — LSH runs in near-linear time against
-a corpus. We'd compute MinHash signatures at ingest time, store them in a new
-`bodyLshSignature Bytes` column, and cluster them in a nightly cron.
-
-A simpler v1 shortcut: compare subject line edit distance (Levenshtein) across
-messages from the same sender within a 30-day window. Catches "URGENT: donate now"
-vs "URGENT: donate today" without full-body LSH.
+**Approach:**
+- **Exact dupes** (no AI): SHA-256 hash of the normalized body (lowercase, strip
+  punctuation, strip merge tags). Store as `bodyHash String?`. Group by hash to
+  find exact copies.
+- **Near-dupes** (embeddings): Generate `text-embedding-3-small` vector for each
+  message body once at ingest. Store as `bodyEmbedding` (pgvector). A nightly cron
+  clusters messages with cosine similarity > 0.92 and assigns them a shared
+  `templateGroupId String?`. Cross-sender clustering is deliberately included —
+  it surfaces coordinated messaging and shared template vendors, which is its own
+  high-value signal.
+- **V1 shortcut** if pgvector is not yet available: Levenshtein on subject lines
+  within a 30-day same-sender window. Ships faster, catches ~60% of near-dupes.
 
 **Schema change:**
-- `bodyHash String?` — SHA-256 of the normalized body. Indexes exact dupes.
-- `templateGroupId String?` — assigned by the nightly clustering cron. Null until
-  first classification run. Messages in the same group share a common template.
-- `bodyLshSignature Bytes?` — MinHash signature for near-dupe detection. Optional
-  for v1 if we start with subject-line Levenshtein only.
+- `bodyHash String?` — indexes exact dupes
+- `templateGroupId String?` — assigned by nightly clustering cron
+- `bodyEmbedding Unsupported("vector(1536)")?` — requires pgvector extension
+  (available on Neon by default)
 
 **Display:**
-- Summary stat: "X% of messages this month were recycled content" (exact + near-dupe)
-- Template families: ranked list of template groups by usage count, showing the
-  "original" (first seen) and all variants
-- Per-sender repetition score: how often does each sender reuse content?
-- Timeline: repetition rate over time — are campaigns getting lazier?
+- Summary stat: "X% of messages this month were recycled content"
+- Template families: ranked list of groups by usage count, showing the original
+  (first seen) and all variants with sender + date
+- Per-sender repetition score: how often each sender reuses content
+- Timeline: repetition rate over time
 
 **Open questions:**
-- What threshold counts as a "near-duplicate"? 85% token overlap is a reasonable
-  starting point but should be tuneable.
-- Should repeated messages from *different* senders count? That would surface
-  coordinated messaging or shared template vendors — potentially very interesting.
-  Recommend flagging this as a separate "coordinated messaging" signal rather than
-  lumping it into repetition.
+- 0.92 cosine similarity as the near-dupe threshold is a starting point — should
+  be tunable per client.
+- Cross-sender "coordinated messaging" is interesting enough to surface as its own
+  separate signal rather than just folding it into repetition stats.
 
 ---
 
 ## Implementation Order (Recommended)
 
-| Priority | Feature | Reason |
-|----------|---------|--------|
-| 1 | #3 Subject Line Patterns | Pure string logic, no schema migration needed for display. Most immediately actionable (inbox rate correlation). |
-| 2 | #1 Messaging Type Tagging | Adds `messageTypes[]` column. Backfill + ingest hook. Powers #4. |
-| 3 | #4 Competitive Comparisons | Mostly a UI re-aggregation of existing data. Becomes richer once #1/#3 land. |
-| 4 | #2 Narrative / Topic Trends | Requires nightly aggregation cron + new snapshot table. Most infrastructure. |
-| 5 | #5 Message Repetition | Requires `bodyHash` + optional LSH. Most complex but highest "wow factor." |
+| Priority | Feature | AI needed | Reason |
+|----------|---------|-----------|--------|
+| 1 | #3 Subject Line Patterns | No | Pure string logic, ships fast, highest confidence output. Most immediately actionable (inbox rate correlation). |
+| 2 | #1 Messaging Type Tagging | Yes — Groq classifier at ingest | Adds `messageTypes[]` + `subjectPatterns[]` in a single migration. Powers #4. |
+| 3 | #4 Competitive Comparisons | No | UI re-aggregation. Becomes genuinely rich once #1/#3 data is backfilled. |
+| 4 | #2 Narrative / Topic Trends | Partially — TF-IDF + weekly Groq clustering | New snapshot table + nightly cron. Most infrastructure work. |
+| 5 | #5 Message Repetition | Yes — embeddings + nightly cluster cron | Most complex. Highest "wow factor." Requires pgvector. |
 
-Features #1 and #3 share the same backfill script and schema migration and should
-be built together in a single sprint.
+Features #1 and #3 share a single migration and a single backfill script and
+should be built together in the same sprint.
 
 ---
 
 ## Shared Infrastructure Needed
 
-- **`lib/message-classifier.ts`** — single util that takes a campaign record and
-  returns `{ messageTypes: string[], subjectPatterns: string[] }`. Used by both
-  the ingest processor and the backfill script. Powers #1 and #3.
+- **`lib/message-classifier.ts`** — util that takes a campaign record and returns
+  `{ messageTypes: string[], subjectPatterns: string[] }`. The `subjectPatterns`
+  half is pure string logic; `messageTypes` calls Groq when the pre-filter regex
+  is inconclusive. Used by both the ingest processor and the backfill script.
 - **Backfill script** — `scripts/backfill-message-classifications.ts`. Reads all
-  existing `CompetitiveInsightCampaign` rows in batches, runs the classifier, and
-  writes the two new columns. Idempotent.
-- **`TopicTrendSnapshot` table** — for #2. Populated by a new
-  `app/api/cron/compute-topic-trends/route.ts` that runs nightly.
-- **New API routes** — each feature likely needs a dedicated endpoint under
-  `app/api/ci/` (e.g. `app/api/ci/subject-patterns/`, `app/api/ci/topic-trends/`,
-  `app/api/ci/comparisons/`, `app/api/ci/repetition/`) to keep query logic out of
-  the component layer.
+  existing `CompetitiveInsightCampaign` rows in batches of 50, runs the classifier
+  (with Groq rate-limit awareness), writes `messageTypes` + `subjectPatterns`.
+  Idempotent — skips rows where both columns are already populated.
+- **`TopicTrendSnapshot` table** — for #2. Populated by
+  `app/api/cron/compute-topic-trends/route.ts` running nightly.
+- **pgvector extension** — for #5. Already available on Neon, just needs to be
+  enabled and the `bodyEmbedding` column added.
+- **New API routes** — one per feature under `app/api/ci/`:
+  - `app/api/ci/subject-patterns/`
+  - `app/api/ci/message-types/`
+  - `app/api/ci/topic-trends/`
+  - `app/api/ci/comparisons/`
+  - `app/api/ci/repetition/`

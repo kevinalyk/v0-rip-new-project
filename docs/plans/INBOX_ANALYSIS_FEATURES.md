@@ -228,6 +228,81 @@ should be built together in the same sprint.
 
 ---
 
+## Daily AI Report — $300 Tier
+
+Rather than surfacing all five features as separate standalone views, the primary
+delivery mechanism for AI-powered analysis on the $300 tier is a **daily
+pre-generated briefing** — a structured analyst-style report written by AI from
+the previous 24–48 hours of data, regenerated once per day at 6 AM ET.
+
+**Why once a day:**
+- AI cost is fixed and predictable — one model call per client per day regardless
+  of how many times they view the report
+- Clients get a consistent "morning briefing" rhythm rather than a live dashboard
+  they have to check constantly
+- The report is stored as a DB row — every page load is a fast DB read, no model
+  call on demand
+
+**What the report covers:**
+A single report can roll up several of Michael's requested features in one pass:
+- Top messaging themes and fastest-growing topics (#2 narrative trends)
+- Subject line tactics in play this week (#3 patterns)
+- Competitive sender breakdown — who's sending what, channel mix, volume (#4)
+- Messaging type shift vs. prior week (#1 tagging)
+
+This is a "what's happening in the inbox right now" briefing — AI-written prose
+with key stats inline, structured as sections. Not a dashboard, more like an
+analyst memo that refreshes each morning.
+
+**Cost model:**
+Feeding a summary of the top 200 messages (subject lines + sender + type tags,
+not full bodies) is ~8–10k tokens per client per day. At Groq or GPT-4o-mini
+pricing that is fractions of a penny — well under $1/month per client. Richer
+analysis with full body text scales cost up but remains manageable. The report
+runs on the house — it is included in the $300 tier at no variable cost to the
+client and no meaningful cost to us.
+
+**On-demand regeneration — Stripe billing (future):**
+Stripe is adding native AI token billing, which opens a clean path for charging
+clients to regenerate the report mid-day if they want a fresh read. The default
+(once daily, free to view) stays on the house. A client who wants a second run
+at 2 PM can pay a small per-report fee directly charged through Stripe at the
+moment they click "Regenerate." No subscription tier change needed — it is a
+pure usage charge. This is not v1 scope but the architecture should not block it:
+keep the generation logic in a single callable function so both the cron and a
+future paid endpoint can invoke it.
+
+**Tier gating:**
+The report page checks `client.tier === 'pro'` (or equivalent $300 tier flag)
+before rendering. Non-pro clients see a paywall prompt. Historical reports (last
+30 days) are stored so clients can browse past briefings — this is a feature in
+itself.
+
+**Schema:**
+New `DailyReport` table:
+```
+model DailyReport {
+  id          String   @id @default(cuid())
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id])
+  generatedAt DateTime @default(now())
+  reportDate  String   // "YYYY-MM-DD" — the day this report covers
+  content     Json     // structured sections: { summary, themes, subjectPatterns, senders, ... }
+  model       String   // which model generated it, for debugging/audit
+  promptTokens  Int?
+  outputTokens  Int?
+  createdAt   DateTime @default(now())
+
+  @@unique([clientId, reportDate])
+}
+```
+
+**Cron:** `app/api/cron/generate-daily-reports/route.ts`, scheduled 10:00 UTC
+(6 AM ET). Iterates clients with `tier === 'pro'`, generates one report each,
+upserts into `DailyReport` by `(clientId, reportDate)` — safe to re-run.
+
+---
+
 ## Shared Infrastructure Needed
 
 - **`lib/message-classifier.ts`** — util that takes a campaign record and returns

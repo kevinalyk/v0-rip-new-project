@@ -333,28 +333,22 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
   if (authToken) {
     try {
       const payload = await verifyToken(authToken)
-      console.log("[v0] directory slug page - payload:", payload ? { userId: payload.userId, role: payload.role } : null)
       if (payload) {
         const user = await prisma.user.findUnique({
           where: { id: payload.userId as string },
           select: { role: true, client: { select: { hasCompetitiveInsights: true } } },
         })
-        console.log("[v0] directory slug page - user:", user ? { role: user.role, hasCI: user.client?.hasCompetitiveInsights } : null)
         if (user) {
           hasFullAccess =
             user.role === "super_admin" ||
             (user.client?.hasCompetitiveInsights ?? false)
         }
       }
-    } catch (e) {
-      console.log("[v0] directory slug page - auth error:", e)
+    } catch {
+      // invalid token — treat as unauthenticated
     }
-  } else {
-    console.log("[v0] directory slug page - no auth token")
   }
-  console.log("[v0] directory slug page - hasFullAccess:", hasFullAccess, "slug:", slug)
   const initialData = await getEntityBySlug(slug, hasFullAccess)
-  console.log("[v0] directory slug page - initialData campaigns:", initialData?.recentCampaigns?.length, "sms:", initialData?.recentSms?.length)
   const structuredData = initialData ? buildEntityStructuredData(initialData) : null
   const breadcrumbData = initialData ? buildEntityBreadcrumb(initialData.entity.name, slug) : null
 

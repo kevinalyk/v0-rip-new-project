@@ -323,7 +323,11 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
   }
 
   // ─── Entity profile page (existing flow) ───
-  const initialData = await getEntityBySlug(slug)
+  // Pass the auth token so getEntityBySlug can filter to 3-hour window for
+  // free/unauthenticated users and return the correct hasFullAccess flag.
+  const cookieStore = await cookies()
+  const authToken = cookieStore.get("auth_token")?.value
+  const initialData = await getEntityBySlug(slug, authToken)
   const structuredData = initialData ? buildEntityStructuredData(initialData) : null
   const breadcrumbData = initialData ? buildEntityBreadcrumb(initialData.entity.name, slug) : null
 

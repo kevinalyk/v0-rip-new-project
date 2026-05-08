@@ -139,7 +139,7 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
         const res = await fetch("/api/auth/me", { credentials: "include" })
         if (res.ok) {
           const user = await res.json()
-          setClientSlug(user.clientId || "rip")
+          setClientSlug(user.client?.slug || "")
           setIsAuthenticated(true)
         }
       } catch {
@@ -496,7 +496,7 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
                         size="sm"
                         className="bg-[#dc2a28] hover:bg-[#dc2a28]/90 text-white mt-1"
                         onClick={() => {
-                          if (clientSlug) window.location.href = `/${clientSlug}/billing?addon=ci`
+                          window.location.href = clientSlug ? `/${clientSlug}/billing` : "/login"
                         }}
                       >
                         Upgrade to Unlock
@@ -517,7 +517,7 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
                     variant="outline"
                     className="text-xs h-7 border-[#dc2a28] text-[#dc2a28] hover:bg-[#dc2a28]/10 flex-shrink-0 ml-4"
                     onClick={() => {
-                      if (clientSlug) window.location.href = `/${clientSlug}/billing?addon=ci`
+                      window.location.href = clientSlug ? `/${clientSlug}/billing` : "/login"
                     }}
                   >
                     Unlock Full History

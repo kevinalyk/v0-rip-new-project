@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, Lock, Mail, MessageSquare, Building2, User, Users, ArrowLeft, Calendar, Smartphone, ExternalLink } from "lucide-react"
 import { CiEntitySubscribeButton } from "@/components/ci-entity-subscribe-button"
-import { nameToSlug } from "@/lib/directory"
+import { nameToSlug } from "@/lib/directory-utils"
 import { RelatedEntities } from "@/components/related-entities"
 
 interface Mapping {
@@ -34,6 +34,8 @@ interface RecentSms {
 }
 
 interface EntityData {
+  hasFullAccess: boolean
+  cutoffAt: string
   entity: {
     id: string
     name: string
@@ -222,7 +224,7 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
     )
   }
 
-  const { entity, recentCampaigns, recentSms } = data
+  const { entity, recentCampaigns, recentSms, hasFullAccess, cutoffAt } = data
   const emailDomains = [...new Set(entity.mappings.filter((m) => m.senderDomain).map((m) => m.senderDomain!))]
   const shortCodes = [...new Set(entity.mappings.filter((m) => m.senderPhone).map((m) => m.senderPhone!))]
 
@@ -376,6 +378,7 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
           type CommItem =
             | { kind: "email"; id: string; title: string; date: string | null; sortTs: number }
             | { kind: "sms"; id: string; title: string; date: string | null; sortTs: number }
+
           const emailItems: CommItem[] = recentCampaigns.map((c) => ({
             kind: "email",
             id: c.id,
@@ -394,6 +397,24 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
             .sort((a, b) => b.sortTs - a.sortTs)
             .slice(0, 10)
 
+          // Cutoff timestamp from the API — items older than this are blurred
+          // for unauthenticated and free-tier users.
+          const cutoffTs = cutoffAt ? new Date(cutoffAt).getTime() : 0
+
+          // First index that falls outside the 3-hour window — everything from
+          // here onward gets blurred. Full-access users never hit this condition.
+          const firstLockedIdx = hasFullAccess
+            ? combined.length
+            : combined.findIndex((item) => item.sortTs < cutoffTs)
+          const hasLockedItems = firstLockedIdx !== -1 && firstLockedIdx < combined.length
+
+          // Whether the overlay is shown depends on auth state and access level:
+          // - not signed in → sign-in overlay
+          // - signed in but no CI access → upgrade overlay
+          // - full access → no overlay
+          const showSignInOverlay = !isAuthenticated && hasLockedItems
+          const showUpgradeOverlay = isAuthenticated && !hasFullAccess && hasLockedItems
+
           return (
             <div className="rounded-lg border border-border bg-card overflow-hidden mb-8">
               <div className="px-4 py-3 border-b border-border flex items-center justify-between">
@@ -403,47 +424,77 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
                 </span>
               </div>
 
-              <div className={`divide-y divide-border relative${!isAuthenticated ? " min-h-[240px]" : ""}`}>
-                {combined.map((item) => (
-                  <div
-                    key={`${item.kind}-${item.id}`}
-                    className={`px-4 py-3 flex items-center justify-between gap-4 ${isAuthenticated ? "cursor-pointer hover:bg-accent/50 transition-colors" : "blur-sm select-none pointer-events-none"}`}
-                    onClick={() => isAuthenticated && handlePreviewClick(item.id, item.kind)}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      {item.kind === "email" ? (
-                        <Mail className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                      ) : (
-                        <MessageSquare className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                      )}
-                      <span className="text-sm truncate">{item.title}</span>
+              <div className="divide-y divide-border relative">
+                {combined.map((item, index) => {
+                  const isLocked = !hasFullAccess && index >= firstLockedIdx && firstLockedIdx !== -1
+                  return (
+                    <div
+                      key={`${item.kind}-${item.id}`}
+                      className={`px-4 py-3 flex items-center justify-between gap-4 transition-colors
+                        ${isLocked ? "blur-sm select-none pointer-events-none" : ""}
+                        ${!isLocked && isAuthenticated ? "cursor-pointer hover:bg-accent/50" : ""}
+                      `}
+                      onClick={() => !isLocked && isAuthenticated && handlePreviewClick(item.id, item.kind)}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {item.kind === "email" ? (
+                          <Mail className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                        ) : (
+                          <MessageSquare className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                        )}
+                        <span className="text-sm truncate">{item.title}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground flex-shrink-0">{formatDate(item.date)}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground flex-shrink-0">{formatDate(item.date)}</span>
-                  </div>
-                ))}
+                  )
+                })}
 
-            {/* Login gate overlay — only shown when not authenticated */}
-            {!isAuthenticated && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/70 backdrop-blur-[2px]">
-                <div className="flex flex-col items-center gap-3 text-center px-6">
-                  <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                    <Lock className="h-5 w-5 text-muted-foreground" />
+                {/* Sign-in overlay — unauthenticated visitors with locked items */}
+                {showSignInOverlay && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/70 backdrop-blur-[2px]">
+                    <div className="flex flex-col items-center gap-3 text-center px-6">
+                      <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                        <Lock className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <p className="font-semibold text-sm">Sign in to view communications</p>
+                      <p className="text-xs text-muted-foreground max-w-xs">
+                        Free accounts see the last 3 hours. Sign in to access recent activity from {entity.name}.
+                      </p>
+                      <div className="flex gap-3 mt-1">
+                        <Button asChild size="sm" className="bg-[#dc2a28] hover:bg-[#dc2a28]/90 text-white">
+                          <Link href="/login">Sign In</Link>
+                        </Button>
+                        <Button asChild size="sm" variant="outline">
+                          <Link href="/signup">Create Account</Link>
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  <p className="font-semibold text-sm">Sign in to view full communications</p>
-                  <p className="text-xs text-muted-foreground max-w-xs">
-                    Access the complete feed of emails and SMS messages captured from {entity.name}.
-                  </p>
-                  <div className="flex gap-3 mt-1">
-                    <Button asChild size="sm" className="bg-[#dc2a28] hover:bg-[#dc2a28]/90 text-white">
-                      <Link href="/login">Sign In</Link>
-                    </Button>
-                    <Button asChild size="sm" variant="outline">
-                      <Link href="/signup">Create Account</Link>
-                    </Button>
+                )}
+
+                {/* Upgrade overlay — signed-in free-tier users with locked items */}
+                {showUpgradeOverlay && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/70 backdrop-blur-[2px]">
+                    <div className="flex flex-col items-center gap-3 text-center px-6">
+                      <div className="w-10 h-10 rounded-full bg-[#dc2a28]/10 flex items-center justify-center">
+                        <Lock className="h-5 w-5 text-[#dc2a28]" />
+                      </div>
+                      <p className="font-semibold text-sm">Full history requires a CI subscription</p>
+                      <p className="text-xs text-muted-foreground max-w-xs">
+                        {"You're currently seeing the last 3 hours of activity. Upgrade to access the complete communication history."}
+                      </p>
+                      <Button
+                        size="sm"
+                        className="bg-[#dc2a28] hover:bg-[#dc2a28]/90 text-white mt-1"
+                        onClick={() => {
+                          if (clientSlug) window.location.href = `/${clientSlug}/billing?addon=ci`
+                        }}
+                      >
+                        Upgrade to Unlock
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </div>
-            )}
+                )}
               </div>
             </div>
           )

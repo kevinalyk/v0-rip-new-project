@@ -1,15 +1,13 @@
 import prisma from "@/lib/prisma"
+export { nameToSlug } from "@/lib/directory-utils"
+import { nameToSlug } from "@/lib/directory-utils"
 
-export function nameToSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-}
-
-export async function getEntityBySlug(slug: string) {
+// hasFullAccess is resolved by the caller (server page or API route) so this
+// lib file stays free of next/headers and can be safely imported anywhere.
+export async function getEntityBySlug(slug: string, hasFullAccess = false) {
   try {
+    const cutoffAt = new Date(Date.now() - 3 * 60 * 60 * 1000)
+
     const entities = await prisma.ciEntity.findMany({
       where: { type: { not: "data_broker" } },
       select: {
@@ -45,20 +43,28 @@ export async function getEntityBySlug(slug: string) {
     if (!entity) return null
 
     const recentCampaigns = await prisma.competitiveInsightCampaign.findMany({
-      where: { entityId: entity.id },
+      where: {
+        entityId: entity.id,
+        ...(hasFullAccess ? {} : { dateReceived: { gte: cutoffAt } }),
+      },
       orderBy: { dateReceived: "desc" },
       take: 10,
       select: { id: true, subject: true, dateReceived: true, senderEmail: true },
     })
 
     const recentSms = await prisma.smsQueue.findMany({
-      where: { entityId: entity.id },
+      where: {
+        entityId: entity.id,
+        ...(hasFullAccess ? {} : { createdAt: { gte: cutoffAt } }),
+      },
       orderBy: { createdAt: "desc" },
       take: 5,
       select: { id: true, message: true, createdAt: true, phoneNumber: true },
     })
 
     return {
+      hasFullAccess,
+      cutoffAt: cutoffAt.toISOString(),
       entity: {
         id: entity.id,
         name: entity.name,

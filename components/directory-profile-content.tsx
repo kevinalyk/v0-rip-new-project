@@ -124,6 +124,7 @@ function prepareEmailHtml(html: string) {
 export function DirectoryProfileContent({ slug, initialData }: { slug: string; initialData?: EntityData | null }) {
   const [clientSlug, setClientSlug] = useState<string>("")
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [imageIsWide, setImageIsWide] = useState(false)
   const [authLoading, setAuthLoading] = useState(true)
   // If server pre-fetched the data, use it directly — no client fetch needed.
   const [data, setData] = useState<EntityData | null>(initialData ?? null)
@@ -244,15 +245,38 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
         </div>
 
         {/* Profile hero */}
-        <div className="flex items-start gap-6 mb-8">
-          <div className="flex-shrink-0 w-32 h-40 rounded-2xl bg-muted flex items-center justify-center text-muted-foreground overflow-hidden">
-            {entity.imageUrl
-              ? <img src={entity.imageUrl} alt={entity.name} className="w-full h-full object-cover object-top" crossOrigin="anonymous" />
-              : getEntityIcon(entity.type)
-            }
-          </div>
+        <div className={imageIsWide ? "flex flex-col gap-6 mb-8" : "flex items-start gap-6 mb-8"}>
+          {entity.imageUrl && (
+            <div className={`flex-shrink-0 rounded-2xl bg-muted flex items-center justify-center text-muted-foreground overflow-hidden
+              ${imageIsWide ? "w-full max-w-md" : "w-32 h-40"}`}
+            >
+              <img
+                src={entity.imageUrl}
+                alt={entity.name}
+                className={imageIsWide ? "w-full h-auto" : "w-full h-full object-cover object-top"}
+                crossOrigin="anonymous"
+                onLoad={(e) => {
+                  const img = e.currentTarget
+                  const aspectRatio = img.naturalWidth / img.naturalHeight
+                  if (aspectRatio > 1.8) setImageIsWide(true)
+                }}
+              />
+            </div>
+          )}
+          {!entity.imageUrl && (
+            <div className="flex-shrink-0 w-32 h-40 rounded-2xl bg-muted flex items-center justify-center text-muted-foreground">
+              {getEntityIcon(entity.type)}
+            </div>
+          )}
           <div className="flex-1 min-w-0 pt-1">
-            <h1 className="text-2xl font-bold tracking-tight text-balance mb-1">{entity.name}</h1>
+            <div className="flex items-start justify-between gap-3 mb-1">
+              <h1 className="text-2xl font-bold tracking-tight text-balance">{entity.name}</h1>
+              {isAuthenticated && imageIsWide && (
+                <div className="flex-shrink-0">
+                  <CiEntitySubscribeButton entityId={entity.id} entityName={entity.name} />
+                </div>
+              )}
+            </div>
             {entity.office && (
               <p className="text-sm text-muted-foreground mb-2">{entity.office}</p>
             )}
@@ -288,7 +312,7 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
                 </div>
               )}
           </div>
-          {isAuthenticated && (
+          {isAuthenticated && !imageIsWide && (
             <div className="flex-shrink-0">
               <CiEntitySubscribeButton entityId={entity.id} entityName={entity.name} />
             </div>

@@ -6,6 +6,7 @@ import AppLayout from "@/components/app-layout"
 import { getEntityBySlug } from "@/lib/directory"
 import { getAllEntitiesWithCounts } from "@/lib/ci-entity-utils"
 import { verifyToken } from "@/lib/auth"
+import prisma from "@/lib/prisma"
 import {
   resolveSlug,
   PARTY_SLUG_TO_LABEL,
@@ -323,11 +324,31 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
   }
 
   // ─── Entity profile page (existing flow) ───
-  // Pass the auth token so getEntityBySlug can filter to 3-hour window for
-  // free/unauthenticated users and return the correct hasFullAccess flag.
+  // Resolve full CI access here in the server page (which already imports
+  // next/headers) so lib/directory.ts stays free of that dependency and can
+  // be safely imported by client-side code without breaking the build.
   const cookieStore = await cookies()
   const authToken = cookieStore.get("auth_token")?.value
-  const initialData = await getEntityBySlug(slug, authToken)
+  let hasFullAccess = false
+  if (authToken) {
+    try {
+      const payload = await verifyToken(authToken)
+      if (payload) {
+        const user = await prisma.user.findUnique({
+          where: { id: payload.userId as string },
+          select: { role: true, client: { select: { ciSubscriptionPlan: true } } },
+        })
+        if (user) {
+          hasFullAccess =
+            user.role === "super_admin" ||
+            (user.client?.ciSubscriptionPlan ?? "none") !== "none"
+        }
+      }
+    } catch {
+      // invalid token — treat as unauthenticated
+    }
+  }
+  const initialData = await getEntityBySlug(slug, hasFullAccess)
   const structuredData = initialData ? buildEntityStructuredData(initialData) : null
   const breadcrumbData = initialData ? buildEntityBreadcrumb(initialData.entity.name, slug) : null
 

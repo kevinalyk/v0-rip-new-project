@@ -7,6 +7,7 @@ import {
   extractActBlueIdentifiers,
   extractPSQIdentifiers,
   extractRevvIdentifiers,
+  findEntityByCtaDomain,
 } from "@/lib/ci-entity-utils"
 
 /**
@@ -74,17 +75,7 @@ export async function POST(request: NextRequest) {
     const psqIds = new Set(extractPSQIdentifiers(links))
     const revvIds = new Set(extractRevvIdentifiers(links))
 
-    if (
-      winredIds.size === 0 &&
-      anedotIds.size === 0 &&
-      actblueIds.size === 0 &&
-      psqIds.size === 0 &&
-      revvIds.size === 0
-    ) {
-      return NextResponse.json({ success: false, reason: "No donation platform identifiers found in CTA links" })
-    }
-
-    // Load all entities with donation identifiers
+    // Load all entities with donation identifiers (skip if none extracted — ctaDomain pass will still run)
     const entities = await prisma.ciEntity.findMany({
       where: { donationIdentifiers: { not: null }, type: { not: "data_broker" } },
       select: { id: true, name: true, donationIdentifiers: true },
@@ -131,8 +122,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Fallback: match by ctaDomain mapping (e.g. donate.gregabbott.com)
     if (!matchedEntity) {
-      return NextResponse.json({ success: false, reason: "No matching entity found for these donation identifiers" })
+      const ctaMatch = await findEntityByCtaDomain(links)
+      if (ctaMatch) {
+        const entity = await prisma.ciEntity.findUnique({
+          where: { id: ctaMatch.entityId },
+          select: { id: true, name: true },
+        })
+        if (entity) {
+          matchedEntity = { id: entity.id, name: entity.name, method: ctaMatch.assignmentMethod }
+        }
+      }
+    }
+
+    if (!matchedEntity) {
+      return NextResponse.json({ success: false, reason: "No matching entity found via donation identifiers or CTA domain" })
     }
 
     // Assign the message

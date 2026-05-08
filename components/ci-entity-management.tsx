@@ -207,6 +207,9 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
   const [recentAssignments, setRecentAssignments] = useState<any[]>([])
   const [loadingAssignments, setLoadingAssignments] = useState(false)
 
+  // Per-row auto-assign state: maps message id → "loading" | "success:EntityName" | "error:reason"
+  const [autoAssignStatus, setAutoAssignStatus] = useState<Record<string, string>>({})
+
   const [dataBrokerCampaigns, setDataBrokerCampaigns] = useState<Campaign[]>([])
   const [loadingDataBroker, setLoadingDataBroker] = useState(false)
   const [selectedDataBrokerCampaign, setSelectedDataBrokerCampaign] = useState<Campaign | null>(null)
@@ -1081,6 +1084,48 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
     }
   }
 
+  const handleAutoAssignSingle = async (campaign: Campaign) => {
+    setAutoAssignStatus((prev) => ({ ...prev, [campaign.id]: "loading" }))
+    try {
+      const res = await fetch("/api/admin/auto-assign-single", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: campaign.id, type: campaign.type }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setAutoAssignStatus((prev) => ({ ...prev, [campaign.id]: `success:${data.entityName}` }))
+        // Remove from unassigned list after a short delay so the user can read the result
+        setTimeout(() => {
+          setUnassignedCampaigns((prev) => prev.filter((c) => c.id !== campaign.id))
+          setAutoAssignStatus((prev) => {
+            const next = { ...prev }
+            delete next[campaign.id]
+            return next
+          })
+        }, 1800)
+      } else {
+        setAutoAssignStatus((prev) => ({ ...prev, [campaign.id]: `error:${data.reason || data.error || "No match found"}` }))
+        setTimeout(() => {
+          setAutoAssignStatus((prev) => {
+            const next = { ...prev }
+            delete next[campaign.id]
+            return next
+          })
+        }, 4000)
+      }
+    } catch {
+      setAutoAssignStatus((prev) => ({ ...prev, [campaign.id]: "error:Request failed" }))
+      setTimeout(() => {
+        setAutoAssignStatus((prev) => {
+          const next = { ...prev }
+          delete next[campaign.id]
+          return next
+        })
+      }, 4000)
+    }
+  }
+
   const handleAssignFromPreview = () => {
     if (!selectedPreviewCampaign) return
 
@@ -1199,6 +1244,42 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                                   Preview
                                 </Button>
                               )}
+                              {/* Auto-assign by donation identifier */}
+                              {(() => {
+                                const status = autoAssignStatus[campaign.id]
+                                if (status === "loading") {
+                                  return (
+                                    <Button variant="outline" size="sm" disabled className="h-8 w-24">
+                                      <span className="text-xs">Matching...</span>
+                                    </Button>
+                                  )
+                                }
+                                if (status?.startsWith("success:")) {
+                                  return (
+                                    <Button variant="outline" size="sm" disabled className="h-8 text-green-500 border-green-500/40 max-w-[140px]">
+                                      <span className="text-xs truncate">Assigned: {status.slice(8)}</span>
+                                    </Button>
+                                  )
+                                }
+                                if (status?.startsWith("error:")) {
+                                  return (
+                                    <Button variant="outline" size="sm" disabled className="h-8 text-destructive border-destructive/40 max-w-[140px]">
+                                      <span className="text-xs truncate">{status.slice(6)}</span>
+                                    </Button>
+                                  )
+                                }
+                                return (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleAutoAssignSingle(campaign)}
+                                    className="h-8"
+                                    title="Auto-assign using donation platform identifiers (WinRed, ActBlue, Anedot, etc.)"
+                                  >
+                                    Auto-Assign
+                                  </Button>
+                                )
+                              })()}
                               <Button
                                 variant="ghost"
                                 size="icon"

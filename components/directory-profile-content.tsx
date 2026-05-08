@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, Lock, Mail, MessageSquare, Building2, User, Users, ArrowLeft, Calendar, Smartphone, ExternalLink } from "lucide-react"
 import { CiEntitySubscribeButton } from "@/components/ci-entity-subscribe-button"
-import { nameToSlug } from "@/lib/directory"
+import { nameToSlug } from "@/lib/directory-utils"
 import { RelatedEntities } from "@/components/related-entities"
 
 interface Mapping {

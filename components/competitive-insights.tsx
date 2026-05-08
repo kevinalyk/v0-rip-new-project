@@ -65,7 +65,7 @@ import { CiEntitySubscribeButton } from "./ci-entity-subscribe-button"
 import { useToast } from "@/hooks/use-toast"
 import { CiViewsManager } from "./ci-views-manager" // Imported CiViewsManager
 import { CiAnalyticsView } from "./ci-analytics-view"
-import { nameToSlug } from "@/lib/directory"
+import { nameToSlug } from "@/lib/directory-utils"
 
 interface CompetitiveInsightsProps {
   clientSlug: string

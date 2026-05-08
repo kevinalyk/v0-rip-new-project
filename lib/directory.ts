@@ -1,12 +1,6 @@
 import prisma from "@/lib/prisma"
-
-export function nameToSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-}
+export { nameToSlug } from "@/lib/directory-utils"
+import { nameToSlug } from "@/lib/directory-utils"
 
 // hasFullAccess is resolved by the caller (server page or API route) so this
 // lib file stays free of next/headers and can be safely imported anywhere.

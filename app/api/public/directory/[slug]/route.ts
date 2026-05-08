@@ -31,13 +31,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             where: { id: payload.userId as string },
             select: {
               role: true,
-              client: { select: { ciSubscriptionPlan: true } },
+              client: { select: { hasCompetitiveInsights: true } },
             },
           })
           if (user) {
-            const isSuperAdmin = user.role === "super_admin"
-            const ciPlan = user.client?.ciSubscriptionPlan ?? "none"
-            hasFullAccess = isSuperAdmin || ciPlan !== "none"
+            hasFullAccess =
+              user.role === "super_admin" ||
+              (user.client?.hasCompetitiveInsights ?? false)
           }
         }
       } catch {

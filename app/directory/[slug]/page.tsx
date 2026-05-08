@@ -336,12 +336,12 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
       if (payload) {
         const user = await prisma.user.findUnique({
           where: { id: payload.userId as string },
-          select: { role: true, client: { select: { ciSubscriptionPlan: true } } },
+          select: { role: true, client: { select: { hasCompetitiveInsights: true } } },
         })
         if (user) {
           hasFullAccess =
             user.role === "super_admin" ||
-            (user.client?.ciSubscriptionPlan ?? "none") !== "none"
+            (user.client?.hasCompetitiveInsights ?? false)
         }
       }
     } catch {

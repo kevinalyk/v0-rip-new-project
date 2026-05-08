@@ -139,7 +139,7 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
         const res = await fetch("/api/auth/me", { credentials: "include" })
         if (res.ok) {
           const user = await res.json()
-          setClientSlug(user.clientId || "rip")
+          setClientSlug(user.client?.slug || "")
           setIsAuthenticated(true)
         }
       } catch {
@@ -408,12 +408,21 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
             : combined.findIndex((item) => item.sortTs < cutoffTs)
           const hasLockedItems = firstLockedIdx !== -1 && firstLockedIdx < combined.length
 
-          // Whether the overlay is shown depends on auth state and access level:
-          // - not signed in → sign-in overlay
-          // - signed in but no CI access → upgrade overlay
-          // - full access → no overlay
-          const showSignInOverlay = !isAuthenticated && hasLockedItems
-          const showUpgradeOverlay = isAuthenticated && !hasFullAccess && hasLockedItems
+          // Whether this restricted user has any comms at all in the entity's history
+          const entityHasHistory = entity.counts.total > 0
+
+          // Whether the overlay is shown depends on auth state and access level.
+          // Two cases trigger the gate:
+          // 1. hasLockedItems — some items visible, rest are outside 3hr window
+          // 2. combined is empty but entity has history — nothing in 3hr window at all
+          const isRestricted = !hasFullAccess
+          const nothingInWindow = isRestricted && combined.length === 0 && entityHasHistory
+          const showSignInOverlay = !isAuthenticated && (hasLockedItems || nothingInWindow)
+          const showUpgradeOverlay = isAuthenticated && isRestricted && (hasLockedItems || nothingInWindow)
+
+          // Inline "see more" upgrade banner shown below visible items (when there
+          // are some visible but more exist outside the window)
+          const showUpgradeBanner = isAuthenticated && isRestricted && combined.length > 0 && entityHasHistory
 
           return (
             <div className="rounded-lg border border-border bg-card overflow-hidden mb-8">
@@ -424,9 +433,9 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
                 </span>
               </div>
 
-              <div className="divide-y divide-border relative">
+              <div className={`divide-y divide-border relative${(showSignInOverlay || showUpgradeOverlay) && nothingInWindow ? " min-h-[200px]" : ""}`}>
                 {combined.map((item, index) => {
-                  const isLocked = !hasFullAccess && index >= firstLockedIdx && firstLockedIdx !== -1
+                  const isLocked = isRestricted && index >= firstLockedIdx && firstLockedIdx !== -1
                   return (
                     <div
                       key={`${item.kind}-${item.id}`}
@@ -449,7 +458,7 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
                   )
                 })}
 
-                {/* Sign-in overlay — unauthenticated visitors with locked items */}
+                {/* Sign-in gate — unauthenticated visitors */}
                 {showSignInOverlay && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/70 backdrop-blur-[2px]">
                     <div className="flex flex-col items-center gap-3 text-center px-6">
@@ -458,7 +467,7 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
                       </div>
                       <p className="font-semibold text-sm">Sign in to view communications</p>
                       <p className="text-xs text-muted-foreground max-w-xs">
-                        Free accounts see the last 3 hours. Sign in to access recent activity from {entity.name}.
+                        Free accounts see the last 3 hours of activity. Sign in to access recent messages from {entity.name}.
                       </p>
                       <div className="flex gap-3 mt-1">
                         <Button asChild size="sm" className="bg-[#dc2a28] hover:bg-[#dc2a28]/90 text-white">
@@ -472,22 +481,22 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
                   </div>
                 )}
 
-                {/* Upgrade overlay — signed-in free-tier users with locked items */}
+                {/* Full upgrade gate — signed-in free user, nothing in 3hr window */}
                 {showUpgradeOverlay && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/70 backdrop-blur-[2px]">
                     <div className="flex flex-col items-center gap-3 text-center px-6">
                       <div className="w-10 h-10 rounded-full bg-[#dc2a28]/10 flex items-center justify-center">
                         <Lock className="h-5 w-5 text-[#dc2a28]" />
                       </div>
-                      <p className="font-semibold text-sm">Full history requires a CI subscription</p>
+                      <p className="font-semibold text-sm">No activity in the last 3 hours</p>
                       <p className="text-xs text-muted-foreground max-w-xs">
-                        {"You're currently seeing the last 3 hours of activity. Upgrade to access the complete communication history."}
+                        {entity.name} has {entity.counts.total.toLocaleString()} messages on record. Upgrade to access the full history.
                       </p>
                       <Button
                         size="sm"
                         className="bg-[#dc2a28] hover:bg-[#dc2a28]/90 text-white mt-1"
                         onClick={() => {
-                          if (clientSlug) window.location.href = `/${clientSlug}/billing?addon=ci`
+                          window.location.href = clientSlug ? `/${clientSlug}/billing` : "/login"
                         }}
                       >
                         Upgrade to Unlock
@@ -496,6 +505,25 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
                   </div>
                 )}
               </div>
+
+              {/* Inline "see more" banner — some items visible but full history is locked */}
+              {showUpgradeBanner && (
+                <div className="px-4 py-3 border-t border-border flex items-center justify-between bg-muted/30">
+                  <p className="text-xs text-muted-foreground">
+                    Showing the last 3 hours only. {entity.name} has {entity.counts.total.toLocaleString()} total messages on record.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs h-7 border-[#dc2a28] text-[#dc2a28] hover:bg-[#dc2a28]/10 flex-shrink-0 ml-4"
+                    onClick={() => {
+                      window.location.href = clientSlug ? `/${clientSlug}/billing` : "/login"
+                    }}
+                  >
+                    Unlock Full History
+                  </Button>
+                </div>
+              )}
             </div>
           )
         })()}

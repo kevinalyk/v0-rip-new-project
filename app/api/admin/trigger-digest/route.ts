@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
 import { nanoid } from "nanoid"
 import { sendFollowingDigest, type DigestEntitySection, type DigestMessage } from "@/lib/mailgun"
+import { nameToSlug } from "@/lib/directory-utils"
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
@@ -76,7 +77,6 @@ export async function POST(request: NextRequest) {
           select: {
             id: true,
             name: true,
-            slug: true,
             party: true,
             state: true,
           },
@@ -178,7 +178,7 @@ export async function POST(request: NextRequest) {
 
       return {
         entityName: entity.name,
-        entitySlug: entity.slug ?? null,
+        entitySlug: nameToSlug(entity.name),
         party: entity.party,
         state: entity.state,
         messages: merged,

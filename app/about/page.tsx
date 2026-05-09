@@ -3,7 +3,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = {
   title: "About RIP Tool — Republican Inboxing Protocol",
   description:
-    "RIP Tool is a political intelligence platform built for Republican campaigns, committees, and political organizations. Learn about our inbox placement tracking, competitive intelligence, and political email monitoring tools.",
+    "RIP Tool is a political intelligence platform built for Republican campaigns, committees, and political organizations. Learn about our competitive intelligence, political email monitoring, and entity directory tools.",
   robots: { index: true, follow: true },
 }
 
@@ -18,8 +18,8 @@ export default function AboutPage() {
           RIP Tool — Republican Inboxing Protocol — is a political intelligence
           platform built specifically for Republican campaigns, party committees,
           PACs, and political organizations. We help political professionals
-          understand what is being sent, where it lands, and what the
-          competition is doing.
+          understand what the competition is sending, who is sending it, and
+          where new campaigns are entering the fundraising ecosystem.
         </p>
       </header>
 
@@ -28,18 +28,18 @@ export default function AboutPage() {
         <p className="text-muted-foreground leading-relaxed mb-4">
           Political email and text message fundraising has become one of the
           most important revenue channels for campaigns at every level — from
-          local races to presidential campaigns. The difference between an email
-          landing in the inbox versus the spam folder can represent hundreds of
-          thousands of dollars in a single fundraising cycle. RIP Tool was built
-          to give Republican political professionals the data they need to
-          compete effectively.
+          local races to presidential campaigns. Staying informed about what
+          competing campaigns and organizations are sending to their donors
+          gives political professionals a meaningful strategic edge. RIP Tool
+          was built to make that intelligence accessible, organized, and
+          actionable.
         </p>
         <p className="text-muted-foreground leading-relaxed">
-          Our platform combines inbox placement monitoring, competitive
-          intelligence, and a comprehensive political communication directory
-          into a single tool. We track email delivery across seed accounts,
-          monitor the sending activity of over 800 political entities, and
-          surface actionable intelligence for campaigns that need to stay ahead.
+          Our platform combines a real-time competitive intelligence feed, a
+          comprehensive political communication directory, and personal
+          monitoring tools into a single product. We monitor the sending
+          activity of over 800 political entities and surface that data in a
+          way that helps campaigns, committees, and consultants stay ahead.
         </p>
       </section>
 
@@ -47,24 +47,6 @@ export default function AboutPage() {
         <h2 className="text-2xl font-semibold mb-6">Platform Features</h2>
 
         <div className="space-y-8">
-          <div>
-            <h3 className="text-lg font-semibold mb-2">
-              Inbox Placement Monitoring
-            </h3>
-            <p className="text-muted-foreground leading-relaxed">
-              RIP Tool monitors email deliverability by tracking campaign sends
-              against a managed seed list. Every time a client sends a campaign,
-              RIP Tool measures whether the email lands in the inbox or the spam
-              folder across major email providers. Clients can view their inbox
-              rate, spam rate, and overall delivery rate for each campaign, with
-              historical trend data going back up to one year. The platform
-              breaks down deliverability by date range, state, party, donation
-              platform (WinRed, ActBlue, Anedot, PSQ), and file type (house
-              file versus third-party), giving campaign managers and digital
-              directors a granular view of where their emails are going and why.
-            </p>
-          </div>
-
           <div>
             <h3 className="text-lg font-semibold mb-2">
               Competitive Intelligence Feed
@@ -107,12 +89,13 @@ export default function AboutPage() {
               New Campaigns Directory
             </h3>
             <p className="text-muted-foreground leading-relaxed">
-              RIP Tool tracks newly filed and newly active political campaigns
-              entering the fundraising ecosystem. The New Campaigns page
-              surfaces candidates and committees that have recently begun
-              sending political emails or SMS messages, giving clients early
-              visibility into emerging political players before they appear in
-              mainstream political coverage.
+              RIP Tool tracks newly active political campaigns entering the
+              fundraising ecosystem. The New Campaigns page surfaces candidates
+              and committees that have recently begun sending political emails
+              or SMS messages, giving clients early visibility into emerging
+              political players before they appear in mainstream political
+              coverage. Campaigns are organized by chamber, party, and state,
+              and each entry links to a full entity profile.
             </p>
           </div>
 
@@ -121,29 +104,12 @@ export default function AboutPage() {
               Personal Email and SMS Monitoring
             </h3>
             <p className="text-muted-foreground leading-relaxed">
-              Beyond the platform-wide seed list, RIP Tool clients can connect
-              their own personal email addresses and phone numbers to the
-              platform. The Personal Monitoring feature captures every political
-              email and SMS message received by those accounts and attributes
-              them to the correct sending entity, giving clients a first-person
-              view of what their own voters and donors are receiving from
-              competing campaigns and organizations.
-            </p>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-semibold mb-2">
-              Inboxing Trends and Analytics
-            </h3>
-            <p className="text-muted-foreground leading-relaxed">
-              The Inboxing Report provides paid-tier clients with charts and
-              analytics covering inbox rate over time, spam rate trends, overall
-              deliverability, inbox rate by party, inbox rate by donation
-              platform, and inbox rate by file type. Reports can be filtered by
-              time period (7 days, 30 days, 90 days, one year, or custom date
-              range) and by state, allowing political professionals to compare
-              deliverability across regions and platforms and identify
-              deliverability issues before they impact fundraising performance.
+              RIP Tool clients can connect their own personal email addresses
+              and phone numbers to the platform. The Personal Monitoring feature
+              captures every political email and SMS message received by those
+              accounts and attributes them to the correct sending entity, giving
+              clients a first-person view of what their own voters and donors
+              are receiving from competing campaigns and organizations.
             </p>
           </div>
 
@@ -176,18 +142,6 @@ export default function AboutPage() {
               reporting purposes.
             </p>
           </div>
-
-          <div>
-            <h3 className="text-lg font-semibold mb-2">
-              API Access
-            </h3>
-            <p className="text-muted-foreground leading-relaxed">
-              Clients on eligible plans can access RIP Tool data programmatically
-              via a REST API using API key authentication. The Developer section
-              of the platform allows clients to generate and manage API keys for
-              integration with their own internal tools and workflows.
-            </p>
-          </div>
         </div>
       </section>
 
@@ -203,9 +157,9 @@ export default function AboutPage() {
         <p className="text-muted-foreground leading-relaxed">
           The platform is subscription-based. A free tier is available with
           limited access to recent competitive intelligence data. Paid tiers
-          unlock full historical access, inboxing reports, personal monitoring,
-          and API access. Enterprise pricing is available for organizations
-          requiring custom configurations or expanded seat access.
+          unlock full historical access, personal monitoring, and additional
+          features. Enterprise pricing is available for organizations requiring
+          custom configurations or expanded seat access.
         </p>
       </section>
 
@@ -220,22 +174,17 @@ export default function AboutPage() {
           millions of emails and text messages each election cycle.
         </p>
         <p className="text-muted-foreground leading-relaxed mb-4">
-          Inbox placement — whether an email lands in a recipient's primary
-          inbox, promotional tab, or spam folder — directly determines how many
-          people see a campaign's message and how much money that message raises.
-          Gmail, Outlook, Yahoo, and other major email providers use increasingly
-          sophisticated filters that evaluate sender reputation, engagement
-          history, authentication records, and content signals to make placement
-          decisions. A campaign that consistently lands in spam can lose a
-          significant portion of its fundraising capacity without ever knowing
-          the cause.
+          Understanding what competing campaigns are sending — the messaging
+          strategies, subject line approaches, call-to-action tactics, and
+          sending cadences they use — is increasingly important for campaigns
+          that want to stay competitive. RIP Tool aggregates that activity into
+          a single, searchable, filterable feed updated in real time.
         </p>
         <p className="text-muted-foreground leading-relaxed">
-          RIP Tool was built to bring transparency to this process — giving
-          Republican political professionals a tool to monitor their own
-          deliverability, benchmark against the broader ecosystem, and stay
-          informed about what competing campaigns and organizations are sending
-          to their donors.
+          With over 800 tracked entities spanning federal candidates, state
+          candidates, party committees, PACs, and political organizations, RIP
+          Tool provides one of the most comprehensive views of Republican
+          political communication activity available anywhere.
         </p>
       </section>
 
@@ -250,9 +199,9 @@ export default function AboutPage() {
           >
             app.rip-tool.com/news
           </a>
-          . Articles cover topics including Gmail inbox placement trends,
-          fundraising platform updates, compliance changes, and analysis of
-          political email sending patterns across the Republican ecosystem.
+          . Articles cover topics including fundraising platform updates,
+          compliance changes, and analysis of political email and SMS sending
+          patterns across the Republican ecosystem.
         </p>
       </section>
 

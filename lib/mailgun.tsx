@@ -647,6 +647,7 @@ export interface DigestMessage {
 
 export interface DigestEntitySection {
   entityName: string
+  entitySlug: string | null
   party: string | null
   state: string | null
   messages: DigestMessage[] // empty = no activity yesterday
@@ -657,6 +658,7 @@ export async function sendFollowingDigest(params: {
   firstName: string | null
   digestDate: string // e.g. "Thursday, May 8, 2026"
   entitySections: DigestEntitySection[]
+  clientSlug: string
 }): Promise<boolean> {
   const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
   const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN
@@ -666,7 +668,12 @@ export async function sendFollowingDigest(params: {
     return false
   }
 
-  const { to, firstName, digestDate, entitySections } = params
+  const { to, firstName, digestDate, entitySections, clientSlug } = params
+
+  const APP_URL = "https://app.rip-tool.com"
+  const feedUrl = `${APP_URL}/${clientSlug}/ci/campaigns`
+  const subscriptionsUrl = `${APP_URL}/${clientSlug}/ci/subscriptions`
+  const logoUrl = `${APP_URL}/images/IconOnly_Transparent_NoBuffer.png`
 
   const greeting = firstName ? `Hi ${firstName},` : "Hi there,"
 
@@ -692,7 +699,10 @@ export async function sendFollowingDigest(params: {
     }).format(date)
   }
 
-  const entitySectionsHtml = entitySections
+  // Only include entities that actually sent messages
+  const activeSections = entitySections.filter((s) => s.messages.length > 0)
+
+  const entitySectionsHtml = activeSections
     .map((section) => {
       const partyBadge = section.party
         ? `<span style="display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:0.3px;color:#ffffff;background:${partyColor(section.party)};margin-right:6px;">${partyLabel(section.party)}</span>`
@@ -701,46 +711,48 @@ export async function sendFollowingDigest(params: {
         ? `<span style="display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;font-weight:600;color:#374151;background:#e5e7eb;margin-right:6px;">${section.state}</span>`
         : ""
 
+      const directoryUrl = section.entitySlug
+        ? `${APP_URL}/directory/${section.entitySlug}`
+        : null
+
+      const entityNameHtml = directoryUrl
+        ? `<a href="${directoryUrl}" target="_blank" style="font-size:16px;font-weight:700;color:#f9fafb;text-decoration:none;">${section.entityName}</a>`
+        : `<span style="font-size:16px;font-weight:700;color:#f9fafb;">${section.entityName}</span>`
+
       const headerHtml = `
         <tr>
           <td style="padding:20px 24px 12px;border-top:2px solid #1f2937;">
-            <div style="font-size:16px;font-weight:700;color:#f9fafb;margin-bottom:6px;">${section.entityName}</div>
+            <div style="margin-bottom:6px;">${entityNameHtml}</div>
             <div>${partyBadge}${stateBadge}</div>
           </td>
         </tr>`
-
-      if (section.messages.length === 0) {
-        return `
-          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-            ${headerHtml}
-            <tr>
-              <td style="padding:10px 24px 20px;">
-                <span style="font-size:13px;color:#6b7280;font-style:italic;">No messages sent yesterday.</span>
-              </td>
-            </tr>
-          </table>`
-      }
 
       const rowsHtml = section.messages
         .map((msg, i) => {
           const isEmail = msg.kind === "email"
           const icon = isEmail
-            ? `<span style="display:inline-block;width:18px;height:18px;vertical-align:middle;margin-right:8px;">
+            ? `<span style="display:inline-block;width:18px;height:18px;vertical-align:middle;margin-right:8px;flex-shrink:0;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
               </span>`
-            : `<span style="display:inline-block;width:18px;height:18px;vertical-align:middle;margin-right:8px;">
+            : `<span style="display:inline-block;width:18px;height:18px;vertical-align:middle;margin-right:8px;flex-shrink:0;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
               </span>`
           const bg = i % 2 === 0 ? "#111827" : "#0f172a"
           const borderTop = i === 0 ? "border-top:1px solid #1f2937;" : ""
+
+          // Truncate SMS previews to 60 chars to prevent wrapping
+          const displaySubject = !isEmail && msg.subject.length > 60
+            ? msg.subject.slice(0, 60) + "…"
+            : msg.subject
+
           return `
             <tr>
               <td style="padding:10px 24px;background:${bg};${borderTop}border-bottom:1px solid #1f2937;">
                 <table width="100%" cellpadding="0" cellspacing="0">
                   <tr>
-                    <td style="vertical-align:middle;">
+                    <td style="vertical-align:middle;width:100%;">
                       ${icon}
-                      <a href="${msg.shareUrl}" target="_blank" style="font-size:13px;color:#e5e7eb;text-decoration:none;font-weight:500;">${msg.subject}</a>
+                      <a href="${msg.shareUrl}" target="_blank" style="font-size:13px;color:#e5e7eb;text-decoration:none;font-weight:500;">${displaySubject}</a>
                     </td>
                     <td style="text-align:right;white-space:nowrap;padding-left:16px;vertical-align:middle;">
                       <span style="font-size:12px;color:#6b7280;">${formatTime(msg.receivedAt)}</span>
@@ -766,14 +778,14 @@ export async function sendFollowingDigest(params: {
     .join(`<tr><td style="height:8px;"></td></tr>`)
 
   const totalMessages = entitySections.reduce((s, e) => s + e.messages.length, 0)
-  const entitiesWithActivity = entitySections.filter((e) => e.messages.length > 0).length
+  const entitiesWithActivity = activeSections.length
 
   const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Your Following Digest — ${digestDate}</title>
+  <title>Daily Digest - Inbox.GOP</title>
 </head>
 <body style="margin:0;padding:0;background:#030712;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#030712;padding:32px 16px;">
@@ -786,11 +798,11 @@ export async function sendFollowingDigest(params: {
             <td style="padding:0 0 24px;">
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td>
-                    <span style="font-size:20px;font-weight:800;color:#f9fafb;letter-spacing:-0.5px;">RIP</span>
-                    <span style="font-size:13px;color:#6b7280;margin-left:8px;font-weight:500;">Following Digest</span>
+                  <td style="vertical-align:middle;">
+                    <img src="${logoUrl}" alt="Inbox.GOP" width="28" height="28" style="display:inline-block;vertical-align:middle;margin-right:8px;" />
+                    <span style="font-size:13px;color:#6b7280;font-weight:500;vertical-align:middle;">Following Digest</span>
                   </td>
-                  <td style="text-align:right;">
+                  <td style="text-align:right;vertical-align:middle;">
                     <span style="font-size:12px;color:#4b5563;">${digestDate}</span>
                   </td>
                 </tr>
@@ -801,11 +813,20 @@ export async function sendFollowingDigest(params: {
           <!-- Intro card -->
           <tr>
             <td style="background:#111827;border-radius:8px 8px 0 0;padding:20px 24px;border-bottom:1px solid #1f2937;">
-              <p style="margin:0 0 4px;font-size:15px;color:#f9fafb;font-weight:600;">${greeting}</p>
-              <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">
-                Here&apos;s what the ${entitySections.length} ${entitySections.length === 1 ? "entity" : "entities"} you follow sent yesterday.
-                ${totalMessages > 0 ? `<strong style="color:#e5e7eb;">${totalMessages} message${totalMessages === 1 ? "" : "s"}</strong> from <strong style="color:#e5e7eb;">${entitiesWithActivity}</strong> of them.` : "None of them sent anything yesterday."}
-              </p>
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:top;">
+                    <p style="margin:0 0 4px;font-size:15px;color:#f9fafb;font-weight:600;">${greeting}</p>
+                    <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">
+                      Here&apos;s what the ${entitySections.length} ${entitySections.length === 1 ? "entity" : "entities"} you follow sent yesterday.
+                      ${totalMessages > 0 ? `<strong style="color:#e5e7eb;">${totalMessages} message${totalMessages === 1 ? "" : "s"}</strong> from <strong style="color:#e5e7eb;">${entitiesWithActivity}</strong> of them.` : "None of them sent anything yesterday."}
+                    </p>
+                  </td>
+                  <td style="text-align:right;vertical-align:top;padding-left:16px;white-space:nowrap;">
+                    <a href="${subscriptionsUrl}" target="_blank" style="display:inline-block;padding:7px 14px;background:#1f2937;border:1px solid #374151;border-radius:6px;font-size:12px;font-weight:600;color:#e5e7eb;text-decoration:none;">View More</a>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
 
@@ -823,7 +844,7 @@ export async function sendFollowingDigest(params: {
                 You&apos;re receiving this because you follow entities on
                 <a href="https://app.rip-tool.com" style="color:#6b7280;text-decoration:none;">app.rip-tool.com</a>.<br/>
                 View the full feed at
-                <a href="https://app.rip-tool.com/competitive-intelligence" style="color:#6b7280;text-decoration:none;">app.rip-tool.com/competitive-intelligence</a>.
+                <a href="${feedUrl}" style="color:#6b7280;text-decoration:none;">${feedUrl.replace("https://", "")}</a>.
               </p>
             </td>
           </tr>
@@ -837,24 +858,24 @@ export async function sendFollowingDigest(params: {
 
   const text = `${greeting}
 
-Following Digest — ${digestDate}
+Daily Digest - Inbox.GOP — ${digestDate}
 
-${entitySections
+${activeSections
   .map((s) => {
     const meta = [s.party, s.state].filter(Boolean).join(" · ")
     const header = `${s.entityName}${meta ? ` (${meta})` : ""}`
-    if (s.messages.length === 0) return `${header}\n  No messages sent yesterday.`
     return `${header}\n${s.messages.map((m) => `  [${m.kind.toUpperCase()}] ${m.subject}\n  ${m.senderIdentifier}\n  ${m.shareUrl}`).join("\n\n")}`
   })
   .join("\n\n---\n\n")}
 
-View full feed: https://app.rip-tool.com/competitive-intelligence
+View more: ${subscriptionsUrl}
+View full feed: ${feedUrl}
 `
 
   const formData = new FormData()
-  formData.append("from", `RIP Digest <digest@${MAILGUN_DOMAIN}>`)
+  formData.append("from", `Inbox.GOP Digest <digest@${MAILGUN_DOMAIN}>`)
   formData.append("to", to)
-  formData.append("subject", `Your Following Digest — ${digestDate}`)
+  formData.append("subject", `Daily Digest - Inbox.GOP`)
   formData.append("html", html)
   formData.append("text", text)
 

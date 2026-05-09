@@ -226,7 +226,14 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
   }
 
   const { entity, recentCampaigns, recentSms, hasFullAccess, cutoffAt } = data
-  const emailDomains = [...new Set(entity.mappings.filter((m) => m.senderDomain).map((m) => m.senderDomain!))]
+  // For each email mapping, prefer the full senderEmail if available, otherwise fall back to senderDomain
+  const emailIdentifiers = [
+    ...new Set(
+      entity.mappings
+        .filter((m) => m.senderEmail || m.senderDomain)
+        .map((m) => m.senderEmail ?? m.senderDomain!)
+    ),
+  ]
   const shortCodes = [...new Set(entity.mappings.filter((m) => m.senderPhone).map((m) => m.senderPhone!))]
 
   return (
@@ -370,14 +377,14 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
         )}
 
         {/* Domains & Short Codes */}
-        {(emailDomains.length > 0 || shortCodes.length > 0) && (
+        {(emailIdentifiers.length > 0 || shortCodes.length > 0) && (
           <div className="grid gap-4 md:grid-cols-2 mb-8">
-            {emailDomains.length > 0 && (
+            {emailIdentifiers.length > 0 && (
               <div className="rounded-lg border border-border bg-card p-4">
-                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pb-2 mb-3 border-b border-border">Email Domains</h2>
+                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pb-2 mb-3 border-b border-border">Email Senders</h2>
                 <div className="flex flex-wrap gap-2">
-                  {emailDomains.map((domain) => (
-                    <Badge key={domain} variant="secondary" className="font-mono text-xs">{domain}</Badge>
+                  {emailIdentifiers.map((identifier) => (
+                    <Badge key={identifier} variant="secondary" className="font-mono text-xs">{identifier}</Badge>
                   ))}
                 </div>
               </div>

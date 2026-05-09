@@ -102,7 +102,11 @@ export function extractOffice(html: string): string | null {
   return null
 }
 
-// Extract the first meaningful bio paragraph from Ballotpedia HTML
+// Extract the full bio from Ballotpedia HTML.
+// Collects all meaningful intro paragraphs (before the first h2 section) PLUS
+// all paragraphs inside the "Biography" h2 section. This gives us the complete
+// text Google will find on Ballotpedia rather than just the first sentence.
+// Hard cap at 4000 characters to keep the DB field reasonable.
 export function extractBio(html: string): string | null {
   const clean = html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -110,12 +114,11 @@ export function extractBio(html: string): string | null {
     .replace(/<table[\s\S]*?<\/table>/gi, "")
     .replace(/<nav[\s\S]*?<\/nav>/gi, "")
 
-  const paragraphs = clean.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) || []
-
   const cleanParagraph = (raw: string) =>
     raw
       .replace(/<[^>]+>/g, "")
-      .replace(/\[\d+\]/g, "")
+      .replace(/\[\d+\]/g, "") // remove [1] citation markers
+      .replace(/\[source\]/gi, "")
       .replace(/&amp;/g, "&")
       .replace(/&nbsp;/g, " ")
       .replace(/&lt;/g, "<")
@@ -124,18 +127,65 @@ export function extractBio(html: string): string | null {
       .replace(/\s+/g, " ")
       .trim()
 
-  for (const p of paragraphs) {
+  const skipPattern =
+    /^(see also|contents|navigation|retrieved|external links|references|footnotes|this article|don't know|join the|make it possible)/i
+
+  const collected: string[] = []
+  let totalLength = 0
+  const MAX_LENGTH = 4000
+
+  // ── Pass 1: intro paragraphs before the first <h2> ──────────────────────
+  // Find where the first h2 section starts (e.g. "Biography", "Committee
+  // assignments", etc.) so we only grab true intro content in this pass.
+  const firstH2Index = clean.search(/<h2[\s>]/i)
+  const introPortion = firstH2Index > 0 ? clean.slice(0, firstH2Index) : clean
+
+  const introParas = introPortion.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) || []
+  for (const p of introParas) {
     const text = cleanParagraph(p)
     if (text.length < 60) continue
-    if (/^(see also|contents|navigation|retrieved|external links)/i.test(text)) continue
-    if (text.length > 500) {
-      const truncated = text.slice(0, 500)
-      const lastPeriod = truncated.lastIndexOf(".")
-      return lastPeriod > 100 ? truncated.slice(0, lastPeriod + 1) : truncated + "..."
-    }
-    return text
+    if (skipPattern.test(text)) continue
+    collected.push(text)
+    totalLength += text.length
+    if (totalLength >= MAX_LENGTH) break
   }
-  return null
+
+  // ── Pass 2: Biography section ────────────────────────────────────────────
+  // Find the <h2> that contains "Biography" and collect all <p> tags until
+  // the next <h2> (or end of content).
+  if (totalLength < MAX_LENGTH) {
+    const bioSectionMatch = clean.match(
+      /<h2[^>]*>[\s\S]*?Biography[\s\S]*?<\/h2>([\s\S]*?)(?=<h2[\s>]|$)/i,
+    )
+    if (bioSectionMatch) {
+      const bioSection = bioSectionMatch[1]
+      const bioParas = bioSection.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) || []
+      for (const p of bioParas) {
+        const text = cleanParagraph(p)
+        if (text.length < 40) continue
+        if (skipPattern.test(text)) continue
+        // Avoid duplicating text already captured in the intro pass
+        if (collected.some((existing) => existing.includes(text.slice(0, 80)))) continue
+        collected.push(text)
+        totalLength += text.length
+        if (totalLength >= MAX_LENGTH) break
+      }
+    }
+  }
+
+  if (collected.length === 0) return null
+
+  // Join with double newline so each paragraph is distinct in storage
+  let result = collected.join("\n\n")
+
+  // Hard cap — trim at last sentence boundary before the limit
+  if (result.length > MAX_LENGTH) {
+    const truncated = result.slice(0, MAX_LENGTH)
+    const lastPeriod = truncated.lastIndexOf(".")
+    result = lastPeriod > 200 ? truncated.slice(0, lastPeriod + 1) : truncated + "..."
+  }
+
+  return result
 }
 
 export type EnrichResult = {

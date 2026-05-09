@@ -673,6 +673,7 @@ export async function sendFollowingDigest(params: {
   const APP_URL = "https://app.rip-tool.com"
   const feedUrl = `${APP_URL}/${clientSlug}/ci/campaigns`
   const subscriptionsUrl = `${APP_URL}/${clientSlug}/ci/subscriptions`
+  const settingsUrl = `${APP_URL}/${clientSlug}/account/settings`
   const logoUrl = `${APP_URL}/images/IconOnly_Transparent_NoBuffer.png`
 
   const greeting = firstName ? `Hi ${firstName},` : "Hi there,"
@@ -848,7 +849,9 @@ export async function sendFollowingDigest(params: {
                 You&apos;re receiving this because you follow entities on
                 <a href="https://app.rip-tool.com" style="color:#6b7280;text-decoration:none;">app.rip-tool.com</a>.<br/>
                 View the full feed at
-                <a href="${feedUrl}" style="color:#6b7280;text-decoration:none;">${feedUrl.replace("https://", "")}</a>.
+                <a href="${feedUrl}" style="color:#6b7280;text-decoration:none;">${feedUrl.replace("https://", "")}</a>.<br/>
+                To stop receiving this digest, visit your
+                <a href="${settingsUrl}" style="color:#6b7280;text-decoration:none;">email settings</a>.
               </p>
             </td>
           </tr>
@@ -874,6 +877,8 @@ ${activeSections
 
 View more: ${subscriptionsUrl}
 View full feed: ${feedUrl}
+
+To stop receiving this digest, update your email settings: ${settingsUrl}
 `
 
   const formData = new FormData()

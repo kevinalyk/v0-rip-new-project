@@ -190,9 +190,10 @@ export async function POST(request: NextRequest) {
       return a.entityName.localeCompare(b.entityName)
     })
 
-    // ── Fetch users and send (same as cron, with optional email override) ────
+    // ── Fetch users who have the digest enabled and send ────────────────────
+    // digestEnabled filter is skipped when an emailOverride is provided (admin test sends)
     const users = await prisma.user.findMany({
-      where: { clientId: ripClient.id },
+      where: { clientId: ripClient.id, ...(emailOverride ? {} : { digestEnabled: true }) },
       select: { email: true, firstName: true },
     })
 

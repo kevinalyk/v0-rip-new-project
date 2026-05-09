@@ -197,9 +197,9 @@ export async function GET(request: Request) {
       return a.entityName.localeCompare(b.entityName)
     })
 
-    // ── Fetch all RIP users and send ─────────────────────────────────────────
+    // ── Fetch all RIP users who have the digest enabled and send ─────────────
     const users = await prisma.user.findMany({
-      where: { clientId: ripClient.id },
+      where: { clientId: ripClient.id, digestEnabled: true },
       select: { email: true, firstName: true },
     })
 

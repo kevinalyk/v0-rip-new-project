@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Save, Info, CheckCircle } from "lucide-react"
+import { Loader2, Mail } from "lucide-react"
 import { toast } from "sonner"
 import AppLayout from "@/components/app-layout"
 
@@ -16,12 +15,9 @@ export default function AccountSettingsPage() {
   const clientSlug = params.clientSlug as string
   const isAdminRoute = clientSlug === "admin"
 
-  const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [retentionPeriod, setRetentionPeriod] = useState("90")
-  const [saving, setSaving] = useState(false)
-  const [clientId, setClientId] = useState<string | null>(null)
-  const [clientName, setClientName] = useState<string>("System")
+  const [digestEnabled, setDigestEnabled] = useState(true)
+  const [savingDigest, setSavingDigest] = useState(false)
 
   useEffect(() => {
     checkAuth()
@@ -37,22 +33,18 @@ export default function AccountSettingsPage() {
       }
 
       const userData = await response.json()
-      setUser(userData)
 
-      // Check if first login
       if (userData.firstLogin) {
         router.push("/reset-password")
         return
       }
 
-      // If not admin route, verify access to this client
       if (!isAdminRoute) {
         const verifyResponse = await fetch(`/api/client/verify-access?clientSlug=${clientSlug}`, {
           credentials: "include",
         })
 
         if (!verifyResponse.ok) {
-          // No access to this client
           if (userData.role === "super_admin") {
             router.push("/rip/ci/campaigns")
           } else if (userData.clientSlug) {
@@ -63,7 +55,6 @@ export default function AccountSettingsPage() {
           return
         }
       } else {
-        // Admin route - verify super_admin
         if (userData.role !== "super_admin") {
           if (userData.clientSlug) {
             router.push(`/${userData.clientSlug}`)
@@ -74,89 +65,54 @@ export default function AccountSettingsPage() {
         }
       }
 
-      // Fetch client and settings
-      await fetchClientAndSettings(userData)
+      await fetchUserSettings()
     } catch (error) {
       console.error("Auth check failed:", error)
       router.push("/login")
     }
   }
 
-  const fetchClientAndSettings = async (userData: any) => {
+  const fetchUserSettings = async () => {
     try {
-      // Get client ID from user or from first domain
-      let fetchedClientId: string | null = null
+      const response = await fetch("/api/user/settings", { credentials: "include" })
 
-      if (userData.clientId) {
-        // User has a client assigned
-        fetchedClientId = userData.clientId
-
-        // Fetch client details
-        const clientResponse = await fetch(`/api/clients/${userData.clientId}`, {
-          credentials: "include",
-        })
-
-        if (clientResponse.ok) {
-          const clientData = await clientResponse.json()
-          setClientName(clientData.name)
-        }
-      } else {
-        setClientName("System")
-      }
-
-      setClientId(fetchedClientId)
-
-      // Fetch settings for this client
-      if (fetchedClientId) {
-        const settingsUrl = `/api/settings?clientId=${fetchedClientId}`
-        const response = await fetch(settingsUrl, { credentials: "include" })
-
-        if (response.ok) {
-          const settings = await response.json()
-          if (settings.retention_period) {
-            setRetentionPeriod(settings.retention_period.toString())
-          }
-        }
+      if (response.ok) {
+        const data = await response.json()
+        setDigestEnabled(data.digestEnabled ?? true)
       }
     } catch (error) {
-      console.error("Error fetching settings:", error)
+      console.error("Error fetching user settings:", error)
       toast.error("Failed to load settings")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleSaveSettings = async () => {
-    if (!clientId) {
-      toast.error("No client assigned")
-      return
-    }
+  const handleDigestToggle = async (enabled: boolean) => {
+    setDigestEnabled(enabled)
+    setSavingDigest(true)
 
     try {
-      setSaving(true)
-      const url = `/api/settings?clientId=${clientId}`
-
-      const response = await fetch(url, {
+      const response = await fetch("/api/user/settings", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          retention_period: retentionPeriod,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ digestEnabled: enabled }),
         credentials: "include",
       })
 
       if (!response.ok) {
-        throw new Error("Failed to save settings")
+        throw new Error("Failed to save")
       }
 
-      toast.success("Settings saved successfully")
+      toast.success(
+        enabled ? "Daily digest enabled" : "Daily digest disabled"
+      )
     } catch (error) {
-      console.error("Error saving settings:", error)
-      toast.error("Failed to save settings")
+      console.error("Error saving digest setting:", error)
+      setDigestEnabled(!enabled)
+      toast.error("Failed to save setting")
     } finally {
-      setSaving(false)
+      setSavingDigest(false)
     }
   }
 
@@ -176,95 +132,45 @@ export default function AccountSettingsPage() {
       <div className="container mx-auto py-8 px-4 max-w-4xl">
         <div className="space-y-6">
           <div>
-            <h2 className="text-lg font-medium">{clientName} Settings</h2>
+            <h2 className="text-lg font-medium">Your Settings</h2>
             <p className="text-muted-foreground">
-              Configure settings for {clientName}. These settings apply to all domains owned by this client.
+              Manage your personal preferences and notification settings.
             </p>
           </div>
 
           <Card>
             <CardHeader>
-              <CardTitle>Data Retention</CardTitle>
+              <CardTitle>Email Notifications</CardTitle>
               <CardDescription>
-                Configure how long campaign data and email results are stored before being automatically cleaned up.
-                This setting applies to all domains owned by {clientName}.
+                Control which emails you receive from Inbox.GOP.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="retention">Data Retention Period</Label>
-                  <Select value={retentionPeriod} onValueChange={setRetentionPeriod}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select retention period" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="30">30 days (1 month)</SelectItem>
-                      <SelectItem value="60">60 days (2 months)</SelectItem>
-                      <SelectItem value="90">90 days (3 months)</SelectItem>
-                      <SelectItem value="120">120 days (4 months)</SelectItem>
-                      <SelectItem value="180">180 days (6 months)</SelectItem>
-                      <SelectItem value="365">365 days (1 year)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-sm text-muted-foreground">
-                    Individual email results and detailed processing data will be automatically deleted after this
-                    period. Campaign summaries and statistics will be preserved.
-                  </p>
+            <CardContent className="space-y-0">
+              <div className="flex items-center justify-between py-4">
+                <div className="flex items-start gap-3">
+                  <Mail className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
+                  <div className="space-y-1">
+                    <Label htmlFor="digest-toggle" className="text-sm font-medium cursor-pointer">
+                      Daily Digest
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      Receive a daily summary of emails and SMS sent by the entities you follow.
+                    </p>
+                  </div>
                 </div>
-              </div>
-
-              <div className="rounded-md border p-4 bg-muted/30">
-                <h4 className="font-medium mb-2 flex items-center gap-2">
-                  <Info className="h-4 w-4 text-blue-500" />
-                  What gets cleaned up?
-                </h4>
-                <ul className="list-disc list-inside space-y-1 text-sm">
-                  <li>Individual email delivery results and placement data</li>
-                  <li>Detailed forwarded email content and headers</li>
-                  <li>Raw email processing logs and metadata</li>
-                </ul>
-                <p className="text-sm text-muted-foreground mt-2">
-                  <strong>Note:</strong> Campaign summaries, seed list emails, and user accounts are not affected by
-                  this setting.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 p-3 border rounded-lg bg-green-50 dark:bg-green-900/20">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-                <div className="text-sm">
-                  <span className="font-medium text-green-800 dark:text-green-200">Current setting: </span>
-                  <span className="text-green-700 dark:text-green-300">
-                    Data will be retained for {retentionPeriod} days
-                    {retentionPeriod === "30" && " (1 month)"}
-                    {retentionPeriod === "60" && " (2 months)"}
-                    {retentionPeriod === "90" && " (3 months)"}
-                    {retentionPeriod === "120" && " (4 months)"}
-                    {retentionPeriod === "180" && " (6 months)"}
-                    {retentionPeriod === "365" && " (1 year)"}
-                  </span>
+                <div className="flex items-center gap-2 ml-6 shrink-0">
+                  {savingDigest && (
+                    <Loader2 size={14} className="animate-spin text-muted-foreground" />
+                  )}
+                  <Switch
+                    id="digest-toggle"
+                    checked={digestEnabled}
+                    onCheckedChange={handleDigestToggle}
+                    disabled={savingDigest}
+                  />
                 </div>
               </div>
             </CardContent>
-            <CardFooter>
-              <Button
-                className="bg-rip-red hover:bg-rip-red/90 text-white"
-                onClick={handleSaveSettings}
-                disabled={saving}
-              >
-                {saving ? (
-                  <>
-                    <Loader2 size={16} className="mr-2 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save size={16} className="mr-2" />
-                    Save Settings
-                  </>
-                )}
-              </Button>
-            </CardFooter>
           </Card>
         </div>
       </div>

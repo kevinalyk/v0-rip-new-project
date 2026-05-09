@@ -634,3 +634,248 @@ export async function sendDowngradeScheduledEmail(
     return false
   }
 }
+
+// ─── Following Digest ─────────────────────────────────────────────────────────
+
+export interface DigestMessage {
+  kind: "email" | "sms"
+  subject: string       // email subject or SMS preview (first ~80 chars)
+  senderIdentifier: string // senderEmail (emails) or phoneNumber (sms)
+  receivedAt: Date
+  shareUrl: string      // https://app.rip-tool.com/share/<token>
+}
+
+export interface DigestEntitySection {
+  entityName: string
+  party: string | null
+  state: string | null
+  messages: DigestMessage[] // empty = no activity yesterday
+}
+
+export async function sendFollowingDigest(params: {
+  to: string
+  firstName: string | null
+  digestDate: string // e.g. "Thursday, May 8, 2026"
+  entitySections: DigestEntitySection[]
+}): Promise<boolean> {
+  const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
+  const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN
+
+  if (!MAILGUN_API_KEY || !MAILGUN_DOMAIN) {
+    console.error("Mailgun credentials not configured")
+    return false
+  }
+
+  const { to, firstName, digestDate, entitySections } = params
+
+  const greeting = firstName ? `Hi ${firstName},` : "Hi there,"
+
+  const partyColor = (party: string | null) => {
+    if (!party) return "#6b7280"
+    const p = party.toLowerCase()
+    if (p === "republican") return "#dc2626"
+    if (p === "democrat") return "#2563eb"
+    return "#6b7280"
+  }
+
+  const partyLabel = (party: string | null) => {
+    if (!party) return null
+    return party.charAt(0).toUpperCase() + party.slice(1)
+  }
+
+  const formatTime = (date: Date) => {
+    return new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "America/New_York",
+    }).format(date)
+  }
+
+  const entitySectionsHtml = entitySections
+    .map((section) => {
+      const partyBadge = section.party
+        ? `<span style="display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:0.3px;color:#ffffff;background:${partyColor(section.party)};margin-right:6px;">${partyLabel(section.party)}</span>`
+        : ""
+      const stateBadge = section.state
+        ? `<span style="display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;font-weight:600;color:#374151;background:#e5e7eb;margin-right:6px;">${section.state}</span>`
+        : ""
+
+      const headerHtml = `
+        <tr>
+          <td style="padding:20px 24px 12px;border-top:2px solid #1f2937;">
+            <div style="font-size:16px;font-weight:700;color:#f9fafb;margin-bottom:6px;">${section.entityName}</div>
+            <div>${partyBadge}${stateBadge}</div>
+          </td>
+        </tr>`
+
+      if (section.messages.length === 0) {
+        return `
+          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+            ${headerHtml}
+            <tr>
+              <td style="padding:10px 24px 20px;">
+                <span style="font-size:13px;color:#6b7280;font-style:italic;">No messages sent yesterday.</span>
+              </td>
+            </tr>
+          </table>`
+      }
+
+      const rowsHtml = section.messages
+        .map((msg, i) => {
+          const isEmail = msg.kind === "email"
+          const icon = isEmail
+            ? `<span style="display:inline-block;width:18px;height:18px;vertical-align:middle;margin-right:8px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+              </span>`
+            : `<span style="display:inline-block;width:18px;height:18px;vertical-align:middle;margin-right:8px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
+              </span>`
+          const bg = i % 2 === 0 ? "#111827" : "#0f172a"
+          const borderTop = i === 0 ? "border-top:1px solid #1f2937;" : ""
+          return `
+            <tr>
+              <td style="padding:10px 24px;background:${bg};${borderTop}border-bottom:1px solid #1f2937;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="vertical-align:middle;">
+                      ${icon}
+                      <a href="${msg.shareUrl}" target="_blank" style="font-size:13px;color:#e5e7eb;text-decoration:none;font-weight:500;">${msg.subject}</a>
+                    </td>
+                    <td style="text-align:right;white-space:nowrap;padding-left:16px;vertical-align:middle;">
+                      <span style="font-size:12px;color:#6b7280;">${formatTime(msg.receivedAt)}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colspan="2" style="padding-top:2px;padding-left:26px;">
+                      <span style="font-size:11px;color:#4b5563;">${msg.senderIdentifier}</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>`
+        })
+        .join("")
+
+      return `
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          ${headerHtml}
+          ${rowsHtml}
+        </table>`
+    })
+    .join(`<tr><td style="height:8px;"></td></tr>`)
+
+  const totalMessages = entitySections.reduce((s, e) => s + e.messages.length, 0)
+  const entitiesWithActivity = entitySections.filter((e) => e.messages.length > 0).length
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Following Digest — ${digestDate}</title>
+</head>
+<body style="margin:0;padding:0;background:#030712;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#030712;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+          <!-- Header -->
+          <tr>
+            <td style="padding:0 0 24px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td>
+                    <span style="font-size:20px;font-weight:800;color:#f9fafb;letter-spacing:-0.5px;">RIP</span>
+                    <span style="font-size:13px;color:#6b7280;margin-left:8px;font-weight:500;">Following Digest</span>
+                  </td>
+                  <td style="text-align:right;">
+                    <span style="font-size:12px;color:#4b5563;">${digestDate}</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Intro card -->
+          <tr>
+            <td style="background:#111827;border-radius:8px 8px 0 0;padding:20px 24px;border-bottom:1px solid #1f2937;">
+              <p style="margin:0 0 4px;font-size:15px;color:#f9fafb;font-weight:600;">${greeting}</p>
+              <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">
+                Here&apos;s what the ${entitySections.length} ${entitySections.length === 1 ? "entity" : "entities"} you follow sent yesterday.
+                ${totalMessages > 0 ? `<strong style="color:#e5e7eb;">${totalMessages} message${totalMessages === 1 ? "" : "s"}</strong> from <strong style="color:#e5e7eb;">${entitiesWithActivity}</strong> of them.` : "None of them sent anything yesterday."}
+              </p>
+            </td>
+          </tr>
+
+          <!-- Entity sections -->
+          <tr>
+            <td style="background:#0d1117;border-radius:0 0 8px 8px;overflow:hidden;">
+              ${entitySectionsHtml}
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:24px 0 0;">
+              <p style="margin:0;font-size:12px;color:#374151;text-align:center;line-height:1.8;">
+                You&apos;re receiving this because you follow entities on
+                <a href="https://app.rip-tool.com" style="color:#6b7280;text-decoration:none;">app.rip-tool.com</a>.<br/>
+                View the full feed at
+                <a href="https://app.rip-tool.com/competitive-intelligence" style="color:#6b7280;text-decoration:none;">app.rip-tool.com/competitive-intelligence</a>.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+
+  const text = `${greeting}
+
+Following Digest — ${digestDate}
+
+${entitySections
+  .map((s) => {
+    const meta = [s.party, s.state].filter(Boolean).join(" · ")
+    const header = `${s.entityName}${meta ? ` (${meta})` : ""}`
+    if (s.messages.length === 0) return `${header}\n  No messages sent yesterday.`
+    return `${header}\n${s.messages.map((m) => `  [${m.kind.toUpperCase()}] ${m.subject}\n  ${m.senderIdentifier}\n  ${m.shareUrl}`).join("\n\n")}`
+  })
+  .join("\n\n---\n\n")}
+
+View full feed: https://app.rip-tool.com/competitive-intelligence
+`
+
+  const formData = new FormData()
+  formData.append("from", `RIP Digest <digest@${MAILGUN_DOMAIN}>`)
+  formData.append("to", to)
+  formData.append("subject", `Your Following Digest — ${digestDate}`)
+  formData.append("html", html)
+  formData.append("text", text)
+
+  try {
+    const response = await fetch(`https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`api:${MAILGUN_API_KEY}`).toString("base64")}`,
+      },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("Mailgun following digest error:", response.status, errorText)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error sending following digest:", error)
+    return false
+  }
+}

@@ -31,6 +31,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "daily",
       priority: 0.8,
     },
+    {
+      url: `${APP_URL}/privacy`,
+      lastModified: new Date("2025-10-15"),
+      changeFrequency: "yearly",
+      priority: 0.3,
+    },
+    {
+      url: `${APP_URL}/terms`,
+      lastModified: new Date("2025-10-15"),
+      changeFrequency: "yearly",
+      priority: 0.3,
+    },
   ]
 
   // Dynamic directory profile pages

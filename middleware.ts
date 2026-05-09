@@ -42,7 +42,9 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname === "/testpage" ||
     request.nextUrl.pathname.startsWith("/share/") ||
     request.nextUrl.pathname === "/news" ||
-    request.nextUrl.pathname.startsWith("/news/")
+    request.nextUrl.pathname.startsWith("/news/") ||
+    request.nextUrl.pathname === "/privacy" ||
+    request.nextUrl.pathname === "/terms"
   ) {
     return NextResponse.next()
   }

@@ -366,7 +366,7 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
   )
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────��───────────────────────────────────
 // Server-rendered SEO content block
 // Rendered as real visible HTML so both Google and users see it.
 // Appears below the main interactive profile — subtle styling so it doesn't
@@ -486,118 +486,133 @@ function EntitySeoContent({
       style={{
         maxWidth: "860px",
         margin: "0 auto",
-        padding: "32px 24px 48px",
-        borderTop: "1px solid rgba(255,255,255,0.06)",
-        color: "rgba(255,255,255,0.45)",
-        fontSize: "13px",
-        lineHeight: "1.7",
+        padding: "8px 24px 32px",
         fontFamily: "inherit",
       }}
     >
-      <h2
-        style={{
-          fontSize: "11px",
-          fontWeight: 600,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          color: "rgba(255,255,255,0.3)",
-          marginBottom: "12px",
-          marginTop: 0,
-        }}
-      >
-        About this entity
-      </h2>
+      <details>
+        {/* Summary is the only visible element when collapsed — made as
+            unobtrusive as possible: tiny, muted, no marker styling */}
+        <summary
+          style={{
+            fontSize: "11px",
+            color: "rgba(255,255,255,0.15)",
+            cursor: "pointer",
+            listStyle: "none",
+            userSelect: "none",
+            display: "inline-block",
+            outline: "none",
+          }}
+        >
+          More about this entity
+        </summary>
 
-      {/* Auto-generated context paragraph */}
-      <p style={{ margin: "0 0 16px", color: "rgba(255,255,255,0.45)" }}>
-        {noContentNote ?? contextParts.join(" ")}
-      </p>
+        {/* Everything below is in the DOM (Google indexes it) but hidden
+            until the user clicks the summary above */}
+        <div
+          style={{
+            marginTop: "16px",
+            borderTop: "1px solid rgba(255,255,255,0.06)",
+            paddingTop: "20px",
+            color: "rgba(255,255,255,0.4)",
+            fontSize: "13px",
+            lineHeight: "1.7",
+          }}
+        >
+          {/* Auto-generated context paragraph */}
+          <p style={{ margin: "0 0 16px" }}>
+            {noContentNote ?? contextParts.join(" ")}
+          </p>
 
-      {/* Recent activity subject lines */}
-      {activityItems.length > 0 && (
-        <>
-          <h3
-            style={{
-              fontSize: "11px",
-              fontWeight: 600,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: "rgba(255,255,255,0.3)",
-              margin: "20px 0 10px",
-            }}
-          >
-            Recent communications
-          </h3>
-          <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-            {activityItems.map((item, i) => (
-              <li
-                key={i}
+          {/* Recent activity subject lines */}
+          {activityItems.length > 0 && (
+            <>
+              <h3
                 style={{
-                  display: "flex",
-                  alignItems: "baseline",
-                  gap: "8px",
-                  padding: "4px 0",
-                  borderBottom: "1px solid rgba(255,255,255,0.04)",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "rgba(255,255,255,0.25)",
+                  margin: "20px 0 10px",
                 }}
               >
-                <span
-                  style={{
-                    fontSize: "10px",
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    color: "rgba(255,255,255,0.2)",
-                    minWidth: "36px",
-                    flexShrink: 0,
-                  }}
-                >
-                  {item.kind === "email" ? "Email" : "SMS"}
-                </span>
-                <span style={{ flex: 1, color: "rgba(255,255,255,0.4)" }}>{item.subject}</span>
-                {item.date && (
-                  <span
+                Recent communications
+              </h3>
+              <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                {activityItems.map((item, i) => (
+                  <li
+                    key={i}
                     style={{
-                      fontSize: "11px",
-                      color: "rgba(255,255,255,0.2)",
-                      whiteSpace: "nowrap",
-                      flexShrink: 0,
+                      display: "flex",
+                      alignItems: "baseline",
+                      gap: "8px",
+                      padding: "4px 0",
+                      borderBottom: "1px solid rgba(255,255,255,0.04)",
                     }}
                   >
-                    {new Date(item.date).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+                    <span
+                      style={{
+                        fontSize: "10px",
+                        fontWeight: 600,
+                        textTransform: "uppercase",
+                        color: "rgba(255,255,255,0.18)",
+                        minWidth: "36px",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {item.kind === "email" ? "Email" : "SMS"}
+                    </span>
+                    <span style={{ flex: 1, color: "rgba(255,255,255,0.35)" }}>
+                      {item.subject}
+                    </span>
+                    {item.date && (
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          color: "rgba(255,255,255,0.18)",
+                          whiteSpace: "nowrap",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {new Date(item.date).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
 
-      {/* Footer attribution */}
-      <p style={{ margin: "20px 0 0", fontSize: "11px", color: "rgba(255,255,255,0.2)" }}>
-        {entity.name} is tracked in the{" "}
-        <a
-          href="/directory"
-          style={{ color: "rgba(255,255,255,0.3)", textDecoration: "underline" }}
-        >
-          RIP Tool political communications directory
-        </a>
-        {entity.ballotpediaUrl && (
-          <>
-            {" · "}
+          {/* Footer attribution */}
+          <p style={{ margin: "20px 0 0", fontSize: "11px", color: "rgba(255,255,255,0.18)" }}>
+            {entity.name} is tracked in the{" "}
             <a
-              href={entity.ballotpediaUrl}
-              style={{ color: "rgba(255,255,255,0.3)", textDecoration: "underline" }}
-              rel="noopener noreferrer"
-              target="_blank"
+              href="/directory"
+              style={{ color: "rgba(255,255,255,0.25)", textDecoration: "underline" }}
             >
-              View on Ballotpedia
+              RIP Tool political communications directory
             </a>
-          </>
-        )}
-      </p>
+            {entity.ballotpediaUrl && (
+              <>
+                {" · "}
+                <a
+                  href={entity.ballotpediaUrl}
+                  style={{ color: "rgba(255,255,255,0.25)", textDecoration: "underline" }}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  View on Ballotpedia
+                </a>
+              </>
+            )}
+          </p>
+        </div>
+      </details>
     </section>
   )
 }

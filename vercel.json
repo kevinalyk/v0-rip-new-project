@@ -62,6 +62,10 @@
     {
       "path": "/api/cron/refresh-ballotpedia",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/digest-following",
+      "schedule": "0 12 * * *"
     }
   ]
 }

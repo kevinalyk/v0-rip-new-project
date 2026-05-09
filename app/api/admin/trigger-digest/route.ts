@@ -191,9 +191,13 @@ export async function POST(request: NextRequest) {
     })
 
     // ── Fetch users who have the digest enabled and send ────────────────────
-    // digestEnabled filter is skipped when an emailOverride is provided (admin test sends)
+    // When an emailOverride is provided, still filter by that specific user's digestEnabled.
     const users = await prisma.user.findMany({
-      where: { clientId: ripClient.id, ...(emailOverride ? {} : { digestEnabled: true }) },
+      where: {
+        clientId: ripClient.id,
+        digestEnabled: true,
+        ...(emailOverride ? { email: emailOverride } : {}),
+      },
       select: { email: true, firstName: true },
     })
 

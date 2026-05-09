@@ -395,10 +395,14 @@ function EntitySeoContent({
     }
   })()
 
-  const emailDomains = entity.mappings
-    .filter((m) => m.senderDomain)
-    .map((m) => m.senderDomain)
-    .filter(Boolean)
+  // Prefer full senderEmail when available, fall back to senderDomain
+  const emailDomains = [
+    ...new Set(
+      entity.mappings
+        .filter((m) => m.senderEmail || m.senderDomain)
+        .map((m) => m.senderEmail ?? m.senderDomain!)
+    ),
+  ]
   const smsNumbers = entity.mappings
     .filter((m) => m.senderPhone)
     .map((m) => m.senderPhone)
@@ -434,7 +438,7 @@ function EntitySeoContent({
 
   if (emailDomains.length > 0) {
     contextParts.push(
-      `Known email sending domain${emailDomains.length === 1 ? "" : "s"}: ${emailDomains.join(", ")}.`,
+      `Known email sender${emailDomains.length === 1 ? "" : "s"}: ${emailDomains.join(", ")}.`,
     )
   }
 

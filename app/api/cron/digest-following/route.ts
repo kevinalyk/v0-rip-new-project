@@ -66,6 +66,7 @@ export async function GET(request: Request) {
           select: {
             id: true,
             name: true,
+            slug: true,
             party: true,
             state: true,
           },
@@ -183,6 +184,7 @@ export async function GET(request: Request) {
 
       return {
         entityName: entity.name,
+        entitySlug: entity.slug ?? null,
         party: entity.party,
         state: entity.state,
         messages: merged,
@@ -214,6 +216,7 @@ export async function GET(request: Request) {
         firstName: user.firstName,
         digestDate: digestDateLabel,
         entitySections,
+        clientSlug: ripClient.slug,
       })
 
       if (ok) {

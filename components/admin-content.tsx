@@ -28,6 +28,15 @@ interface DailyStats {
 
 export function AdminContent({ user }: AdminContentProps) {
   const [isRunning, setIsRunning] = useState(false)
+  const [isTriggeringDigest, setIsTriggeringDigest] = useState(false)
+  const [digestEmailOverride, setDigestEmailOverride] = useState("")
+  const [digestDateOffset, setDigestDateOffset] = useState("1")
+  const [digestTriggerResult, setDigestTriggerResult] = useState<{
+    sent: number
+    failed: number
+    window: { label: string }
+    results: Array<{ email: string; sent: boolean; entityCount: number; messageCount: number }>
+  } | null>(null)
   const [dailyStats, setDailyStats] = useState<DailyStats[]>([])
   const [loadingStats, setLoadingStats] = useState(true)
   const [dateRange, setDateRange] = useState({ days: 30 })
@@ -314,6 +323,36 @@ export function AdminContent({ user }: AdminContentProps) {
 
     fetchMessageStats()
   }, [dateRange, startDate, endDate])
+
+  const handleTriggerDigest = async () => {
+    setIsTriggeringDigest(true)
+    setDigestTriggerResult(null)
+    try {
+      const body: Record<string, unknown> = {
+        dateOffset: parseInt(digestDateOffset, 10) || 1,
+      }
+      if (digestEmailOverride.trim()) {
+        body.email = digestEmailOverride.trim()
+      }
+      const response = await fetch("/api/admin/trigger-digest", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setDigestTriggerResult(data)
+        toast.success(`Digest sent to ${data.sent} user${data.sent === 1 ? "" : "s"} for ${data.window?.label}`)
+      } else {
+        toast.error(data.error || "Failed to trigger digest")
+      }
+    } catch {
+      toast.error("Failed to trigger digest")
+    } finally {
+      setIsTriggeringDigest(false)
+    }
+  }
 
   const handleRunEngagement = async () => {
     setIsRunning(true)
@@ -1739,6 +1778,69 @@ const downloadActBluePatterns = () => {
           </Button>
         </CardContent>
       </Card>
+
+      {/* ── Following Digest Trigger ───────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mail size={16} />
+            Trigger Following Digest
+          </CardTitle>
+          <CardDescription>
+            Manually send the daily following digest to all RIP users (or override the recipient for testing).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground font-medium">Email override (optional)</label>
+              <Input
+                placeholder="test@example.com"
+                value={digestEmailOverride}
+                onChange={(e) => setDigestEmailOverride(e.target.value)}
+                className="text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground font-medium">Days back (1 = yesterday)</label>
+              <Input
+                type="number"
+                min="0"
+                max="30"
+                value={digestDateOffset}
+                onChange={(e) => setDigestDateOffset(e.target.value)}
+                className="text-sm"
+              />
+            </div>
+          </div>
+          <Button onClick={handleTriggerDigest} disabled={isTriggeringDigest} className="gap-2">
+            {isTriggeringDigest ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Mail size={16} />
+                Send Digest Now
+              </>
+            )}
+          </Button>
+          {digestTriggerResult && (
+            <div className="mt-3 p-3 rounded-md bg-muted text-sm space-y-1">
+              <p className="font-medium">
+                {digestTriggerResult.window?.label} — {digestTriggerResult.sent} sent, {digestTriggerResult.failed} failed
+              </p>
+              {digestTriggerResult.results.map((r, i) => (
+                <p key={i} className="text-muted-foreground text-xs">
+                  {r.sent ? "✓" : "✗"} {r.email} — {r.entityCount} entities, {r.messageCount} messages
+                </p>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>SMS Gateway Migration</CardTitle>

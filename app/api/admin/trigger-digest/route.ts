@@ -76,7 +76,6 @@ export async function POST(request: NextRequest) {
     const users = await prisma.user.findMany({
       where: {
         ...userWhere,
-        email: { not: null },
         digestEnabled: true,
       },
       select: {

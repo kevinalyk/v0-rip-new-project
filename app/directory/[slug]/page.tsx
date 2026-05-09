@@ -361,6 +361,243 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbData) }} />
       )}
       <DirectoryProfileContent slug={slug} initialData={initialData} />
+      {initialData && <EntitySeoContent data={initialData} />}
     </>
+  )
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Server-rendered SEO content block
+// Rendered as real visible HTML so both Google and users see it.
+// Appears below the main interactive profile — subtle styling so it doesn't
+// compete visually, but never hidden or cloaked.
+// ──────────────────────────────────────────────────────────────────────────────
+
+function EntitySeoContent({
+  data,
+}: {
+  data: NonNullable<Awaited<ReturnType<typeof getEntityBySlug>>>
+}) {
+  const { entity, recentCampaigns, recentSms } = data
+
+  // ── Auto-generated context paragraph ────────────────────────────────────
+  const partyLabel = entity.party
+    ? entity.party.charAt(0).toUpperCase() + entity.party.slice(1)
+    : null
+  const typeLabel = (() => {
+    switch (entity.type) {
+      case "candidate": return "candidate"
+      case "pac": return "PAC"
+      case "committee": return "committee"
+      case "organization": return "organization"
+      case "nonprofit": return "nonprofit"
+      default: return "political entity"
+    }
+  })()
+
+  const emailDomains = entity.mappings
+    .filter((m) => m.senderDomain)
+    .map((m) => m.senderDomain)
+    .filter(Boolean)
+  const smsNumbers = entity.mappings
+    .filter((m) => m.senderPhone)
+    .map((m) => m.senderPhone)
+    .filter(Boolean)
+
+  const hasAnyContent =
+    entity.counts.total > 0 ||
+    emailDomains.length > 0 ||
+    smsNumbers.length > 0 ||
+    entity.bio
+
+  // Build the auto-generated paragraph from data we actually have
+  const contextParts: string[] = []
+
+  if (partyLabel && entity.state) {
+    contextParts.push(
+      `${entity.name} is a ${partyLabel} ${typeLabel}${entity.state ? ` based in ${entity.state}` : ""}.`,
+    )
+  } else if (partyLabel) {
+    contextParts.push(`${entity.name} is a ${partyLabel} ${typeLabel}.`)
+  } else {
+    contextParts.push(`${entity.name} is a ${typeLabel} tracked in the RIP Tool political communications directory.`)
+  }
+
+  if (entity.counts.total > 0) {
+    const parts: string[] = []
+    if (entity.counts.emails > 0) parts.push(`${entity.counts.emails} email${entity.counts.emails === 1 ? "" : "s"}`)
+    if (entity.counts.sms > 0) parts.push(`${entity.counts.sms} SMS message${entity.counts.sms === 1 ? "" : "s"}`)
+    contextParts.push(
+      `RIP Tool has tracked ${parts.join(" and ")} from ${entity.name}, totaling ${entity.counts.total} political communications.`,
+    )
+  }
+
+  if (emailDomains.length > 0) {
+    contextParts.push(
+      `Known email sending domain${emailDomains.length === 1 ? "" : "s"}: ${emailDomains.join(", ")}.`,
+    )
+  }
+
+  if (smsNumbers.length > 0) {
+    contextParts.push(
+      `Known SMS short code${smsNumbers.length === 1 ? "" : "s"} and phone number${smsNumbers.length === 1 ? "" : "s"}: ${smsNumbers.join(", ")}.`,
+    )
+  }
+
+  const winredSlugs = (entity.donationIdentifiers as Record<string, string[]> | null)?.winred ?? []
+  if (winredSlugs.length > 0) {
+    contextParts.push(
+      `WinRed donation page${winredSlugs.length === 1 ? "" : "s"}: ${winredSlugs.map((s) => `secure.winred.com/${s}`).join(", ")}.`,
+    )
+  }
+
+  // No-content fallback paragraph
+  const noContentNote = !hasAnyContent
+    ? `${entity.name} is listed in the RIP Tool directory but does not yet have emails, SMS messages, sending domains, or phone numbers on record. We are actively monitoring for new communications and will update this profile as data becomes available.`
+    : null
+
+  // ── Recent activity list ─────────────────────────────────────────────────
+  // Mix emails and SMS by date, up to 10 items total
+  type ActivityItem = { kind: "email" | "sms"; subject: string; date: string | null; sender: string }
+  const activityItems: ActivityItem[] = [
+    ...recentCampaigns.map((c) => ({
+      kind: "email" as const,
+      subject: c.subject || "(no subject)",
+      date: c.dateReceived,
+      sender: c.senderEmail || "",
+    })),
+    ...recentSms.map((s) => ({
+      kind: "sms" as const,
+      subject: s.message ? s.message.slice(0, 120) + (s.message.length > 120 ? "…" : "") : "(no preview)",
+      date: s.createdAt,
+      sender: s.phoneNumber || "",
+    })),
+  ]
+    .sort((a, b) => {
+      if (!a.date) return 1
+      if (!b.date) return -1
+      return new Date(b.date).getTime() - new Date(a.date).getTime()
+    })
+    .slice(0, 10)
+
+  return (
+    <section
+      aria-label={`About ${entity.name}`}
+      style={{
+        maxWidth: "860px",
+        margin: "0 auto",
+        padding: "32px 24px 48px",
+        borderTop: "1px solid rgba(255,255,255,0.06)",
+        color: "rgba(255,255,255,0.45)",
+        fontSize: "13px",
+        lineHeight: "1.7",
+        fontFamily: "inherit",
+      }}
+    >
+      <h2
+        style={{
+          fontSize: "11px",
+          fontWeight: 600,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: "rgba(255,255,255,0.3)",
+          marginBottom: "12px",
+          marginTop: 0,
+        }}
+      >
+        About this entity
+      </h2>
+
+      {/* Auto-generated context paragraph */}
+      <p style={{ margin: "0 0 16px", color: "rgba(255,255,255,0.45)" }}>
+        {noContentNote ?? contextParts.join(" ")}
+      </p>
+
+      {/* Recent activity subject lines */}
+      {activityItems.length > 0 && (
+        <>
+          <h3
+            style={{
+              fontSize: "11px",
+              fontWeight: 600,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "rgba(255,255,255,0.3)",
+              margin: "20px 0 10px",
+            }}
+          >
+            Recent communications
+          </h3>
+          <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {activityItems.map((item, i) => (
+              <li
+                key={i}
+                style={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: "8px",
+                  padding: "4px 0",
+                  borderBottom: "1px solid rgba(255,255,255,0.04)",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "10px",
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    color: "rgba(255,255,255,0.2)",
+                    minWidth: "36px",
+                    flexShrink: 0,
+                  }}
+                >
+                  {item.kind === "email" ? "Email" : "SMS"}
+                </span>
+                <span style={{ flex: 1, color: "rgba(255,255,255,0.4)" }}>{item.subject}</span>
+                {item.date && (
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color: "rgba(255,255,255,0.2)",
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {new Date(item.date).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {/* Footer attribution */}
+      <p style={{ margin: "20px 0 0", fontSize: "11px", color: "rgba(255,255,255,0.2)" }}>
+        {entity.name} is tracked in the{" "}
+        <a
+          href="/directory"
+          style={{ color: "rgba(255,255,255,0.3)", textDecoration: "underline" }}
+        >
+          RIP Tool political communications directory
+        </a>
+        {entity.ballotpediaUrl && (
+          <>
+            {" · "}
+            <a
+              href={entity.ballotpediaUrl}
+              style={{ color: "rgba(255,255,255,0.3)", textDecoration: "underline" }}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              View on Ballotpedia
+            </a>
+          </>
+        )}
+      </p>
+    </section>
   )
 }

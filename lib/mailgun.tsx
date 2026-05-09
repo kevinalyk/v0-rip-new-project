@@ -719,10 +719,14 @@ export async function sendFollowingDigest(params: {
         ? `<a href="${directoryUrl}" target="_blank" style="font-size:16px;font-weight:700;color:#f9fafb;text-decoration:none;">${section.entityName}</a>`
         : `<span style="font-size:16px;font-weight:700;color:#f9fafb;">${section.entityName}</span>`
 
+      const viewProfileBtn = directoryUrl
+        ? `<a href="${directoryUrl}" target="_blank" style="display:inline-block;margin-left:10px;padding:3px 10px;border:1px solid #374151;border-radius:4px;font-size:11px;font-weight:500;color:#9ca3af;text-decoration:none;vertical-align:middle;line-height:1.6;">View Profile ↗</a>`
+        : ""
+
       const headerHtml = `
         <tr>
           <td style="padding:20px 24px 12px;border-top:2px solid #1f2937;">
-            <div style="margin-bottom:6px;">${entityNameHtml}</div>
+            <div style="margin-bottom:6px;">${entityNameHtml}${viewProfileBtn}</div>
             <div>${partyBadge}${stateBadge}</div>
           </td>
         </tr>`

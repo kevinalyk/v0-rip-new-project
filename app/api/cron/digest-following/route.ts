@@ -22,28 +22,42 @@ export async function GET(request: Request) {
     }
 
     // ── Date window: yesterday midnight → today midnight ET ──────────────────
-    const nowET = new Date(
-      new Date().toLocaleString("en-US", { timeZone: "America/New_York" }),
-    )
-    const yesterdayStart = new Date(nowET)
-    yesterdayStart.setDate(yesterdayStart.getDate() - 1)
-    yesterdayStart.setHours(0, 0, 0, 0)
+    // Get today's date parts in ET using Intl, then build UTC timestamps
+    // for midnight ET = UTC-4 (EDT) or UTC-5 (EST).
+    const now = new Date()
+    const etParts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(now)
+    const etYear = Number(etParts.find((p) => p.type === "year")!.value)
+    const etMonth = Number(etParts.find((p) => p.type === "month")!.value) - 1
+    const etDay = Number(etParts.find((p) => p.type === "day")!.value)
 
-    const yesterdayEnd = new Date(nowET)
-    yesterdayEnd.setHours(0, 0, 0, 0)
+    // Determine ET UTC offset at today's midnight using a sentinel date
+    const todayMidnightET = new Date(`${etYear}-${String(etMonth + 1).padStart(2, "0")}-${String(etDay).padStart(2, "0")}T00:00:00`)
+    const etOffset = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      timeZoneName: "shortOffset",
+    }).formatToParts(todayMidnightET).find((p) => p.type === "timeZoneName")!.value
+    // e.g. "GMT-4" → -4, "GMT-5" → -5
+    const etOffsetHours = -Number(etOffset.replace("GMT", "").replace("+", ""))
+    const etOffsetMs = etOffsetHours * 60 * 60 * 1000
 
-    // Convert back to UTC for DB queries
-    const etOffsetMs = nowET.getTime() - new Date().getTime()
-    const windowStart = new Date(yesterdayStart.getTime() - etOffsetMs)
-    const windowEnd = new Date(yesterdayEnd.getTime() - etOffsetMs)
+    // Today midnight ET in UTC
+    const windowEnd = new Date(Date.UTC(etYear, etMonth, etDay, 0, 0, 0) + etOffsetMs)
+    // Yesterday midnight ET in UTC
+    const windowStart = new Date(windowEnd.getTime() - 24 * 60 * 60 * 1000)
 
+    // Label for the digest header — format windowStart (yesterday) in ET
     const digestDateLabel = new Intl.DateTimeFormat("en-US", {
       weekday: "long",
       month: "long",
       day: "numeric",
       year: "numeric",
       timeZone: "America/New_York",
-    }).format(yesterdayStart)
+    }).format(windowStart)
 
     console.log(`[digest-following] Window: ${windowStart.toISOString()} → ${windowEnd.toISOString()}`)
 

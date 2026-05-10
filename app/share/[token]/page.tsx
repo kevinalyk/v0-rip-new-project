@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
-import { getAuthenticatedUser } from "@/lib/auth"
+import { getSession } from "@/lib/auth"
 import { PrismaClient } from "@prisma/client"
 import SharePageClient from "./share-page-client"
 
@@ -116,7 +116,7 @@ export async function generateMetadata({ params }: { params: { token: string } }
 
 export default async function SharePage({ params }: { params: { token: string } }) {
   // ── Require authentication ────────────────────────────────────────────────
-  const user = await getAuthenticatedUser()
+  const user = await getSession()
   if (!user) {
     redirect(`/login?redirect=/share/${params.token}`)
   }

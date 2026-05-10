@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma"
 
 export async function GET(request: NextRequest, { params }: { params: { token: string } }) {
   try {
+    // Authentication is enforced at the page level (app/share/[token]/page.tsx)
     const token = params.token
 
     let campaign = await prisma.competitiveInsightCampaign.findUnique({

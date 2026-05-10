@@ -62,10 +62,15 @@ export async function POST(request: NextRequest) {
     // ── RIP client ───────────────────────────────────────────────────────────
     const ripClient = await prisma.client.findFirst({
       where: { slug: "rip" },
-      select: { id: true, slug: true },
+      select: { id: true, slug: true, subscriptionPlan: true },
     })
     if (!ripClient) {
       return NextResponse.json({ error: "RIP client not found" }, { status: 404 })
+    }
+
+    // ── Skip if client is on free plan ────────────────────────────────────────
+    if (ripClient.subscriptionPlan === "free") {
+      return NextResponse.json({ ok: true, message: "Free plan — no digest", sent: 0, failed: 0, results: [] })
     }
 
     // ── Entity subscriptions (same as cron) ──────────────────────────────────
@@ -84,8 +89,9 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // ── Skip if no subscriptions ──────────────────────────────────────────────
     if (subscriptions.length === 0) {
-      return NextResponse.json({ ok: true, message: "No subscriptions, nothing to send", sent: 0, failed: 0, results: [] })
+      return NextResponse.json({ ok: true, message: "No subscriptions — no digest", sent: 0, failed: 0, results: [] })
     }
 
     const entityIds = subscriptions.map((s) => s.entityId)
@@ -191,9 +197,13 @@ export async function POST(request: NextRequest) {
     })
 
     // ── Fetch users who have the digest enabled and send ────────────────────
-    // digestEnabled filter is skipped when an emailOverride is provided (admin test sends)
+    // When an emailOverride is provided, still filter by that specific user's digestEnabled.
     const users = await prisma.user.findMany({
-      where: { clientId: ripClient.id, ...(emailOverride ? {} : { digestEnabled: true }) },
+      where: {
+        clientId: ripClient.id,
+        digestEnabled: true,
+        ...(emailOverride ? { email: emailOverride } : {}),
+      },
       select: { email: true, firstName: true },
     })
 

@@ -50,12 +50,18 @@ export async function GET(request: Request) {
     // ── Find RIP client and its subscriptions ─────────────────────────────────
     const ripClient = await prisma.client.findFirst({
       where: { slug: "rip" },
-      select: { id: true, slug: true },
+      select: { id: true, slug: true, subscriptionPlan: true },
     })
 
     if (!ripClient) {
       console.error("[digest-following] RIP client not found")
       return NextResponse.json({ error: "RIP client not found" }, { status: 404 })
+    }
+
+    // ── Skip if client is on free plan ────────────────────────────────────────
+    if (ripClient.subscriptionPlan === "free") {
+      console.log("[digest-following] RIP client is on free plan — skipping")
+      return NextResponse.json({ success: true, message: "Free plan — no digest" })
     }
 
     // Get all entity subscriptions for RIP
@@ -74,9 +80,10 @@ export async function GET(request: Request) {
       },
     })
 
+    // ── Skip if no subscriptions ──────────────────────────────────────────────
     if (subscriptions.length === 0) {
-      console.log("[digest-following] No entity subscriptions for RIP — skipping")
-      return NextResponse.json({ success: true, message: "No subscriptions, nothing to send" })
+      console.log("[digest-following] No entity subscriptions — skipping")
+      return NextResponse.json({ success: true, message: "No subscriptions — no digest" })
     }
 
     const entityIds = subscriptions.map((s) => s.entityId)

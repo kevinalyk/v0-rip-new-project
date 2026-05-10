@@ -1,8 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { getAuthenticatedUser } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 
 export async function GET(request: NextRequest, { params }: { params: { token: string } }) {
   try {
+    // ── Require authentication ────────────────────────────────────────────────
+    const user = await getAuthenticatedUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     const token = params.token
 
     let campaign = await prisma.competitiveInsightCampaign.findUnique({

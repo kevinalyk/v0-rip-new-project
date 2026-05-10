@@ -35,21 +35,30 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Date window (same as cron) ───────────────────────────────────────────
-    const nowET = new Date(
-      new Date().toLocaleString("en-US", { timeZone: "America/New_York" }),
-    )
+    const now = new Date()
+    const etParts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(now)
+    const etYear = Number(etParts.find((p) => p.type === "year")!.value)
+    const etMonth = Number(etParts.find((p) => p.type === "month")!.value) - 1
+    const etDay = Number(etParts.find((p) => p.type === "day")!.value)
 
-    const windowStartET = new Date(nowET)
-    windowStartET.setDate(windowStartET.getDate() - dateOffset)
-    windowStartET.setHours(0, 0, 0, 0)
+    // Determine ET UTC offset at today's midnight
+    const todayMidnightET = new Date(`${etYear}-${String(etMonth + 1).padStart(2, "0")}-${String(etDay).padStart(2, "0")}T00:00:00`)
+    const etOffset = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      timeZoneName: "shortOffset",
+    }).formatToParts(todayMidnightET).find((p) => p.type === "timeZoneName")!.value
+    const etOffsetHours = -Number(etOffset.replace("GMT", "").replace("+", ""))
+    const etOffsetMs = etOffsetHours * 60 * 60 * 1000
 
-    const windowEndET = new Date(nowET)
-    windowEndET.setDate(windowEndET.getDate() - (dateOffset - 1))
-    windowEndET.setHours(0, 0, 0, 0)
-
-    const etOffsetMs = nowET.getTime() - new Date().getTime()
-    const windowStart = new Date(windowStartET.getTime() - etOffsetMs)
-    const windowEnd = new Date(windowEndET.getTime() - etOffsetMs)
+    // Today midnight ET in UTC, then offset by dateOffset
+    const todayMidnightUTC = new Date(Date.UTC(etYear, etMonth, etDay, 0, 0, 0) + etOffsetMs)
+    const windowEnd = new Date(todayMidnightUTC.getTime() - (dateOffset - 1) * 24 * 60 * 60 * 1000)
+    const windowStart = new Date(todayMidnightUTC.getTime() - dateOffset * 24 * 60 * 60 * 1000)
 
     const digestDateLabel = new Intl.DateTimeFormat("en-US", {
       weekday: "long",
@@ -57,7 +66,7 @@ export async function POST(request: NextRequest) {
       day: "numeric",
       year: "numeric",
       timeZone: "America/New_York",
-    }).format(windowStartET)
+    }).format(windowStart)
 
     // ── RIP client ───────────────────────────────────────────────────────────
     const ripClient = await prisma.client.findFirst({

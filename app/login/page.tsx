@@ -126,6 +126,13 @@ function LoginForm({ successMessage = "", redirectUrl = "" }) {
       </div>
 
       <Card className="w-full max-w-md">
+        {redirectUrl && (
+          <div className="p-4 bg-blue-50 dark:bg-blue-950 border-b border-blue-200 dark:border-blue-800 rounded-t-lg">
+            <p className="text-sm text-blue-900 dark:text-blue-100">
+              To view this content, please log in to your account.
+            </p>
+          </div>
+        )}
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Sign in to your account</CardTitle>
           <CardDescription>Enter your email and password to access Inbox.GOP</CardDescription>

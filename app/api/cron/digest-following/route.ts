@@ -43,7 +43,7 @@ export async function GET(request: Request) {
       day: "numeric",
       year: "numeric",
       timeZone: "America/New_York",
-    }).format(nowET)
+    }).format(yesterdayStart)
 
     console.log(`[digest-following] Window: ${windowStart.toISOString()} → ${windowEnd.toISOString()}`)
 

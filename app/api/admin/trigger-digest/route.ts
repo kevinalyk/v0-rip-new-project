@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       day: "numeric",
       year: "numeric",
       timeZone: "America/New_York",
-    }).format(nowET)
+    }).format(windowStartET)
 
     // ── RIP client ───────────────────────────────────────────────────────────
     const ripClient = await prisma.client.findFirst({

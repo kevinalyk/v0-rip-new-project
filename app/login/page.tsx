@@ -14,7 +14,7 @@ import { ForgotPasswordDialog } from "@/components/forgot-password-dialog"
 import { toast } from "sonner"
 
 // Create a client component for the login form
-function LoginForm({ successMessage = "" }) {
+function LoginForm({ successMessage = "", redirectUrl = "" }) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
@@ -89,9 +89,10 @@ function LoginForm({ successMessage = "" }) {
         document.body.appendChild(form)
         form.submit()
       } else {
+        const redirectTarget = redirectUrl || "/"
         const form = document.createElement("form")
         form.method = "GET"
-        form.action = "/"
+        form.action = redirectTarget
         document.body.appendChild(form)
         form.submit()
       }
@@ -207,6 +208,7 @@ function LoginWithParams() {
   const searchParams = useSearchParams()
   const resetSuccess = searchParams.get("reset") === "success"
   const signupSuccess = searchParams.get("signup") === "success"
+  const redirectUrl = searchParams.get("redirect") || ""
 
   const successMessage = resetSuccess
     ? "Password has been reset successfully. Please log in with your new password."
@@ -214,7 +216,7 @@ function LoginWithParams() {
       ? "Account created successfully! Please log in with your credentials."
       : ""
 
-  return <LoginForm successMessage={successMessage} />
+  return <LoginForm successMessage={successMessage} redirectUrl={redirectUrl} />
 }
 
 export default function LoginPage() {

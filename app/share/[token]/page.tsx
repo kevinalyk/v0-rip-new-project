@@ -72,13 +72,13 @@ export async function generateMetadata({ params }: { params: { token: string } }
 
     if (!campaign) {
       return {
-        title: "Shared Campaign | RIP Tool",
-        description: "View this shared campaign on RIP Tool",
+        title: "Shared Campaign - Inbox.GOP",
+        description: "View this shared campaign on Inbox.GOP",
       }
     }
 
     const entityName = campaign.entity?.name || (isSms ? campaign.phoneNumber : campaign.senderName)
-    const title = `${entityName} | RIP Tool`
+    const title = `${entityName} - Inbox.GOP`
     const description = isSms
       ? (campaign as any).message?.slice(0, 160)
       : campaign.subject?.slice(0, 160) || "View this campaign on RIP Tool"

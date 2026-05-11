@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 
-const TITLE = "Political Email & SMS Directory | RIP Tool"
+const TITLE = "Directory - Inbox.GOP"
 const DESCRIPTION =
   "Search and explore political candidates, PACs, and organizations tracked by the Republican Inboxing Protocol. Browse campaign emails, fundraising texts, and political messaging across the United States."
 
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
-    siteName: "RIP Tool",
+    siteName: "Inbox.GOP",
     type: "website",
     url: "https://app.rip-tool.com/directory",
     images: [

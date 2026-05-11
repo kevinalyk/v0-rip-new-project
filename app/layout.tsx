@@ -11,7 +11,7 @@ const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"),
-  title: "Republican Inboxing Protocol",
+  title: "Inbox.GOP",
   description: "A tool dedicated to helping Republicans and conservatives inbox effectively. Ensure your message reaches your supporters with the Republican Inboxing Protocol.",
   icons: {
     icon: [

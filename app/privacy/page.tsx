@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | RIP Tool",
+  title: "Privacy Policy - Inbox.GOP",
   description:
     "Privacy Policy for RIP Tool (Republican Inboxing Protocol). Learn how we collect, use, and protect your personal information.",
 }

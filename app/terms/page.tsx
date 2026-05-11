@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "Terms of Service | RIP Tool",
+  title: "Terms of Service - Inbox.GOP",
   description:
     "Terms of Service for RIP Tool (Republican Inboxing Protocol). Read the terms governing your access to and use of rip-tool.com.",
 }

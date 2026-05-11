@@ -68,12 +68,12 @@ export async function generateMetadata({
 
   if (!combo) {
     return {
-      title: "Page Not Found | RIP Tool",
+      title: "Page Not Found - Inbox.GOP",
       description: "This directory page could not be found.",
     }
   }
 
-  const title = `${combo.stateName} ${combo.partyLabel} - Campaign Emails & SMS | RIP Tool`
+  const title = `${combo.stateName} ${combo.partyLabel} Directory - Inbox.GOP`
   const description = `Track campaign emails and texts from ${combo.stateName} ${combo.partyAdjective} candidates and officials. See how ${combo.stateName} ${combo.partyLabel.toLowerCase()} are communicating with voters via the Republican Inboxing Protocol.`
   const url = `${APP_URL}/directory/${combo.stateSlug}/${combo.partySlug}`
 
@@ -84,7 +84,7 @@ export async function generateMetadata({
       title,
       description,
       url,
-      siteName: "RIP Tool",
+      siteName: "Inbox.GOP",
       type: "website",
       images: [{ url: `${APP_URL}/og-candidate-directory.png`, width: 1200, height: 630, alt: title }],
     },

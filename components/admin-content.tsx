@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Loader2, Play, X, Mail, MessageSquare, TrendingUp, CalendarIcon, Twitter } from "lucide-react"
+import { Loader2, Play, X, Mail, MessageSquare, TrendingUp, CalendarIcon, Twitter, Download } from "lucide-react"
 import { toast } from "sonner"
 import { CampaignDetectionDialog } from "@/components/campaign-detection-dialog"
 import { CompetitiveInsightsDetectionDialog } from "@/components/competitive-insights-detection-dialog"
@@ -52,6 +52,8 @@ export function AdminContent({ user }: AdminContentProps) {
   const [dateRange, setDateRange] = useState({ days: 30 })
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
+  const [ballotpediaUrl, setBallotpediaUrl] = useState("")
+  const [isScrapingBallotpedia, setIsScrapingBallotpedia] = useState(false)
   const [isMigratingSMS, setIsMigratingSMS] = useState(false)
   const [isMigratingSMSNumbers, setIsMigratingSMSNumbers] = useState(false)
   const [isSanitizingEmails, setIsSanitizingEmails] = useState(false)
@@ -1608,6 +1610,42 @@ const downloadActBluePatterns = () => {
       toast.error("Failed to add mapping")
     } finally {
       setAddingSelector(null)
+    }
+  }
+
+  const handleScrapeBallotpedia = async () => {
+    if (!ballotpediaUrl.trim()) {
+      toast.error("Please enter a Ballotpedia URL")
+      return
+    }
+    setIsScrapingBallotpedia(true)
+    try {
+      const response = await fetch("/api/admin/scrape-ballotpedia-state", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: ballotpediaUrl.trim() }),
+      })
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `ballotpedia-scrape-${new Date().toISOString().split("T")[0]}.json`
+        document.body.appendChild(a)
+        a.click()
+        URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        toast.success("Ballotpedia data downloaded successfully")
+      } else {
+        const data = await response.json()
+        toast.error(data.error || "Failed to scrape Ballotpedia")
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to scrape Ballotpedia")
+    } finally {
+      setIsScrapingBallotpedia(false)
     }
   }
 
@@ -3413,6 +3451,44 @@ const downloadActBluePatterns = () => {
               )}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Scrape Ballotpedia State Elections */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Download size={18} />
+            Scrape Ballotpedia State Elections
+          </CardTitle>
+          <CardDescription>
+            Paste a Ballotpedia state election page URL to scrape all candidate data and download it as JSON for analysis.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Input
+            placeholder="https://ballotpedia.org/Alabama_House_of_Representatives_elections,_2026#General_election"
+            value={ballotpediaUrl}
+            onChange={(e) => setBallotpediaUrl(e.target.value)}
+            disabled={isScrapingBallotpedia}
+          />
+          <Button
+            onClick={handleScrapeBallotpedia}
+            disabled={isScrapingBallotpedia || !ballotpediaUrl.trim()}
+            className="gap-2"
+          >
+            {isScrapingBallotpedia ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Scraping...
+              </>
+            ) : (
+              <>
+                <Download size={16} />
+                Scrape &amp; Download JSON
+              </>
+            )}
+          </Button>
         </CardContent>
       </Card>
     </div>

@@ -400,6 +400,28 @@ export function AdminContent({ user }: AdminContentProps) {
     }
   }
 
+  const handleRunEngagement = async () => {
+    setIsRunning(true)
+    try {
+      const response = await fetch("/api/debug/run-engagement", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success(data.message || "Engagement simulation completed successfully")
+      } else {
+        toast.error(data.error || "Failed to run engagement simulation")
+      }
+    } catch (error) {
+      toast.error("Failed to run engagement simulation")
+    } finally {
+      setIsRunning(false)
+    }
+  }
+
   const handleScrapeBallotpedia = async () => {
     if (!ballotpediaUrl.trim()) {
       toast.error("Please enter a Ballotpedia URL")

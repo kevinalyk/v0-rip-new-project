@@ -5,6 +5,7 @@ import { CompetitiveInsights } from "@/components/competitive-insights"
 import { AppLayout } from "@/components/app-layout"
 import { useEffect, useState } from "react"
 import { Loader2 } from "lucide-react"
+import AdBanner from "@/components/ad-banner"
 
 export default function CICampaignsPage() {
   const params = useParams()
@@ -43,6 +44,7 @@ export default function CICampaignsPage() {
 
   return (
     <AppLayout clientSlug={clientSlug} isAdminView={clientSlug === "admin"}>
+      <AdBanner showAd={subscriptionPlan === "free"} />
       <CompetitiveInsights clientSlug={clientSlug} subscriptionPlan={subscriptionPlan as any} />
     </AppLayout>
   )

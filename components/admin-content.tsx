@@ -400,28 +400,6 @@ export function AdminContent({ user }: AdminContentProps) {
     }
   }
 
-  const handleRunEngagement = async () => {
-    setIsRunning(true)
-    try {
-      const response = await fetch("/api/debug/run-engagement", {
-        method: "POST",
-        credentials: "include",
-      })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        toast.success(data.message || "Engagement simulation completed successfully")
-      } else {
-        toast.error(data.error || "Failed to run engagement simulation")
-      }
-    } catch (error) {
-      toast.error("Failed to run engagement simulation")
-    } finally {
-      setIsRunning(false)
-    }
-  }
-
   const handleScrapeBallotpedia = async () => {
     if (!ballotpediaUrl.trim()) {
       toast.error("Please enter a Ballotpedia URL")
@@ -456,6 +434,50 @@ export function AdminContent({ user }: AdminContentProps) {
       toast.error("Failed to scrape Ballotpedia")
     } finally {
       setIsScrapingBallotpedia(false)
+    }
+  }
+
+  const handleMigrateSMS = async () => {
+    setIsMigratingSMS(true)
+    try {
+      const response = await fetch("/api/admin/migrate-sms-gateway", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      })
+      const data = await response.json()
+      if (response.ok) {
+        toast.success(data.message || "SMS migration completed")
+      } else {
+        toast.error(data.error || "Failed to migrate SMS")
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to migrate SMS")
+    } finally {
+      setIsMigratingSMS(false)
+    }
+  }
+
+  const handleMigrateSMSNumbers = async () => {
+    setIsMigratingSMSNumbers(true)
+    try {
+      const response = await fetch("/api/admin/fix-sms-numbers", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      })
+      const data = await response.json()
+      if (response.ok) {
+        toast.success(data.message || "SMS numbers fixed")
+      } else {
+        toast.error(data.error || "Failed to fix SMS numbers")
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to fix SMS numbers")
+    } finally {
+      setIsMigratingSMSNumbers(false)
     }
   }
 

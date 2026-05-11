@@ -210,15 +210,13 @@ export default function SharePageClient() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Dialog
-        open={dialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            handleClose()
-          }
-        }}
-      >
-        <DialogContent className="!max-w-[1400px] !w-[95vw] md:!w-[85vw] max-h-[90vh] md:max-h-[85vh] overflow-y-auto p-4 md:p-6">
+      <Dialog open={dialogOpen} onOpenChange={() => {}}>
+        <DialogContent
+          className="!max-w-[1400px] !w-[95vw] md:!w-[85vw] max-h-[90vh] md:max-h-[85vh] overflow-y-auto p-4 md:p-6"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          onClose={handleClose}
+        >
           <DialogHeader>
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
               <div className="flex-1 min-w-0 pr-8 md:pr-0">

@@ -117,6 +117,7 @@ export async function POST(request: NextRequest) {
         dateReceived: { gte: windowStart, lt: windowEnd },
         isHidden: false,
         isDeleted: false,
+        donationPlatform: { in: ["winred", "actblue"] },
       },
       select: {
         id: true,
@@ -136,6 +137,7 @@ export async function POST(request: NextRequest) {
         createdAt: { gte: windowStart, lt: windowEnd },
         isHidden: false,
         isDeleted: false,
+        assignmentMethod: { in: ["auto_winred", "auto_actblue"] },
       },
       select: {
         id: true,

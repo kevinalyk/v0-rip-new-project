@@ -48,6 +48,26 @@ function stripQueryParams(url: string): string {
   }
 }
 
+// Known intermediate redirect domains — if fetch lands here, leave finalUrl unset
+// so the unwrap-links cron can re-resolve it with its JS-aware resolver
+const INTERMEDIATE_REDIRECT_DOMAINS = [
+  "t.ly",
+  "bit.ly",
+  "tinyurl.com",
+  "ow.ly",
+  "buff.ly",
+  "dlvr.it",
+]
+
+function isIntermediateRedirect(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, "")
+    return INTERMEDIATE_REDIRECT_DOMAINS.some((d) => hostname === d || hostname.endsWith(`.${d}`))
+  } catch {
+    return false
+  }
+}
+
 /**
  * Resolve shortened URLs to their final destination
  * Similar to resolveRedirects from competitive-insights-utils
@@ -66,6 +86,13 @@ export async function resolveShortenedUrls(urls: string[]): Promise<Array<{ url:
         })
 
         const finalUrl = stripQueryParams(response.url)
+
+        // If we landed on a known intermediate redirect (e.g. t.ly/redirect),
+        // don't store it — the unwrap-links cron will resolve it properly with JS support
+        if (isIntermediateRedirect(finalUrl)) {
+          console.warn(`[SMS Link Extractor] Landed on intermediate redirect ${finalUrl} for ${url} — deferring to cron`)
+          return { url }
+        }
 
         // Only include finalUrl if it's different from original
         if (finalUrl !== url) {

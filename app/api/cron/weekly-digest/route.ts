@@ -61,15 +61,14 @@ export async function GET(request: Request) {
 
     console.log(`[weekly-digest] Window: ${windowStart.toISOString()} → ${windowEnd.toISOString()}`)
 
-    // ── Fetch all non-free clients ───────────────────────────────────────────
+    // ── Fetch all clients (free and paid get the weekly top 10) ─────────────
     const clients = await prisma.client.findMany({
-      where: { subscriptionPlan: { not: "free" } },
       select: { id: true, slug: true },
     })
 
     if (clients.length === 0) {
-      console.log("[weekly-digest] No paid clients found")
-      return NextResponse.json({ success: true, message: "No paid clients", processed: 0 })
+      console.log("[weekly-digest] No clients found")
+      return NextResponse.json({ success: true, message: "No clients found", processed: 0 })
     }
 
     // ── Fetch all active entities and build top 10 (shared across all clients) ─

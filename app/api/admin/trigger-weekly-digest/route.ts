@@ -80,14 +80,13 @@ export async function POST(request: NextRequest) {
     const weekStartLabel = formatWeekLabel(windowStart)
     const weekEndLabel = formatWeekLabel(new Date(windowEnd.getTime() - 1)) // day before windowEnd
 
-    // ── Fetch all non-free clients ───────────────────────────────────────────
+    // ── Fetch all clients (free and paid both get the weekly top 10) ─────────
     const clients = await prisma.client.findMany({
-      where: { subscriptionPlan: { not: "free" } },
       select: { id: true, slug: true },
     })
 
     if (clients.length === 0) {
-      return NextResponse.json({ ok: true, message: "No paid clients", sent: 0, failed: 0, results: [] })
+      return NextResponse.json({ ok: true, message: "No clients found", sent: 0, failed: 0, results: [] })
     }
 
     // ── Fetch all active entities on the platform ────────────────────────────

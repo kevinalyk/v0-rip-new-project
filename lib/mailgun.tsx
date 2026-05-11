@@ -909,3 +909,258 @@ To stop receiving this digest, update your email settings: ${settingsUrl}
     return false
   }
 }
+
+// ── Weekly Top-10 Digest ──────────────────────────────────────────────────────
+
+export interface WeeklyDigestItem {
+  kind: "email" | "sms"
+  subject: string          // subject line or SMS preview
+  entityName: string
+  entitySlug: string | null
+  party: string | null
+  state: string | null
+  senderIdentifier: string // email address or phone number
+  receivedAt: Date
+  viewCount: number
+  shareUrl: string
+}
+
+export async function sendWeeklyDigest(params: {
+  to: string
+  firstName: string | null
+  weekStart: string // e.g. "Sunday, May 4, 2026"
+  weekEnd: string   // e.g. "Saturday, May 10, 2026"
+  items: WeeklyDigestItem[]
+  clientSlug: string
+}): Promise<boolean> {
+  const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
+  const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN
+
+  if (!MAILGUN_API_KEY || !MAILGUN_DOMAIN) {
+    console.error("Mailgun credentials not configured")
+    return false
+  }
+
+  const { to, firstName, weekStart, weekEnd, items, clientSlug } = params
+
+  const APP_URL = "https://app.rip-tool.com"
+  const feedUrl = `${APP_URL}/${clientSlug}/ci/campaigns`
+  const subscriptionsUrl = `${APP_URL}/${clientSlug}/ci/subscriptions`
+  const settingsUrl = `${APP_URL}/${clientSlug}/account/settings`
+  const logoUrl = `${APP_URL}/images/IconOnly_Transparent_NoBuffer.png`
+
+  const greeting = firstName ? `Hi ${firstName},` : "Hi there,"
+
+  const partyColor = (party: string | null) => {
+    if (!party) return "#6b7280"
+    const p = party.toLowerCase()
+    if (p === "republican") return "#dc2626"
+    if (p === "democrat") return "#2563eb"
+    return "#6b7280"
+  }
+
+  const partyLabel = (party: string | null) => {
+    if (!party) return null
+    return party.charAt(0).toUpperCase() + party.slice(1)
+  }
+
+  const formatDate = (date: Date) => {
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "America/New_York",
+    }).format(date)
+  }
+
+  const emailIcon = `<span style="display:inline-block;width:18px;height:18px;vertical-align:middle;margin-right:8px;flex-shrink:0;">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+  </span>`
+
+  const smsIcon = `<span style="display:inline-block;width:18px;height:18px;vertical-align:middle;margin-right:8px;flex-shrink:0;">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
+  </span>`
+
+  const rowsHtml = items
+    .map((item, i) => {
+      const bg = i % 2 === 0 ? "#111827" : "#0f172a"
+      const borderTop = i === 0 ? "border-top:1px solid #1f2937;" : ""
+      const icon = item.kind === "email" ? emailIcon : smsIcon
+      const displaySubject = item.subject.length > 70 ? item.subject.slice(0, 70) + "…" : item.subject
+
+      const directoryUrl = item.entitySlug ? `${APP_URL}/directory/${item.entitySlug}` : null
+
+      const partyBadge = item.party
+        ? `<span style="display:inline-block;padding:1px 6px;border-radius:20px;font-size:10px;font-weight:700;color:#ffffff;background:${partyColor(item.party)};margin-right:4px;">${partyLabel(item.party)}</span>`
+        : ""
+      const stateBadge = item.state
+        ? `<span style="display:inline-block;padding:1px 6px;border-radius:20px;font-size:10px;font-weight:600;color:#374151;background:#e5e7eb;margin-right:4px;">${item.state}</span>`
+        : ""
+
+      const entityLink = directoryUrl
+        ? `<a href="${directoryUrl}" target="_blank" style="font-size:11px;font-weight:600;color:#9ca3af;text-decoration:none;">${item.entityName}</a>`
+        : `<span style="font-size:11px;font-weight:600;color:#9ca3af;">${item.entityName}</span>`
+
+      const rankLabel = `<span style="font-size:11px;font-weight:700;color:#4b5563;margin-right:10px;min-width:18px;display:inline-block;">#${i + 1}</span>`
+
+      return `
+        <tr>
+          <td style="padding:10px 24px;background:${bg};${borderTop}border-bottom:1px solid #1f2937;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="vertical-align:middle;width:100%;">
+                  ${rankLabel}${icon}
+                  <a href="${item.shareUrl}" target="_blank" style="font-size:13px;color:#e5e7eb;text-decoration:none;font-weight:500;">${displaySubject}</a>
+                </td>
+                <td style="text-align:right;white-space:nowrap;padding-left:16px;vertical-align:middle;">
+                  <span style="font-size:11px;color:#6b7280;">${item.viewCount.toLocaleString()} view${item.viewCount === 1 ? "" : "s"}</span>
+                </td>
+              </tr>
+              <tr>
+                <td colspan="2" style="padding-top:4px;padding-left:36px;">
+                  ${entityLink}&nbsp;${partyBadge}${stateBadge}
+                  <span style="font-size:11px;color:#4b5563;margin-left:6px;">${item.senderIdentifier}</span>
+                </td>
+              </tr>
+              <tr>
+                <td colspan="2" style="padding-top:2px;padding-left:36px;">
+                  <span style="font-size:10px;color:#374151;">${formatDate(item.receivedAt)} ET</span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>`
+    })
+    .join("")
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Weekly Top 10 Digest - Inbox.GOP</title>
+</head>
+<body style="margin:0;padding:0;background:#030712;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#030712;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+          <!-- Header -->
+          <tr>
+            <td style="padding:0 0 24px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;">
+                    <img src="${logoUrl}" alt="Inbox.GOP" width="28" height="28" style="display:inline-block;vertical-align:middle;margin-right:8px;" />
+                    <span style="font-size:13px;color:#6b7280;font-weight:500;vertical-align:middle;">Weekly Top 10</span>
+                  </td>
+                  <td style="text-align:right;vertical-align:middle;">
+                    <span style="font-size:12px;color:#4b5563;">${weekStart} – ${weekEnd}</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Intro card -->
+          <tr>
+            <td style="background:#111827;border-radius:8px 8px 0 0;padding:20px 24px;border-bottom:1px solid #1f2937;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:top;">
+                    <p style="margin:0 0 4px;font-size:15px;color:#f9fafb;font-weight:600;">${greeting}</p>
+                    <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">
+                      Here are the <strong style="color:#e5e7eb;">top ${items.length} most-viewed</strong> emails and SMS from the entities you follow over the past week.
+                    </p>
+                  </td>
+                  <td style="text-align:right;vertical-align:top;padding-left:16px;white-space:nowrap;">
+                    <a href="${subscriptionsUrl}" target="_blank" style="display:inline-block;padding:7px 14px;background:#1f2937;border:1px solid #374151;border-radius:6px;font-size:12px;font-weight:600;color:#e5e7eb;text-decoration:none;">View More</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Top 10 list -->
+          <tr>
+            <td style="background:#0d1117;border-radius:0 0 8px 8px;overflow:hidden;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                ${rowsHtml}
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:24px 0 0;">
+              <p style="margin:0;font-size:12px;color:#374151;text-align:center;line-height:1.8;">
+                You&apos;re receiving this because you follow entities on
+                <a href="https://app.rip-tool.com" style="color:#6b7280;text-decoration:none;">app.rip-tool.com</a>.<br/>
+                View the full feed at
+                <a href="${feedUrl}" style="color:#6b7280;text-decoration:none;">${feedUrl.replace("https://", "")}</a>.<br/>
+                To stop receiving this digest, visit your
+                <a href="${settingsUrl}" style="color:#6b7280;text-decoration:none;">email settings</a>.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+
+  const text = `${greeting}
+
+Weekly Top 10 Digest - Inbox.GOP
+${weekStart} – ${weekEnd}
+
+${items
+  .map((item, i) => {
+    const meta = [item.party, item.state].filter(Boolean).join(" · ")
+    return `#${i + 1} [${item.kind.toUpperCase()}] ${item.subject}
+  Entity: ${item.entityName}${meta ? ` (${meta})` : ""}
+  ${item.senderIdentifier}
+  ${item.viewCount} views · ${formatDate(item.receivedAt)} ET
+  ${item.shareUrl}`
+  })
+  .join("\n\n")}
+
+View more: ${subscriptionsUrl}
+View full feed: ${feedUrl}
+
+To stop receiving this digest, update your email settings: ${settingsUrl}
+`
+
+  const formData = new FormData()
+  formData.append("from", `Inbox.GOP Digest <digest@${MAILGUN_DOMAIN}>`)
+  formData.append("to", to)
+  formData.append("subject", `Weekly Top 10 - Inbox.GOP`)
+  formData.append("html", html)
+  formData.append("text", text)
+
+  try {
+    const response = await fetch(`https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`api:${MAILGUN_API_KEY}`).toString("base64")}`,
+      },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("Mailgun weekly digest error:", response.status, errorText)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error sending weekly digest:", error)
+    return false
+  }
+}

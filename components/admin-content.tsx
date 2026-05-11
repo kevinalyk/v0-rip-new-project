@@ -37,6 +37,16 @@ export function AdminContent({ user }: AdminContentProps) {
     window: { label: string }
     results: Array<{ email: string; sent: boolean; entityCount: number; messageCount: number }>
   } | null>(null)
+  const [isTriggeringWeeklyDigest, setIsTriggeringWeeklyDigest] = useState(false)
+  const [weeklyDigestEmailOverride, setWeeklyDigestEmailOverride] = useState("")
+  const [weeklyDigestWeekOffset, setWeeklyDigestWeekOffset] = useState("1")
+  const [weeklyDigestTriggerResult, setWeeklyDigestTriggerResult] = useState<{
+    sent: number
+    failed: number
+    itemCount: number
+    window: { label: string }
+    results: Array<{ email: string; sent: boolean; itemCount: number }>
+  } | null>(null)
   const [dailyStats, setDailyStats] = useState<DailyStats[]>([])
   const [loadingStats, setLoadingStats] = useState(true)
   const [dateRange, setDateRange] = useState({ days: 30 })
@@ -351,6 +361,36 @@ export function AdminContent({ user }: AdminContentProps) {
       toast.error("Failed to trigger digest")
     } finally {
       setIsTriggeringDigest(false)
+    }
+  }
+
+  const handleTriggerWeeklyDigest = async () => {
+    setIsTriggeringWeeklyDigest(true)
+    setWeeklyDigestTriggerResult(null)
+    try {
+      const body: Record<string, unknown> = {
+        weekOffset: parseInt(weeklyDigestWeekOffset, 10) || 1,
+      }
+      if (weeklyDigestEmailOverride.trim()) {
+        body.email = weeklyDigestEmailOverride.trim()
+      }
+      const response = await fetch("/api/admin/trigger-weekly-digest", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setWeeklyDigestTriggerResult(data)
+        toast.success(`Weekly digest sent to ${data.sent} user${data.sent === 1 ? "" : "s"} — ${data.itemCount} items`)
+      } else {
+        toast.error(data.error || "Failed to trigger weekly digest")
+      }
+    } catch {
+      toast.error("Failed to trigger weekly digest")
+    } finally {
+      setIsTriggeringWeeklyDigest(false)
     }
   }
 
@@ -1834,6 +1874,68 @@ const downloadActBluePatterns = () => {
               {digestTriggerResult.results.map((r, i) => (
                 <p key={i} className="text-muted-foreground text-xs">
                   {r.sent ? "✓" : "✗"} {r.email} — {r.entityCount} entities, {r.messageCount} messages
+                </p>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Weekly Digest Trigger ──────────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mail size={16} />
+            Trigger Weekly Top 10 Digest
+          </CardTitle>
+          <CardDescription>
+            Manually send the weekly top-10 digest to all RIP users (or override the recipient for testing). Ranks by view count, ties broken alphabetically.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground font-medium">Email override (optional)</label>
+              <Input
+                placeholder="test@example.com"
+                value={weeklyDigestEmailOverride}
+                onChange={(e) => setWeeklyDigestEmailOverride(e.target.value)}
+                className="text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground font-medium">Weeks back (1 = last 7 days)</label>
+              <Input
+                type="number"
+                min="1"
+                max="12"
+                value={weeklyDigestWeekOffset}
+                onChange={(e) => setWeeklyDigestWeekOffset(e.target.value)}
+                className="text-sm"
+              />
+            </div>
+          </div>
+          <Button onClick={handleTriggerWeeklyDigest} disabled={isTriggeringWeeklyDigest} className="gap-2">
+            {isTriggeringWeeklyDigest ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Mail size={16} />
+                Send Weekly Digest Now
+              </>
+            )}
+          </Button>
+          {weeklyDigestTriggerResult && (
+            <div className="mt-3 p-3 rounded-md bg-muted text-sm space-y-1">
+              <p className="font-medium">
+                {weeklyDigestTriggerResult.window?.label} — {weeklyDigestTriggerResult.itemCount} items — {weeklyDigestTriggerResult.sent} sent, {weeklyDigestTriggerResult.failed} failed
+              </p>
+              {weeklyDigestTriggerResult.results.map((r, i) => (
+                <p key={i} className="text-muted-foreground text-xs">
+                  {r.sent ? "✓" : "✗"} {r.email} — {r.itemCount} items
                 </p>
               ))}
             </div>

@@ -14,6 +14,8 @@ import {
   PARTY_SLUG_TO_LABEL,
   PARTY_SLUG_TO_ADJECTIVE,
 } from "@/lib/directory-routing"
+import AdBanner from "@/components/ad-banner"
+import { shouldShowAd } from "@/lib/ads"
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
@@ -119,13 +121,11 @@ export default async function DirectoryStatePartyPage({
     notFound()
   }
 
-  const clientSlug = await getClientSlug()
-  const initialResult = await getAllEntitiesWithCounts({
-    page: 1,
-    pageSize: 50,
-    state: combo.stateAbbrev,
-    party: combo.partyValue,
-  })
+  const [clientSlug, showAd, initialResult] = await Promise.all([
+    getClientSlug(),
+    shouldShowAd(),
+    getAllEntitiesWithCounts({ page: 1, pageSize: 50, state: combo.stateAbbrev, party: combo.partyValue }),
+  ])
 
   const heading = `${combo.stateName} ${combo.partyLabel}`
   const subtitle = `Track ${combo.stateName} ${combo.partyAdjective} candidates, PACs, and officials. ${initialResult.pagination.totalCount} ${combo.partyAdjective} entities tracked in ${combo.stateName}.`
@@ -155,6 +155,7 @@ export default async function DirectoryStatePartyPage({
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionPage) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }} />
       <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
+        <AdBanner showAd={showAd} />
         <CiDirectoryContent
           clientSlug={clientSlug}
           isPublic={!clientSlug}

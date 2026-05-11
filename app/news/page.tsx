@@ -8,6 +8,8 @@ import { verifyToken } from "@/lib/auth"
 import AppLayout from "@/components/app-layout"
 import NewsPageClient from "@/components/news-page-client"
 import { Megaphone } from "lucide-react"
+import AdBanner from "@/components/ad-banner"
+import { shouldShowAd } from "@/lib/ads"
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
@@ -34,6 +36,8 @@ export default async function NewsPage() {
       if (payload) clientSlug = (payload.clientSlug as string) || ""
     }
   } catch { /* unauthenticated visitor */ }
+
+  const showAd = await shouldShowAd()
 
   // Fetch published articles server-side — these render as real HTML for crawlers.
   let announcements: {
@@ -72,6 +76,7 @@ export default async function NewsPage() {
 
   return (
     <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
+      <AdBanner showAd={showAd} />
       {/*
         Article cards are rendered as pure server HTML so crawlers see real
         content immediately. NewsPageClient mounts once below and handles

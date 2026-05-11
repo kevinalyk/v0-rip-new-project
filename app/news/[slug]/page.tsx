@@ -6,6 +6,8 @@ import prisma from "@/lib/prisma"
 import { verifyToken } from "@/lib/auth"
 import AppLayout from "@/components/app-layout"
 import NewsPostClient from "./news-post-client"
+import AdBanner from "@/components/ad-banner"
+import { shouldShowAd } from "@/lib/ads"
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
@@ -71,6 +73,8 @@ export default async function NewsPostPage({ params }: Props) {
     }
   } catch { /* unauthenticated visitor */ }
 
+  const showAd = await shouldShowAd()
+
   // Pre-fetch the post server-side so the full article body is present in the
   // initial HTML — crawlers and social scrapers read real content, not a spinner.
   let initialPost: {
@@ -112,6 +116,7 @@ export default async function NewsPostPage({ params }: Props) {
 
   return (
     <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
+      <AdBanner showAd={showAd} />
       <NewsPostClient slug={params.slug} initialPost={initialPost} />
     </AppLayout>
   )

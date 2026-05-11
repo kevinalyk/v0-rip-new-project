@@ -3,6 +3,8 @@ import { verifyToken } from "@/lib/auth"
 import AppLayout from "@/components/app-layout"
 import { CiDirectoryContent } from "@/components/ci-directory-content"
 import { getAllEntitiesWithCounts } from "@/lib/ci-entity-utils"
+import AdBanner from "@/components/ad-banner"
+import { shouldShowAd } from "@/lib/ads"
 
 export default async function PublicDirectoryPage() {
   // Resolve clientSlug server-side so the page ships with pre-rendered HTML
@@ -23,12 +25,14 @@ export default async function PublicDirectoryPage() {
     // unauthenticated visitor — no-op
   }
 
-  // Pre-fetch the first page of entities server-side so the HTML response
-  // contains real content for crawlers rather than a "Loading…" placeholder.
-  const initialResult = await getAllEntitiesWithCounts({ page: 1, pageSize: 50 })
+  const [showAd, initialResult] = await Promise.all([
+    shouldShowAd(),
+    getAllEntitiesWithCounts({ page: 1, pageSize: 50 }),
+  ])
 
   return (
     <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
+      <AdBanner showAd={showAd} />
       <CiDirectoryContent
         clientSlug={clientSlug}
         isPublic={!clientSlug}

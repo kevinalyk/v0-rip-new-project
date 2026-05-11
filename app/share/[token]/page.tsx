@@ -3,6 +3,8 @@ import { redirect } from "next/navigation"
 import { getSession } from "@/lib/auth"
 import { PrismaClient } from "@prisma/client"
 import SharePageClient from "./share-page-client"
+import AdBanner from "@/components/ad-banner"
+import { shouldShowAd } from "@/lib/ads"
 
 const prisma = new PrismaClient()
 
@@ -121,7 +123,15 @@ export default async function SharePage({ params }: { params: { token: string } 
     redirect(`/login?redirect=/share/${params.token}`)
   }
 
-  // Increment view count server-side on every page load
-  await incrementViewCount(params.token)
-  return <SharePageClient />
+  const [showAd] = await Promise.all([
+    shouldShowAd(),
+    incrementViewCount(params.token),
+  ])
+
+  return (
+    <>
+      <AdBanner showAd={showAd} />
+      <SharePageClient />
+    </>
+  )
 }

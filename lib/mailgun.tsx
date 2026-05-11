@@ -1014,9 +1014,6 @@ export async function sendWeeklyDigest(params: {
                   ${rankLabel}${icon}
                   <a href="${item.shareUrl}" target="_blank" style="font-size:12px;color:#e5e7eb;text-decoration:none;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-block;max-width:calc(100% - 140px);">${displaySubject}</a>
                 </td>
-                <td style="text-align:right;white-space:nowrap;padding-left:16px;vertical-align:middle;">
-                  <span style="font-size:11px;color:#6b7280;">${item.viewCount.toLocaleString()} view${item.viewCount === 1 ? "" : "s"}</span>
-                </td>
               </tr>
               <tr>
                 <td colspan="2" style="padding-top:4px;padding-left:36px;">

@@ -58,6 +58,25 @@ async function customFetch(
   })
 }
 
+// Known intermediate redirect domains that should not be stored as finalUrl
+const INTERMEDIATE_REDIRECT_DOMAINS = [
+  "t.ly",
+  "bit.ly",
+  "tinyurl.com",
+  "ow.ly",
+  "buff.ly",
+  "dlvr.it",
+]
+
+function isIntermediateRedirect(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, "")
+    return INTERMEDIATE_REDIRECT_DOMAINS.some((d) => hostname === d || hostname.endsWith(`.${d}`))
+  } catch {
+    return false
+  }
+}
+
 // Substack JWT redirect links encode the destination URL in the JWT payload's "e" field.
 // e.g. substack.com/redirect/2/eyJlIjoiaHR0cHM6Ly8...
 // We can decode without verifying the signature since we only need the URL.
@@ -107,6 +126,34 @@ async function resolveRedirects(url: string): Promise<string> {
             "Accept-Language": "en-US,en;q=0.5",
           },
         })
+
+        // t.ly and similar JS-redirect shorteners return 200 but redirect via JS — force GET
+        if (response.status === 200 && isIntermediateRedirect(currentUrl)) {
+          const getResponse = await customFetch(currentUrl, {
+            method: "GET",
+            timeout: 10000,
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              "Accept-Language": "en-US,en;q=0.5",
+            },
+          })
+          const html = getResponse.body || ""
+          const jsPatterns = [
+            /window\.location(?:\.href)?\s*=\s*["']([^"']+)["']/i,
+            /location\.href\s*=\s*["']([^"']+)["']/i,
+            /location\.replace\(["']([^"']+)["']\)/i,
+          ]
+          for (const pattern of jsPatterns) {
+            const match = html.match(pattern)
+            if (match && match[1] && match[1].startsWith("http")) {
+              currentUrl = match[1]
+              redirectCount++
+              break
+            }
+          }
+          continue
+        }
 
         if (response.status >= 300 && response.status < 400) {
           const locationHeader = response.headers.location
@@ -512,8 +559,10 @@ export async function GET(request: Request) {
           const isUnresolvedSubstackJwt =
             linkUrl.match(/substack\.com\/redirect\/\d+\//) ||
             (existingFinal && String(existingFinal).match(/substack\.com\/redirect\/\d+\//))
+          // Re-process if finalUrl is a known intermediate redirect (e.g. t.ly/redirect)
+          const isStuckOnIntermediate = existingFinal && isIntermediateRedirect(String(existingFinal))
 
-          if (existingFinal && !isUnresolvedSubstackJwt) {
+          if (existingFinal && !isUnresolvedSubstackJwt && !isStuckOnIntermediate) {
             // Already properly unwrapped, skip — but clean up any legacy uppercase fields
             const { finalURL: _a, strippedFinalURL: _b, ...rest } = link as any
             updatedCtaLinks.push(rest)
@@ -691,8 +740,9 @@ export async function GET(request: Request) {
           const isUnresolvedSubstackJwt =
             linkUrl.match(/substack\.com\/redirect\/\d+\//) ||
             (existingFinal && String(existingFinal).match(/substack\.com\/redirect\/\d+\//))
+          const isStuckOnIntermediate = existingFinal && isIntermediateRedirect(String(existingFinal))
 
-          if (existingFinal && !isUnresolvedSubstackJwt) {
+          if (existingFinal && !isUnresolvedSubstackJwt && !isStuckOnIntermediate) {
             // Already properly unwrapped, skip — clean up any legacy uppercase fields
             const { finalURL: _a, strippedFinalURL: _b, ...rest } = link as any
             updatedCtaLinks.push(rest)

@@ -48,6 +48,26 @@ function stripQueryParams(url: string): string {
   }
 }
 
+// Known intermediate redirect domains — if fetch lands here, leave finalUrl unset
+// so the unwrap-links cron can re-resolve it with its JS-aware resolver
+const INTERMEDIATE_REDIRECT_DOMAINS = [
+  "t.ly",
+  "bit.ly",
+  "tinyurl.com",
+  "ow.ly",
+  "buff.ly",
+  "dlvr.it",
+]
+
+function isIntermediateRedirect(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, "")
+    return INTERMEDIATE_REDIRECT_DOMAINS.some((d) => hostname === d || hostname.endsWith(`.${d}`))
+  } catch {
+    return false
+  }
+}
+
 /**
  * Resolve shortened URLs to their final destination
  * Similar to resolveRedirects from competitive-insights-utils
@@ -65,7 +85,45 @@ export async function resolveShortenedUrls(urls: string[]): Promise<Array<{ url:
           },
         })
 
-        const finalUrl = stripQueryParams(response.url)
+        let finalUrl = stripQueryParams(response.url)
+
+        // If we landed on a known intermediate redirect (e.g. t.ly/redirect),
+        // do a follow-up GET and parse the JS redirect to get the true final URL
+        if (isIntermediateRedirect(finalUrl)) {
+          try {
+            const getResponse = await fetch(finalUrl, {
+              method: "GET",
+              redirect: "follow",
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              },
+            })
+
+            // First try following HTTP redirects (response.url after redirect: "follow")
+            if (getResponse.url && getResponse.url !== finalUrl && !isIntermediateRedirect(getResponse.url)) {
+              finalUrl = stripQueryParams(getResponse.url)
+            } else {
+              // Fall back to parsing JS redirect patterns from the HTML body
+              const html = await getResponse.text()
+              const jsPatterns = [
+                /window\.location(?:\.href)?\s*=\s*["']([^"']+)["']/i,
+                /location\.replace\s*\(\s*["']([^"']+)["']\s*\)/i,
+                /location\.href\s*=\s*["']([^"']+)["']/i,
+                /<meta[^>]+http-equiv=["']refresh["'][^>]+content=["'][^;]+;\s*url=([^"']+)["']/i,
+              ]
+              for (const pattern of jsPatterns) {
+                const match = html.match(pattern)
+                if (match?.[1]?.startsWith("http")) {
+                  finalUrl = stripQueryParams(match[1])
+                  break
+                }
+              }
+            }
+          } catch {
+            // If the follow-up GET fails, leave finalUrl as-is and let the cron retry later
+          }
+        }
 
         // Only include finalUrl if it's different from original
         if (finalUrl !== url) {

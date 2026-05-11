@@ -102,11 +102,11 @@ export function extractOffice(html: string): string | null {
   return null
 }
 
-// Extract the full bio from Ballotpedia HTML.
-// Collects all meaningful intro paragraphs (before the first h2 section) PLUS
-// all paragraphs inside the "Biography" h2 section. This gives us the complete
-// text Google will find on Ballotpedia rather than just the first sentence.
-// Hard cap at 4000 characters to keep the DB field reasonable.
+// Extract the intro bio from Ballotpedia HTML.
+// Collects up to 3 intro paragraphs (before any section heading), stopping
+// immediately if we hit "Biography" or similar section markers. This ensures
+// we only get the high-level summary rather than the full life story.
+// Hard cap at 2000 characters to keep the DB field reasonable.
 export function extractBio(html: string): string | null {
   const clean = html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -132,45 +132,28 @@ export function extractBio(html: string): string | null {
 
   const collected: string[] = []
   let totalLength = 0
-  const MAX_LENGTH = 4000
+  const MAX_LENGTH = 2000
+  const MAX_PARAGRAPHS = 3
 
-  // ── Pass 1: intro paragraphs before the first <h2> ──────────────────────
-  // Find where the first h2 section starts (e.g. "Biography", "Committee
-  // assignments", etc.) so we only grab true intro content in this pass.
+  // Find where the first h2 OR the word "Biography" appears as a section heading
   const firstH2Index = clean.search(/<h2[\s>]/i)
-  const introPortion = firstH2Index > 0 ? clean.slice(0, firstH2Index) : clean
+  const biographyHeadingIndex = clean.search(/<h\d[^>]*>[\s\S]*?Biography[\s\S]*?<\/h\d>/i)
 
+  // Stop intro extraction at whichever comes first: first h2, "Biography" heading, or end of content
+  let stopIndex = clean.length
+  if (firstH2Index > 0) stopIndex = Math.min(stopIndex, firstH2Index)
+  if (biographyHeadingIndex > 0) stopIndex = Math.min(stopIndex, biographyHeadingIndex)
+
+  const introPortion = clean.slice(0, stopIndex)
   const introParas = introPortion.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) || []
+
   for (const p of introParas) {
     const text = cleanParagraph(p)
     if (text.length < 60) continue
     if (skipPattern.test(text)) continue
     collected.push(text)
     totalLength += text.length
-    if (totalLength >= MAX_LENGTH) break
-  }
-
-  // ── Pass 2: Biography section ────────────────────────────────────────────
-  // Find the <h2> that contains "Biography" and collect all <p> tags until
-  // the next <h2> (or end of content).
-  if (totalLength < MAX_LENGTH) {
-    const bioSectionMatch = clean.match(
-      /<h2[^>]*>[\s\S]*?Biography[\s\S]*?<\/h2>([\s\S]*?)(?=<h2[\s>]|$)/i,
-    )
-    if (bioSectionMatch) {
-      const bioSection = bioSectionMatch[1]
-      const bioParas = bioSection.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) || []
-      for (const p of bioParas) {
-        const text = cleanParagraph(p)
-        if (text.length < 40) continue
-        if (skipPattern.test(text)) continue
-        // Avoid duplicating text already captured in the intro pass
-        if (collected.some((existing) => existing.includes(text.slice(0, 80)))) continue
-        collected.push(text)
-        totalLength += text.length
-        if (totalLength >= MAX_LENGTH) break
-      }
-    }
+    if (collected.length >= MAX_PARAGRAPHS || totalLength >= MAX_LENGTH) break
   }
 
   if (collected.length === 0) return null

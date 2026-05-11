@@ -92,23 +92,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, message: "Free plan — no digest", sent: 0, failed: 0, results: [] })
     }
 
-    // ── Entity subscriptions ─────────────────────────────────────────────────
-    const subscriptions = await prisma.ciEntitySubscription.findMany({
-      where: { clientId: ripClient.id },
-      select: {
-        entityId: true,
-        entity: {
-          select: { id: true, name: true, party: true, state: true },
-        },
-      },
+    // ── Fetch all active entities on the platform ────────────────────────────
+    const allEntities = await prisma.ciEntity.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, party: true, state: true },
     })
-    if (subscriptions.length === 0) {
-      return NextResponse.json({ ok: true, message: "No subscriptions — no digest", sent: 0, failed: 0, results: [] })
-    }
+    const entityIds = allEntities.map((e) => e.id)
+    const entityMap = Object.fromEntries(allEntities.map((e) => [e.id, e]))
 
-    const entityIds = subscriptions.map((s) => s.entityId)
-    // Build a lookup map for entity metadata
-    const entityMap = Object.fromEntries(subscriptions.map((s) => [s.entityId, s.entity]))
+    if (entityIds.length === 0) {
+      return NextResponse.json({ ok: true, message: "No active entities — no digest", sent: 0, failed: 0, results: [] })
+    }
 
     // ── Fetch emails in window ───────────────────────────────────────────────
     const emails = await prisma.competitiveInsightCampaign.findMany({

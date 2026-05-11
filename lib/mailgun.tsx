@@ -988,7 +988,7 @@ export async function sendWeeklyDigest(params: {
       const bg = i % 2 === 0 ? "#111827" : "#0f172a"
       const borderTop = i === 0 ? "border-top:1px solid #1f2937;" : ""
       const icon = item.kind === "email" ? emailIcon : smsIcon
-      const displaySubject = item.subject.length > 70 ? item.subject.slice(0, 70) + "…" : item.subject
+      const displaySubject = item.subject.length > 50 ? item.subject.slice(0, 50) + "…" : item.subject
 
       const directoryUrl = item.entitySlug ? `${APP_URL}/directory/${item.entitySlug}` : null
 
@@ -1012,7 +1012,7 @@ export async function sendWeeklyDigest(params: {
               <tr>
                 <td style="vertical-align:middle;width:100%;">
                   ${rankLabel}${icon}
-                  <a href="${item.shareUrl}" target="_blank" style="font-size:13px;color:#e5e7eb;text-decoration:none;font-weight:500;">${displaySubject}</a>
+                  <a href="${item.shareUrl}" target="_blank" style="font-size:12px;color:#e5e7eb;text-decoration:none;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-block;max-width:calc(100% - 140px);">${displaySubject}</a>
                 </td>
                 <td style="text-align:right;white-space:nowrap;padding-left:16px;vertical-align:middle;">
                   <span style="font-size:11px;color:#6b7280;">${item.viewCount.toLocaleString()} view${item.viewCount === 1 ? "" : "s"}</span>

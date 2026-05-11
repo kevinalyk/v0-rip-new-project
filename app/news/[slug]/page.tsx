@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     })
 
     if (!post) {
-      return { title: "Post Not Found | RIP Tool" }
+      return { title: "Post Not Found - Inbox.GOP" }
     }
 
     const plainText = stripHtml(post.body)
@@ -37,13 +37,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const ogImageUrl = post.imageUrl ?? `${url}/opengraph-image`
 
     return {
-      title: `${post.title} | RIP Tool`,
+      title: `${post.title} - Inbox.GOP`,
       description,
       openGraph: {
         title: post.title,
         description,
         url,
-        siteName: "RIP Tool",
+        siteName: "Inbox.GOP",
         type: "article",
         publishedTime,
         images: [{ url: ogImageUrl, width: 1200, height: 630, alt: post.title }],
@@ -57,7 +57,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     }
   } catch (err) {
     console.error("[generateMetadata] error for slug:", params.slug, err)
-    return { title: "RIP Tool News" }
+    return { title: "What's New - Inbox.GOP" }
   }
 }
 

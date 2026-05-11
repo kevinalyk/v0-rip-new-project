@@ -16,7 +16,7 @@ import { shouldShowAd } from "@/lib/ads"
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
-const NC_TITLE = "Recently Launched Campaigns | RIP Tool"
+const NC_TITLE = "Recently Launched Campaigns - Inbox.GOP"
 const NC_DESCRIPTION =
   "Track political campaigns launched in the last 7 days. New House, Senate, and other federal candidates from across the United States, captured by the Republican Inboxing Protocol."
 

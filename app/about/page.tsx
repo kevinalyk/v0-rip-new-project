@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "About RIP Tool — Republican Inboxing Protocol",
+  title: "About - Inbox.GOP",
   description:
     "RIP Tool is a political intelligence platform built for Republican campaigns, committees, and political organizations. Learn about our competitive intelligence, political email monitoring, and entity directory tools.",
   robots: { index: true, follow: true },

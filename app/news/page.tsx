@@ -14,10 +14,10 @@ import { shouldShowAd } from "@/lib/ads"
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
 export const metadata: Metadata = {
-  title: "What's New | RIP Tool",
-  description: "Updates, improvements, and new features from the RIP Tool team — built for the Republican Inboxing Protocol.",
+  title: "What's New - Inbox.GOP",
+  description: "Updates, improvements, and new features from the Inbox.GOP team.",
   openGraph: {
-    title: "What's New | RIP Tool",
+    title: "What's New - Inbox.GOP",
     description: "Updates, improvements, and new features from the RIP Tool team — built for the Republican Inboxing Protocol.",
     url: `${BASE_URL}/news`,
     siteName: "RIP Tool",

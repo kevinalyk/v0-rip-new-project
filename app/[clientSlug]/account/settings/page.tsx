@@ -18,6 +18,8 @@ export default function AccountSettingsPage() {
   const [loading, setLoading] = useState(true)
   const [digestEnabled, setDigestEnabled] = useState(true)
   const [savingDigest, setSavingDigest] = useState(false)
+  const [weeklyDigestEnabled, setWeeklyDigestEnabled] = useState(true)
+  const [savingWeeklyDigest, setSavingWeeklyDigest] = useState(false)
 
   useEffect(() => {
     checkAuth()
@@ -79,12 +81,37 @@ export default function AccountSettingsPage() {
       if (response.ok) {
         const data = await response.json()
         setDigestEnabled(data.digestEnabled ?? true)
+        setWeeklyDigestEnabled(data.weeklyDigestEnabled ?? true)
       }
     } catch (error) {
       console.error("Error fetching user settings:", error)
       toast.error("Failed to load settings")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleWeeklyDigestToggle = async (enabled: boolean) => {
+    setWeeklyDigestEnabled(enabled)
+    setSavingWeeklyDigest(true)
+
+    try {
+      const response = await fetch("/api/user/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ weeklyDigestEnabled: enabled }),
+        credentials: "include",
+      })
+
+      if (!response.ok) throw new Error("Failed to save")
+
+      toast.success(enabled ? "Weekly digest enabled" : "Weekly digest disabled")
+    } catch (error) {
+      console.error("Error saving weekly digest setting:", error)
+      setWeeklyDigestEnabled(!enabled)
+      toast.error("Failed to save setting")
+    } finally {
+      setSavingWeeklyDigest(false)
     }
   }
 
@@ -167,6 +194,33 @@ export default function AccountSettingsPage() {
                     checked={digestEnabled}
                     onCheckedChange={handleDigestToggle}
                     disabled={savingDigest}
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-border" />
+
+              <div className="flex items-center justify-between py-4">
+                <div className="flex items-start gap-3">
+                  <Mail className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
+                  <div className="space-y-1">
+                    <Label htmlFor="weekly-digest-toggle" className="text-sm font-medium cursor-pointer">
+                      Weekly Top 10 Digest
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      Receive a weekly roundup of the top 10 most-viewed emails and SMS from the past 7 days, sent every Sunday.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 ml-6 shrink-0">
+                  {savingWeeklyDigest && (
+                    <Loader2 size={14} className="animate-spin text-muted-foreground" />
+                  )}
+                  <Switch
+                    id="weekly-digest-toggle"
+                    checked={weeklyDigestEnabled}
+                    onCheckedChange={handleWeeklyDigestToggle}
+                    disabled={savingWeeklyDigest}
                   />
                 </div>
               </div>

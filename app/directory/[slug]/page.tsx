@@ -12,6 +12,8 @@ import {
   PARTY_SLUG_TO_LABEL,
   PARTY_SLUG_TO_ADJECTIVE,
 } from "@/lib/directory-routing"
+import AdBanner from "@/components/ad-banner"
+import { shouldShowAd } from "@/lib/ads"
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
@@ -254,6 +256,7 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
   const { slug } = await params
 
   const resolved = resolveSlug(slug)
+  const showAd = await shouldShowAd()
 
   // ─── State landing page (e.g. /directory/texas) ───
   if (resolved?.kind === "state") {
@@ -273,6 +276,7 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionPage) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }} />
         <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
+          <AdBanner showAd={showAd} />
           <CiDirectoryContent
             clientSlug={clientSlug}
             isPublic={!clientSlug}
@@ -308,6 +312,7 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionPage) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }} />
         <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
+          <AdBanner showAd={showAd} />
           <CiDirectoryContent
             clientSlug={clientSlug}
             isPublic={!clientSlug}
@@ -360,6 +365,7 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
       {breadcrumbData && (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbData) }} />
       )}
+      <AdBanner showAd={showAd} />
       <DirectoryProfileContent slug={slug} initialData={initialData} />
       {initialData && <EntitySeoContent data={initialData} />}
     </>

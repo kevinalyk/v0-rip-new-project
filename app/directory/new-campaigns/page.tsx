@@ -11,6 +11,8 @@ import prisma from "@/lib/prisma"
 import { nameToSlug } from "@/lib/directory"
 import NewCampaignsFilters from "@/components/new-campaigns-filters"
 import { OFFICES } from "@/lib/campaign-filter-options"
+import AdBanner from "@/components/ad-banner"
+import { shouldShowAd } from "@/lib/ads"
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
@@ -85,6 +87,8 @@ export default async function NewCampaignsPage({
     // unauthenticated visitor — no-op
   }
 
+  const showAd = await shouldShowAd()
+
   // Fetch launches from the last 7 days, newest first, with linked entity data.
   // Note: we filter and sort by `launchedAt` (the actual FEC filing date shown to users),
   // not `firstSeenAt` (when our scraper picked them up). All rows in a single scrape
@@ -144,6 +148,7 @@ export default async function NewCampaignsPage({
 
   return (
     <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
+      <AdBanner showAd={showAd} />
       <div className="flex flex-col h-full min-h-screen bg-background">
         {/* Page header */}
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 px-4 md:px-6 pt-4 md:pt-6 pb-4 border-b border-border">

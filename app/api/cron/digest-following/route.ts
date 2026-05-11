@@ -8,10 +8,8 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
 /**
  * Daily Following Digest — fires at 7 AM ET (12:00 UTC)
- * For each RIP user, sends an email listing what their followed entities
+ * For each client, sends an email to their users listing what their followed entities
  * sent the previous calendar day (midnight–midnight ET).
- *
- * TEST MODE: only sends to users whose client.slug === "rip"
  */
 export async function GET(request: Request) {
   try {
@@ -61,196 +59,203 @@ export async function GET(request: Request) {
 
     console.log(`[digest-following] Window: ${windowStart.toISOString()} → ${windowEnd.toISOString()}`)
 
-    // ── Find RIP client and its subscriptions ─────────────────────────────────
-    const ripClient = await prisma.client.findFirst({
-      where: { slug: "rip" },
-      select: { id: true, slug: true, subscriptionPlan: true },
+    // ── Fetch all non-free clients ───────────────────────────────────────────
+    const clients = await prisma.client.findMany({
+      where: { subscriptionPlan: { not: "free" } },
+      select: { id: true, slug: true },
     })
 
-    if (!ripClient) {
-      console.error("[digest-following] RIP client not found")
-      return NextResponse.json({ error: "RIP client not found" }, { status: 404 })
+    if (clients.length === 0) {
+      console.log("[digest-following] No paid clients found")
+      return NextResponse.json({ success: true, message: "No paid clients", processed: 0 })
     }
 
-    // ── Skip if client is on free plan ────────────────────────────────────────
-    if (ripClient.subscriptionPlan === "free") {
-      console.log("[digest-following] RIP client is on free plan — skipping")
-      return NextResponse.json({ success: true, message: "Free plan — no digest" })
-    }
+    let totalSent = 0
+    const results: Array<{ client: string; sent: number; failed: number; error?: string }> = []
 
-    // Get all entity subscriptions for RIP
-    const subscriptions = await prisma.ciEntitySubscription.findMany({
-      where: { clientId: ripClient.id },
-      select: {
-        entityId: true,
-        entity: {
+    // ── Process each client ──────────────────────────────────────────────────
+    for (const client of clients) {
+      try {
+        // Get all entity subscriptions for this client
+        const subscriptions = await prisma.ciEntitySubscription.findMany({
+          where: { clientId: client.id },
+          select: {
+            entityId: true,
+            entity: {
+              select: {
+                id: true,
+                name: true,
+                party: true,
+                state: true,
+              },
+            },
+          },
+        })
+
+        if (subscriptions.length === 0) {
+          console.log(`[digest-following] Client ${client.slug}: no subscriptions`)
+          results.push({ client: client.slug, sent: 0, failed: 0 })
+          continue
+        }
+
+        const entityIds = subscriptions.map((s) => s.entityId)
+
+        // ── Fetch yesterday's emails for subscribed entities ──────────────────────
+        const emails = await prisma.competitiveInsightCampaign.findMany({
+          where: {
+            entityId: { in: entityIds },
+            dateReceived: { gte: windowStart, lt: windowEnd },
+            isHidden: false,
+            isDeleted: false,
+          },
           select: {
             id: true,
-            name: true,
-            party: true,
-            state: true,
+            entityId: true,
+            subject: true,
+            senderEmail: true,
+            dateReceived: true,
+            shareToken: true,
           },
-        },
-      },
-    })
+          orderBy: { dateReceived: "desc" },
+        })
 
-    // ── Skip if no subscriptions ──────────────────────────────────────────────
-    if (subscriptions.length === 0) {
-      console.log("[digest-following] No entity subscriptions — skipping")
-      return NextResponse.json({ success: true, message: "No subscriptions — no digest" })
-    }
+        // ── Fetch yesterday's SMS for subscribed entities ─────────────────────────
+        const smsMessages = await prisma.smsQueue.findMany({
+          where: {
+            entityId: { in: entityIds },
+            createdAt: { gte: windowStart, lt: windowEnd },
+            isHidden: false,
+            isDeleted: false,
+          },
+          select: {
+            id: true,
+            entityId: true,
+            message: true,
+            phoneNumber: true,
+            createdAt: true,
+            shareToken: true,
+          },
+          orderBy: { createdAt: "desc" },
+        })
 
-    const entityIds = subscriptions.map((s) => s.entityId)
+        // ── Ensure share tokens exist for all messages (generate if missing) ──────
+        const ensureEmailToken = async (id: string, existing: string | null): Promise<string> => {
+          if (existing) return existing
+          const token = nanoid(16)
+          await prisma.competitiveInsightCampaign.update({
+            where: { id },
+            data: { shareToken: token, shareTokenCreatedAt: new Date() },
+          })
+          return token
+        }
 
-    // ── Fetch yesterday's emails for subscribed entities ──────────────────────
-    const emails = await prisma.competitiveInsightCampaign.findMany({
-      where: {
-        entityId: { in: entityIds },
-        dateReceived: { gte: windowStart, lt: windowEnd },
-        isHidden: false,
-        isDeleted: false,
-      },
-      select: {
-        id: true,
-        entityId: true,
-        subject: true,
-        senderEmail: true,
-        dateReceived: true,
-        shareToken: true,
-      },
-      orderBy: { dateReceived: "desc" },
-    })
+        const ensureSmsToken = async (id: string, existing: string | null): Promise<string> => {
+          if (existing) return existing
+          const token = nanoid(16)
+          await prisma.smsQueue.update({
+            where: { id },
+            data: { shareToken: token, shareTokenCreatedAt: new Date() },
+          })
+          return token
+        }
 
-    // ── Fetch yesterday's SMS for subscribed entities ─────────────────────────
-    const smsMessages = await prisma.smsQueue.findMany({
-      where: {
-        entityId: { in: entityIds },
-        createdAt: { gte: windowStart, lt: windowEnd },
-        isHidden: false,
-        isDeleted: false,
-      },
-      select: {
-        id: true,
-        entityId: true,
-        message: true,
-        phoneNumber: true,
-        createdAt: true,
-        shareToken: true,
-      },
-      orderBy: { createdAt: "desc" },
-    })
+        // Build token maps (generate any missing tokens)
+        const emailTokenMap: Record<string, string> = {}
+        for (const e of emails) {
+          emailTokenMap[e.id] = await ensureEmailToken(e.id, e.shareToken)
+        }
 
-    // ── Ensure share tokens exist for all messages (generate if missing) ──────
-    const ensureEmailToken = async (id: string, existing: string | null): Promise<string> => {
-      if (existing) return existing
-      const token = nanoid(16)
-      await prisma.competitiveInsightCampaign.update({
-        where: { id },
-        data: { shareToken: token, shareTokenCreatedAt: new Date() },
-      })
-      return token
-    }
+        const smsTokenMap: Record<string, string> = {}
+        for (const s of smsMessages) {
+          smsTokenMap[s.id] = await ensureSmsToken(s.id, s.shareToken)
+        }
 
-    const ensureSmsToken = async (id: string, existing: string | null): Promise<string> => {
-      if (existing) return existing
-      const token = nanoid(16)
-      await prisma.smsQueue.update({
-        where: { id },
-        data: { shareToken: token, shareTokenCreatedAt: new Date() },
-      })
-      return token
-    }
+        // ── Build per-entity sections ─────────────────────────────────────────────
+        const entitySections: DigestEntitySection[] = subscriptions.map((sub) => {
+          const entity = sub.entity
 
-    // Build token maps (generate any missing tokens)
-    const emailTokenMap: Record<string, string> = {}
-    for (const e of emails) {
-      emailTokenMap[e.id] = await ensureEmailToken(e.id, e.shareToken)
-    }
+          // Collect emails for this entity
+          const entityEmails: DigestMessage[] = emails
+            .filter((e) => e.entityId === entity.id)
+            .map((e) => ({
+              kind: "email" as const,
+              subject: e.subject,
+              senderIdentifier: e.senderEmail,
+              receivedAt: e.dateReceived,
+              shareUrl: `${APP_URL}/share/${emailTokenMap[e.id]}`,
+            }))
 
-    const smsTokenMap: Record<string, string> = {}
-    for (const s of smsMessages) {
-      smsTokenMap[s.id] = await ensureSmsToken(s.id, s.shareToken)
-    }
+          // Collect SMS for this entity
+          const entitySms: DigestMessage[] = smsMessages
+            .filter((s) => s.entityId === entity.id)
+            .map((s) => ({
+              kind: "sms" as const,
+              subject: (s.message || "").slice(0, 80) + ((s.message || "").length > 80 ? "…" : ""),
+              senderIdentifier: s.phoneNumber || "Unknown number",
+              receivedAt: s.createdAt,
+              shareUrl: `${APP_URL}/share/${smsTokenMap[s.id]}`,
+            }))
 
-    // ── Build per-entity sections ─────────────────────────────────────────────
-    const entitySections: DigestEntitySection[] = subscriptions.map((sub) => {
-      const entity = sub.entity
+          // Merge and sort by date desc, cap at 10
+          const merged = [...entityEmails, ...entitySms]
+            .sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime())
+            .slice(0, 10)
 
-      // Collect emails for this entity
-      const entityEmails: DigestMessage[] = emails
-        .filter((e) => e.entityId === entity.id)
-        .map((e) => ({
-          kind: "email" as const,
-          subject: e.subject,
-          senderIdentifier: e.senderEmail,
-          receivedAt: e.dateReceived,
-          shareUrl: `${APP_URL}/share/${emailTokenMap[e.id]}`,
-        }))
+          return {
+            entityName: entity.name,
+            entitySlug: nameToSlug(entity.name),
+            party: entity.party,
+            state: entity.state,
+            messages: merged,
+          }
+        })
 
-      // Collect SMS for this entity
-      const entitySms: DigestMessage[] = smsMessages
-        .filter((s) => s.entityId === entity.id)
-        .map((s) => ({
-          kind: "sms" as const,
-          subject: (s.message || "").slice(0, 80) + ((s.message || "").length > 80 ? "…" : ""),
-          senderIdentifier: s.phoneNumber || "Unknown number",
-          receivedAt: s.createdAt,
-          shareUrl: `${APP_URL}/share/${smsTokenMap[s.id]}`,
-        }))
+        // Sort sections: entities with activity first, then alpha
+        entitySections.sort((a, b) => {
+          if (b.messages.length !== a.messages.length) return b.messages.length - a.messages.length
+          return a.entityName.localeCompare(b.entityName)
+        })
 
-      // Merge and sort by date desc, cap at 10
-      const merged = [...entityEmails, ...entitySms]
-        .sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime())
-        .slice(0, 10)
+        // ── Fetch all users for this client who have the digest enabled and send ─
+        const users = await prisma.user.findMany({
+          where: { clientId: client.id, digestEnabled: true },
+          select: { email: true, firstName: true },
+        })
 
-      return {
-        entityName: entity.name,
-        entitySlug: nameToSlug(entity.name),
-        party: entity.party,
-        state: entity.state,
-        messages: merged,
-      }
-    })
+        let sent = 0
+        let failed = 0
 
-    // Sort sections: entities with activity first, then alpha
-    entitySections.sort((a, b) => {
-      if (b.messages.length !== a.messages.length) return b.messages.length - a.messages.length
-      return a.entityName.localeCompare(b.entityName)
-    })
+        for (const user of users) {
+          if (!user.email) continue
 
-    // ── Fetch all RIP users who have the digest enabled and send ─────────────
-    const users = await prisma.user.findMany({
-      where: { clientId: ripClient.id, digestEnabled: true },
-      select: { email: true, firstName: true },
-    })
+          const ok = await sendFollowingDigest({
+            to: user.email,
+            firstName: user.firstName,
+            digestDate: digestDateLabel,
+            entitySections,
+            clientSlug: client.slug,
+          })
 
-    const stats = { sent: 0, failed: 0, skipped: 0 }
+          if (ok) {
+            sent++
+            console.log(`[digest-following] ${client.slug}: sent to ${user.email}`)
+          } else {
+            failed++
+            console.error(`[digest-following] ${client.slug}: failed to send to ${user.email}`)
+          }
+        }
 
-    for (const user of users) {
-      if (!user.email) {
-        stats.skipped++
-        continue
-      }
-
-      const ok = await sendFollowingDigest({
-        to: user.email,
-        firstName: user.firstName,
-        digestDate: digestDateLabel,
-        entitySections,
-        clientSlug: ripClient.slug,
-      })
-
-      if (ok) {
-        stats.sent++
-        console.log(`[digest-following] Sent to ${user.email}`)
-      } else {
-        stats.failed++
-        console.error(`[digest-following] Failed to send to ${user.email}`)
+        totalSent += sent
+        results.push({ client: client.slug, sent, failed })
+        console.log(`[digest-following] ${client.slug}: ${sent} sent, ${failed} failed`)
+      } catch (err: any) {
+        console.error(`[digest-following] ${client.slug} error:`, err.message)
+        results.push({ client: client.slug, sent: 0, failed: 0, error: err.message })
       }
     }
 
-    console.log(`[digest-following] Done — ${JSON.stringify(stats)}`)
-    return NextResponse.json({ success: true, stats, digestDate: digestDateLabel })
+    console.log(`[digest-following] Done — ${totalSent} total sent — ${JSON.stringify(results)}`)
+    return NextResponse.json({ success: true, totalSent, results, digestDate: digestDateLabel })
   } catch (error: any) {
     console.error("[digest-following] Fatal error:", error.message)
     return NextResponse.json({ error: "Digest failed", message: error.message }, { status: 500 })

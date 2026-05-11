@@ -1070,7 +1070,7 @@ export async function sendWeeklyDigest(params: {
                   <td style="vertical-align:top;">
                     <p style="margin:0 0 4px;font-size:15px;color:#f9fafb;font-weight:600;">${greeting}</p>
                     <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">
-                      Here are the <strong style="color:#e5e7eb;">top ${items.length} most-viewed</strong> emails and SMS from the entities you follow over the past week.
+                      Here are the <strong style="color:#e5e7eb;">top ${items.length} most-viewed</strong> emails and SMS from across Inbox.GOP over the past week.
                     </p>
                   </td>
                   <td style="text-align:right;vertical-align:top;padding-left:16px;white-space:nowrap;">

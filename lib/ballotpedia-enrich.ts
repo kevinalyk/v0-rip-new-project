@@ -103,10 +103,12 @@ export function extractOffice(html: string): string | null {
 }
 
 // Extract the intro bio from Ballotpedia HTML.
-// Collects up to 3 intro paragraphs (before any section heading), stopping
-// immediately if we hit "Biography" or similar section markers. This ensures
-// we only get the high-level summary rather than the full life story.
-// Hard cap at 2000 characters to keep the DB field reasonable.
+// Strategy:
+//   1. Find the position of the "Biography" section heading (any <hN> tag).
+//   2. If found, only consider HTML before that point — stopping us from
+//      capturing personal history that belongs in the Biography section.
+//   3. From that portion, collect up to 3 clean paragraphs (min 60 chars each).
+//   4. If "Biography" is never found, same rule applies — first 3 paragraphs.
 export function extractBio(html: string): string | null {
   const clean = html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -117,7 +119,7 @@ export function extractBio(html: string): string | null {
   const cleanParagraph = (raw: string) =>
     raw
       .replace(/<[^>]+>/g, "")
-      .replace(/\[\d+\]/g, "") // remove [1] citation markers
+      .replace(/\[\d+\]/g, "")      // strip [1] citation markers
       .replace(/\[source\]/gi, "")
       .replace(/&amp;/g, "&")
       .replace(/&nbsp;/g, " ")
@@ -130,45 +132,23 @@ export function extractBio(html: string): string | null {
   const skipPattern =
     /^(see also|contents|navigation|retrieved|external links|references|footnotes|this article|don't know|join the|make it possible)/i
 
+  // Find the "Biography" heading — stop scraping before it.
+  // Falls back to the full document if the heading is never found.
+  const biographyMatch = clean.search(/<h\d[^>]*>\s*Biography\s*<\/h\d>/i)
+  const cutoff = biographyMatch > 0 ? biographyMatch : clean.length
+
+  const introParas = clean.slice(0, cutoff).match(/<p[^>]*>([\s\S]*?)<\/p>/gi) || []
+
   const collected: string[] = []
-  let totalLength = 0
-  const MAX_LENGTH = 2000
-  const MAX_PARAGRAPHS = 3
-
-  // Find where the first h2 OR the word "Biography" appears as a section heading
-  const firstH2Index = clean.search(/<h2[\s>]/i)
-  const biographyHeadingIndex = clean.search(/<h\d[^>]*>[\s\S]*?Biography[\s\S]*?<\/h\d>/i)
-
-  // Stop intro extraction at whichever comes first: first h2, "Biography" heading, or end of content
-  let stopIndex = clean.length
-  if (firstH2Index > 0) stopIndex = Math.min(stopIndex, firstH2Index)
-  if (biographyHeadingIndex > 0) stopIndex = Math.min(stopIndex, biographyHeadingIndex)
-
-  const introPortion = clean.slice(0, stopIndex)
-  const introParas = introPortion.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) || []
-
   for (const p of introParas) {
     const text = cleanParagraph(p)
     if (text.length < 60) continue
     if (skipPattern.test(text)) continue
     collected.push(text)
-    totalLength += text.length
-    if (collected.length >= MAX_PARAGRAPHS || totalLength >= MAX_LENGTH) break
+    if (collected.length >= 3) break
   }
 
-  if (collected.length === 0) return null
-
-  // Join with double newline so each paragraph is distinct in storage
-  let result = collected.join("\n\n")
-
-  // Hard cap — trim at last sentence boundary before the limit
-  if (result.length > MAX_LENGTH) {
-    const truncated = result.slice(0, MAX_LENGTH)
-    const lastPeriod = truncated.lastIndexOf(".")
-    result = lastPeriod > 200 ? truncated.slice(0, lastPeriod + 1) : truncated + "..."
-  }
-
-  return result
+  return collected.length > 0 ? collected.join("\n\n") : null
 }
 
 export type EnrichResult = {

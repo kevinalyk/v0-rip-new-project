@@ -1,4 +1,4 @@
-import { encryptToken } from "./encryption"
+import { encrypt } from "./encryption"
 
 /**
  * Generate a tracked email link that logs clicks before redirecting.
@@ -24,7 +24,7 @@ export function generateTrackedLink(
     linkType,
   }
 
-  const token = encryptToken(JSON.stringify(clickData))
+  const token = encrypt(JSON.stringify(clickData))
 
   // Build the tracking URL
   const trackingUrl = new URL(`${baseUrl}/api/track/click`)

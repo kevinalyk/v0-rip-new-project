@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
-import { decryptToken } from "@/lib/encryption"
+import prisma from "@/lib/prisma"
+import { decrypt } from "@/lib/encryption"
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     // Decrypt token to get click metadata
     let clickData: any
     try {
-      clickData = JSON.parse(decryptToken(token))
+      clickData = JSON.parse(decrypt(token))
     } catch (error) {
       console.error("[track/click] Invalid token:", error)
       // If token is invalid, just redirect without logging
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
     // Log the click
     try {
-      await db.emailClickEvent.create({
+      await prisma.emailClickEvent.create({
         data: {
           userId,
           emailType,

@@ -29,12 +29,12 @@ export default function AdSidebar({ showAd }: AdSidebarProps) {
   return (
     <div
       className="hidden lg:flex flex-col items-start flex-shrink-0"
-      style={{ width: "300px", minWidth: "300px", paddingTop: "24px" }}
+      style={{ width: "160px", minWidth: "160px", paddingTop: "24px" }}
       aria-label="Advertisement"
     >
       <ins
         className="adsbygoogle"
-        style={{ display: "block", width: "300px", minHeight: "250px" }}
+        style={{ display: "block", width: "160px", minHeight: "600px" }}
         data-ad-client="ca-pub-5715074898343065"
         data-ad-slot="5401962530"
         data-ad-format="auto"

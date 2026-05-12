@@ -1,15 +1,30 @@
 import { NextResponse } from "next/server"
-import { cookies } from "next/headers"
 
 export async function POST() {
-  // Clear the auth cookie
-  cookies().set({
+  const response = NextResponse.json({ success: true })
+
+  // Clear without domain — matches exactly how the login route sets the cookie
+  response.cookies.set({
     name: "auth_token",
     value: "",
     expires: new Date(0),
     path: "/",
-    domain: ".rip-tool.com", // Must match the domain used when setting the cookie
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
   })
 
-  return NextResponse.json({ success: true })
+  // Also clear with domain as a belt-and-suspenders in case an old cookie exists
+  response.cookies.set({
+    name: "auth_token",
+    value: "",
+    expires: new Date(0),
+    path: "/",
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    domain: ".rip-tool.com",
+  })
+
+  return response
 }

@@ -219,7 +219,7 @@ export async function GET(request: Request) {
         // ── Fetch all users for this client who have the digest enabled and send ─
         const users = await prisma.user.findMany({
           where: { clientId: client.id, digestEnabled: true },
-          select: { email: true, firstName: true },
+          select: { id: true, email: true, firstName: true },
         })
 
         let sent = 0
@@ -230,6 +230,7 @@ export async function GET(request: Request) {
 
           const ok = await sendFollowingDigest({
             to: user.email,
+            userId: user.id,
             firstName: user.firstName,
             digestDate: digestDateLabel,
             entitySections,

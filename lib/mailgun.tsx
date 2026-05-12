@@ -1,5 +1,7 @@
 // Mailgun email sending utility
 
+import { generateTrackedLink } from "./email-tracking"
+
 const ADMIN_NOTIFICATION_EMAIL = "kevinalyk@gmail.com"
 
 async function sendMailgunEmail(subject: string, html: string, text: string): Promise<boolean> {
@@ -655,6 +657,7 @@ export interface DigestEntitySection {
 
 export async function sendFollowingDigest(params: {
   to: string
+  userId: string // Add userId for tracking
   firstName: string | null
   digestDate: string // e.g. "Thursday, May 8, 2026"
   entitySections: DigestEntitySection[]
@@ -668,12 +671,12 @@ export async function sendFollowingDigest(params: {
     return false
   }
 
-  const { to, firstName, digestDate, entitySections, clientSlug } = params
+  const { to, userId, firstName, digestDate, entitySections, clientSlug } = params
 
   const APP_URL = "https://app.rip-tool.com"
-  const feedUrl = `${APP_URL}/${clientSlug}/ci/campaigns`
-  const subscriptionsUrl = `${APP_URL}/${clientSlug}/ci/subscriptions`
-  const settingsUrl = `${APP_URL}/${clientSlug}/account/settings`
+  const feedUrl = generateTrackedLink(userId, "daily_digest", "feed", `/${clientSlug}/ci/campaigns`, APP_URL)
+  const subscriptionsUrl = generateTrackedLink(userId, "daily_digest", "subscriptions", `/${clientSlug}/ci/subscriptions`, APP_URL)
+  const settingsUrl = generateTrackedLink(userId, "daily_digest", "settings", `/${clientSlug}/account/settings`, APP_URL)
   const logoUrl = `${APP_URL}/images/IconOnly_Transparent_NoBuffer.png`
 
   const greeting = firstName ? `Hi ${firstName},` : "Hi there,"
@@ -713,7 +716,13 @@ export async function sendFollowingDigest(params: {
         : ""
 
       const directoryUrl = section.entitySlug
-        ? `${APP_URL}/directory/${section.entitySlug}`
+        ? generateTrackedLink(
+            userId,
+            "daily_digest",
+            "entity_profile",
+            `/${clientSlug}/directory/${section.entitySlug}`,
+            APP_URL
+          )
         : null
 
       const entityNameHtml = directoryUrl
@@ -750,6 +759,15 @@ export async function sendFollowingDigest(params: {
             ? msg.subject.slice(0, 60) + "…"
             : msg.subject
 
+          // Track campaign clicks
+          const trackedShareUrl = generateTrackedLink(
+            userId,
+            "daily_digest",
+            "campaign",
+            msg.shareUrl,
+            APP_URL
+          )
+
           return `
             <tr>
               <td style="padding:10px 24px;background:${bg};${borderTop}border-bottom:1px solid #1f2937;">
@@ -757,7 +775,7 @@ export async function sendFollowingDigest(params: {
                   <tr>
                     <td style="vertical-align:middle;width:100%;">
                       ${icon}
-                      <a href="${msg.shareUrl}" target="_blank" style="font-size:13px;color:#e5e7eb;text-decoration:none;font-weight:500;">${displaySubject}</a>
+                      <a href="${trackedShareUrl}" target="_blank" style="font-size:13px;color:#e5e7eb;text-decoration:none;font-weight:500;">${displaySubject}</a>
                     </td>
                     <td style="text-align:right;white-space:nowrap;padding-left:16px;vertical-align:middle;">
                       <span style="font-size:12px;color:#6b7280;">${formatTime(msg.receivedAt)}</span>

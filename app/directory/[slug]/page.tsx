@@ -13,6 +13,7 @@ import {
   PARTY_SLUG_TO_ADJECTIVE,
 } from "@/lib/directory-routing"
 import AdBanner from "@/components/ad-banner"
+import AdSidebar from "@/components/ad-sidebar"
 import { shouldShowAd } from "@/lib/ads"
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
@@ -366,8 +367,13 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbData) }} />
       )}
       <AdBanner showAd={showAd} />
-      <DirectoryProfileContent slug={slug} initialData={initialData} />
-      {initialData && <EntitySeoContent data={initialData} />}
+      <div className="flex justify-center gap-4">
+        <div className="flex-1 min-w-0">
+          <DirectoryProfileContent slug={slug} initialData={initialData} />
+          {initialData && <EntitySeoContent data={initialData} />}
+        </div>
+        <AdSidebar showAd={showAd} />
+      </div>
     </>
   )
 }

@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -53,6 +52,8 @@ export function AdminContent({ user }: AdminContentProps) {
   const [dateRange, setDateRange] = useState({ days: 30 })
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
+  const [ballotpediaUrl, setBallotpediaUrl] = useState("")
+  const [isScrapingBallotpedia, setIsScrapingBallotpedia] = useState(false)
   const [isMigratingSMS, setIsMigratingSMS] = useState(false)
   const [isMigratingSMSNumbers, setIsMigratingSMSNumbers] = useState(false)
   const [isSanitizingEmails, setIsSanitizingEmails] = useState(false)
@@ -98,11 +99,6 @@ export function AdminContent({ user }: AdminContentProps) {
   } | null>(null)
   const [addingSelector, setAddingSelector] = useState<string | null>(null)
   const [dkimNewName, setDkimNewName] = useState<Record<string, string>>({})
-
-  // Ballotpedia state scraper state
-  const [ballotpediaUrl, setBallotpediaUrl] = useState("")
-  const [isScrapingBallotpedia, setIsScrapingBallotpedia] = useState(false)
-  const [ballotpediaScraperResults, setBallotpediaScraperResults] = useState<{ candidates: Array<any> } | null>(null)
 
   const [isAutoPopulatingWinRed, setIsAutoPopulatingWinRed] = useState(false)
   const [isAutoPopulatingAnedot, setIsAutoPopulatingAnedot] = useState(false)
@@ -422,13 +418,1207 @@ export function AdminContent({ user }: AdminContentProps) {
     }
   }
 
+  const handleMigrateSMS = async () => {
+    setIsMigratingSMS(true)
+    try {
+      const response = await fetch("/api/admin/migrate-sms", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success(
+          `SMS migration completed: ${data.summary.updated} updated, ${data.summary.skipped} skipped, ${data.summary.errors} errors`,
+        )
+      } else {
+        toast.error(data.error || "Failed to run SMS migration")
+      }
+    } catch (error) {
+      toast.error("Failed to run SMS migration")
+    } finally {
+      setIsMigratingSMS(false)
+    }
+  }
+
+  const handleMigrateSMSNumbers = async () => {
+    setIsMigratingSMSNumbers(true)
+    try {
+      const response = await fetch("/api/admin/migrate-sms-numbers", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success(
+          `SMS numbers migration completed: ${data.updated} updated, ${data.skipped} skipped, ${data.errors} errors`,
+        )
+      } else {
+        toast.error(data.error || "Failed to run SMS numbers migration")
+      }
+    } catch (error) {
+      toast.error("Failed to run SMS numbers migration")
+    } finally {
+      setIsMigratingSMSNumbers(false)
+    }
+  }
+
+  const handleSanitizeEmails = async () => {
+    setIsSanitizingEmails(true)
+    try {
+      const response = await fetch("/api/admin/sanitize-emails", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success(
+          `Email sanitization completed: ${data.summary.updated} updated, ${data.summary.skipped} skipped, ${data.summary.errors} errors`,
+        )
+      } else {
+        toast.error(data.error || "Failed to sanitize emails")
+      }
+    } catch (error) {
+      toast.error("Failed to sanitize emails")
+    } finally {
+      setIsSanitizingEmails(false)
+    }
+  }
+
+  const handleBackfillSMSLinks = async () => {
+    setIsBackfillingSMSLinks(true)
+    try {
+      const response = await fetch("/api/admin/backfill-sms-links", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success(
+          `SMS links backfill completed: ${data.summary.updated} updated, ${data.summary.skipped} skipped, ${data.summary.errors} errors`,
+        )
+      } else {
+        toast.error(data.error || "Failed to backfill SMS links")
+      }
+    } catch (error) {
+      toast.error("Failed to backfill SMS links")
+    } finally {
+      setIsBackfillingSMSLinks(false)
+    }
+  }
+
+  const handleRedactSMSLinks = async (dryRun = false) => {
+    setIsRedactingSMSLinks(true)
+    setRedactSMSLinksResults(null)
+    try {
+      const response = await fetch("/api/admin/redact-sms-links", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dryRun }),
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setRedactSMSLinksResults(data)
+        toast.success(
+          dryRun
+            ? `Dry run: ${data.updated} messages would be updated`
+            : `Done: ${data.updated} messages updated, ${data.skipped} already clean`
+        )
+      } else {
+        toast.error(data.error || "Failed to redact SMS links")
+      }
+    } catch (error) {
+      toast.error("Failed to redact SMS links")
+    } finally {
+      setIsRedactingSMSLinks(false)
+    }
+  }
+
+  const handleCleanCTAParams = async () => {
+    setIsCleaningCTAParams(true)
+    try {
+      const response = await fetch("/api/admin/clean-cta-params", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success(
+          `CTA cleanup completed: ${data.summary.emailCampaignsUpdated} emails, ${data.summary.smsMessagesUpdated} SMS updated (${data.summary.totalUpdated} total)`,
+        )
+      } else {
+        toast.error(data.error || "Failed to clean CTA parameters")
+      }
+    } catch (error) {
+      toast.error("Failed to clean CTA parameters")
+    } finally {
+      setIsCleaningCTAParams(false)
+    }
+  }
+
+  const handleSanitizeSubjects = async () => {
+    setIsSanitizingSubjects(true)
+    try {
+      const response = await fetch("/api/admin/sanitize-subject-lines", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success(
+          `Subject sanitization completed: ${data.summary.updated} updated, ${data.summary.skipped} skipped, ${data.summary.errors} errors`,
+        )
+      } else {
+        toast.error(data.error || "Failed to sanitize subject lines")
+      }
+    } catch (error) {
+      toast.error("Failed to sanitize subject lines")
+    } finally {
+      setIsSanitizingSubjects(false)
+    }
+  }
+
+  const handleUnwrapCTALinks = async () => {
+    setIsUnwrappingLinks(true)
+    try {
+      const response = await fetch("/api/admin/unwrap-cta-links", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success(
+          `CTA unwrapping completed: ${data.summary.updated} updated, ${data.summary.skipped} skipped, ${data.summary.errors} errors`,
+        )
+      } else {
+        toast.error(data.error || "Failed to unwrap CTA links")
+      }
+    } catch (error) {
+      toast.error("Failed to unwrap CTA links")
+    } finally {
+      setIsUnwrappingLinks(false)
+    }
+  }
+
+  const handleSanitizeEmailLinks = async () => {
+    setIsSanitizingEmailLinks(true)
+    try {
+      const response = await fetch("/api/admin/sanitize-email-links", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success(
+          `Email links sanitized: ${data.summary.updated} updated, ${data.summary.skipped} skipped, ${data.summary.errors} errors`,
+        )
+      } else {
+        toast.error(data.error || "Failed to sanitize email links")
+      }
+    } catch (error) {
+      toast.error("Failed to sanitize email links")
+    } finally {
+      setIsSanitizingEmailLinks(false)
+    }
+  }
+
+  const handleRedactEmailLinks = async () => {
+    setIsRedactingEmailLinks(true)
+    try {
+      const response = await fetch("/api/admin/redact-email-links", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(redactCampaignId.trim() ? { campaignId: redactCampaignId.trim() } : {}),
+      })
+      const data = await response.json()
+      if (response.ok) {
+        toast.success(
+          `Redacted links: ${data.summary.updated} updated, ${data.summary.skipped} skipped, ${data.summary.errors} errors`,
+        )
+      } else {
+        toast.error(data.error || "Failed to redact email links")
+      }
+    } catch (error) {
+      toast.error("Failed to redact email links")
+    } finally {
+      setIsRedactingEmailLinks(false)
+    }
+  }
+
+  const handleAutoPopulateWinRed = async () => {
+    setIsAutoPopulatingWinRed(true)
+    try {
+      const response = await fetch("/api/admin/auto-populate-winred", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success(
+          `WinRed identifier auto-population completed: ${data.summary.updated} updated, ${data.summary.skipped} skipped, ${data.summary.errors} errors`,
+        )
+      } else {
+        toast.error(data.error || "Failed to auto-populate WinRed identifiers")
+      }
+    } catch (error) {
+      toast.error("Failed to auto-populate WinRed identifiers")
+    } finally {
+      setIsAutoPopulatingWinRed(false)
+    }
+  }
+
+  const handleAutoPopulateAnedot = async () => {
+    setIsAutoPopulatingAnedot(true)
+    try {
+      const response = await fetch("/api/admin/auto-populate-anedot", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success(
+          `Anedot identifier auto-population completed: ${data.summary.updated} updated, ${data.summary.skipped} skipped, ${data.summary.errors} errors`,
+        )
+      } else {
+        toast.error(data.error || "Failed to auto-populate Anedot identifiers")
+      }
+    } catch (error) {
+      toast.error("Failed to auto-populate Anedot identifiers")
+    } finally {
+      setIsAutoPopulatingAnedot(false)
+    }
+  }
+
+const handleAutoPopulateActBlue = async () => {
+  setIsAutoPopulatingActBlue(true)
+  try {
+    const response = await fetch("/api/admin/auto-populate-actblue", {
+      method: "POST",
+      credentials: "include",
+    })
+    const data = await response.json()
+    if (response.ok) {
+      toast.success(
+        `ActBlue identifier auto-population completed: ${data.summary.updated} updated, ${data.summary.skipped} skipped, ${data.summary.errors} errors`,
+      )
+    } else {
+      toast.error(data.error || "Failed to auto-populate ActBlue identifiers")
+    }
+  } catch {
+    toast.error("Failed to auto-populate ActBlue identifiers")
+  } finally {
+    setIsAutoPopulatingActBlue(false)
+  }
+}
+
+const handleAutoPopulatePSQ = async () => {
+  setIsAutoPopulatingPSQ(true)
+  try {
+    const response = await fetch("/api/admin/auto-populate-psq", {
+      method: "POST",
+      credentials: "include",
+    })
+    const data = await response.json()
+    if (response.ok) {
+      toast.success(
+        `PSQ identifier auto-population completed: ${data.summary.updated} updated, ${data.summary.skipped} skipped, ${data.summary.errors} errors`,
+      )
+    } else {
+      toast.error(data.error || "Failed to auto-populate PSQ identifiers")
+    }
+  } catch {
+    toast.error("Failed to auto-populate PSQ identifiers")
+  } finally {
+    setIsAutoPopulatingPSQ(false)
+  }
+}
+
+const handleAutoPopulateEngage = async () => {
+  setIsAutoPopulatingEngage(true)
+  try {
+    const response = await fetch("/api/admin/auto-populate-engage", {
+      method: "POST",
+      credentials: "include",
+    })
+
+    const data = await response.json()
+
+    if (response.ok) {
+      toast.success(`Engage auto-population completed: Updated ${data.updated} entities with ${data.totalIdentifiers} identifiers found`)
+    } else {
+      toast.error(data.error || "Failed to auto-populate Engage identifiers")
+    }
+  } catch {
+    toast.error("Failed to auto-populate Engage identifiers")
+  } finally {
+    setIsAutoPopulatingEngage(false)
+  }
+}
+
+  const handleAnalyzeActBlue = async () => {
+    setIsAnalyzingActBlue(true)
+    setActBluePatterns(null)
+    try {
+      const response = await fetch("/api/admin/analyze-actblue-patterns", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setActBluePatterns(data)
+        toast.success(
+          `ActBlue analysis completed: Found ${data.summary.totalPatterns} unique patterns with ${data.summary.totalOccurrences} total occurrences`,
+        )
+      } else {
+        toast.error(data.error || "Failed to analyze ActBlue patterns")
+      }
+    } catch (error) {
+      toast.error("Failed to analyze ActBlue patterns")
+    } finally {
+      setIsAnalyzingActBlue(false)
+    }
+  }
+
+const handleScanUrlKeyword = async () => {
+  if (!urlKeyword.trim() || urlKeyword.length < 2) {
+    toast.error("Please enter a keyword with at least 2 characters")
+    return
+  }
+  setIsScanningUrlKeyword(true)
+  setUrlKeywordResults(null)
+  try {
+    const response = await fetch("/api/admin/scan-url-keyword", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ keyword: urlKeyword.trim() }),
+    })
+    const data = await response.json()
+    if (response.ok) {
+      setUrlKeywordResults(data)
+      toast.success(`Found ${data.summary.uniqueUrls} unique URLs containing "${urlKeyword}"`)
+    } else {
+      toast.error(data.error || "Failed to scan URLs")
+    }
+  } catch {
+    toast.error("Failed to scan URLs")
+  } finally {
+    setIsScanningUrlKeyword(false)
+  }
+}
+
+const downloadUrlKeywordResults = () => {
+  if (!urlKeywordResults) return
+  
+  const csv = [
+    ["Hostname", "Pathname", "Count", "Full URL"],
+    ...urlKeywordResults.matches.map((m: any) => [m.hostname, m.pathname, m.count, m.fullUrl]),
+  ]
+  .map((row) => row.map((cell) => `"${cell}"`).join(","))
+  .join("\n")
+
+  const blob = new Blob([csv], { type: "text/csv" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = `url-keyword-${urlKeywordResults.keyword}-${new Date().toISOString().split("T")[0]}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const downloadActBluePatterns = () => {
+  if (!actBluePatterns) return
+
+    const csv = [
+      ["Pattern", "Identifier", "Count", "Example URL"],
+      ...actBluePatterns.patterns.map((p: any) => [p.pattern, p.identifier, p.count, p.fullUrl]),
+    ]
+      .map((row) => row.map((cell) => `"${cell}"`).join(","))
+      .join("\n")
+
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `actblue-patterns-${new Date().toISOString().split("T")[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleReassignSubstack = async () => {
+    setIsReassigningSubstack(true)
+    setReassignSubstackResults(null)
+    try {
+      const response = await fetch("/api/admin/reassign-substack", {
+        method: "POST",
+        credentials: "include",
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setReassignSubstackResults(data)
+        toast.success(
+          `Substack reassignment done: ${data.unassigned} unassigned, ${data.reassigned} reassigned, ${data.unmatched} unmatched`
+        )
+      } else {
+        toast.error(data.error || "Failed to reassign Substack campaigns")
+      }
+    } catch {
+      toast.error("Failed to reassign Substack campaigns")
+    } finally {
+      setIsReassigningSubstack(false)
+    }
+  }
+
+  const handleBulkReassign = async () => {
+    setIsReassigning(true)
+    setReassignmentResults(null)
+    try {
+      const response = await fetch("/api/admin/reassign-data-broker-campaigns", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setReassignmentResults(data)
+        toast.success(
+          `Bulk reassignment completed: ${data.summary.reassigned} reassigned, ${data.summary.skipped} skipped, ${data.summary.errors} errors`,
+        )
+      } else {
+        toast.error(data.error || "Failed to reassign campaigns")
+      }
+    } catch (error) {
+      toast.error("Failed to reassign campaigns")
+    } finally {
+      setIsReassigning(false)
+    }
+  }
+
+  const handleUnassignDataBrokers = async () => {
+    if (!confirm("This will unassign ALL campaigns from data broker entities. Are you sure?")) {
+      return
+    }
+
+    setIsUnassigning(true)
+    setUnassignResults(null)
+    try {
+      const response = await fetch("/api/admin/unassign-data-broker-campaigns", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setUnassignResults(data)
+        toast.success(`Unassigned ${data.summary.unassigned} campaigns from ${data.summary.dataBrokers} data brokers`)
+      } else {
+        toast.error(data.error || "Failed to unassign campaigns")
+      }
+    } catch (error) {
+      console.error("Error unassigning campaigns:", error)
+      alert("Failed to unassign campaigns")
+    } finally {
+      setIsUnassigning(false)
+    }
+  }
+
+  const handleAssignDataBrokers = async () => {
+    if (
+      !confirm(
+        "This will scan unassigned campaigns from data broker domains and assign them based on link patterns and donation identifiers. Continue?",
+      )
+    ) {
+      return
+    }
+
+    setIsAssigningDataBrokers(true)
+    setDataBrokerAssignmentResults(null)
+
+    try {
+      const response = await fetch("/api/admin/assign-data-broker-unassigned", {
+        method: "POST",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to assign data broker campaigns")
+      }
+
+      const data = await response.json()
+      setDataBrokerAssignmentResults(data.results)
+    } catch (error) {
+      console.error("Error assigning data broker campaigns:", error)
+      alert("Failed to assign data broker campaigns")
+    } finally {
+      setIsAssigningDataBrokers(false)
+    }
+  }
+
+  const handleAssignDailyGOPNews = async () => {
+    if (!confirm("Assign unassigned Daily GOP News campaigns based on WinRed identifiers?")) {
+      return
+    }
+
+    setIsDailyGOPAssigning(true)
+    setDailyGOPResults(null)
+
+    try {
+      const response = await fetch("/api/admin/assign-daily-gop-news", {
+        method: "POST",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to assign Daily GOP News campaigns")
+      }
+
+      const data = await response.json()
+      setDailyGOPResults(data)
+      toast.success(`Assigned ${data.summary.assigned} of ${data.summary.total} Daily GOP News campaigns`)
+    } catch (error) {
+      console.error("Error assigning Daily GOP News campaigns:", error)
+      toast.error("Failed to assign Daily GOP News campaigns")
+    } finally {
+      setIsDailyGOPAssigning(false)
+    }
+  }
+
+  const handleAssignLibertyMuse = async () => {
+    if (
+      !confirm("Assign unassigned American Liberty Muse campaigns based on newsletter patterns and WinRed identifiers?")
+    ) {
+      return
+    }
+
+    setIsLibertyMuseAssigning(true)
+    setLibertyMuseResults(null)
+
+    try {
+      const response = await fetch("/api/admin/assign-american-liberty-muse", {
+        method: "POST",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to assign American Liberty Muse campaigns")
+      }
+
+      const data = await response.json()
+      setLibertyMuseResults(data)
+      const totalAssigned =
+        data.results.assignedToDataBroker + data.results.assignedViaWinRed + data.results.assignedViaAnedot
+      toast.success(`Assigned ${totalAssigned} of ${data.results.total} American Liberty Muse campaigns`)
+    } catch (error) {
+      console.error("Error assigning American Liberty Muse campaigns:", error)
+      toast.error("Failed to assign American Liberty Muse campaigns")
+    } finally {
+      setIsLibertyMuseAssigning(false)
+    }
+  }
+
+  const handleAssignStayInformedNow = async () => {
+    if (!confirm("Assign unassigned Stay Informed Now campaigns based on WinRed identifiers?")) {
+      return
+    }
+
+    setIsStayInformedAssigning(true)
+    setStayInformedResults(null)
+
+    try {
+      const response = await fetch("/api/admin/assign-stay-informed-now", {
+        method: "POST",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to assign Stay Informed Now campaigns")
+      }
+
+      const data = await response.json()
+      setStayInformedResults(data)
+      toast.success(`Assigned ${data.summary.assigned} of ${data.summary.total} Stay Informed Now campaigns`)
+    } catch (error) {
+      console.error("Error assigning Stay Informed Now campaigns:", error)
+      toast.error("Failed to assign Stay Informed Now campaigns")
+    } finally {
+      setIsStayInformedAssigning(false)
+    }
+  }
+
+  const handleAssignLibertyActionNews = async () => {
+    if (
+      !confirm("Assign unassigned Liberty Action News campaigns based on newsletter patterns and WinRed identifiers?")
+    ) {
+      return
+    }
+
+    setIsLibertyActionAssigning(true)
+    setLibertyActionResults(null)
+
+    try {
+      const response = await fetch("/api/admin/assign-liberty-action-news", {
+        method: "POST",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to assign Liberty Action News campaigns")
+      }
+
+      const data = await response.json()
+      setLibertyActionResults(data)
+      const totalAssigned =
+        data.results.assignedToDataBroker + data.results.assignedViaWinRed + data.results.assignedViaAnedot
+      toast.success(`Assigned ${totalAssigned} of ${data.results.total} Liberty Action News campaigns`)
+    } catch (error) {
+      console.error("Error assigning Liberty Action News campaigns:", error)
+      toast.error("Failed to assign Liberty Action News campaigns")
+    } finally {
+      setIsLibertyActionAssigning(false)
+    }
+  }
+
+  const handleAssignMagaDailyUpdates = async () => {
+    if (!confirm("Assign unassigned MAGA Daily Updates campaigns based on WinRed identifiers?")) {
+      return
+    }
+
+    setIsMagaDailyAssigning(true)
+    setMagaDailyResults(null)
+
+    try {
+      const response = await fetch("/api/admin/assign-maga-daily-updates", {
+        method: "POST",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to assign MAGA Daily Updates campaigns")
+      }
+
+      const data = await response.json()
+      setMagaDailyResults(data)
+      toast.success(`Assigned ${data.assignedCount} of ${data.totalProcessed} MAGA Daily Updates campaigns`)
+    } catch (error) {
+      console.error("Error assigning MAGA Daily Updates campaigns:", error)
+      toast.error("Failed to assign MAGA Daily Updates campaigns")
+    } finally {
+      setIsMagaDailyAssigning(false)
+    }
+  }
+
+  const handleAssignOfficialTrumpTracker = async () => {
+    if (!confirm("Assign unassigned Official Trump Tracker campaigns based on WinRed identifiers?")) {
+      return
+    }
+
+    setIsOfficialTrumpTrackerAssigning(true)
+    setOfficialTrumpTrackerResults(null)
+
+    try {
+      const response = await fetch("/api/admin/assign-official-trump-tracker", {
+        method: "POST",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to assign Official Trump Tracker campaigns")
+      }
+
+      const data = await response.json()
+      setOfficialTrumpTrackerResults(data)
+      toast.success(`Assigned ${data.assignedCount} of ${data.totalProcessed} Official Trump Tracker campaigns`)
+    } catch (error) {
+      console.error("Error assigning Official Trump Tracker campaigns:", error)
+      toast.error("Failed to assign Official Trump Tracker campaigns")
+    } finally {
+      setIsOfficialTrumpTrackerAssigning(false)
+    }
+  }
+
+  // --- NEW HANDLER FOR SMS FIX ---
+  const handleFixSMS5417204415 = async () => {
+    if (
+      !confirm(
+        "This will fix all SMS messages with phone number 5417204415 by extracting the real sender from the 'From:' field. Continue?",
+      )
+    ) {
+      return
+    }
+
+    setIsFixingSMS5417204415(true)
+    setSmsFixResults(null)
+
+    try {
+      const response = await fetch("/api/admin/fix-sms-5417204415", {
+        method: "POST",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to fix SMS messages")
+      }
+
+      const data = await response.json()
+      setSmsFixResults(data)
+      toast.success(`Fixed ${data.summary.updated} of ${data.summary.total} SMS messages`)
+    } catch (error) {
+      console.error("Error fixing SMS messages:", error)
+      toast.error("Failed to fix SMS messages")
+    } finally {
+      setIsFixingSMS5417204415(false)
+    }
+  }
+  // --- END NEW HANDLER ---
+
+  const handleAutoAssignSms = async () => {
+    if (
+      !confirm(
+        "This will process all unassigned SMS messages, unwrap URLs, and auto-assign based on donation identifiers. Continue?",
+      )
+    ) {
+      return
+    }
+
+    setIsAutoAssigningSms(true)
+    setSmsAutoAssignResults(null)
+
+    try {
+      const response = await fetch("/api/admin/auto-assign-sms", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to auto-assign SMS")
+      }
+
+      const data = await response.json()
+      setSmsAutoAssignResults(data)
+      toast.success(
+        `Processed ${data.summary.totalProcessed} SMS: ${data.summary.urlsUnwrapped} URLs unwrapped, ${data.summary.smsAssigned} assigned to entities`,
+      )
+    } catch (error) {
+      console.error("Error auto-assigning SMS:", error)
+      toast.error("Failed to auto-assign SMS")
+    } finally {
+      setIsAutoAssigningSms(false)
+    }
+  }
+
+  const handleAutoAssignCampaigns = async () => {
+    if (
+      !confirm(
+        "This will process all unassigned campaigns (emails and SMS) and auto-assign them based on donation identifiers found in their links. Continue?",
+      )
+    ) {
+      return
+    }
+
+    setIsAutoAssigningCampaigns(true)
+    setCampaignsAutoAssignResults(null)
+
+    try {
+      const response = await fetch("/api/admin/auto-assign-campaigns", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to auto-assign campaigns")
+      }
+
+      const data = await response.json()
+      setCampaignsAutoAssignResults(data)
+      toast.success(
+        `Processed campaigns: ${data.summary.emailsAssigned} emails and ${data.summary.smsAssigned} SMS assigned to entities`,
+      )
+    } catch (error) {
+      console.error("Error auto-assigning campaigns:", error)
+      toast.error("Failed to auto-assign campaigns")
+    } finally {
+      setIsAutoAssigningCampaigns(false)
+    }
+  }
+  // </CHANGE>
+
+  const handleBulkUnwrapAll = async () => {
+    setIsBulkUnwrapping(true)
+    try {
+      const response = await fetch("/api/admin/bulk-unwrap-all", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setBulkUnwrapResults(data)
+        toast.success(
+          `Batch completed: ${data.summary.totalLinksUnwrapped} links unwrapped across ${data.summary.emailCampaigns.total + data.summary.smsMessages.total} campaigns`,
+        )
+      } else {
+        toast.error(data.error || "Failed to bulk unwrap campaigns")
+      }
+    } catch (error) {
+      toast.error("Failed to bulk unwrap campaigns")
+    } finally {
+      setIsBulkUnwrapping(false)
+    }
+  }
+
+  const handleAnalyzePlatforms = async () => {
+    setIsAnalyzingPlatforms(true)
+    setPlatformAnalysisResults(null)
+
+    try {
+      const response = await fetch("/api/admin/analyze-platforms", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setPlatformAnalysisResults(data)
+        toast.success(
+          `Platform analysis completed: Found ${data.summary.totalUniqueDomains} unique domains across ${data.summary.totalLinkCount} total links`,
+        )
+      } else {
+        toast.error(data.error || "Failed to analyze platforms")
+      }
+    } catch (error) {
+      toast.error("Failed to analyze platforms")
+    } finally {
+      setIsAnalyzingPlatforms(false)
+    }
+  }
+
+  const downloadPlatformAnalysis = () => {
+    if (!platformAnalysisResults) return
+
+    const csv = [["Domain", "Count"], ...platformAnalysisResults.domains.map((d) => [d.domain, d.count])]
+      .map((row) => row.map((cell) => `"${cell}"`).join(","))
+      .join("\n")
+
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `platform-usage-${new Date().toISOString().split("T")[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+  // </CHANGE>
+
+  const handleTestUnwrapUrl = async () => {
+    if (!testUrl.trim()) {
+      toast.error("Please enter a URL to test")
+      return
+    }
+
+    setIsTestingUrl(true)
+    setTestUrlResults(null)
+
+    try {
+      const response = await fetch("/api/admin/test-unwrap-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ url: testUrl.trim() }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setTestUrlResults(data)
+        if (data.final.changed) {
+          toast.success(`URL unwrapped successfully (${data.redirectChain.totalSteps} steps)`)
+        } else {
+          toast.info("URL already at final destination")
+        }
+      } else {
+        toast.error(data.error || "Failed to unwrap URL")
+      }
+    } catch (error) {
+      console.error("Failed to unwrap URL:", error)
+      toast.error("Failed to unwrap URL")
+    } finally {
+      setIsTestingUrl(false)
+    }
+  }
+  // </CHANGE>
+
+  const handleBatchUnwrap = async () => {
+    setIsBatchUnwrapping(true)
+    try {
+      const response = await fetch("/api/admin/batch-unwrap-links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          lastEmailId: batchUnwrapCursor.lastEmailId,
+          lastSmsId: batchUnwrapCursor.lastSmsId,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setBatchUnwrapResults({
+          emails: data.results.emails,
+          sms: data.results.sms,
+          totals: data.results.totals,
+          hasMore: data.hasMore,
+          message: data.message,
+        })
+        setBatchUnwrapCursor({
+          lastEmailId: data.results.emails.lastId,
+          lastSmsId: data.results.sms.lastId,
+        })
+        setTotalBatchesRun((prev) => prev + 1)
+        toast.success(data.message)
+      } else {
+        toast.error(data.error || "Failed to process batch")
+      }
+    } catch (error) {
+      toast.error("Failed to process batch")
+    } finally {
+      setIsBatchUnwrapping(false)
+    }
+  }
+
+  const handleResetBatchCursor = () => {
+    setBatchUnwrapCursor({ lastEmailId: null, lastSmsId: null })
+    setBatchUnwrapResults(null)
+    setTotalBatchesRun(0)
+    toast.info("Cursor reset - will start from beginning")
+  }
+
+  const handleAnalyzePSQ = async () => {
+    setIsAnalyzingPSQ(true)
+    setPsqPatterns(null)
+    try {
+      const response = await fetch("/api/admin/analyze-psq-patterns", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setPsqPatterns(data)
+        toast.success(
+          `PSQ Impact analysis completed: Found ${data.summary.totalPatterns} unique patterns with ${data.summary.totalOccurrences} total occurrences`,
+        )
+      } else {
+        toast.error(data.error || "Failed to analyze PSQ Impact patterns")
+      }
+    } catch (error) {
+      toast.error("Failed to analyze PSQ Impact patterns")
+    } finally {
+      setIsAnalyzingPSQ(false)
+    }
+  }
+
+  const downloadPSQPatterns = () => {
+    if (!psqPatterns) return
+
+    const csv = [
+      ["Pattern", "Identifier", "Count", "Example URL"],
+      ...psqPatterns.patterns.map((p: any) => [p.pattern, p.identifier, p.count, p.fullUrl]),
+    ]
+      .map((row) => row.map((cell) => `"${cell}"`).join(","))
+      .join("\n")
+
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `psq-patterns-${new Date().toISOString().split("T")[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleRemoveFinalURL = async () => {
+    setIsRemovingFinalURL(true)
+    setRemoveFinalURLResults(null)
+    try {
+      const response = await fetch("/api/admin/remove-final-url-uppercase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      })
+      const data = await response.json()
+      if (response.ok && data.success) {
+        setRemoveFinalURLResults(data.summary)
+        toast.success(`Removed ${data.summary.totalLinksRemoved} "finalURL" keys across ${data.summary.emailCampaignsUpdated + data.summary.smsMessagesUpdated} records`)
+      } else {
+        toast.error(data.error || "Failed to remove finalURL keys")
+      }
+    } catch {
+      toast.error("Failed to remove finalURL keys")
+    } finally {
+      setIsRemovingFinalURL(false)
+    }
+  }
+
+  const handleUnwrapSingleCampaign = async () => {
+    if (!unwrapCampaignId.trim()) {
+      toast.error("Please enter a campaign ID or share link")
+      return
+    }
+
+    setIsUnwrappingSingle(true)
+    setUnwrapResults(null)
+    try {
+      const response = await fetch("/api/admin/unwrap-campaign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ campaignId: unwrapCampaignId.trim() }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        const displayName =
+          data.campaign.type === "email"
+            ? data.campaign.subject
+            : `SMS from ${data.campaign.phoneNumber}: ${data.campaign.messagePreview}...`
+
+        toast.success(`Unwrapped ${data.linksUpdated} out of ${data.totalLinks} links`)
+        setUnwrapResults({
+          type: data.campaign.type,
+          displayName,
+          details: data.unwrapDetails,
+        })
+        setUnwrapCampaignId("")
+      } else {
+        toast.error(data.error || "Failed to unwrap campaign")
+      }
+    } catch (error) {
+      toast.error("Failed to unwrap campaign")
+    } finally {
+      setIsUnwrappingSingle(false)
+    }
+  }
+
+  const handleBackfillDonationPlatform = async (dryRun = false) => {
+    setIsBackfillingPlatform(true)
+    setPlatformBackfillResults(null)
+    try {
+      const response = await fetch("/api/admin/backfill-donation-platform", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dryRun }),
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setPlatformBackfillResults(data)
+        toast.success(
+          dryRun
+            ? `Dry run: would update ${data.summary.updated} of ${data.summary.processed} campaigns`
+            : `Done: ${data.summary.updated} campaigns updated (${data.summary.processed} processed)`
+        )
+      } else {
+        toast.error(data.error || "Backfill failed")
+      }
+    } catch {
+      toast.error("Backfill failed")
+    } finally {
+      setIsBackfillingPlatform(false)
+    }
+  }
+
+  const handleDkimAudit = async () => {
+    setIsDkimAuditing(true)
+    setDkimAuditResults(null)
+    try {
+      const res = await fetch("/api/admin/dkim-selector-audit")
+      const data = await res.json()
+      if (res.ok) {
+        setDkimAuditResults(data)
+        toast.success(`Found ${data.uniqueSelectors} unique DKIM selectors across ${data.totalEmails.toLocaleString()} emails`)
+      } else {
+        toast.error(data.error || "Audit failed")
+      }
+    } catch {
+      toast.error("Audit failed")
+    } finally {
+      setIsDkimAuditing(false)
+    }
+  }
+
+  const handleAddDkimMapping = async (selector: string) => {
+    const name = dkimNewName[selector]?.trim()
+    if (!name) {
+      toast.error("Enter a provider name first")
+      return
+    }
+    setAddingSelector(selector)
+    try {
+      const res = await fetch("/api/admin/dkim-mappings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectorValue: selector, friendlyName: name }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(`Added: ${selector} → ${name}`)
+        // Update local results to reflect the new mapping
+        setDkimAuditResults((prev) =>
+          prev
+            ? {
+                ...prev,
+                unmappedCount: prev.unmappedCount - 1,
+                results: prev.results.map((r) =>
+                  r.selector === selector ? { ...r, mappedTo: name } : r
+                ),
+              }
+            : prev
+        )
+        setDkimNewName((prev) => { const n = { ...prev }; delete n[selector]; return n })
+      } else {
+        toast.error(data.error || "Failed to add mapping")
+      }
+    } catch {
+      toast.error("Failed to add mapping")
+    } finally {
+      setAddingSelector(null)
+    }
+  }
+
   const handleScrapeBallotpedia = async () => {
     if (!ballotpediaUrl.trim()) {
       toast.error("Please enter a Ballotpedia URL")
       return
     }
     setIsScrapingBallotpedia(true)
-    setBallotpediaScraperResults(null)
     try {
       const response = await fetch("/api/admin/scrape-ballotpedia-state", {
         method: "POST",
@@ -2264,7 +3454,7 @@ export function AdminContent({ user }: AdminContentProps) {
         </CardContent>
       </Card>
 
-      {/* ── Scrape Ballotpedia State Elections ─────────────────────────── */}
+      {/* Scrape Ballotpedia State Elections */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -2272,19 +3462,16 @@ export function AdminContent({ user }: AdminContentProps) {
             Scrape Ballotpedia State Elections
           </CardTitle>
           <CardDescription>
-            Scrape candidate data from Ballotpedia state election pages (House, Senate, etc.) and download as JSON for analysis.
+            Paste a Ballotpedia state election page URL to scrape all candidate data and download it as JSON for analysis.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Ballotpedia URL</label>
-            <Input
-              placeholder="e.g., https://ballotpedia.org/Alabama_House_of_Representatives_elections,_2026#General_election"
-              value={ballotpediaUrl}
-              onChange={(e) => setBallotpediaUrl(e.target.value)}
-              disabled={isScrapingBallotpedia}
-            />
-          </div>
+          <Input
+            placeholder="https://ballotpedia.org/Alabama_House_of_Representatives_elections,_2026#General_election"
+            value={ballotpediaUrl}
+            onChange={(e) => setBallotpediaUrl(e.target.value)}
+            disabled={isScrapingBallotpedia}
+          />
           <Button
             onClick={handleScrapeBallotpedia}
             disabled={isScrapingBallotpedia || !ballotpediaUrl.trim()}
@@ -2298,13 +3485,10 @@ export function AdminContent({ user }: AdminContentProps) {
             ) : (
               <>
                 <Download size={16} />
-                Scrape & Download JSON
+                Scrape &amp; Download JSON
               </>
             )}
           </Button>
-          <p className="text-xs text-muted-foreground">
-            This will fetch the candidate table from the provided Ballotpedia URL and download it as a JSON file for you to review and upload for analysis.
-          </p>
         </CardContent>
       </Card>
     </div>

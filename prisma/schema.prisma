@@ -265,6 +265,22 @@ model SeedEmail {
   @@index([ownedByClient, assignedToClient])
 }
 
+model EmailClickEvent {
+  id            String   @id @default(cuid())
+  userId        String   // User who clicked
+  emailType     String   // "daily_digest", "weekly_digest", etc.
+  linkType      String   // "entity_profile", "campaign", "subscriptions", "settings", "feed", "unsubscribe"
+  destination   String   // Where they clicked to (e.g., "/directory/john-smith")
+  referrer      String?  // Optional referrer data
+  userAgent     String?  @db.Text // Browser/device info
+  clickedAt     DateTime @default(now())
+  
+  @@index([userId])
+  @@index([emailType])
+  @@index([linkType])
+  @@index([clickedAt])
+}
+
 model CompetitiveInsightCampaign {
   id                  String   @id @default(cuid())
   senderName          String

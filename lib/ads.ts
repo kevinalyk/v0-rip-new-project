@@ -34,3 +34,21 @@ export async function shouldShowAd(): Promise<boolean> {
     return true
   }
 }
+
+/**
+ * Returns true ONLY for unauthenticated (not logged in) visitors.
+ * Used for sidebar/secondary ads that should not show to any logged-in user,
+ * even those on the free plan.
+ */
+export async function shouldShowSidebarAd(): Promise<boolean> {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("auth_token")?.value
+    if (!token) return true
+
+    const payload = await verifyToken(token)
+    return !payload // only show if token is invalid/missing
+  } catch {
+    return true
+  }
+}

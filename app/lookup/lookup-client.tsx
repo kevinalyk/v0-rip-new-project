@@ -843,7 +843,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
             <div className="mb-8 text-center">
               <p className="text-red-500 text-xs font-semibold uppercase tracking-widest mb-2">Political Contact Lookup</p>
               <h1 className="text-gray-900 text-3xl sm:text-4xl font-bold leading-tight text-balance mb-4">
-                Who is contacting me politically?
+                {"Who's Contacting Me?"}
               </h1>
               <p className="text-gray-500 text-sm sm:text-base leading-relaxed text-pretty max-w-lg mx-auto">
                 Getting unwanted political texts or emails? Enter the phone number or email address

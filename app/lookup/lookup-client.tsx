@@ -771,7 +771,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
   }
 
   return (
-    <div style={{ backgroundColor: "#f9fafb", minHeight: "100vh" }}>
+    <div style={{ backgroundColor: "#f9fafb" }}>
       {showAuthGate && (
         <AuthGateModal
           defaultTab={authGateTab}

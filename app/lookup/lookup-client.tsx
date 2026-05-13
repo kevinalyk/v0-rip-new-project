@@ -133,12 +133,12 @@ function AuthGateModal({
       aria-modal="true"
       aria-labelledby="auth-gate-title"
     >
-      <div className="relative bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+      <div className="relative bg-gray-50 border border-gray-200 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
         {/* Close button */}
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 text-[#8b8fa8] hover:text-white transition-colors"
+          className="absolute top-4 right-4 text-gray-600 hover:text-gray-900 transition-colors"
           aria-label="Close"
         >
           <X className="w-4 h-4" />
@@ -147,25 +147,25 @@ function AuthGateModal({
         {/* Header */}
         <div className="px-6 pt-6 pb-4">
           <div className="flex items-center gap-2 mb-1">
-            <div className="bg-[#eb3847] rounded-lg p-1.5">
-              <Search className="w-4 h-4 text-white" />
+            <div className="bg-red-500 rounded-lg p-1.5">
+              <Search className="w-4 h-4 text-gray-900" />
             </div>
-            <span className="text-white font-semibold text-sm">Who&apos;s Contacting Me?</span>
+            <span className="text-gray-900 font-semibold text-sm">Who&apos;s Contacting Me?</span>
           </div>
-          <p id="auth-gate-title" className="text-[#c8cad8] text-sm leading-relaxed mt-2">
+          <p id="auth-gate-title" className="text-gray-700 text-sm leading-relaxed mt-2">
             Create a free account to search our database and save your search history.
           </p>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-[#2a2d3e] mx-6">
+        <div className="flex border-b border-gray-200 mx-6">
           <button
             type="button"
             onClick={() => switchTab("signup")}
             className={`flex-1 pb-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
               tab === "signup"
-                ? "text-[#eb3847] border-[#eb3847]"
-                : "text-[#8b8fa8] border-transparent hover:text-white"
+                ? "text-red-500 border-red-500"
+                : "text-gray-600 border-transparent hover:text-gray-900"
             }`}
           >
             Create Account
@@ -175,8 +175,8 @@ function AuthGateModal({
             onClick={() => switchTab("login")}
             className={`flex-1 pb-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
               tab === "login"
-                ? "text-[#eb3847] border-[#eb3847]"
-                : "text-[#8b8fa8] border-transparent hover:text-white"
+                ? "text-red-500 border-red-500"
+                : "text-gray-600 border-transparent hover:text-gray-900"
             }`}
           >
             Log In
@@ -187,7 +187,7 @@ function AuthGateModal({
         <form onSubmit={handleSubmit} className="px-6 py-5 flex flex-col gap-3">
           {/* Email */}
           <div>
-            <label htmlFor="gate-email" className="block text-[#8b8fa8] text-xs mb-1.5">
+            <label htmlFor="gate-email" className="block text-gray-600 text-xs mb-1.5">
               Email address
             </label>
             <input
@@ -197,13 +197,13 @@ function AuthGateModal({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-lg px-3 py-2.5 text-white placeholder-[#4a4d5e] text-sm focus:outline-none focus:border-[#eb3847] focus:ring-1 focus:ring-[#eb3847] transition-colors"
+              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors"
             />
           </div>
 
           {/* Password */}
           <div>
-            <label htmlFor="gate-password" className="block text-[#8b8fa8] text-xs mb-1.5">
+            <label htmlFor="gate-password" className="block text-gray-600 text-xs mb-1.5">
               Password
             </label>
             <div className="relative">
@@ -214,12 +214,12 @@ function AuthGateModal({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Min. 8 characters"
-                className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-lg px-3 py-2.5 pr-10 text-white placeholder-[#4a4d5e] text-sm focus:outline-none focus:border-[#eb3847] focus:ring-1 focus:ring-[#eb3847] transition-colors"
+                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 pr-10 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#4a4d5e] hover:text-[#8b8fa8] transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -230,7 +230,7 @@ function AuthGateModal({
           {/* Confirm password (signup only) */}
           {tab === "signup" && (
             <div>
-              <label htmlFor="gate-confirm" className="block text-[#8b8fa8] text-xs mb-1.5">
+              <label htmlFor="gate-confirm" className="block text-gray-600 text-xs mb-1.5">
                 Confirm password
               </label>
               <input
@@ -240,7 +240,7 @@ function AuthGateModal({
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Re-enter your password"
-                className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-lg px-3 py-2.5 text-white placeholder-[#4a4d5e] text-sm focus:outline-none focus:border-[#eb3847] focus:ring-1 focus:ring-[#eb3847] transition-colors"
+                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors"
               />
             </div>
           )}
@@ -257,7 +257,7 @@ function AuthGateModal({
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#eb3847] hover:bg-[#d42f3c] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg py-2.5 text-sm transition-colors flex items-center justify-center gap-2 mt-1"
+            className="w-full bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 font-semibold rounded-lg py-2.5 text-sm transition-colors flex items-center justify-center gap-2 mt-1"
           >
             {loading ? (
               <>
@@ -277,13 +277,13 @@ function AuthGateModal({
             )}
           </button>
 
-          <p className="text-[#4a4d5e] text-xs text-center">
+          <p className="text-gray-400 text-xs text-center">
             By signing up you agree to our{" "}
-            <a href="/terms" className="hover:text-[#8b8fa8] transition-colors underline">
+            <a href="/terms" className="hover:text-gray-600 transition-colors underline">
               Terms
             </a>{" "}
             and{" "}
-            <a href="/privacy" className="hover:text-[#8b8fa8] transition-colors underline">
+            <a href="/privacy" className="hover:text-gray-600 transition-colors underline">
               Privacy Policy
             </a>
             .
@@ -337,14 +337,14 @@ function AdModal({ onClose }: { onClose: () => void }) {
       aria-modal="true"
       aria-label="Advertisement"
     >
-      <div className="relative bg-[#1a1d2e] border border-[#2a2d3e] rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2d3e]">
-          <span className="text-[#8b8fa8] text-xs uppercase tracking-wider font-medium">
+      <div className="relative bg-gray-50 border border-gray-200 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+          <span className="text-gray-600 text-xs uppercase tracking-wider font-medium">
             Advertisement
           </span>
           <button
             onClick={onClose}
-            className="flex items-center gap-1.5 text-[#8b8fa8] hover:text-white transition-colors text-xs"
+            className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 transition-colors text-xs"
             aria-label="Close advertisement"
           >
             <X className="w-3.5 h-3.5" />
@@ -402,41 +402,41 @@ function EntityCard({ entity }: { entity: Entity }) {
       : entity.type
 
   return (
-    <div className="flex items-start gap-4 bg-[#1a1d2e] border border-[#2a2d3e] rounded-xl p-5 hover:border-[#eb3847]/40 transition-colors">
+    <div className="flex items-start gap-4 bg-gray-50 border border-gray-200 rounded-xl p-5 hover:border-red-500/40 transition-colors">
       <div className="flex-shrink-0">
         {entity.imageUrl ? (
           <img
             src={entity.imageUrl}
             alt={entity.name}
-            className="w-14 h-14 rounded-lg object-cover bg-[#0f1117]"
+            className="w-14 h-14 rounded-lg object-cover bg-gray-50"
           />
         ) : (
-          <div className="w-14 h-14 rounded-lg bg-[#0f1117] border border-[#2a2d3e] flex items-center justify-center">
-            <Users className="w-6 h-6 text-[#4a4d5e]" />
+          <div className="w-14 h-14 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center">
+            <Users className="w-6 h-6 text-gray-400" />
           </div>
         )}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-2 mb-1">
-          <h3 className="text-white font-semibold text-base leading-tight text-pretty">
+          <h3 className="text-gray-900 font-semibold text-base leading-tight text-pretty">
             {entity.name}
           </h3>
           <PartyBadge party={entity.party} />
         </div>
         <div className="flex flex-wrap items-center gap-3 mb-2">
-          <span className="text-[#8b8fa8] text-xs">{typeLabel}</span>
+          <span className="text-gray-600 text-xs">{typeLabel}</span>
           {entity.state && (
-            <span className="flex items-center gap-1 text-[#8b8fa8] text-xs">
+            <span className="flex items-center gap-1 text-gray-600 text-xs">
               <MapPin className="w-3 h-3" />
               {entity.state}
             </span>
           )}
           {entity.office && (
-            <span className="text-[#8b8fa8] text-xs truncate max-w-[200px]">{entity.office}</span>
+            <span className="text-gray-600 text-xs truncate max-w-[200px]">{entity.office}</span>
           )}
         </div>
         {entity.description && (
-          <p className="text-[#c8cad8] text-sm leading-relaxed mb-3 line-clamp-2">
+          <p className="text-gray-700 text-sm leading-relaxed mb-3 line-clamp-2">
             {entity.description}
           </p>
         )}
@@ -444,7 +444,7 @@ function EntityCard({ entity }: { entity: Entity }) {
           href={`/directory/${directorySlug}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-[#eb3847] hover:text-[#d42f3c] text-sm font-medium transition-colors"
+          className="inline-flex items-center gap-1.5 text-red-500 hover:text-[#d42f3c] text-sm font-medium transition-colors"
         >
           View in Directory
           <ExternalLink className="w-3.5 h-3.5" />
@@ -469,26 +469,26 @@ function SearchResults({
     <div className="mt-6">
       <div className="flex items-center gap-2 mb-4">
         {queryType === "phone" ? (
-          <Phone className="w-4 h-4 text-[#8b8fa8]" />
+          <Phone className="w-4 h-4 text-gray-600" />
         ) : (
-          <Mail className="w-4 h-4 text-[#8b8fa8]" />
+          <Mail className="w-4 h-4 text-gray-600" />
         )}
-        <p className="text-[#8b8fa8] text-sm">
-          Results for <span className="text-white font-medium">{query}</span>
+        <p className="text-gray-600 text-sm">
+          Results for <span className="text-gray-900 font-medium">{query}</span>
         </p>
       </div>
       {results.length === 0 ? (
-        <div className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-xl p-8 text-center">
-          <Search className="w-8 h-8 text-[#4a4d5e] mx-auto mb-3" />
-          <p className="text-white font-medium mb-1">No results found</p>
-          <p className="text-[#8b8fa8] text-sm leading-relaxed">
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-8 text-center">
+          <Search className="w-8 h-8 text-gray-400 mx-auto mb-3" />
+          <p className="text-gray-900 font-medium mb-1">No results found</p>
+          <p className="text-gray-600 text-sm leading-relaxed">
             We don&apos;t have any campaigns or political groups matching that{" "}
             {queryType === "phone" ? "phone number" : "email address"} in our database yet.
           </p>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          <p className="text-[#8b8fa8] text-xs">
+          <p className="text-gray-600 text-xs">
             {results.length} {results.length === 1 ? "group" : "groups"} found
           </p>
           {results.map((entity) => (
@@ -528,35 +528,51 @@ function HistoryPanel({
   }
 
   return (
-    <div className="mt-6 bg-[#1a1d2e] border border-[#2a2d3e] rounded-xl overflow-hidden">
+    <div className="mt-6 bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
       {/* Panel header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-[#2a2d3e]">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           className="flex items-center gap-2 hover:opacity-80 transition-opacity"
         >
-          <Clock className="w-4 h-4 text-[#8b8fa8]" />
-          <span className="text-[#c8cad8] text-sm font-medium">
+          <Clock className="w-4 h-4 text-gray-600" />
+          <span className="text-gray-700 text-sm font-medium">
             Recent searches ({history.length})
           </span>
           {open ? (
-            <ChevronUp className="w-3.5 h-3.5 text-[#8b8fa8]" />
+            <ChevronUp className="w-3.5 h-3.5 text-gray-600" />
           ) : (
-            <ChevronDown className="w-3.5 h-3.5 text-[#8b8fa8]" />
+            <ChevronDown className="w-3.5 h-3.5 text-gray-600" />
           )}
         </button>
         {open && (
-          <button
-            type="button"
-            onClick={onClearAll}
-            className="flex items-center gap-1.5 text-[#4a4d5e] hover:text-red-400 text-xs transition-colors"
-            aria-label="Clear all searches"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Clear all
-          </button>
-        )}
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                aria-label="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <button
+              type="submit"
+              disabled={isSearching || !query.trim()}
+              className="flex items-center gap-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-300 text-gray-900 px-5 py-2.5 rounded-lg font-medium transition-colors text-sm"
+            >
+              <Search className="w-4 h-4" />
+              Search
+            </button>
+          </form>
+          {!currentUser && (
+            <p className="text-red-600 text-xs mt-2">
+              <Link href="#" onClick={(e) => { e.preventDefault(); setAuthGateTab("signup"); setShowAuthGate(true) }} className="underline hover:no-underline">
+                Sign up or log in
+              </Link>
+              {" "}to search and save your results.
+            </p>
+          )}
       </div>
 
       {open && (
@@ -564,7 +580,7 @@ function HistoryPanel({
           {history.slice(0, 20).map((item) => (
             <div key={item.id}>
               {/* Row header */}
-              <div className="flex items-center hover:bg-[#1e2235] transition-colors group">
+              <div className="flex items-center hover:bg-gray-100 transition-colors group">
                 <button
                   type="button"
                   onClick={() => handleRowClick(item)}
@@ -572,25 +588,25 @@ function HistoryPanel({
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     {item.queryType === "phone" ? (
-                      <Phone className="w-3.5 h-3.5 text-[#4a4d5e] flex-shrink-0" />
+                      <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                     ) : (
-                      <Mail className="w-3.5 h-3.5 text-[#4a4d5e] flex-shrink-0" />
+                      <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                     )}
-                    <span className="text-[#c8cad8] text-sm truncate group-hover:text-white transition-colors">
+                    <span className="text-gray-700 text-sm truncate group-hover:text-gray-900 transition-colors">
                       {item.query}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0 ml-3">
-                    <span className="text-[#4a4d5e] text-xs">
+                    <span className="text-gray-400 text-xs">
                       {item.results.length} result{item.results.length !== 1 ? "s" : ""}
                     </span>
-                    <span className="text-[#4a4d5e] text-xs">
+                    <span className="text-gray-400 text-xs">
                       {new Date(item.createdAt).toLocaleDateString()}
                     </span>
                     {expandedId === item.id ? (
-                      <ChevronUp className="w-3.5 h-3.5 text-[#8b8fa8]" />
+                      <ChevronUp className="w-3.5 h-3.5 text-gray-600" />
                     ) : (
-                      <ChevronDown className="w-3.5 h-3.5 text-[#4a4d5e]" />
+                      <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
                     )}
                   </div>
                 </button>
@@ -598,7 +614,7 @@ function HistoryPanel({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onDeleteItem(item.id) }}
-                  className="px-4 py-3 text-[#4a4d5e] hover:text-red-400 transition-colors flex-shrink-0"
+                  className="px-4 py-3 text-gray-400 hover:text-red-400 transition-colors flex-shrink-0"
                   aria-label={`Delete search for ${item.query}`}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -609,7 +625,7 @@ function HistoryPanel({
               {expandedId === item.id && (
                 <div className="px-5 pb-4 bg-[#13151f]">
                   {item.results.length === 0 ? (
-                    <p className="text-[#4a4d5e] text-xs py-3">
+                    <p className="text-gray-400 text-xs py-3">
                       No results were found for this search.
                     </p>
                   ) : (
@@ -617,7 +633,7 @@ function HistoryPanel({
                       {item.results.map((entity) => (
                         <div
                           key={entity.id}
-                          className="flex items-center gap-3 bg-[#1a1d2e] border border-[#2a2d3e] rounded-lg px-4 py-3"
+                          className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3"
                         >
                           {entity.imageUrl ? (
                             <img
@@ -627,18 +643,18 @@ function HistoryPanel({
                             />
                           ) : (
                             <div className="w-8 h-8 rounded bg-[#2a2d3e] flex items-center justify-center flex-shrink-0">
-                              <Users className="w-4 h-4 text-[#4a4d5e]" />
+                              <Users className="w-4 h-4 text-gray-400" />
                             </div>
                           )}
                           <div className="min-w-0 flex-1">
-                            <p className="text-white text-sm font-medium truncate">{entity.name}</p>
-                            <p className="text-[#8b8fa8] text-xs capitalize">{entity.type}</p>
+                            <p className="text-gray-900 text-sm font-medium truncate">{entity.name}</p>
+                            <p className="text-gray-600 text-xs capitalize">{entity.type}</p>
                           </div>
                           <a
                             href={`/directory/${entity.id}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-[#eb3847] hover:text-[#d42f3c] text-xs font-medium flex items-center gap-1 flex-shrink-0 transition-colors"
+                            className="text-red-500 hover:text-[#d42f3c] text-xs font-medium flex items-center gap-1 flex-shrink-0 transition-colors"
                           >
                             View
                             <ExternalLink className="w-3 h-3" />
@@ -769,18 +785,17 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
           onClose={() => { setShowAuthGate(false); pendingSearchRef.current = null }}
         />
       )}
-      {/* Pop-up ad modal — COMMENTED OUT */}
-      {/* {showAdModal && <AdModal onClose={handleAdClose} />} */}
+      {showAdModal && <AdModal onClose={handleAdClose} />}
 
-      <div className="min-h-screen bg-[#0f1117] flex flex-col">
+      <div className="min-h-screen bg-white flex flex-col">
         {/* Navbar */}
-        <header className="border-b border-[#2a2d3e] bg-[#0f1117] sticky top-0 z-40">
+        <header className="border-b border-gray-200 bg-white sticky top-0 z-40">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="bg-[#eb3847] rounded-lg p-1.5">
-                <Search className="w-4 h-4 text-white" />
+              <div className="bg-red-500 rounded-lg p-1.5">
+                <Search className="w-4 h-4 text-gray-900" />
               </div>
-              <span className="text-white font-semibold text-sm leading-tight hidden sm:block">
+              <span className="text-gray-900 font-semibold text-sm leading-tight hidden sm:block">
                 Who&apos;s Contacting Me?
               </span>
             </div>
@@ -788,13 +803,13 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
             <div className="flex items-center gap-3">
               {currentUser ? (
                 <>
-                  <span className="text-[#8b8fa8] text-xs hidden sm:block truncate max-w-[200px]">
+                  <span className="text-gray-600 text-xs hidden sm:block truncate max-w-[200px]">
                     {currentUser}
                   </span>
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="flex items-center gap-1.5 text-[#8b8fa8] hover:text-white text-xs transition-colors"
+                    className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 text-xs transition-colors"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     Sign out
@@ -805,7 +820,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
                   <button
                     type="button"
                     onClick={() => { pendingSearchRef.current = null; setAuthGateTab("login"); setShowAuthGate(true) }}
-                    className="flex items-center gap-1.5 text-[#8b8fa8] hover:text-white text-xs transition-colors"
+                    className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 text-xs transition-colors"
                   >
                     <LogIn className="w-3.5 h-3.5" />
                     Log in
@@ -813,7 +828,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
                   <button
                     type="button"
                     onClick={() => { pendingSearchRef.current = null; setAuthGateTab("signup"); setShowAuthGate(true) }}
-                    className="flex items-center gap-1.5 bg-[#eb3847] hover:bg-[#d42f3c] text-white text-xs font-medium rounded-lg px-3 py-1.5 transition-colors"
+                    className="flex items-center gap-1.5 bg-red-500 hover:bg-red-600 text-gray-900 text-xs font-medium rounded-lg px-3 py-1.5 transition-colors"
                   >
                     <UserPlus className="w-3.5 h-3.5" />
                     Sign up
@@ -826,16 +841,16 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
 
         {/* Three-column layout */}
         <div className="flex flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 gap-6">
-          {/* Left sidebar — COMMENTED OUT */}
-          {/* <AdSidebar showAd={true} slot="5401962530" /> */}
+          {/* Left sidebar */}
+          <AdSidebar showAd={true} slot="5401962530" />
 
           <main className="flex-1 min-w-0">
             {/* Hero */}
             <div className="mb-8">
-              <h1 className="text-white text-2xl sm:text-3xl font-bold leading-tight text-balance mb-3">
+              <h1 className="text-gray-900 text-2xl sm:text-3xl font-bold leading-tight text-balance mb-3">
                 Who is contacting me?
               </h1>
-              <p className="text-[#8b8fa8] text-sm sm:text-base leading-relaxed text-pretty max-w-xl">
+              <p className="text-gray-600 text-sm sm:text-base leading-relaxed text-pretty max-w-xl">
                 A tool to help you find out what campaign or political group is sending you texts
                 and emails. Type in the number or email you are getting messages from below and
                 we will search our database for any group that uses it.
@@ -847,9 +862,9 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
               <div className="relative flex-1">
                 <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
                   {query.includes("@") ? (
-                    <Mail className="w-4 h-4 text-[#4a4d5e]" />
+                    <Mail className="w-4 h-4 text-gray-400" />
                   ) : (
-                    <Phone className="w-4 h-4 text-[#4a4d5e]" />
+                    <Phone className="w-4 h-4 text-gray-400" />
                   )}
                 </div>
                 <input
@@ -857,14 +872,13 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
                   value={query}
                   onChange={(e) => { setQuery(e.target.value); setError("") }}
                   placeholder="Enter a phone number or email address..."
-                  className="w-full bg-[#1a1d2e] border border-[#2a2d3e] rounded-xl pl-10 pr-4 py-3 text-white placeholder-[#4a4d5e] text-sm focus:outline-none focus:border-[#eb3847] focus:ring-1 focus:ring-[#eb3847] transition-colors"
-                  aria-label="Phone number or email address"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
                 />
               </div>
               <button
                 type="submit"
                 disabled={loading || query.trim().length < 3}
-                className="bg-[#eb3847] hover:bg-[#d42f3c] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl px-5 py-3 text-sm transition-colors flex-shrink-0 flex items-center gap-2"
+                className="bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 font-semibold rounded-xl px-5 py-3 text-sm transition-colors flex-shrink-0 flex items-center gap-2"
               >
                 {loading ? (
                   <span className="flex items-center gap-2">
@@ -882,11 +896,11 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
 
             {/* Guest nudge — shown below the form when not logged in */}
             {!currentUser && (
-              <p className="mt-2 text-[#4a4d5e] text-xs">
+              <p className="mt-2 text-gray-400 text-xs">
                 <button
                   type="button"
                   onClick={() => { pendingSearchRef.current = null; setShowAuthGate(true) }}
-                  className="text-[#eb3847] hover:underline"
+                  className="text-red-500 hover:underline"
                 >
                   Sign up or log in
                 </button>{" "}
@@ -929,7 +943,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
             {/* Empty state */}
             {results === null && history.length === 0 && (
               <div className="mt-10 text-center">
-                <div className="inline-flex items-center gap-2 text-[#4a4d5e] text-sm">
+                <div className="inline-flex items-center gap-2 text-gray-400 text-sm">
                   <Search className="w-4 h-4" />
                   <span>Enter a number or email above to get started</span>
                 </div>
@@ -937,27 +951,27 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
             )}
           </main>
 
-          {/* Right sidebar — COMMENTED OUT */}
-          {/* <AdSidebar showAd={true} slot="9922824720" /> */}
+          {/* Right sidebar */}
+          <AdSidebar showAd={true} slot="9922824720" />
         </div>
 
         {/* Bottom banner */}
-        <footer className="border-t border-[#2a2d3e] py-4">
+        <footer className="border-t border-gray-200 py-4">
           <AdBanner showAd={true} />
-          <p className="text-center text-[#4a4d5e] text-xs mt-3">
+          <p className="text-center text-gray-400 text-xs mt-3">
             Powered by{" "}
             <a
               href="https://app.rip-tool.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-[#8b8fa8] transition-colors"
+              className="hover:text-gray-600 transition-colors"
             >
               RIP Tool
             </a>{" "}
             &middot;{" "}
-            <a href="/terms" className="hover:text-[#8b8fa8] transition-colors">Terms</a>
+            <a href="/terms" className="hover:text-gray-600 transition-colors">Terms</a>
             {" "}&middot;{" "}
-            <a href="/privacy" className="hover:text-[#8b8fa8] transition-colors">Privacy</a>
+            <a href="/privacy" className="hover:text-gray-600 transition-colors">Privacy</a>
           </p>
         </footer>
       </div>

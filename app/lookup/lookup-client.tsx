@@ -53,11 +53,13 @@ interface HistoryItem {
 function AuthGateModal({
   onAuthenticated,
   onClose,
+  defaultTab = "signup",
 }: {
   onAuthenticated: (email: string) => void
   onClose: () => void
+  defaultTab?: "signup" | "login"
 }) {
-  const [tab, setTab] = useState<"signup" | "login">("signup")
+  const [tab, setTab] = useState<"signup" | "login">(defaultTab)
 
   // Shared fields
   const [email, setEmail] = useState("")
@@ -566,6 +568,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
   const [lastQueryType, setLastQueryType] = useState<"phone" | "email">("phone")
   const [showAdModal, setShowAdModal] = useState(false)
   const [showAuthGate, setShowAuthGate] = useState(false)
+  const [authGateTab, setAuthGateTab] = useState<"signup" | "login">("signup")
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const pendingSearchRef = useRef<string | null>(null)
@@ -613,9 +616,10 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
       return
     }
 
-    // Gate: if not logged in, show auth modal and remember the query
+    // Gate: if not logged in, show auth modal (signup tab) and remember the query
     if (!currentUser) {
       pendingSearchRef.current = q
+      setAuthGateTab("signup")
       setShowAuthGate(true)
       return
     }
@@ -658,6 +662,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
     <>
       {showAuthGate && (
         <AuthGateModal
+          defaultTab={authGateTab}
           onAuthenticated={handleAuthenticated}
           onClose={() => { setShowAuthGate(false); pendingSearchRef.current = null }}
         />
@@ -696,7 +701,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
                 <>
                   <button
                     type="button"
-                    onClick={() => { pendingSearchRef.current = null; setShowAuthGate(true) }}
+                    onClick={() => { pendingSearchRef.current = null; setAuthGateTab("login"); setShowAuthGate(true) }}
                     className="flex items-center gap-1.5 text-[#8b8fa8] hover:text-white text-xs transition-colors"
                   >
                     <LogIn className="w-3.5 h-3.5" />
@@ -704,7 +709,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
                   </button>
                   <button
                     type="button"
-                    onClick={() => { pendingSearchRef.current = null; setShowAuthGate(true) }}
+                    onClick={() => { pendingSearchRef.current = null; setAuthGateTab("signup"); setShowAuthGate(true) }}
                     className="flex items-center gap-1.5 bg-[#eb3847] hover:bg-[#d42f3c] text-white text-xs font-medium rounded-lg px-3 py-1.5 transition-colors"
                   >
                     <UserPlus className="w-3.5 h-3.5" />

@@ -384,10 +384,17 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                 />
                 <NavItem
                   icon={<Mail size={18} />}
-                  label="Personal"
-                  active={pathname.includes("/ci/personal")}
+                  label="Personal Email"
+                  active={pathname.includes("/ci/personal") && !pathname.includes("/ci/personal-numbers")}
                   collapsed={false}
                   onClick={() => navigate(`/${getClientSlug()}/ci/personal`)}
+                />
+                <NavItem
+                  icon={<Smartphone size={18} />}
+                  label="Personal Numbers"
+                  active={pathname.includes("/ci/personal-numbers")}
+                  collapsed={false}
+                  onClick={() => navigate(`/${getClientSlug()}/ci/personal-numbers`)}
                 />
               </div>
             )}

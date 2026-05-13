@@ -781,7 +781,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
       )}
       {showAdModal && <AdModal onClose={handleAdClose} />}
 
-      <div className="bg-gray-50 flex flex-col" style={{ backgroundColor: "#f9fafb" }}>
+      <div className="bg-gray-50 flex flex-col min-h-screen" style={{ backgroundColor: "#f9fafb" }}>
         {/* Navbar */}
         <header className="border-b border-gray-200 bg-gray-50 sticky top-0 z-40">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
@@ -834,7 +834,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
         </header>
 
         {/* Three-column layout */}
-        <div className="flex flex-1 max-w-full mx-auto w-full px-2 sm:px-4 py-4 gap-2 sm:gap-4 justify-center items-start">
+        <div className="flex flex-grow max-w-full mx-auto w-full px-2 sm:px-4 py-4 gap-2 sm:gap-4 justify-center items-start">
           {/* Left sidebar */}
           <AdSidebar showAd={true} slot="5401962530" />
 

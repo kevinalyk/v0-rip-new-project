@@ -950,10 +950,12 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
           <AdSidebar showAd={true} slot="9922824720" />
         </div>
 
-        {/* Bottom banner + footer links inside the main flow */}
-        <div className="border-t border-gray-200 pt-2 pb-3">
-          <AdBanner showAd={true} />
-          <p className="text-center text-gray-400 text-xs mt-2">
+        {/* Bottom banner above the footer line */}
+        <AdBanner showAd={true} />
+
+        {/* Footer links below the line */}
+        <div className="border-t border-gray-200 py-2">
+          <p className="text-center text-gray-400 text-xs">
             Powered by{" "}
             <a
               href="https://app.rip-tool.com"

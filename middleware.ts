@@ -28,7 +28,11 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/api/announcements") ||
     request.nextUrl.pathname.startsWith("/api/public/") ||
     request.nextUrl.pathname === "/directory" ||
-    request.nextUrl.pathname.startsWith("/directory/")
+    request.nextUrl.pathname.startsWith("/directory/") ||
+    // Who's Contacting Me? — public lookup tool (has its own auth)
+    request.nextUrl.pathname === "/lookup" ||
+    request.nextUrl.pathname.startsWith("/lookup/") ||
+    request.nextUrl.pathname.startsWith("/api/lookup/")
   ) {
     return NextResponse.next()
   }

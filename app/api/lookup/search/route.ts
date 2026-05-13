@@ -4,15 +4,37 @@ import { neon } from "@neondatabase/serverless"
 
 const sql = neon(process.env.DATABASE_URL!)
 
-function normalizePhone(raw: string): string {
-  // Strip everything except digits and leading +
-  const stripped = raw.replace(/[^\d+]/g, "")
-  // If it doesn't start with + assume US number
-  if (!stripped.startsWith("+")) {
-    const digits = stripped.replace(/\D/g, "")
-    return digits.length === 10 ? `+1${digits}` : `+${digits}`
+/**
+ * Returns an array of candidate values to match against senderPhone.
+ * We try multiple forms because the DB may store short codes (5-6 digits),
+ * full E.164 (+1XXXXXXXXXX), or raw 10-digit strings.
+ */
+function phoneVariants(raw: string): string[] {
+  const digitsOnly = raw.replace(/\D/g, "")
+  const candidates = new Set<string>()
+
+  // Always try exactly what the user typed (trimmed) and digits-only
+  candidates.add(raw.trim())
+  candidates.add(digitsOnly)
+
+  const len = digitsOnly.length
+  if (len === 5 || len === 6) {
+    // Short code — no country prefix, store as-is
+    // already added above
+  } else if (len === 10) {
+    // US 10-digit — add E.164 variant
+    candidates.add(`+1${digitsOnly}`)
+  } else if (len === 11 && digitsOnly.startsWith("1")) {
+    // US 11-digit with country code
+    candidates.add(`+${digitsOnly}`)
+    candidates.add(digitsOnly.slice(1)) // without country code
+    candidates.add(`+1${digitsOnly.slice(1)}`)
+  } else if (len > 6) {
+    // International — try with leading +
+    candidates.add(`+${digitsOnly}`)
   }
-  return stripped
+
+  return Array.from(candidates)
 }
 
 function extractDomain(email: string): string {
@@ -45,11 +67,11 @@ export async function POST(request: NextRequest) {
     let matchedEntityIds: string[] = []
 
     if (queryType === "phone") {
-      const normalized = normalizePhone(q)
+      const variants = phoneVariants(q)
       const rows = await sql`
         SELECT DISTINCT "entityId"
         FROM "CiEntityMapping"
-        WHERE "senderPhone" = ${normalized}
+        WHERE "senderPhone" = ANY(${variants})
       `
       matchedEntityIds = rows.map((r: any) => r.entityId)
     } else {

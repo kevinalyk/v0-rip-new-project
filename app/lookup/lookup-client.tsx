@@ -117,7 +117,7 @@ function AuthGateModal({
         return
       }
 
-      onAuthenticated(data.email)
+      onAuthenticated(data.user?.email ?? email)
     } catch {
       setError("Network error. Please try again.")
     } finally {

@@ -315,19 +315,19 @@ function AdModal({ onClose }: { onClose: () => void }) {
     function tryPush() {
       if (adInitialized.current) return
       try {
-        const ads = (window as any).adsbygoogle
-        if (!ads || typeof ads.push !== "function") {
-          setTimeout(tryPush, 200)
+        const adsbyg = (window as any).adsbygoogle
+        if (!adsbyg || !adsbyg.loaded) {
+          setTimeout(tryPush, 300)
           return
         }
         adInitialized.current = true
-        ads.push({})
+        adsbyg.push({})
       } catch {
         // safe to ignore
       }
     }
 
-    tryPush()
+    setTimeout(tryPush, 100)
   }, [])
 
   return (
@@ -354,7 +354,7 @@ function AdModal({ onClose }: { onClose: () => void }) {
         <div className="p-4" aria-label="Advertisement">
           <ins
             className="adsbygoogle"
-            style={{ display: "block", width: "100%", minHeight: "300px" }}
+            style={{ display: "block" }}
             data-ad-client="ca-pub-5715074898343065"
             data-ad-slot="1824842850"
             data-ad-format="auto"

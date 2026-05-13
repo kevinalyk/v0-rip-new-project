@@ -7,8 +7,8 @@ interface AdBannerProps {
 }
 
 /**
- * Renders a Google AdSense top banner when showAd is true.
- * showAd is resolved server-side: true for unauthenticated visitors and free-plan users.
+ * Renders a Google AdSense banner ad (RIP Tool - Banner, slot 7325494279).
+ * showAd is resolved server-side: true for unauthenticated / free-plan users.
  */
 export default function AdBanner({ showAd }: AdBannerProps) {
   const pushed = useRef(false)
@@ -19,31 +19,32 @@ export default function AdBanner({ showAd }: AdBannerProps) {
     function tryPush() {
       if (pushed.current) return
       try {
-        const ads = (window as any).adsbygoogle
-        if (!ads || typeof ads.push !== "function") {
-          setTimeout(tryPush, 200)
+        const adsbyg = (window as any).adsbygoogle
+        if (!adsbyg || !adsbyg.loaded) {
+          setTimeout(tryPush, 300)
           return
         }
         pushed.current = true
-        ads.push({})
+        adsbyg.push({})
       } catch {
         // safe to ignore
       }
     }
 
-    tryPush()
+    setTimeout(tryPush, 100)
   }, [showAd])
 
   if (!showAd) return null
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-2" aria-label="Advertisement">
+    <div className="w-full py-2" aria-label="Advertisement">
       <ins
         className="adsbygoogle"
-        style={{ display: "block", minHeight: "90px", maxHeight: "120px", overflow: "hidden" }}
+        style={{ display: "block" }}
         data-ad-client="ca-pub-5715074898343065"
         data-ad-slot="7325494279"
-        data-ad-format="horizontal"
+        data-ad-format="auto"
+        data-full-width-responsive="true"
       />
     </div>
   )

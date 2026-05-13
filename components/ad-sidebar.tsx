@@ -8,8 +8,9 @@ interface AdSidebarProps {
 }
 
 /**
- * Renders a Google AdSense vertical sidebar ad on entity profile pages.
- * Only shown to unauthenticated visitors (showAd resolved server-side).
+ * Renders a Google AdSense vertical sidebar ad.
+ * slot defaults to "5401962530" (RIP Tool - Vertical).
+ * Pass slot="9922824720" for the "RIP Tool - Other Side Bar".
  */
 export default function AdSidebar({ showAd, slot = "5401962530" }: AdSidebarProps) {
   const pushed = useRef(false)
@@ -20,20 +21,21 @@ export default function AdSidebar({ showAd, slot = "5401962530" }: AdSidebarProp
     function tryPush() {
       if (pushed.current) return
       try {
-        const ads = (window as any).adsbygoogle
-        // Ensure the script has loaded and initialised its array
-        if (!ads || typeof ads.push !== "function") {
-          setTimeout(tryPush, 200)
+        const adsbyg = (window as any).adsbygoogle
+        // Wait until the real AdSense library has loaded (it sets .loaded = true)
+        if (!adsbyg || !adsbyg.loaded) {
+          setTimeout(tryPush, 300)
           return
         }
         pushed.current = true
-        ads.push({})
+        adsbyg.push({})
       } catch {
         // safe to ignore
       }
     }
 
-    tryPush()
+    // Give the script a moment to initialise before first attempt
+    setTimeout(tryPush, 100)
   }, [showAd])
 
   if (!showAd) return null
@@ -46,11 +48,11 @@ export default function AdSidebar({ showAd, slot = "5401962530" }: AdSidebarProp
     >
       <ins
         className="adsbygoogle"
-        style={{ display: "block", width: "160px", minHeight: "600px" }}
+        style={{ display: "block" }}
         data-ad-client="ca-pub-5715074898343065"
         data-ad-slot={slot}
         data-ad-format="auto"
-        data-full-width-responsive="false"
+        data-full-width-responsive="true"
       />
     </div>
   )

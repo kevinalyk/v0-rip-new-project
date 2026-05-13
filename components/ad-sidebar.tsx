@@ -7,40 +7,27 @@ interface AdSidebarProps {
   slot?: string
 }
 
-/**
- * Renders a Google AdSense vertical sidebar ad.
- * slot defaults to "5401962530" (RIP Tool - Vertical).
- * Pass slot="9922824720" for the "RIP Tool - Other Side Bar".
- */
 export default function AdSidebar({ showAd, slot = "5401962530" }: AdSidebarProps) {
   const pushed = useRef(false)
 
   useEffect(() => {
-    console.log("[v0] AdSidebar mounted, showAd=", showAd, "slot=", slot)
-    if (!showAd || pushed.current) {
-      console.log("[v0] AdSidebar returning early: showAd=", showAd, "pushed=", pushed.current)
-      return
-    }
+    if (!showAd || pushed.current) return
 
     function tryPush() {
       if (pushed.current) return
       try {
         const adsbyg = (window as any).adsbygoogle
-        console.log("[v0] tryPush: adsbyg=", !!adsbyg, "loaded=", adsbyg?.loaded)
         if (!adsbyg || !adsbyg.loaded) {
-          console.log("[v0] AdSense not ready, retrying in 300ms")
           setTimeout(tryPush, 300)
           return
         }
         pushed.current = true
-        console.log("[v0] Pushing ad for slot", slot)
         adsbyg.push({})
-      } catch (e) {
-        console.error("[v0] AdSidebar error:", e)
+      } catch {
+        // safe to ignore
       }
     }
 
-    console.log("[v0] AdSidebar scheduling first tryPush")
     setTimeout(tryPush, 100)
   }, [showAd, slot])
 
@@ -48,13 +35,13 @@ export default function AdSidebar({ showAd, slot = "5401962530" }: AdSidebarProp
 
   return (
     <div
-      className="hidden lg:flex flex-col items-start flex-shrink-0"
-      style={{ width: "160px", minWidth: "160px", paddingTop: "24px" }}
+      className="flex-shrink-0 overflow-hidden"
+      style={{ width: "120px", minWidth: "120px" }}
       aria-label="Advertisement"
     >
       <ins
         className="adsbygoogle"
-        style={{ display: "block" }}
+        style={{ display: "block", width: "120px" }}
         data-ad-client="ca-pub-5715074898343065"
         data-ad-slot={slot}
         data-ad-format="auto"

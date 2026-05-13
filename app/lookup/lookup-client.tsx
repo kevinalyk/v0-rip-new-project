@@ -951,9 +951,9 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
         </div>
 
         {/* Bottom banner */}
-        <footer className="border-t border-gray-200 py-4">
+        <footer className="border-t border-gray-200 pt-2 pb-3">
           <AdBanner showAd={true} />
-          <p className="text-center text-gray-400 text-xs mt-3">
+          <p className="text-center text-gray-400 text-xs mt-2">
             Powered by{" "}
             <a
               href="https://app.rip-tool.com"

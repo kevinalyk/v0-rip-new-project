@@ -11,16 +11,15 @@ interface AdBannerProps {
  * showAd is resolved server-side: true for unauthenticated visitors and free-plan users.
  */
 export default function AdBanner({ showAd }: AdBannerProps) {
-  const initialized = useRef(false)
+  const adRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
-    if (!showAd || initialized.current) return
-    initialized.current = true
+    if (!showAd) return
+    if (adRef.current && adRef.current.getAttribute("data-adsbygoogle-status")) return
     try {
-      // Push the ad unit after the component mounts
       ;(window as any).adsbygoogle = (window as any).adsbygoogle || []
       ;(window as any).adsbygoogle.push({})
-    } catch (e) {
+    } catch {
       // AdSense not loaded yet — safe to ignore
     }
   }, [showAd])
@@ -30,8 +29,9 @@ export default function AdBanner({ showAd }: AdBannerProps) {
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-2" aria-label="Advertisement">
       <ins
+        ref={(el) => { adRef.current = el }}
         className="adsbygoogle"
-        style={{ display: "block", maxHeight: "120px", overflow: "hidden" }}
+        style={{ display: "block", minHeight: "90px", maxHeight: "120px", overflow: "hidden" }}
         data-ad-client="ca-pub-5715074898343065"
         data-ad-slot="7325494279"
         data-ad-format="horizontal"

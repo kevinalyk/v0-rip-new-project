@@ -740,3 +740,31 @@ model IpSenderMapping {
   @@index([friendlyName])
   @@index([rdapChecked])
 }
+
+// ─── Who's Contacting Me? — public lookup tool ────────────────────────────────
+
+model LookupUser {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  passwordHash String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  searches     LookupSearch[]
+
+  @@index([email])
+}
+
+model LookupSearch {
+  id        String   @id @default(cuid())
+  userId    String
+  query     String   // The phone number or email that was searched
+  queryType String   // "phone" | "email"
+  results   Json     // Snapshot of the matched entities at search time
+  createdAt DateTime @default(now())
+
+  user      LookupUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([query])
+}

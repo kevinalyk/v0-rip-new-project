@@ -326,7 +326,10 @@ export async function getAllEntitiesWithCounts(options?: {
     const skip = (page - 1) * pageSize
 
     // Build where clause for filtering
-    const where: any = {}
+    const where: any = {
+      // Never show data brokers in the public/user-facing directory
+      type: { not: "data_broker" },
+    }
 
     if (options?.party && options.party !== "all") {
       if (options.party === "unknown") {
@@ -348,6 +351,8 @@ export async function getAllEntitiesWithCounts(options?: {
     }
 
     if (options?.type && options.type !== "all") {
+      // Override the data_broker exclusion with the specific type filter
+      // (data_broker type can still be explicitly requested if needed)
       where.type = options.type
     }
 

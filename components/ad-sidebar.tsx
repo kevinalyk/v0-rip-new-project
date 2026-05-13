@@ -16,27 +16,33 @@ export default function AdSidebar({ showAd, slot = "5401962530" }: AdSidebarProp
   const pushed = useRef(false)
 
   useEffect(() => {
-    if (!showAd || pushed.current) return
+    console.log("[v0] AdSidebar mounted, showAd=", showAd, "slot=", slot)
+    if (!showAd || pushed.current) {
+      console.log("[v0] AdSidebar returning early: showAd=", showAd, "pushed=", pushed.current)
+      return
+    }
 
     function tryPush() {
       if (pushed.current) return
       try {
         const adsbyg = (window as any).adsbygoogle
-        // Wait until the real AdSense library has loaded (it sets .loaded = true)
+        console.log("[v0] tryPush: adsbyg=", !!adsbyg, "loaded=", adsbyg?.loaded)
         if (!adsbyg || !adsbyg.loaded) {
+          console.log("[v0] AdSense not ready, retrying in 300ms")
           setTimeout(tryPush, 300)
           return
         }
         pushed.current = true
+        console.log("[v0] Pushing ad for slot", slot)
         adsbyg.push({})
-      } catch {
-        // safe to ignore
+      } catch (e) {
+        console.error("[v0] AdSidebar error:", e)
       }
     }
 
-    // Give the script a moment to initialise before first attempt
+    console.log("[v0] AdSidebar scheduling first tryPush")
     setTimeout(tryPush, 100)
-  }, [showAd])
+  }, [showAd, slot])
 
   if (!showAd) return null
 

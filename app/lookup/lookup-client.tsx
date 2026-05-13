@@ -781,7 +781,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
       )}
       {showAdModal && <AdModal onClose={handleAdClose} />}
 
-      <div className="min-h-screen bg-gray-50 flex flex-col" style={{ backgroundColor: "#f9fafb" }}>
+      <div className="bg-gray-50 flex flex-col" style={{ backgroundColor: "#f9fafb" }}>
         {/* Navbar */}
         <header className="border-b border-gray-200 bg-gray-50 sticky top-0 z-40">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">

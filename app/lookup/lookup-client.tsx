@@ -815,7 +815,8 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
 
         {/* Three-column layout */}
         <div className="flex flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 gap-6">
-          <AdSidebar showAd={true} />
+          {/* Left sidebar — RIP Tool Sidebar slot */}
+          <AdSidebar showAd={true} slot="5401962530" />
 
           <main className="flex-1 min-w-0">
             {/* Hero */}
@@ -925,7 +926,8 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
             )}
           </main>
 
-          <AdSidebar showAd={true} />
+          {/* Right sidebar — RIP Tool Other Side Bar slot */}
+          <AdSidebar showAd={true} slot="9922824720" />
         </div>
 
         {/* Bottom banner */}

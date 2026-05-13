@@ -46,6 +46,7 @@ interface HistoryItem {
 
 function AdModal({ onClose }: { onClose: () => void }) {
   const [countdown, setCountdown] = useState(5)
+  const adInitialized = useRef(false)
 
   useEffect(() => {
     if (countdown <= 0) {
@@ -55,6 +56,18 @@ function AdModal({ onClose }: { onClose: () => void }) {
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000)
     return () => clearTimeout(t)
   }, [countdown, onClose])
+
+  // Push the ad unit once the modal mounts
+  useEffect(() => {
+    if (adInitialized.current) return
+    adInitialized.current = true
+    try {
+      ;(window as any).adsbygoogle = (window as any).adsbygoogle || []
+      ;(window as any).adsbygoogle.push({})
+    } catch {
+      // AdSense not loaded — safe to ignore
+    }
+  }, [])
 
   return (
     <div
@@ -79,14 +92,15 @@ function AdModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        {/* Ad unit */}
-        <div className="p-4 flex items-center justify-center min-h-[250px]" aria-label="Advertisement">
+        {/* Ad unit — RIP Tool Pop Up slot (square / auto format) */}
+        <div className="p-4 flex items-center justify-center min-h-[300px]" aria-label="Advertisement">
           <ins
             className="adsbygoogle"
-            style={{ display: "block", width: "100%", minHeight: "200px" }}
+            style={{ display: "block" }}
             data-ad-client="ca-pub-5715074898343065"
-            data-ad-slot="7325494279"
-            data-ad-format="rectangle"
+            data-ad-slot="1824842850"
+            data-ad-format="auto"
+            data-full-width-responsive="true"
           />
         </div>
       </div>

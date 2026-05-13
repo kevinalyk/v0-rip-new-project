@@ -338,10 +338,10 @@ function AdModal({ onClose }: { onClose: () => void }) {
             {countdown > 0 ? `Close in ${countdown}s` : "Close"}
           </button>
         </div>
-        <div className="p-4 flex items-center justify-center min-h-[300px]" aria-label="Advertisement">
+        <div className="p-4" aria-label="Advertisement">
           <ins
             className="adsbygoogle"
-            style={{ display: "block" }}
+            style={{ display: "block", width: "100%", minHeight: "300px" }}
             data-ad-client="ca-pub-5715074898343065"
             data-ad-slot="1824842850"
             data-ad-format="auto"
@@ -441,7 +441,7 @@ function EntityCard({ entity }: { entity: Entity }) {
   )
 }
 
-// ─── Results section ────────────────────────────────────────────────────────────
+// ─── Results section ──���─────────────────────────────────────────────────────────
 
 function SearchResults({
   query,

@@ -20,6 +20,7 @@ import {
   EyeOff,
   LogIn,
   UserPlus,
+  Trash2,
 } from "lucide-react"
 import AdBanner from "@/components/ad-banner"
 import AdSidebar from "@/components/ad-sidebar"
@@ -493,61 +494,152 @@ function SearchResults({
 
 function HistoryPanel({
   history,
-  onRerun,
+  onViewItem,
+  onDeleteItem,
+  onClearAll,
 }: {
   history: HistoryItem[]
-  onRerun: (query: string) => void
+  onViewItem: (item: HistoryItem) => void
+  onDeleteItem: (id: string) => void
+  onClearAll: () => void
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
   if (history.length === 0) return null
+
+  function handleRowClick(item: HistoryItem) {
+    if (expandedId === item.id) {
+      setExpandedId(null)
+    } else {
+      setExpandedId(item.id)
+      onViewItem(item) // triggers ad modal in parent
+    }
+  }
 
   return (
     <div className="mt-6 bg-[#1a1d2e] border border-[#2a2d3e] rounded-xl overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-[#1e2235] transition-colors"
-      >
-        <div className="flex items-center gap-2">
+      {/* Panel header */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-[#2a2d3e]">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+        >
           <Clock className="w-4 h-4 text-[#8b8fa8]" />
           <span className="text-[#c8cad8] text-sm font-medium">
             Recent searches ({history.length})
           </span>
-        </div>
-        {open ? (
-          <ChevronUp className="w-4 h-4 text-[#8b8fa8]" />
-        ) : (
-          <ChevronDown className="w-4 h-4 text-[#8b8fa8]" />
+          {open ? (
+            <ChevronUp className="w-3.5 h-3.5 text-[#8b8fa8]" />
+          ) : (
+            <ChevronDown className="w-3.5 h-3.5 text-[#8b8fa8]" />
+          )}
+        </button>
+        {open && (
+          <button
+            type="button"
+            onClick={onClearAll}
+            className="flex items-center gap-1.5 text-[#4a4d5e] hover:text-red-400 text-xs transition-colors"
+            aria-label="Clear all searches"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Clear all
+          </button>
         )}
-      </button>
+      </div>
+
       {open && (
-        <div className="border-t border-[#2a2d3e] divide-y divide-[#2a2d3e]">
+        <div className="divide-y divide-[#2a2d3e]">
           {history.slice(0, 20).map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onRerun(item.query)}
-              className="w-full flex items-center justify-between px-5 py-3 hover:bg-[#1e2235] transition-colors group text-left"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                {item.queryType === "phone" ? (
-                  <Phone className="w-3.5 h-3.5 text-[#4a4d5e] flex-shrink-0" />
-                ) : (
-                  <Mail className="w-3.5 h-3.5 text-[#4a4d5e] flex-shrink-0" />
-                )}
-                <span className="text-[#c8cad8] text-sm truncate group-hover:text-white transition-colors">
-                  {item.query}
-                </span>
+            <div key={item.id}>
+              {/* Row header */}
+              <div className="flex items-center hover:bg-[#1e2235] transition-colors group">
+                <button
+                  type="button"
+                  onClick={() => handleRowClick(item)}
+                  className="flex-1 flex items-center justify-between px-5 py-3 text-left"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {item.queryType === "phone" ? (
+                      <Phone className="w-3.5 h-3.5 text-[#4a4d5e] flex-shrink-0" />
+                    ) : (
+                      <Mail className="w-3.5 h-3.5 text-[#4a4d5e] flex-shrink-0" />
+                    )}
+                    <span className="text-[#c8cad8] text-sm truncate group-hover:text-white transition-colors">
+                      {item.query}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+                    <span className="text-[#4a4d5e] text-xs">
+                      {item.results.length} result{item.results.length !== 1 ? "s" : ""}
+                    </span>
+                    <span className="text-[#4a4d5e] text-xs">
+                      {new Date(item.createdAt).toLocaleDateString()}
+                    </span>
+                    {expandedId === item.id ? (
+                      <ChevronUp className="w-3.5 h-3.5 text-[#8b8fa8]" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5 text-[#4a4d5e]" />
+                    )}
+                  </div>
+                </button>
+                {/* Per-row delete */}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onDeleteItem(item.id) }}
+                  className="px-4 py-3 text-[#4a4d5e] hover:text-red-400 transition-colors flex-shrink-0"
+                  aria-label={`Delete search for ${item.query}`}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
-              <div className="flex items-center gap-3 flex-shrink-0 ml-3">
-                <span className="text-[#4a4d5e] text-xs">
-                  {item.results.length} result{item.results.length !== 1 ? "s" : ""}
-                </span>
-                <span className="text-[#4a4d5e] text-xs">
-                  {new Date(item.createdAt).toLocaleDateString()}
-                </span>
-              </div>
-            </button>
+
+              {/* Expanded results */}
+              {expandedId === item.id && (
+                <div className="px-5 pb-4 bg-[#13151f]">
+                  {item.results.length === 0 ? (
+                    <p className="text-[#4a4d5e] text-xs py-3">
+                      No results were found for this search.
+                    </p>
+                  ) : (
+                    <div className="pt-3 space-y-2">
+                      {item.results.map((entity) => (
+                        <div
+                          key={entity.id}
+                          className="flex items-center gap-3 bg-[#1a1d2e] border border-[#2a2d3e] rounded-lg px-4 py-3"
+                        >
+                          {entity.imageUrl ? (
+                            <img
+                              src={entity.imageUrl}
+                              alt={entity.name}
+                              className="w-8 h-8 rounded object-cover flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded bg-[#2a2d3e] flex items-center justify-center flex-shrink-0">
+                              <Users className="w-4 h-4 text-[#4a4d5e]" />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="text-white text-sm font-medium truncate">{entity.name}</p>
+                            <p className="text-[#8b8fa8] text-xs capitalize">{entity.type}</p>
+                          </div>
+                          <a
+                            href={`/directory/${entity.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#eb3847] hover:text-[#d42f3c] text-xs font-medium flex items-center gap-1 flex-shrink-0 transition-colors"
+                          >
+                            View
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -807,10 +899,17 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
             {currentUser && historyLoaded && (
               <HistoryPanel
                 history={history}
-                onRerun={(q) => {
-                  setQuery(q)
-                  pendingSearchRef.current = q
+                onViewItem={(item) => {
+                  // Show the ad modal when a user expands a past result
                   setShowAdModal(true)
+                }}
+                onDeleteItem={async (id) => {
+                  await fetch(`/api/lookup/history?id=${id}`, { method: "DELETE" })
+                  setHistory((prev) => prev.filter((h) => h.id !== id))
+                }}
+                onClearAll={async () => {
+                  await fetch("/api/lookup/history", { method: "DELETE" })
+                  setHistory([])
                 }}
               />
             )}

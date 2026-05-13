@@ -311,13 +311,23 @@ function AdModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     if (adInitialized.current) return
-    adInitialized.current = true
-    try {
-      ;(window as any).adsbygoogle = (window as any).adsbygoogle || []
-      ;(window as any).adsbygoogle.push({})
-    } catch {
-      // AdSense not loaded — safe to ignore
+
+    function tryPush() {
+      if (adInitialized.current) return
+      try {
+        const ads = (window as any).adsbygoogle
+        if (!ads || typeof ads.push !== "function") {
+          setTimeout(tryPush, 200)
+          return
+        }
+        adInitialized.current = true
+        ads.push({})
+      } catch {
+        // safe to ignore
+      }
     }
+
+    tryPush()
   }, [])
 
   return (

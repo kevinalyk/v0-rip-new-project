@@ -455,23 +455,7 @@ export function CiDirectoryContent({
               )}
             </>
           )}
-          {/* RIP-only "New Campaigns" pill — hidden for all other clients and unauthenticated visitors.
-              The /directory/new-campaigns page itself is publicly accessible; this just controls
-              who sees the discovery entry point. */}
-          {clientSlug === "rip" && (
-            <Link
-              href="/directory/new-campaigns"
-              className="group inline-flex items-center gap-1.5 rounded-full border border-[#EB3847]/40 bg-[#EB3847]/10 px-3 py-1 text-xs font-medium text-foreground transition-all hover:border-[#EB3847]/70 hover:bg-[#EB3847]/15"
-            >
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#EB3847] opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-[#EB3847]" />
-              </span>
-              <Sparkles className="h-3 w-3 text-[#EB3847]" />
-              <span>New Campaigns</span>
-              <ArrowRight className="h-3 w-3 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
-            </Link>
-          )}
+
           {selectedMapState && (
             <div className="flex items-center gap-1.5 md:ml-2">
               <Badge variant="secondary" className="flex items-center gap-1.5 px-3 py-1 text-sm">

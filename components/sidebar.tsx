@@ -40,6 +40,7 @@ import {
   Key,
   Activity,
   Smartphone,
+  Rocket,
 } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { useTheme } from "next-themes"
@@ -79,6 +80,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     ci: false,
+    radar: false,
     reports: false,
     inbox: false,
     admin: false,
@@ -166,6 +168,8 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
       setExpandedSections((prev) => ({ ...prev, account: true }))
     } else if (pathname.includes("/ci/")) {
       setExpandedSections((prev) => ({ ...prev, ci: true }))
+    } else if (pathname === "/directory" || pathname.startsWith("/directory/")) {
+      setExpandedSections((prev) => ({ ...prev, radar: true }))
     } else if (pathname.includes("/reports/")) {
       setExpandedSections((prev) => ({ ...prev, reports: true }))
     } else if (pathname.includes("/inbox/")) {
@@ -357,7 +361,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
           <nav className="space-y-1 px-2">
             <NavSection
               icon={<Lightbulb size={20} />}
-              label="Competitive Intelligence"
+              label="Content"
               collapsed={collapsed}
               expanded={expandedSections.ci}
               onToggle={() => toggleSection("ci")}
@@ -380,26 +384,37 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                 />
                 <NavItem
                   icon={<Mail size={18} />}
-                  label="Personal Email"
-                  active={pathname.includes("/ci/personal") && !pathname.includes("/ci/personal-numbers")}
+                  label="Personal"
+                  active={pathname.includes("/ci/personal")}
                   collapsed={false}
                   onClick={() => navigate(`/${getClientSlug()}/ci/personal`)}
                 />
-                <NavItem
-                  icon={<Smartphone size={18} />}
-                  label="Personal Numbers"
-                  active={pathname.includes("/ci/personal-numbers")}
-                  collapsed={false}
-                  onClick={() => navigate(`/${getClientSlug()}/ci/personal-numbers`)}
-                />
+              </div>
+            )}
+
+            <NavSection
+              icon={<ScanSearch size={20} />}
+              label="Radar"
+              collapsed={collapsed}
+              expanded={expandedSections.radar}
+              onToggle={() => toggleSection("radar")}
+            />
+            {expandedSections.radar && !collapsed && (
+              <div className="ml-4 space-y-1">
                 <NavItem
                   icon={<Building2 size={18} />}
                   label="Directory"
-                  active={pathname === "/directory" || pathname.startsWith("/directory/")}
+                  active={pathname === "/directory" || (pathname.startsWith("/directory/") && !pathname.includes("/directory/new-campaigns"))}
                   collapsed={false}
                   onClick={() => navigate("/directory")}
                 />
-
+                <NavItem
+                  icon={<Rocket size={18} />}
+                  label="Launch Tracker"
+                  active={pathname.includes("/directory/new-campaigns")}
+                  collapsed={false}
+                  onClick={() => navigate("/directory/new-campaigns")}
+                />
               </div>
             )}
 

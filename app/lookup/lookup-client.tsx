@@ -660,6 +660,16 @@ function HistoryPanel({
 // ─── Main client component ────────────────────────────────────────────────────
 
 export default function LookupClient({ userEmail }: { userEmail: string | null }) {
+  // Force light background on body/html so the dark root theme doesn't bleed through
+  useEffect(() => {
+    const prev = document.body.style.backgroundColor
+    document.documentElement.style.backgroundColor = "#f9fafb"
+    document.body.style.backgroundColor = "#f9fafb"
+    return () => {
+      document.documentElement.style.backgroundColor = ""
+      document.body.style.backgroundColor = prev
+    }
+  }, [])
   const router = useRouter()
   const [currentUser, setCurrentUser] = useState<string | null>(userEmail)
   const [query, setQuery] = useState("")

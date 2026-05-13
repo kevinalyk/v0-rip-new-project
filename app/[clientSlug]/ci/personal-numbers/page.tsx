@@ -6,6 +6,7 @@ import { AppLayout } from "@/components/app-layout"
 import { PersonalNumbersContent } from "@/components/personal-numbers-content"
 import { Loader2, Lock, Smartphone } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import AdBanner from "@/components/ad-banner"
 
 function StaticPersonalNumbers() {
   return (
@@ -74,6 +75,7 @@ export default function PersonalNumbersPage() {
   if (isFree) {
     return (
       <AppLayout clientSlug={clientSlug} isAdminView={clientSlug === "admin"}>
+        <AdBanner showAd={true} />
         <div className="relative overflow-hidden">
           <div className="blur-md opacity-60 pointer-events-none select-none">
             <StaticPersonalNumbers />

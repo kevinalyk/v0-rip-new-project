@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { CalendarIcon, Loader2, Lock, RefreshCw, RotateCcw, TrendingUp, X } from "lucide-react"
+import AdBanner from "@/components/ad-banner"
 import { format } from "date-fns"
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
@@ -190,6 +191,7 @@ export default function InboxingPage() {
   if (isFree) {
     return (
       <AppLayout clientSlug={clientSlug} isAdminView={clientSlug === "admin"}>
+        <AdBanner showAd={true} />
         <div className="relative overflow-hidden min-h-screen">
           {/* Blurred static content in background */}
           <div className="blur-md opacity-60 pointer-events-none select-none px-4 py-6">

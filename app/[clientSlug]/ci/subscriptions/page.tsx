@@ -6,6 +6,7 @@ import { AppLayout } from "@/components/app-layout"
 import { useEffect, useState } from "react"
 import { Loader2, Lock, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import AdBanner from "@/components/ad-banner"
 
 function StaticFollowing() {
   return (
@@ -82,6 +83,7 @@ export default function CISubscriptionsPage() {
   if (isFree) {
     return (
       <AppLayout clientSlug={clientSlug} isAdminView={clientSlug === "admin"}>
+        <AdBanner showAd={true} />
         <div className="relative overflow-hidden">
           <div className="blur-md opacity-60 pointer-events-none select-none">
             <StaticFollowing />

@@ -840,16 +840,24 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
 
           <main className="flex-1 min-w-0 max-w-2xl">
             {/* Hero */}
-            <div className="mb-8">
-              <h1 className="text-gray-900 text-2xl sm:text-3xl font-bold leading-tight text-balance mb-3">
+            <div className="mb-8 text-center">
+              <p className="text-red-500 text-xs font-semibold uppercase tracking-widest mb-2">Political Contact Lookup</p>
+              <h1 className="text-gray-900 text-3xl sm:text-4xl font-bold leading-tight text-balance mb-4">
                 Who is contacting me politically?
               </h1>
-              <p className="text-gray-600 text-sm sm:text-base leading-relaxed text-pretty max-w-xl">
+              <p className="text-gray-500 text-sm sm:text-base leading-relaxed text-pretty max-w-lg mx-auto">
                 Getting unwanted political texts or emails? Enter the phone number or email address
-                below to instantly identify which political campaign, PAC, or advocacy group is
-                contacting you. Search our database of political organizations sending mass messages
-                to voters.
+                below to instantly identify which political campaign, PAC, or advocacy group is contacting you.
               </p>
+
+              {/* Divider with tag pills */}
+              <div className="flex items-center justify-center gap-2 mt-5 flex-wrap">
+                {["Political Campaigns", "PACs", "Advocacy Groups", "Robocalls", "Spam Texts"].map((tag) => (
+                  <span key={tag} className="bg-gray-100 text-gray-500 text-xs px-3 py-1 rounded-full border border-gray-200">
+                    {tag}
+                  </span>
+                ))}
+              </div>
             </div>
 
             {/* Search form */}

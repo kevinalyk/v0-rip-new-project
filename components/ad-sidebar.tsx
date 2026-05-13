@@ -35,17 +35,17 @@ export default function AdSidebar({ showAd, slot = "5401962530" }: AdSidebarProp
 
   return (
     <div
-      className="flex-shrink-0 overflow-hidden"
-      style={{ width: "120px", minWidth: "120px" }}
+      className="flex-shrink-0"
+      style={{ width: "120px", minWidth: "120px", minHeight: "600px" }}
       aria-label="Advertisement"
     >
       <ins
         className="adsbygoogle"
-        style={{ display: "block", width: "120px" }}
+        style={{ display: "inline-block", width: "120px", height: "600px" }}
         data-ad-client="ca-pub-5715074898343065"
         data-ad-slot={slot}
-        data-ad-format="auto"
-        data-full-width-responsive="true"
+        data-ad-format="vertical"
+        data-full-width-responsive="false"
       />
     </div>
   )

@@ -950,8 +950,8 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
           <AdSidebar showAd={true} slot="9922824720" />
         </div>
 
-        {/* Bottom banner */}
-        <footer className="border-t border-gray-200 pt-2 pb-3">
+        {/* Bottom banner + footer links inside the main flow */}
+        <div className="border-t border-gray-200 pt-2 pb-3">
           <AdBanner showAd={true} />
           <p className="text-center text-gray-400 text-xs mt-2">
             Powered by{" "}
@@ -968,7 +968,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
             {" "}&middot;{" "}
             <a href="/privacy" className="hover:text-gray-600 transition-colors">Privacy</a>
           </p>
-        </footer>
+        </div>
       </div>
     </div>
   )

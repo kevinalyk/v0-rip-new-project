@@ -938,8 +938,8 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
           </main>
 
           {/* Right sidebar — COMMENTED OUT */}
-          {/* <AdSidebar showAd={true} slot="9922824720" />
-        </div> */}
+          {/* <AdSidebar showAd={true} slot="9922824720" /> */}
+        </div>
 
         {/* Bottom banner */}
         <footer className="border-t border-[#2a2d3e] py-4">

@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import { redirect } from "next/navigation"
 import { getLookupSession } from "@/lib/lookup-auth"
 import LookupClient from "./lookup-client"
 
@@ -12,10 +11,5 @@ export const metadata: Metadata = {
 
 export default async function LookupPage() {
   const session = await getLookupSession()
-
-  if (!session) {
-    redirect("/lookup/login")
-  }
-
-  return <LookupClient userEmail={session.email} />
+  return <LookupClient userEmail={session?.email ?? null} />
 }

@@ -834,7 +834,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
         </header>
 
         {/* Three-column layout */}
-        <div className="flex flex-grow max-w-full mx-auto w-full px-2 sm:px-4 py-4 gap-2 sm:gap-4 justify-center items-start">
+        <div className="flex flex-grow max-w-full mx-auto w-full px-2 sm:px-4 py-4 gap-2 sm:gap-4 justify-center items-center">
           {/* Left sidebar */}
           <AdSidebar showAd={true} slot="5401962530" />
 

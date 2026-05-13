@@ -6,6 +6,7 @@ import { AppLayout } from "@/components/app-layout"
 import { useEffect, useState } from "react"
 import { Loader2, Lock, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import AdBanner from "@/components/ad-banner"
 import {
   AreaChart,
   Area,
@@ -129,6 +130,7 @@ export default function ReportsReportingPage() {
   if (isFree) {
     return (
       <AppLayout clientSlug={clientSlug} isAdminView={clientSlug === "admin"}>
+        <AdBanner showAd={true} />
         <div className="relative overflow-hidden">
           {/* Blurred static charts in background */}
           <div className="blur-md opacity-60 pointer-events-none select-none px-4 py-6">

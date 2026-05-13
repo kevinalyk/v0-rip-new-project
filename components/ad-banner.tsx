@@ -33,7 +33,7 @@ export default function AdBanner({ showAd }: AdBannerProps) {
   if (!showAd) return null
 
   return (
-    <div className="w-full flex justify-center py-1" aria-label="Advertisement">
+    <div className="w-full flex justify-center py-1" style={{ minHeight: "92px" }} aria-label="Advertisement">
       <ins
         className="adsbygoogle"
         style={{ display: "inline-block", width: "728px", height: "90px" }}

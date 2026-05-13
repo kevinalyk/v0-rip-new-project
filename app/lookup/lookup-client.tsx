@@ -824,11 +824,11 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
         </header>
 
         {/* Three-column layout */}
-        <div className="flex flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 gap-6">
-          {/* Left sidebar — RIP Tool Sidebar slot */}
+        <div className="flex flex-1 max-w-full mx-auto w-full px-2 sm:px-4 py-4 gap-2 sm:gap-4 justify-center">
+          {/* Left sidebar */}
           <AdSidebar showAd={true} slot="5401962530" />
 
-          <main className="flex-1 min-w-0">
+          <main className="flex-1 min-w-0 max-w-2xl">
             {/* Hero */}
             <div className="mb-8">
               <h1 className="text-gray-900 text-2xl sm:text-3xl font-bold leading-tight text-balance mb-3">
@@ -936,7 +936,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
             )}
           </main>
 
-          {/* Right sidebar — RIP Tool Other Side Bar slot */}
+          {/* Right sidebar */}
           <AdSidebar showAd={true} slot="9922824720" />
         </div>
 

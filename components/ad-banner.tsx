@@ -11,11 +11,11 @@ interface AdBannerProps {
  * showAd is resolved server-side: true for unauthenticated visitors and free-plan users.
  */
 export default function AdBanner({ showAd }: AdBannerProps) {
-  const adRef = useRef<HTMLElement | null>(null)
+  const pushed = useRef(false)
 
   useEffect(() => {
-    if (!showAd) return
-    if (adRef.current && adRef.current.getAttribute("data-adsbygoogle-status")) return
+    if (!showAd || pushed.current) return
+    pushed.current = true
     try {
       ;(window as any).adsbygoogle = (window as any).adsbygoogle || []
       ;(window as any).adsbygoogle.push({})
@@ -29,7 +29,6 @@ export default function AdBanner({ showAd }: AdBannerProps) {
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-2" aria-label="Advertisement">
       <ins
-        ref={(el) => { adRef.current = el }}
         className="adsbygoogle"
         style={{ display: "block", minHeight: "90px", maxHeight: "120px", overflow: "hidden" }}
         data-ad-client="ca-pub-5715074898343065"

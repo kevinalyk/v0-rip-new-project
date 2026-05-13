@@ -277,7 +277,6 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionPage) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }} />
         <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
-          <AdBanner showAd={showAd} />
           <CiDirectoryContent
             clientSlug={clientSlug}
             isPublic={!clientSlug}
@@ -288,6 +287,7 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
             pageSubtitle={subtitle}
             syncUrlWithFilters
           />
+          <AdBanner showAd={showAd} />
         </AppLayout>
       </>
     )
@@ -313,7 +313,6 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionPage) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }} />
         <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
-          <AdBanner showAd={showAd} />
           <CiDirectoryContent
             clientSlug={clientSlug}
             isPublic={!clientSlug}
@@ -324,6 +323,7 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
             pageSubtitle={subtitle}
             syncUrlWithFilters
           />
+          <AdBanner showAd={showAd} />
         </AppLayout>
       </>
     )
@@ -366,7 +366,6 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
       {breadcrumbData && (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbData) }} />
       )}
-      <AdBanner showAd={showAd} />
       <div className="flex justify-center gap-4">
         <div className="flex-1 min-w-0">
           <DirectoryProfileContent slug={slug} initialData={initialData} />
@@ -374,6 +373,7 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
         </div>
         <AdSidebar showAd={showSidebarAd} />
       </div>
+      <AdBanner showAd={showAd} />
     </>
   )
 }

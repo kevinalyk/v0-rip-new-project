@@ -14,23 +14,31 @@ export default function AdBanner({ showAd }: AdBannerProps) {
   const pushed = useRef(false)
 
   useEffect(() => {
-    if (!showAd || pushed.current) return
+    console.log("[v0] AdBanner mounted, showAd=", showAd)
+    if (!showAd || pushed.current) {
+      console.log("[v0] AdBanner returning early: showAd=", showAd, "pushed=", pushed.current)
+      return
+    }
 
     function tryPush() {
       if (pushed.current) return
       try {
         const adsbyg = (window as any).adsbygoogle
+        console.log("[v0] AdBanner tryPush: adsbyg=", !!adsbyg, "loaded=", adsbyg?.loaded)
         if (!adsbyg || !adsbyg.loaded) {
+          console.log("[v0] AdBanner AdSense not ready, retrying")
           setTimeout(tryPush, 300)
           return
         }
         pushed.current = true
+        console.log("[v0] AdBanner pushing ad for slot 7325494279")
         adsbyg.push({})
-      } catch {
-        // safe to ignore
+      } catch (e) {
+        console.error("[v0] AdBanner error:", e)
       }
     }
 
+    console.log("[v0] AdBanner scheduling first tryPush")
     setTimeout(tryPush, 100)
   }, [showAd])
 

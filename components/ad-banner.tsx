@@ -15,13 +15,23 @@ export default function AdBanner({ showAd }: AdBannerProps) {
 
   useEffect(() => {
     if (!showAd || pushed.current) return
-    pushed.current = true
-    try {
-      ;(window as any).adsbygoogle = (window as any).adsbygoogle || []
-      ;(window as any).adsbygoogle.push({})
-    } catch {
-      // AdSense not loaded yet — safe to ignore
+
+    function tryPush() {
+      if (pushed.current) return
+      try {
+        const ads = (window as any).adsbygoogle
+        if (!ads || typeof ads.push !== "function") {
+          setTimeout(tryPush, 200)
+          return
+        }
+        pushed.current = true
+        ads.push({})
+      } catch {
+        // safe to ignore
+      }
     }
+
+    tryPush()
   }, [showAd])
 
   if (!showAd) return null

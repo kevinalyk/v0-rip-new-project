@@ -16,13 +16,24 @@ export default function AdSidebar({ showAd, slot = "5401962530" }: AdSidebarProp
 
   useEffect(() => {
     if (!showAd || pushed.current) return
-    pushed.current = true
-    try {
-      ;(window as any).adsbygoogle = (window as any).adsbygoogle || []
-      ;(window as any).adsbygoogle.push({})
-    } catch {
-      // AdSense not loaded — safe to ignore
+
+    function tryPush() {
+      if (pushed.current) return
+      try {
+        const ads = (window as any).adsbygoogle
+        // Ensure the script has loaded and initialised its array
+        if (!ads || typeof ads.push !== "function") {
+          setTimeout(tryPush, 200)
+          return
+        }
+        pushed.current = true
+        ads.push({})
+      } catch {
+        // safe to ignore
+      }
     }
+
+    tryPush()
   }, [showAd])
 
   if (!showAd) return null

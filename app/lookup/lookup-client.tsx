@@ -842,12 +842,13 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
             {/* Hero */}
             <div className="mb-8">
               <h1 className="text-gray-900 text-2xl sm:text-3xl font-bold leading-tight text-balance mb-3">
-                Who is contacting me?
+                Who is contacting me politically?
               </h1>
               <p className="text-gray-600 text-sm sm:text-base leading-relaxed text-pretty max-w-xl">
-                A tool to help you find out what campaign or political group is sending you texts
-                and emails. Type in the number or email you are getting messages from below and
-                we will search our database for any group that uses it.
+                Getting unwanted political texts or emails? Enter the phone number or email address
+                below to instantly identify which political campaign, PAC, or advocacy group is
+                contacting you. Search our database of political organizations sending mass messages
+                to voters.
               </p>
             </div>
 

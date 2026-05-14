@@ -197,7 +197,12 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
   }
 
   const toggleSection = (section: string) => {
-    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }))
+    setExpandedSections((prev) => {
+      const isCurrentlyOpen = prev[section]
+      // Close all sections, then open the clicked one (unless it was already open)
+      const allClosed = Object.fromEntries(Object.keys(prev).map((k) => [k, false]))
+      return { ...allClosed, [section]: !isCurrentlyOpen }
+    })
   }
 
   const getClientSlug = () => {
@@ -322,7 +327,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
         className,
       )}
     >
-      <div className="flex flex-col flex-grow">
+      <div className="flex flex-col min-h-0 flex-grow">
         <div className="p-4 flex justify-between items-center">
           <div className="flex-1 flex justify-center">
             <Logo collapsed={collapsed} variant="icon" />

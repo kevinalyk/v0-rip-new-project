@@ -1,9 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import bcryptjs from "bcryptjs"
-import { neon } from "@neondatabase/serverless"
+import prisma from "@/lib/prisma"
 import { createLookupToken, LOOKUP_COOKIE } from "@/lib/lookup-auth"
-
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,23 +16,19 @@ export async function POST(request: NextRequest) {
 
     const normalizedEmail = email.toLowerCase().trim()
 
-    const rows = await sql`
-      SELECT id, email, "passwordHash"
-      FROM "LookupUser"
-      WHERE email = ${normalizedEmail}
-      LIMIT 1
-    `
+    // Look up user in the main User table
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: normalizedEmail, mode: "insensitive" } },
+    })
 
-    if (rows.length === 0) {
+    if (!user) {
       return NextResponse.json(
         { error: "Invalid email or password." },
         { status: 401 }
       )
     }
 
-    const user = rows[0]
-    const match = await bcryptjs.compare(password, user.passwordHash)
-
+    const match = await bcryptjs.compare(password, user.password)
     if (!match) {
       return NextResponse.json(
         { error: "Invalid email or password." },
@@ -42,6 +36,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Issue a lookup session token
     const token = await createLookupToken({ userId: user.id, email: user.email })
 
     const response = NextResponse.json({
@@ -57,6 +52,12 @@ export async function POST(request: NextRequest) {
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 30,
     })
+
+    // Update lastActive non-blocking
+    prisma.user.update({
+      where: { id: user.id },
+      data: { lastActive: new Date() },
+    }).catch(() => {})
 
     return response
   } catch (error) {

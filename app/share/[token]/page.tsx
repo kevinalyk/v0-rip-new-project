@@ -47,6 +47,8 @@ async function incrementViewCount(token: string) {
   }
 }
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
+
 export async function generateMetadata({ params }: { params: { token: string } }): Promise<Metadata> {
   try {
     const token = params.token
@@ -77,11 +79,14 @@ export async function generateMetadata({ params }: { params: { token: string } }
       }
     }
 
-    const entityName = campaign.entity?.name || (isSms ? campaign.phoneNumber : campaign.senderName)
+    const entityName = campaign.entity?.name || (isSms ? (campaign as any).phoneNumber : (campaign as any).senderName)
     const title = `${entityName} - Inbox.GOP`
     const description = isSms
       ? (campaign as any).message?.slice(0, 160)
-      : campaign.subject?.slice(0, 160) || "View this campaign on RIP Tool"
+      : (campaign as any).subject?.slice(0, 160) || "View this campaign on RIP Tool"
+
+    // Use absolute URL so social crawlers (iMessage, Twitter, Signal) can fetch the image
+    const ogImageUrl = `${APP_URL}/api/og/share/${token}`
 
     return {
       title,
@@ -93,7 +98,7 @@ export async function generateMetadata({ params }: { params: { token: string } }
         type: "website",
         images: [
           {
-            url: `/api/og/share/${token}`,
+            url: ogImageUrl,
             width: 1200,
             height: 630,
             alt: `${entityName} on RIP Tool`,
@@ -104,7 +109,7 @@ export async function generateMetadata({ params }: { params: { token: string } }
         card: "summary_large_image",
         title,
         description,
-        images: [`/api/og/share/${token}`],
+        images: [ogImageUrl],
       },
     }
   } catch (error) {

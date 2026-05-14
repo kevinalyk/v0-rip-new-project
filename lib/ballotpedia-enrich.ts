@@ -107,8 +107,8 @@ export function extractOffice(html: string): string | null {
 //   1. Find the position of the "Biography" section heading (any <hN> tag).
 //   2. If found, only consider HTML before that point — stopping us from
 //      capturing personal history that belongs in the Biography section.
-//   3. From that portion, collect up to 3 clean paragraphs (min 60 chars each).
-//   4. If "Biography" is never found, same rule applies — first 3 paragraphs.
+//   3. From that portion, collect only the first clean paragraph (min 60 chars).
+//   4. If "Biography" is never found, same rule applies — first paragraph only.
 export function extractBio(html: string): string | null {
   const clean = html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -145,10 +145,10 @@ export function extractBio(html: string): string | null {
     if (text.length < 60) continue
     if (skipPattern.test(text)) continue
     collected.push(text)
-    if (collected.length >= 3) break
+    if (collected.length >= 1) break
   }
 
-  return collected.length > 0 ? collected.join("\n\n") : null
+  return collected.length > 0 ? collected[0] : null
 }
 
 export type EnrichResult = {

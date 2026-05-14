@@ -15,10 +15,10 @@ const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
 export const metadata: Metadata = {
   title: "Intelligence Digest - Inbox.GOP",
-  description: "Right-leaning political intelligence and analysis from the Inbox.GOP team.",
+  description: "Political intelligence and analysis from the Inbox.GOP team.",
   openGraph: {
     title: "Intelligence Digest - Inbox.GOP",
-    description: "Right-leaning political intelligence and analysis from the Inbox.GOP team.",
+    description: "Political intelligence and analysis from the Inbox.GOP team.",
     url: `${BASE_URL}/digest`,
     siteName: "Inbox.GOP",
     type: "website",
@@ -88,7 +88,7 @@ export default async function DigestPage() {
               <h1 className="text-2xl font-bold tracking-tight">Intelligence Digest</h1>
             </div>
             <p className="text-sm text-muted-foreground">
-              Right-leaning political intelligence and analysis
+              Political intelligence and analysis
             </p>
           </div>
         </div>

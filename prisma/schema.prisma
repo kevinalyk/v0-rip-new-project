@@ -619,6 +619,23 @@ model Announcement {
   @@index([slug])
 }
 
+model DigestArticle {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  summary     String?  @db.Text
+  body        String   @db.Text
+  imageUrl    String?
+  sources     Json?    // Array of { label: string; url: string }
+  tags        Json?    // Array of strings e.g. ["economy", "immigration"]
+  publishedAt DateTime @default(now())
+  createdBy   String   @default("claude")
+  updatedAt   DateTime @updatedAt
+
+  @@index([publishedAt(sort: Desc)])
+  @@index([slug])
+}
+
 model RedactedName {
   id        String   @id @default(cuid())
   name      String   @unique // The exact name/term to redact (case-sensitive)

@@ -177,9 +177,14 @@ export default function SharePageClient({ isAuthenticated, token }: SharePageCli
           <p className="text-muted-foreground">
             You need an Inbox.GOP account to view shared campaigns.
           </p>
-          <Button onClick={() => router.push(`/login?redirect=/share/${token}`)}>
-            Sign in
-          </Button>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Button onClick={() => router.push(`/login?redirect=/share/${token}`)}>
+              Sign in
+            </Button>
+            <Button variant="outline" asChild>
+              <a href="https://app.rip-tool.com/signup">Sign up</a>
+            </Button>
+          </div>
           <div className="pt-4 border-t">
             <p className="text-xs text-muted-foreground">Powered by Inbox.GOP</p>
           </div>

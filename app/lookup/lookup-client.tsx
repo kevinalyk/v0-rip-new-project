@@ -635,7 +635,7 @@ function HistoryPanel({
                             <p className="text-gray-600 text-xs capitalize">{entity.type}</p>
                           </div>
                           <a
-                            href={`/directory/${entity.id}`}
+                            href={`/directory/${entity.name.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-")}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-red-500 hover:text-red-600 text-xs font-medium flex items-center gap-1 flex-shrink-0 transition-colors"

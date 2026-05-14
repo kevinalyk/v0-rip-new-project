@@ -126,7 +126,8 @@ export default function SignupPage() {
         throw new Error(data.error || "Signup failed")
       }
 
-      router.push("/login?signup=success")
+      // Auth cookie is set by the API — redirect straight to the dashboard
+      router.push("/rip")
     } catch (err: any) {
       console.error("Signup error:", err)
       setError(err.message || "An error occurred during signup")

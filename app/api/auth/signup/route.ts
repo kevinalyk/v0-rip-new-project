@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import bcryptjs from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { sendNewSignupNotification, sendWelcomeEmail } from "@/lib/mailgun"
+import { createToken } from "@/lib/auth"
 
 const signupAttempts = new Map<string, { count: number; resetTime: number }>()
 const MAX_ATTEMPTS = 3
@@ -199,14 +200,46 @@ export async function POST(request: NextRequest) {
       ipAddress: ip !== "unknown" ? ip : undefined,
     }).catch((err) => console.error("[Signup] Admin notification failed:", err))
 
-    return NextResponse.json(
+    // Auto-login: issue auth token so the user doesn't have to visit /login
+    const tokenPayload = {
+      userId: result.user.id,
+      email: result.user.email,
+      firstName: result.user.firstName,
+      lastName: result.user.lastName,
+      role: result.user.role,
+      clientId: result.client.id,
+      clientSlug: result.client.slug,
+    }
+    const token = await createToken(tokenPayload)
+
+    const response = NextResponse.json(
       {
         message: "Account created successfully",
         clientId: result.client.id,
         userId: result.user.id,
+        user: {
+          id: result.user.id,
+          email: result.user.email,
+          firstName: result.user.firstName,
+          lastName: result.user.lastName,
+          role: result.user.role,
+          firstLogin: result.user.firstLogin,
+        },
       },
       { status: 201 },
     )
+
+    response.cookies.set({
+      name: "auth_token",
+      value: token,
+      httpOnly: true,
+      path: "/",
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7,
+    })
+
+    return response
   } catch (error) {
     console.error("[Server Error] Signup failed:", error)
     return NextResponse.json({ error: "An error occurred during signup. Please try again." }, { status: 500 })

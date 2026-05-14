@@ -54,48 +54,90 @@ interface StoryItem {
   body: string
 }
 
-function parseStories(html: string): StoryItem[] | null {
+function parseStories(html: string): { stories: StoryItem[]; remainder: string } | null {
   // Pattern: <strong>CATEGORY — Headline.</strong> Body text
-  // or <p><strong>CATEGORY — Headline.</strong> Body</p>
-  const pattern = /(?:<p[^>]*>)?\s*<strong>([A-Z][A-Z &]+?)\s*[—–-]+\s*([^<]+?)<\/strong>\s*([\s\S]*?)(?=(?:<p[^>]*>)?\s*<strong>[A-Z][A-Z &]+?\s*[—–-]|$)/g
+  // Stop story body at the next story opener OR at a block-level structural element (table, h2, blockquote)
+  const storyOpener = /(?:<p[^>]*>)?\s*<strong>[A-Z][A-Z &]+?\s*[—–-]/
+  const blockBreak = /<\s*(table|h2|h3|blockquote|hr)[\s>]/i
+
+  // Find where the first story opener is
+  const firstMatch = storyOpener.exec(html)
+  if (!firstMatch) return null
+
+  // Anything before the first story opener is a preamble — ignore it here, handled separately
+  let cursor = firstMatch.index
   const stories: StoryItem[] = []
+
+  const itemPattern = /<strong>([A-Z][A-Z &]+?)\s*[—–-]+\s*([^<]+?)<\/strong>\s*([\s\S]*?)(?=(?:<p[^>]*>)?\s*<strong>[A-Z][A-Z &]+?\s*[—–-]|<\s*(?:table|h2|h3|blockquote|hr)[\s>]|$)/gi
+  itemPattern.lastIndex = cursor
+
   let match
-  while ((match = pattern.exec(html)) !== null) {
+  let lastStoryEnd = cursor
+  while ((match = itemPattern.exec(html)) !== null) {
+    // Stop if we've hit a block-level structural break before this match
+    const segment = html.slice(lastStoryEnd, match.index)
+    if (blockBreak.test(segment)) break
+
     const category = match[1].trim()
     const headline = match[2].trim().replace(/\.$/, "")
     const rawBody = match[3].replace(/<\/p>/g, "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim()
     if (headline) stories.push({ category, headline, body: rawBody })
+    lastStoryEnd = match.index + match[0].length
   }
-  return stories.length >= 2 ? stories : null
+
+  if (stories.length < 2) return null
+
+  // Everything after the last story is "remainder" — tables, quotes, etc.
+  const remainder = html.slice(lastStoryEnd).trim()
+  return { stories, remainder }
 }
+
+const PROSE_CLASSES = `prose prose-neutral dark:prose-invert max-w-none text-base leading-relaxed text-foreground
+  [&_img]:rounded-md [&_img]:max-w-full [&_img]:my-4
+  [&_h2]:text-lg [&_h2]:font-bold [&_h2]:mt-6 [&_h2]:mb-2
+  [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1
+  [&_blockquote]:border-l-4 [&_blockquote]:border-[#dc2a28] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-muted-foreground
+  [&_table]:w-full [&_table]:text-sm [&_th]:text-left [&_th]:py-2 [&_th]:px-3 [&_th]:font-semibold [&_th]:border-b [&_th]:border-border
+  [&_td]:py-2 [&_td]:px-3 [&_td]:border-b [&_td]:border-border/50`
 
 // ─── Structured body renderer ─────────────────────────────────────────────────
 function DigestBody({ html }: { html: string }) {
-  const stories = parseStories(html)
+  const parsed = parseStories(html)
 
-  if (stories) {
+  if (parsed) {
+    const { stories, remainder } = parsed
     return (
-      <div className="space-y-3 mb-10">
+      <div className="mb-10">
         <div className="flex items-center gap-3 mb-4">
           <span className="text-[10px] font-bold tracking-widest text-[#dc2a28] uppercase">Today&apos;s Digest</span>
           <span className="h-px flex-1 bg-border" />
           <span className="text-xs font-semibold text-muted-foreground">Top Stories</span>
         </div>
-        {stories.map((s, i) => (
-          <div key={i} className="rounded-lg border border-border bg-card p-4">
-            <div className="flex items-start gap-3">
-              <span
-                className={`mt-0.5 flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide ${getCategoryStyle(s.category)}`}
-              >
-                {s.category}
-              </span>
-              <div>
-                <p className="text-sm font-semibold leading-snug text-foreground mb-1">{s.headline}</p>
-                {s.body && <p className="text-sm text-muted-foreground leading-relaxed">{s.body}</p>}
+        <div className="space-y-3">
+          {stories.map((s, i) => (
+            <div key={i} className="rounded-lg border border-border bg-card p-4">
+              <div className="flex items-start gap-3">
+                <span
+                  className={`mt-0.5 flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide ${getCategoryStyle(s.category)}`}
+                >
+                  {s.category}
+                </span>
+                <div>
+                  <p className="text-sm font-semibold leading-snug text-foreground mb-1">{s.headline}</p>
+                  {s.body && <p className="text-sm text-muted-foreground leading-relaxed">{s.body}</p>}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
+
+        {/* Remainder: polling tables, quotes, etc. rendered as styled HTML */}
+        {remainder && (
+          <div
+            className={`mt-6 ${PROSE_CLASSES}`}
+            dangerouslySetInnerHTML={{ __html: remainder }}
+          />
+        )}
       </div>
     )
   }
@@ -103,13 +145,7 @@ function DigestBody({ html }: { html: string }) {
   // Fallback: render raw HTML with prose styles
   return (
     <div
-      className="prose prose-neutral dark:prose-invert max-w-none text-base leading-relaxed text-foreground mb-10
-        [&_img]:rounded-md [&_img]:max-w-full [&_img]:my-4
-        [&_h2]:text-lg [&_h2]:font-bold [&_h2]:mt-6 [&_h2]:mb-2
-        [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1
-        [&_blockquote]:border-l-4 [&_blockquote]:border-[#dc2a28] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-muted-foreground
-        [&_table]:w-full [&_table]:text-sm [&_th]:text-left [&_th]:py-2 [&_th]:px-3 [&_th]:font-semibold [&_th]:border-b [&_th]:border-border
-        [&_td]:py-2 [&_td]:px-3 [&_td]:border-b [&_td]:border-border/50"
+      className={`${PROSE_CLASSES} mb-10`}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   )

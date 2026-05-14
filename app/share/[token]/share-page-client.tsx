@@ -3,7 +3,6 @@
 import type React from "react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Mail, Calendar, ExternalLink, Loader2, ZoomIn, ZoomOut, Smartphone, Phone } from "lucide-react"
@@ -223,19 +222,12 @@ export default function SharePageClient({ isAuthenticated, token }: SharePageCli
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Dialog open={dialogOpen} onOpenChange={() => {}}>
-        <DialogContent
-          className="!max-w-[1400px] !w-[95vw] md:!w-[85vw] max-h-[90vh] md:max-h-[85vh] overflow-y-auto p-4 md:p-6"
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-          onClose={handleClose}
-        >
-          <DialogHeader>
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
+    <div className="min-h-screen bg-background py-6 px-4">
+      <div className="max-w-[1400px] w-full md:w-[85vw] mx-auto rounded-lg border bg-card shadow-sm overflow-y-auto p-4 md:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4 flex-1">
               <div className="flex-1 min-w-0 pr-8 md:pr-0">
-                <DialogTitle className="text-base md:text-xl break-words">{campaign.subject}</DialogTitle>
-                <DialogDescription asChild>
+                <h2 className="text-base md:text-xl font-semibold break-words">{campaign.subject}</h2>
                   <div className="flex flex-col gap-1 mt-2 text-left">
                     {/* Entity name + party badge row (stacked above sender) */}
                     {campaign.entity && (
@@ -285,7 +277,6 @@ export default function SharePageClient({ isAuthenticated, token }: SharePageCli
                       {new Date(campaign.dateReceived).toLocaleDateString()}
                     </div>
                   </div>
-                </DialogDescription>
               </div>
               {campaign.type === "email" && (
                 <div className="flex flex-wrap items-center gap-2">
@@ -301,7 +292,7 @@ export default function SharePageClient({ isAuthenticated, token }: SharePageCli
                 </div>
               )}
             </div>
-          </DialogHeader>
+          </div>
 
           <Tabs defaultValue="preview" className="mt-4">
             <TabsList className="grid w-full grid-cols-2">
@@ -395,8 +386,7 @@ export default function SharePageClient({ isAuthenticated, token }: SharePageCli
               Shared via <span className="font-medium">Inbox.GOP</span> • Competitive Intelligence Platform
             </p>
           </div>
-        </DialogContent>
-      </Dialog>
+      </div>
     </div>
   )
 }

@@ -180,7 +180,10 @@ export async function POST(request: NextRequest) {
     // Send welcome email to the new user — non-blocking
     sendWelcomeEmail({
       firstName,
+      lastName,
       email,
+      organizationName: result.client.name,
+      plan: "Free Trial",
       loginUrl: "https://app.rip-tool.com/login",
     }).catch((err) => console.error("[Signup] Welcome email failed:", err))
 

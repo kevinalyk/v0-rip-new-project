@@ -1,11 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import bcryptjs from "bcryptjs"
-import { neon } from "@neondatabase/serverless"
+import prisma from "@/lib/prisma"
 import { createLookupToken, LOOKUP_COOKIE } from "@/lib/lookup-auth"
 
-const sql = neon(process.env.DATABASE_URL!)
-
-// Simple in-memory rate limiter — resets on cold start, acceptable for this use case
+// Simple in-memory rate limiter — resets on cold start
 const attempts = new Map<string, { count: number; reset: number }>()
 function rateLimit(ip: string) {
   const now = Date.now()
@@ -56,30 +54,39 @@ export async function POST(request: NextRequest) {
 
     const normalizedEmail = email.toLowerCase().trim()
 
-    // Check for existing account
-    const existing = await sql`
-      SELECT id FROM "LookupUser" WHERE email = ${normalizedEmail} LIMIT 1
-    `
-    if (existing.length > 0) {
+    // Check if the email already exists in the main User table
+    const existing = await prisma.user.findFirst({
+      where: { email: { equals: normalizedEmail, mode: "insensitive" } },
+    })
+
+    if (existing) {
       return NextResponse.json(
-        { error: "An account with this email already exists." },
+        { error: "An account with this email already exists. Please log in instead." },
         { status: 400 }
       )
     }
 
     const passwordHash = await bcryptjs.hash(password, 12)
-    const id = crypto.randomUUID()
-    const now = new Date().toISOString()
 
-    await sql`
-      INSERT INTO "LookupUser" (id, email, "passwordHash", "createdAt", "updatedAt")
-      VALUES (${id}, ${normalizedEmail}, ${passwordHash}, ${now}, ${now})
-    `
+    // Create in the main User table with role "lookup" and clientId "lookup"
+    const user = await prisma.user.create({
+      data: {
+        email: normalizedEmail,
+        firstName: "",
+        lastName: "",
+        password: passwordHash,
+        role: "lookup",
+        firstLogin: false,
+        clientId: "lookup",
+        digestEnabled: false,
+        weeklyDigestEnabled: false,
+      },
+    })
 
-    const token = await createLookupToken({ userId: id, email: normalizedEmail })
+    const token = await createLookupToken({ userId: user.id, email: user.email })
 
     const response = NextResponse.json(
-      { user: { id, email: normalizedEmail } },
+      { user: { id: user.id, email: user.email } },
       { status: 201 }
     )
 

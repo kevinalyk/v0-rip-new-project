@@ -99,58 +99,73 @@ export default async function DigestPage() {
             <p className="text-muted-foreground">No articles yet.</p>
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-4">
             {articles.map((a) => {
               const excerpt =
                 a.summary ||
-                a.body.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200)
-              const tags = a.tags ?? []
+                a.body.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 180)
+              const tags = (a.tags ?? []).slice(0, 6)
               return (
                 <article
                   key={a.id}
                   className="rounded-xl border border-border bg-card overflow-hidden hover:border-[#dc2a28]/40 hover:shadow-md transition-all"
                 >
                   {a.imageUrl && (
-                    <div className="w-full aspect-[16/6] overflow-hidden bg-muted">
+                    <div className="w-full aspect-[16/5] overflow-hidden bg-muted">
                       <img src={a.imageUrl} alt={a.title} className="w-full h-full object-cover" />
                     </div>
                   )}
-                  <div className="px-5 py-4">
-                    <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                  <div className="px-5 pt-4 pb-5">
+                    {/* Badge + date row */}
+                    <div className="flex items-center gap-2 flex-wrap mb-2">
+                      <span className="text-[10px] font-bold tracking-widest text-[#dc2a28] uppercase border border-[#dc2a28]/40 rounded px-2 py-0.5">
+                        Daily Digest
+                      </span>
+                      <span className="text-muted-foreground text-xs">·</span>
                       <time
                         dateTime={new Date(a.publishedAt).toISOString()}
-                        className="text-xs text-muted-foreground uppercase tracking-wide"
+                        className="text-xs text-muted-foreground"
                       >
-                        {format(new Date(a.publishedAt), "MMMM d, yyyy")}
+                        {format(new Date(a.publishedAt), "EEEE, MMMM d, yyyy")}
                       </time>
-                      {tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border"
-                        >
-                          {tag}
-                        </span>
-                      ))}
                     </div>
+
+                    {/* Title */}
                     <h2 className="text-lg font-bold leading-snug mb-2 text-balance">
                       <a
                         href={`/digest/${a.slug}`}
-                        className="hover:underline hover:text-[#dc2a28] transition-colors"
+                        className="hover:text-[#dc2a28] transition-colors"
                       >
                         {a.title}
                       </a>
                     </h2>
-                    <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2 mb-4">
+
+                    {/* Summary */}
+                    <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2 mb-3">
                       {excerpt}
                     </p>
-                    <a
-                      href={`/digest/${a.slug}`}
-                      aria-label={`Continue reading ${a.title}`}
-                      className="inline-flex items-center gap-2 bg-[#dc2a28] hover:bg-[#dc2a28]/90 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-                    >
-                      Continue Reading
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
-                    </a>
+
+                    {/* Tags + CTA row */}
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                      <a
+                        href={`/digest/${a.slug}`}
+                        aria-label={`Continue reading ${a.title}`}
+                        className="inline-flex items-center gap-1.5 text-[#dc2a28] text-sm font-medium hover:underline transition-colors flex-shrink-0"
+                      >
+                        Read Digest
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+                      </a>
+                    </div>
                   </div>
                 </article>
               )

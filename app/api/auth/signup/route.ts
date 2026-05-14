@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import bcryptjs from "bcryptjs"
 import { prisma } from "@/lib/prisma"
-import { sendNewSignupNotification } from "@/lib/mailgun"
+import { sendNewSignupNotification, sendWelcomeEmail } from "@/lib/mailgun"
 
 const signupAttempts = new Map<string, { count: number; resetTime: number }>()
 const MAX_ATTEMPTS = 3
@@ -176,6 +176,13 @@ export async function POST(request: NextRequest) {
 
       return { client, user }
     })
+
+    // Send welcome email to the new user — non-blocking
+    sendWelcomeEmail({
+      firstName,
+      email,
+      loginUrl: "https://app.rip-tool.com/login",
+    }).catch((err) => console.error("[Signup] Welcome email failed:", err))
 
     // Fire admin notification non-blocking — don't let email failure affect signup
     sendNewSignupNotification({

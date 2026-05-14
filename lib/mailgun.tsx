@@ -266,6 +266,78 @@ Stripe Dashboard: ${stripeUrl}
   return sendMailgunEmail(`New Payment: ${amountFormatted} — ${clientId}`, html, text)
 }
 
+export async function sendWelcomeEmail(params: {
+  firstName: string
+  email: string
+  loginUrl?: string
+}): Promise<boolean> {
+  const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
+  const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN
+
+  if (!MAILGUN_API_KEY || !MAILGUN_DOMAIN) {
+    console.error("[Mailgun] Credentials not configured — skipping welcome email")
+    return false
+  }
+
+  const { firstName, email, loginUrl = "https://app.rip-tool.com/login" } = params
+
+  const formData = new FormData()
+  formData.append("from", `Inbox.GOP <hello@${MAILGUN_DOMAIN}>`)
+  formData.append("to", email)
+  formData.append("subject", "Welcome to Inbox.GOP — Your account is ready")
+  formData.append(
+    "html",
+    `<!DOCTYPE html>
+    <html>
+      <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 560px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
+        <div style="background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="background: #dc2626; padding: 24px 28px;">
+            <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Inbox.GOP</p>
+            <h1 style="margin: 4px 0 0 0; color: white; font-size: 22px; font-weight: 700;">Welcome, ${firstName}!</h1>
+          </div>
+          <div style="padding: 28px;">
+            <p style="margin: 0 0 16px 0; font-size: 15px;">Your Inbox.GOP account has been created. You can now sign in and start using the platform.</p>
+            <div style="text-align: center; margin: 28px 0;">
+              <a href="${loginUrl}" style="display: inline-block; background: #dc2626; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-size: 14px; font-weight: 600;">Sign In to Inbox.GOP</a>
+            </div>
+            <p style="margin: 0; font-size: 13px; color: #666;">If you did not create this account, please contact us at <a href="mailto:support@rip-tool.com" style="color: #dc2626;">support@rip-tool.com</a>.</p>
+          </div>
+          <div style="padding: 16px 28px; background: #f9fafb; border-top: 1px solid #f0f0f0; text-align: center;">
+            <p style="margin: 0; font-size: 12px; color: #999;">Inbox.GOP — Republican Inboxing Protocol</p>
+          </div>
+        </div>
+      </body>
+    </html>`,
+  )
+  formData.append(
+    "text",
+    `Welcome to Inbox.GOP, ${firstName}!\n\nYour account has been created. Sign in here: ${loginUrl}\n\nIf you did not create this account, contact support@rip-tool.com.\n\n— Inbox.GOP`,
+  )
+
+  try {
+    const response = await fetch(`https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`api:${MAILGUN_API_KEY}`).toString("base64")}`,
+      },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("[Mailgun] Welcome email error:", response.status, errorText)
+      return false
+    }
+
+    console.log("[Mailgun] Welcome email sent to:", email)
+    return true
+  } catch (error) {
+    console.error("[Mailgun] Error sending welcome email:", error)
+    return false
+  }
+}
+
 export async function sendPasswordResetEmail(email: string, resetToken: string): Promise<boolean> {
   const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
   const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN

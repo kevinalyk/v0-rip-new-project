@@ -500,6 +500,8 @@ function SearchResults({
   )
 }
 
+const HISTORY_PAGE_SIZE = 10
+
 // ─── History panel ──────────────────────────────────────────────────────────────
 
 function HistoryPanel({
@@ -515,8 +517,13 @@ function HistoryPanel({
 }) {
   const [open, setOpen] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [page, setPage] = useState(0)
 
   if (history.length === 0) return null
+
+  const totalPages = Math.ceil(history.length / HISTORY_PAGE_SIZE)
+  const showPagination = history.length > HISTORY_PAGE_SIZE
+  const pageItems = history.slice(page * HISTORY_PAGE_SIZE, (page + 1) * HISTORY_PAGE_SIZE)
 
   function handleRowClick(item: HistoryItem) {
     if (expandedId === item.id) {
@@ -561,7 +568,7 @@ function HistoryPanel({
 
       {open && (
         <div className="divide-y divide-[#2a2d3e]">
-          {history.slice(0, 20).map((item) => (
+          {pageItems.map((item) => (
             <div key={item.id}>
               {/* Row header */}
               <div className="flex items-center hover:bg-gray-100 transition-colors group">
@@ -653,6 +660,88 @@ function HistoryPanel({
           ))}
         </div>
       )}
+
+      {/* Pagination — only when >10 items */}
+      {open && showPagination && (
+        <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50">
+          <span className="text-xs text-gray-400">
+            Page {page + 1} of {totalPages}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="px-2.5 py-1 rounded text-xs text-gray-600 border border-gray-200 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Prev
+            </button>
+            {Array.from({ length: totalPages }).map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setPage(i)}
+                className={`px-2.5 py-1 rounded text-xs border transition-colors ${
+                  i === page
+                    ? "bg-red-500 text-white border-red-500"
+                    : "text-gray-600 border-gray-200 bg-white hover:bg-gray-100"
+                }`}
+              >
+                {i + 1}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page === totalPages - 1}
+              className="px-2.5 py-1 rounded text-xs text-gray-600 border border-gray-200 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── FAQ accordion ────────────────────────────────────────────────────────────
+
+const FAQS: { question: string; answer: string }[] = [
+  // FAQs will be populated by the user
+]
+
+function FaqSection() {
+  const [openIndex, setOpenIndex] = useState<number | null>(null)
+
+  if (FAQS.length === 0) return null
+
+  return (
+    <div className="mt-12 border-t border-gray-200 pt-10">
+      <h2 className="text-center text-gray-900 text-2xl font-bold mb-8">
+        Frequently Asked Questions
+      </h2>
+      <div className="space-y-3 max-w-2xl mx-auto">
+        {FAQS.map((faq, i) => (
+          <div key={i} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setOpenIndex(openIndex === i ? null : i)}
+              className="w-full flex items-center justify-between px-6 py-5 text-left"
+            >
+              <span className="text-gray-800 text-sm font-medium pr-4">{faq.question}</span>
+              <span className="text-red-500 text-lg font-light flex-shrink-0 leading-none">
+                {openIndex === i ? "−" : "+"}
+              </span>
+            </button>
+            {openIndex === i && (
+              <div className="px-6 pb-5">
+                <p className="text-gray-500 text-sm leading-relaxed">{faq.answer}</p>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -950,12 +1039,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
             )}
 
             {/* FAQ Section */}
-            <div className="mt-12 border-t border-gray-200 pt-8">
-              <h2 className="text-gray-900 text-xl font-bold mb-6">Frequently Asked Questions</h2>
-              <div className="space-y-4">
-                {/* FAQs will be added here */}
-              </div>
-            </div>
+            <FaqSection />
           </main>
 
           {/* Right sidebar */}

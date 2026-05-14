@@ -841,23 +841,18 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
           <main className="flex-1 min-w-0 max-w-2xl">
             {/* Hero */}
             <div className="mb-8 text-center">
-              <p className="text-red-500 text-xs font-semibold uppercase tracking-widest mb-2">Political Contact Lookup</p>
               <h1 className="text-gray-900 text-3xl sm:text-4xl font-bold leading-tight text-balance mb-4">
                 {"Who's Contacting Me?"}
               </h1>
               <p className="text-gray-500 text-sm sm:text-base leading-relaxed text-pretty max-w-lg mx-auto">
-                Getting unwanted political texts or emails? Enter the phone number or email address
-                below to instantly identify which political campaign, PAC, or advocacy group is contacting you.
+                Political campaigns send a lot of emails and texts. These messages are a vital way campaigns get their message out so they can win elections, but if you want to opt out we created a simple tool to help.
               </p>
-
-              {/* Divider with tag pills */}
-              <div className="flex items-center justify-center gap-2 mt-5 flex-wrap">
-                {["Political Campaigns", "PACs", "Advocacy Groups", "Robocalls", "Spam Texts"].map((tag) => (
-                  <span key={tag} className="bg-gray-100 text-gray-500 text-xs px-3 py-1 rounded-full border border-gray-200">
-                    {tag}
-                  </span>
-                ))}
-              </div>
+              <p className="text-gray-500 text-sm sm:text-base leading-relaxed text-pretty max-w-lg mx-auto mt-3">
+                Below you can enter the number or email you are getting messages from and {"we'll"} scan our database for any campaign using it to send.
+              </p>
+              <p className="text-gray-500 text-sm sm:text-base leading-relaxed text-pretty max-w-lg mx-auto mt-3">
+                The best way to opt out of solicitations is to contact campaigns directly because they are the ones sending the messages.
+              </p>
             </div>
 
             {/* Search form */}
@@ -953,6 +948,14 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
                 </div>
               </div>
             )}
+
+            {/* FAQ Section */}
+            <div className="mt-12 border-t border-gray-200 pt-8">
+              <h2 className="text-gray-900 text-xl font-bold mb-6">Frequently Asked Questions</h2>
+              <div className="space-y-4">
+                {/* FAQs will be added here */}
+              </div>
+            </div>
           </main>
 
           {/* Right sidebar */}

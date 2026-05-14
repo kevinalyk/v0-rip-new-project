@@ -714,33 +714,35 @@ const FAQS: { question: string; answer: string }[] = [
 function FaqSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
 
-  if (FAQS.length === 0) return null
-
   return (
     <div className="mt-12 border-t border-gray-200 pt-10">
       <h2 className="text-center text-gray-900 text-2xl font-bold mb-8">
         Frequently Asked Questions
       </h2>
       <div className="space-y-3 max-w-2xl mx-auto">
-        {FAQS.map((faq, i) => (
-          <div key={i} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setOpenIndex(openIndex === i ? null : i)}
-              className="w-full flex items-center justify-between px-6 py-5 text-left"
-            >
-              <span className="text-gray-800 text-sm font-medium pr-4">{faq.question}</span>
-              <span className="text-red-500 text-lg font-light flex-shrink-0 leading-none">
-                {openIndex === i ? "−" : "+"}
-              </span>
-            </button>
-            {openIndex === i && (
-              <div className="px-6 pb-5">
-                <p className="text-gray-500 text-sm leading-relaxed">{faq.answer}</p>
-              </div>
-            )}
-          </div>
-        ))}
+        {FAQS.length === 0 ? (
+          <p className="text-center text-gray-400 text-sm py-4">FAQs coming soon.</p>
+        ) : (
+          FAQS.map((faq, i) => (
+            <div key={i} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setOpenIndex(openIndex === i ? null : i)}
+                className="w-full flex items-center justify-between px-6 py-5 text-left"
+              >
+                <span className="text-gray-800 text-sm font-medium pr-4">{faq.question}</span>
+                <span className="text-red-500 text-lg font-light flex-shrink-0 leading-none">
+                  {openIndex === i ? "−" : "+"}
+                </span>
+              </button>
+              {openIndex === i && (
+                <div className="px-6 pb-5">
+                  <p className="text-gray-500 text-sm leading-relaxed">{faq.answer}</p>
+                </div>
+              )}
+            </div>
+          ))
+        )}
       </div>
     </div>
   )

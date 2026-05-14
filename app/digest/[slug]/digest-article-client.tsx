@@ -32,6 +32,90 @@ interface DigestArticle {
   updatedAt: string
 }
 
+// ─── Category badge colors ────────────────────────────────────────────────────
+const CATEGORY_STYLES: Record<string, string> = {
+  POLL:       "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  PRIMARY:    "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
+  ENDORSE:    "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+  "DEM WATCH":"bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+  MONEY:      "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  BREAKING:   "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+  UPDATE:     "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
+}
+
+function getCategoryStyle(cat: string) {
+  return CATEGORY_STYLES[cat.toUpperCase()] ?? "bg-muted text-muted-foreground"
+}
+
+// ─── Parse body HTML into structured story items ──────────────────────────────
+interface StoryItem {
+  category: string
+  headline: string
+  body: string
+}
+
+function parseStories(html: string): StoryItem[] | null {
+  // Pattern: <strong>CATEGORY — Headline.</strong> Body text
+  // or <p><strong>CATEGORY — Headline.</strong> Body</p>
+  const pattern = /(?:<p[^>]*>)?\s*<strong>([A-Z][A-Z &]+?)\s*[—–-]+\s*([^<]+?)<\/strong>\s*([\s\S]*?)(?=(?:<p[^>]*>)?\s*<strong>[A-Z][A-Z &]+?\s*[—–-]|$)/g
+  const stories: StoryItem[] = []
+  let match
+  while ((match = pattern.exec(html)) !== null) {
+    const category = match[1].trim()
+    const headline = match[2].trim().replace(/\.$/, "")
+    const rawBody = match[3].replace(/<\/p>/g, "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim()
+    if (headline) stories.push({ category, headline, body: rawBody })
+  }
+  return stories.length >= 2 ? stories : null
+}
+
+// ─── Structured body renderer ─────────────────────────────────────────────────
+function DigestBody({ html }: { html: string }) {
+  const stories = parseStories(html)
+
+  if (stories) {
+    return (
+      <div className="space-y-3 mb-10">
+        <div className="flex items-center gap-3 mb-4">
+          <span className="text-[10px] font-bold tracking-widest text-[#dc2a28] uppercase">Today&apos;s Digest</span>
+          <span className="h-px flex-1 bg-border" />
+          <span className="text-xs font-semibold text-muted-foreground">Top Stories</span>
+        </div>
+        {stories.map((s, i) => (
+          <div key={i} className="rounded-lg border border-border bg-card p-4">
+            <div className="flex items-start gap-3">
+              <span
+                className={`mt-0.5 flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide ${getCategoryStyle(s.category)}`}
+              >
+                {s.category}
+              </span>
+              <div>
+                <p className="text-sm font-semibold leading-snug text-foreground mb-1">{s.headline}</p>
+                {s.body && <p className="text-sm text-muted-foreground leading-relaxed">{s.body}</p>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  // Fallback: render raw HTML with prose styles
+  return (
+    <div
+      className="prose prose-neutral dark:prose-invert max-w-none text-base leading-relaxed text-foreground mb-10
+        [&_img]:rounded-md [&_img]:max-w-full [&_img]:my-4
+        [&_h2]:text-lg [&_h2]:font-bold [&_h2]:mt-6 [&_h2]:mb-2
+        [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1
+        [&_blockquote]:border-l-4 [&_blockquote]:border-[#dc2a28] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-muted-foreground
+        [&_table]:w-full [&_table]:text-sm [&_th]:text-left [&_th]:py-2 [&_th]:px-3 [&_th]:font-semibold [&_th]:border-b [&_th]:border-border
+        [&_td]:py-2 [&_td]:px-3 [&_td]:border-b [&_td]:border-border/50"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export default function DigestArticleClient({
   slug,
   initialArticle,
@@ -130,17 +214,12 @@ export default function DigestArticleClient({
 
   const tags = article.tags ?? []
   const sources = article.sources ?? []
+  const publishedDate = new Date(article.publishedAt)
 
   return (
     <>
-      {/* Hero image */}
-      {article.imageUrl && (
-        <div className="w-full h-[260px] overflow-hidden">
-          <img src={article.imageUrl} alt={article.title} className="w-full h-full object-cover" />
-        </div>
-      )}
+      <div className="container mx-auto py-8 px-4 max-w-2xl">
 
-      <div className="container mx-auto py-8 px-4 max-w-3xl">
         {/* Back link */}
         <Link
           href="/digest"
@@ -150,46 +229,56 @@ export default function DigestArticleClient({
           Back to Intelligence Digest
         </Link>
 
-        {/* Meta */}
-        <div className="flex items-center gap-2 flex-wrap mb-3">
-          <time
-            dateTime={new Date(article.publishedAt).toISOString()}
-            className="text-xs text-muted-foreground uppercase tracking-wide"
-          >
-            {format(new Date(article.publishedAt), "MMMM d, yyyy")}
-          </time>
-          {tags.map((tag) => (
-            <span
-              key={tag}
-              className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border"
-            >
-              {tag}
+        {/* Header card */}
+        <div className="rounded-xl border border-border bg-card px-6 py-5 mb-6">
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
+            <span className="text-[10px] font-bold tracking-widest text-[#dc2a28] uppercase border border-[#dc2a28]/40 rounded px-2 py-0.5">
+              Daily Digest
             </span>
-          ))}
+            <span className="text-muted-foreground text-xs">
+              {format(publishedDate, "EEEE, MMMM d, yyyy")}
+            </span>
+          </div>
+
+          <h1 className="text-2xl font-bold leading-tight tracking-tight text-balance mb-3">
+            {article.title}
+          </h1>
+
+          {article.summary && (
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {article.summary}
+            </p>
+          )}
         </div>
 
-        {/* Title */}
-        <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance mb-6">
-          {article.title}
-        </h1>
-
-        {/* Summary if present */}
-        {article.summary && (
-          <p className="text-base text-muted-foreground leading-relaxed mb-6 border-l-4 border-[#dc2a28] pl-4 italic">
-            {article.summary}
-          </p>
+        {/* Tags */}
+        {tags.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap mb-6">
+            {tags.map((tag) => (
+              <span
+                key={tag}
+                className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
         )}
 
-        {/* Body */}
-        <div
-          className="prose prose-neutral dark:prose-invert max-w-none text-base leading-relaxed text-foreground mb-10 [&_img]:rounded-md [&_img]:max-w-full [&_img]:my-4"
-          dangerouslySetInnerHTML={{ __html: article.body }}
-        />
+        {/* Hero image */}
+        {article.imageUrl && (
+          <div className="w-full aspect-[16/7] overflow-hidden rounded-xl bg-muted mb-6">
+            <img src={article.imageUrl} alt={article.title} className="w-full h-full object-cover" />
+          </div>
+        )}
+
+        {/* Body — parsed into structured cards or fallback prose */}
+        <DigestBody html={article.body} />
 
         {/* Sources */}
         {sources.length > 0 && (
-          <div className="mb-10 p-4 rounded-lg border border-border bg-muted/30">
-            <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">Sources</h3>
+          <div className="mb-8 p-4 rounded-xl border border-border bg-muted/30">
+            <h3 className="text-[10px] font-bold mb-3 text-muted-foreground uppercase tracking-widest">Sources</h3>
             <ul className="space-y-2">
               {sources.map((s, i) => (
                 <li key={i} className="flex items-center gap-2">
@@ -208,8 +297,21 @@ export default function DigestArticleClient({
           </div>
         )}
 
+        {/* Footer branding + share */}
+        <div className="rounded-xl border border-border bg-card px-5 py-4">
+          <p className="text-xs text-muted-foreground mb-3">
+            <span className="font-semibold text-foreground">Inbox.GOP</span>
+            {" · Political Wire — Daily Republican intelligence digest published every weekday morning."}
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link href="/directory" className="text-xs text-[#dc2a28] hover:underline">← Directory</Link>
+            <span className="text-muted-foreground text-xs">·</span>
+            <Link href="/digest" className="text-xs text-[#dc2a28] hover:underline">All Digests</Link>
+          </div>
+        </div>
+
         {/* Share bar */}
-        <div className="border-t border-border pt-6 flex items-center gap-3 flex-wrap">
+        <div className="border-t border-border pt-5 mt-5 flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium text-muted-foreground">Share:</span>
           <a
             href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(article.title)}&url=${encodeURIComponent(shareUrl)}`}
@@ -217,7 +319,7 @@ export default function DigestArticleClient({
             rel="noopener noreferrer"
           >
             <Button variant="outline" size="sm" className="gap-2">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.741l7.73-8.835L1.254 2.25H8.08l4.259 5.631 5.905-5.631Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z" />
               </svg>
               X
@@ -229,12 +331,12 @@ export default function DigestArticleClient({
             rel="noopener noreferrer"
           >
             <Button variant="outline" size="sm" className="gap-2">
-              <Facebook size={14} />
+              <Facebook size={12} />
               Facebook
             </Button>
           </a>
           <Button variant="outline" size="sm" className="gap-2" onClick={handleCopyLink}>
-            <Link2 size={14} />
+            <Link2 size={12} />
             Copy Link
           </Button>
 

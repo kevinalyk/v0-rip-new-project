@@ -148,8 +148,8 @@ export function extractBio(html: string): string | null {
     if (text.length < 60) continue
     if (skipPattern.test(text)) continue
     collected.push(text)
-    // If there's no Biography section, only take the first paragraph
-    if (!hasBiographySection && collected.length >= 1) break
+    // Cap at 3 paragraphs; if no Biography section exists, stop at 1
+    if (collected.length >= (hasBiographySection ? 3 : 1)) break
   }
 
   return collected.length > 0 ? collected.join("\n\n") : null

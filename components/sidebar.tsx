@@ -41,6 +41,7 @@ import {
   Activity,
   Smartphone,
   Rocket,
+  Newspaper,
 } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { useTheme } from "next-themes"
@@ -426,6 +427,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                   active={pathname.includes("/directory/new-campaigns")}
                   collapsed={false}
                   onClick={() => navigate("/directory/new-campaigns")}
+                />
+                <NavItem
+                  icon={<Newspaper size={18} />}
+                  label="Intelligence Digest"
+                  active={pathname === "/digest" || pathname.startsWith("/digest/")}
+                  collapsed={false}
+                  onClick={() => navigate("/digest")}
                 />
               </div>
             )}

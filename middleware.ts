@@ -47,6 +47,8 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/share/") ||
     request.nextUrl.pathname === "/news" ||
     request.nextUrl.pathname.startsWith("/news/") ||
+    request.nextUrl.pathname === "/digest" ||
+    request.nextUrl.pathname.startsWith("/digest/") ||
     request.nextUrl.pathname === "/privacy" ||
     request.nextUrl.pathname === "/terms" ||
     request.nextUrl.pathname === "/about"
@@ -95,6 +97,7 @@ export async function middleware(request: NextRequest) {
             !currentPath.startsWith("/set-password") &&
             !currentPath.startsWith("/share/") &&
             !currentPath.startsWith("/news") &&
+            !currentPath.startsWith("/digest") &&
             !currentPath.startsWith("/directory") &&
             !currentPath.startsWith(`/${clientSlug}`)
 

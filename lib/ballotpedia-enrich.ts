@@ -136,7 +136,9 @@ export function extractBio(html: string): string | null {
   // Find the "Biography" heading — collect everything before it.
   // If the heading is found, grab all intro paragraphs up to it.
   // If not found, fall back to only the first paragraph.
-  const biographyMatch = clean.search(/<h\d[^>]*>\s*Biography\s*<\/h\d>/i)
+  // Ballotpedia wraps headings in spans: <h2><span ...>Biography</span></h2>
+  // so we match any heading tag that contains the word "Biography" anywhere inside it.
+  const biographyMatch = clean.search(/<h\d[^>]*>(?:[^<]|<(?!\/h\d))*?Biography(?:[^<]|<(?!\/h\d))*?<\/h\d>/i)
   const hasBiographySection = biographyMatch > 0
   const cutoff = hasBiographySection ? biographyMatch : clean.length
 

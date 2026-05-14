@@ -31,6 +31,7 @@ model User {
   domainAccess  UserDomainAccess[]
   ciViews       CiView[]
   entityTags    EntityTag[] // Added relation to entity tags created by this user
+  lookupSearches LookupSearch[] // Searches made via the public lookup tool
 }
 
 model Domain {
@@ -743,18 +744,6 @@ model IpSenderMapping {
 
 // ─── Who's Contacting Me? — public lookup tool ────────────────────────────────
 
-model LookupUser {
-  id           String         @id @default(cuid())
-  email        String         @unique
-  passwordHash String
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-
-  searches     LookupSearch[]
-
-  @@index([email])
-}
-
 model LookupSearch {
   id        String   @id @default(cuid())
   userId    String
@@ -763,7 +752,7 @@ model LookupSearch {
   results   Json     // Snapshot of the matched entities at search time
   createdAt DateTime @default(now())
 
-  user      LookupUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([query])

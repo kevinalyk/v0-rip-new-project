@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
 
     const passwordHash = await bcryptjs.hash(password, 12)
 
-    // Create in the main User table with role "lookup" and clientId "lookup"
+    // Create in the main User table with role "lookup" — no clientId needed
     const user = await prisma.user.create({
       data: {
         email: normalizedEmail,
@@ -77,7 +77,6 @@ export async function POST(request: NextRequest) {
         password: passwordHash,
         role: "lookup",
         firstLogin: false,
-        clientId: "lookup",
         digestEnabled: false,
         weeklyDigestEnabled: false,
       },

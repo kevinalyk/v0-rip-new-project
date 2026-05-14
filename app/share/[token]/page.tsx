@@ -122,21 +122,21 @@ export async function generateMetadata({ params }: { params: { token: string } }
 }
 
 export default async function SharePage({ params }: { params: { token: string } }) {
-  // ── Require authentication ────────────────────────────────────────────────
   const user = await getSession()
-  if (!user) {
-    redirect(`/login?redirect=/share/${params.token}`)
-  }
 
+  // If not authenticated, still render the page shell so generateMetadata
+  // (and therefore OG tags) are always present for social crawlers.
+  // SharePageClient handles the login-wall UI when isAuthenticated=false.
   const [showAd] = await Promise.all([
     shouldShowAd(),
-    incrementViewCount(params.token),
+    // Only increment view count for real users, not crawlers
+    user ? incrementViewCount(params.token) : Promise.resolve(),
   ])
 
   return (
     <>
       <AdBanner showAd={showAd} />
-      <SharePageClient />
+      <SharePageClient isAuthenticated={!!user} token={params.token} />
     </>
   )
 }

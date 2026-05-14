@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
@@ -31,22 +31,25 @@ interface Campaign {
   } | null
 }
 
-export default function SharePageClient() {
-  const params = useParams()
+interface SharePageClientProps {
+  isAuthenticated: boolean
+  token: string
+}
+
+export default function SharePageClient({ isAuthenticated, token }: SharePageClientProps) {
   const router = useRouter()
-  const token = params.token as string
   const [campaign, setCampaign] = useState<Campaign | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(isAuthenticated)
   const [error, setError] = useState<string | null>(null)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [emailZoom, setEmailZoom] = useState(100)
   const [dialogOpen, setDialogOpen] = useState(true)
   const [iframeContentHeight, setIframeContentHeight] = useState<number>(800)
 
   useEffect(() => {
-    checkAuth()
-    fetchSharedCampaign()
-  }, [token])
+    if (isAuthenticated) {
+      fetchSharedCampaign()
+    }
+  }, [token, isAuthenticated])
 
   // Auto-fit zoom on mobile when an email campaign loads
   useEffect(() => {
@@ -56,15 +59,6 @@ export default function SharePageClient() {
       setIframeContentHeight(800)
     }
   }, [campaign])
-
-  const checkAuth = async () => {
-    try {
-      const response = await fetch("/api/auth/me", { credentials: "include" })
-      setIsAuthenticated(response.ok)
-    } catch {
-      setIsAuthenticated(false)
-    }
-  }
 
   const fetchSharedCampaign = async () => {
     try {
@@ -177,6 +171,26 @@ export default function SharePageClient() {
   const renderMessageWithLinks = (text: string) => {
     // Render as plain text — links are shown in the CTA Links section
     return text
+  }
+
+  // Show login wall for unauthenticated users — OG tags still rendered server-side
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="max-w-md w-full text-center space-y-4">
+          <h1 className="text-2xl font-bold">Sign in to view this campaign</h1>
+          <p className="text-muted-foreground">
+            You need an Inbox.GOP account to view shared campaigns.
+          </p>
+          <Button onClick={() => router.push(`/login?redirect=/share/${token}`)}>
+            Sign in
+          </Button>
+          <div className="pt-4 border-t">
+            <p className="text-xs text-muted-foreground">Powered by Inbox.GOP</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (loading) {

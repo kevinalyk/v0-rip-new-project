@@ -361,7 +361,11 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
         {/* Bio */}
         {entity.bio && (
           <div className={`rounded-lg border border-border border-l-4 ${getPartyBorderColor(entity.party)} bg-card p-5 mb-8`}>
-            <p className="text-sm text-muted-foreground leading-relaxed">{entity.bio}</p>
+            <div className="flex flex-col gap-3">
+              {entity.bio.split("\n\n").map((paragraph, i) => (
+                <p key={i} className="text-sm text-muted-foreground leading-relaxed">{paragraph}</p>
+              ))}
+            </div>
             {entity.ballotpediaUrl && (
               <a
                 href={entity.ballotpediaUrl}

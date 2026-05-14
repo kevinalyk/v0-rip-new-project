@@ -105,10 +105,11 @@ export function extractOffice(html: string): string | null {
 // Extract the intro bio from Ballotpedia HTML.
 // Strategy:
 //   1. Find the position of the "Biography" section heading (any <hN> tag).
-//   2. If found, only consider HTML before that point — stopping us from
-//      capturing personal history that belongs in the Biography section.
-//   3. From that portion, collect only the first clean paragraph (min 60 chars).
-//   4. If "Biography" is never found, same rule applies — first paragraph only.
+//   2. If found, only consider HTML before that point — these are the intro
+//      paragraphs (current office, election status, etc.) not the personal bio.
+//   3. Collect all clean paragraphs (min 60 chars) before that heading.
+//   4. If "Biography" is never found, collect the first paragraph only.
+//   5. Join multiple paragraphs with \n\n so callers can split and render them.
 export function extractBio(html: string): string | null {
   const clean = html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -132,10 +133,12 @@ export function extractBio(html: string): string | null {
   const skipPattern =
     /^(see also|contents|navigation|retrieved|external links|references|footnotes|this article|don't know|join the|make it possible)/i
 
-  // Find the "Biography" heading — stop scraping before it.
-  // Falls back to the full document if the heading is never found.
+  // Find the "Biography" heading — collect everything before it.
+  // If the heading is found, grab all intro paragraphs up to it.
+  // If not found, fall back to only the first paragraph.
   const biographyMatch = clean.search(/<h\d[^>]*>\s*Biography\s*<\/h\d>/i)
-  const cutoff = biographyMatch > 0 ? biographyMatch : clean.length
+  const hasBiographySection = biographyMatch > 0
+  const cutoff = hasBiographySection ? biographyMatch : clean.length
 
   const introParas = clean.slice(0, cutoff).match(/<p[^>]*>([\s\S]*?)<\/p>/gi) || []
 
@@ -145,10 +148,11 @@ export function extractBio(html: string): string | null {
     if (text.length < 60) continue
     if (skipPattern.test(text)) continue
     collected.push(text)
-    if (collected.length >= 1) break
+    // If there's no Biography section, only take the first paragraph
+    if (!hasBiographySection && collected.length >= 1) break
   }
 
-  return collected.length > 0 ? collected[0] : null
+  return collected.length > 0 ? collected.join("\n\n") : null
 }
 
 export type EnrichResult = {

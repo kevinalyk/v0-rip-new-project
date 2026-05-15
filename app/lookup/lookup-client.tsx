@@ -876,7 +876,12 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
         <header className="border-b border-gray-200 bg-gray-50 sticky top-0 z-40">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-red-500 font-bold text-base tracking-tight">inbox.gop</span>
+              <div className="bg-red-500 rounded-lg p-1.5">
+                <Search className="w-4 h-4 text-gray-900" />
+              </div>
+              <span className="text-gray-900 font-semibold text-sm leading-tight hidden sm:block">
+                Who&apos;s Contacting Me?
+              </span>
             </div>
 
             <div className="flex items-center gap-3">

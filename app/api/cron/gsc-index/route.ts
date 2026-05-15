@@ -45,11 +45,9 @@ export async function GET(request: Request) {
         await submitUrlForIndexing(url)
         results.push({ slug: article.slug, success: true })
       } catch (err) {
-        results.push({
-          slug: article.slug,
-          success: false,
-          error: err instanceof Error ? err.message : "Unknown error",
-        })
+        const errMsg = err instanceof Error ? err.message : "Unknown error"
+        console.error(`[cron/gsc-index] Failed to submit ${url}: ${errMsg}`)
+        results.push({ slug: article.slug, success: false, error: errMsg })
       }
     }
 

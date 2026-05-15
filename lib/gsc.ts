@@ -129,18 +129,40 @@ export async function getPageSearchQueries(pagePath: string, days = 28): Promise
   }))
 }
 
-/** Submit a URL for indexing via the Indexing API (separate from GSC) */
+/** Submit a URL for indexing via IndexNow.
+ *
+ *  IndexNow is supported by Google, Bing, and Yandex — no OAuth or service
+ *  account required. Requires INDEXNOW_KEY env var and the matching key file
+ *  served at /{key}.txt (public/36eb0f0e16708d33d6019f044cbb32e9.txt).
+ */
 export async function submitUrlForIndexing(url: string): Promise<boolean> {
-  const auth = new google.auth.OAuth2(
-    process.env.GSC_CLIENT_ID,
-    process.env.GSC_CLIENT_SECRET
-  )
-  auth.setCredentials({ refresh_token: process.env.GSC_REFRESH_TOKEN })
+  const key = process.env.INDEXNOW_KEY
+  if (!key) {
+    throw new Error("Missing INDEXNOW_KEY env var")
+  }
 
-  const indexing = google.indexing({ version: "v3", auth })
-  const response = await indexing.urlNotifications.publish({
-    requestBody: { url, type: "URL_UPDATED" },
+  const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
+  const host = new URL(siteUrl).host
+
+  const body = {
+    host,
+    key,
+    keyLocation: `${siteUrl}/${key}.txt`,
+    urlList: [url],
+  }
+
+  const response = await fetch("https://api.indexnow.org/indexnow", {
+    method: "POST",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify(body),
   })
-  console.log(`[gsc] Submitted ${url} — status ${response.status}`)
+
+  // 200 and 202 are both success responses from IndexNow
+  if (!response.ok && response.status !== 202) {
+    const text = await response.text()
+    throw new Error(`IndexNow returned ${response.status}: ${text}`)
+  }
+
+  console.log(`[gsc] IndexNow submitted ${url} — HTTP ${response.status}`)
   return true
 }

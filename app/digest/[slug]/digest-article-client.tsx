@@ -97,8 +97,16 @@ const PROSE_CLASSES = `prose prose-neutral dark:prose-invert max-w-none text-bas
   [&_h2]:text-lg [&_h2]:font-bold [&_h2]:mt-6 [&_h2]:mb-2
   [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1
   [&_blockquote]:border-l-4 [&_blockquote]:border-[#dc2a28] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-muted-foreground
-  [&_table]:w-full [&_table]:text-sm [&_th]:text-left [&_th]:py-2 [&_th]:px-3 [&_th]:font-semibold [&_th]:border-b [&_th]:border-border
-  [&_td]:py-2 [&_td]:px-3 [&_td]:border-b [&_td]:border-border/50`
+  [&_table]:min-w-full [&_table]:text-sm [&_th]:text-left [&_th]:py-2 [&_th]:px-3 [&_th]:font-semibold [&_th]:border-b [&_th]:border-border [&_th]:whitespace-nowrap
+  [&_td]:py-2 [&_td]:px-3 [&_td]:border-b [&_td]:border-border/50 [&_td]:whitespace-nowrap`
+
+// Wrap every <table> in a horizontally-scrollable container so it doesn't overflow on mobile
+function wrapTables(html: string): string {
+  return html.replace(
+    /(<table[\s\S]*?<\/table>)/gi,
+    '<div class="overflow-x-auto -mx-1 rounded-md my-4">$1</div>'
+  )
+}
 
 // ─── Structured body renderer ─────────────────────────────────────────────────
 function DigestBody({ html }: { html: string }) {
@@ -135,7 +143,7 @@ function DigestBody({ html }: { html: string }) {
         {remainder && (
           <div
             className={`mt-6 ${PROSE_CLASSES}`}
-            dangerouslySetInnerHTML={{ __html: remainder }}
+            dangerouslySetInnerHTML={{ __html: wrapTables(remainder) }}
           />
         )}
       </div>
@@ -146,7 +154,7 @@ function DigestBody({ html }: { html: string }) {
   return (
     <div
       className={`${PROSE_CLASSES} mb-10`}
-      dangerouslySetInnerHTML={{ __html: html }}
+      dangerouslySetInnerHTML={{ __html: wrapTables(html) }}
     />
   )
 }

@@ -117,10 +117,39 @@ export default async function DigestArticlePage({ params }: Props) {
     console.error("[DigestArticlePage] failed to pre-fetch article:", err)
   }
 
+  const articleJsonLd = initialArticle
+    ? {
+        "@context": "https://schema.org",
+        "@type": "NewsArticle",
+        headline: initialArticle.title,
+        description: initialArticle.summary || undefined,
+        datePublished: initialArticle.publishedAt,
+        dateModified: initialArticle.updatedAt,
+        url: `${BASE_URL}/digest/${initialArticle.slug}`,
+        ...(initialArticle.imageUrl && { image: { "@type": "ImageObject", url: initialArticle.imageUrl } }),
+        publisher: {
+          "@type": "Organization",
+          name: "Inbox.GOP",
+          url: BASE_URL,
+        },
+        ...(initialArticle.tags && initialArticle.tags.length > 0 && {
+          keywords: initialArticle.tags.join(", "),
+        }),
+      }
+    : null
+
   return (
-    <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
-      <AdBanner showAd={showAd} />
-      <DigestArticleClient slug={params.slug} initialArticle={initialArticle} />
-    </AppLayout>
+    <>
+      {articleJsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+        />
+      )}
+      <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
+        <AdBanner showAd={showAd} />
+        <DigestArticleClient slug={params.slug} initialArticle={initialArticle} />
+      </AppLayout>
+    </>
   )
 }

@@ -15,13 +15,45 @@ const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
 export const metadata: Metadata = {
   title: "Intelligence Digest - Inbox.GOP",
-  description: "Political intelligence and analysis from the Inbox.GOP team.",
+  description: "Daily political intelligence and analysis from Inbox.GOP. Covering Senate battlegrounds, primaries, endorsements, and Democratic failures.",
+  keywords: [
+    "republican intelligence digest",
+    "GOP daily briefing",
+    "political analysis",
+    "senate battleground tracker",
+    "republican primary news",
+    "conservative political digest",
+    "inbox gop digest",
+    "daily political intelligence",
+  ],
+  robots: { index: true, follow: true },
+  alternates: { canonical: `${BASE_URL}/digest` },
   openGraph: {
     title: "Intelligence Digest - Inbox.GOP",
-    description: "Political intelligence and analysis from the Inbox.GOP team.",
+    description: "Daily political intelligence and analysis from Inbox.GOP. Covering Senate battlegrounds, primaries, endorsements, and Democratic failures.",
     url: `${BASE_URL}/digest`,
     siteName: "Inbox.GOP",
     type: "website",
+    images: [{ url: `${BASE_URL}/og-candidate-directory.png`, width: 1200, height: 630, alt: "Inbox.GOP Intelligence Digest" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Intelligence Digest - Inbox.GOP",
+    description: "Daily political intelligence and analysis from Inbox.GOP.",
+    images: [`${BASE_URL}/og-candidate-directory.png`],
+  },
+}
+
+const digestListJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Blog",
+  name: "Inbox.GOP Intelligence Digest",
+  url: `${BASE_URL}/digest`,
+  description: "Daily political intelligence and analysis covering Senate battlegrounds, primaries, endorsements, and campaign finance.",
+  publisher: {
+    "@type": "Organization",
+    name: "Inbox.GOP",
+    url: BASE_URL,
   },
 }
 
@@ -78,10 +110,15 @@ export default async function DigestPage() {
   }
 
   return (
-    <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
-      <AdBanner showAd={showAd} />
-      <div className="container mx-auto py-8 px-4 max-w-3xl">
-        <div className="flex items-center justify-between mb-10">
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(digestListJsonLd) }}
+      />
+      <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>
+        <AdBanner showAd={showAd} />
+        <div className="container mx-auto py-8 px-4 max-w-3xl">
+          <div className="flex items-center justify-between mb-10">
           <div>
             <div className="flex items-center gap-3 mb-1">
               <Newspaper size={22} className="text-[#dc2a28]" />
@@ -174,8 +211,9 @@ export default async function DigestPage() {
         )}
       </div>
 
-      {/* Super-admin FAB + CRUD dialogs */}
-      <DigestPageClient initialArticles={articles} />
-    </AppLayout>
+        {/* Super-admin FAB + CRUD dialogs */}
+        <DigestPageClient initialArticles={articles} />
+      </AppLayout>
+    </>
   )
 }

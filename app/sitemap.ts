@@ -167,5 +167,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // If DB is unavailable during build, skip news pages
   }
 
-  return [...staticPages, ...landingPages, ...entityPages, ...newsPages]
+  // Dynamic digest articles
+  let digestPages: MetadataRoute.Sitemap = []
+  try {
+    const articles = await prisma.digestArticle.findMany({
+      select: { slug: true, updatedAt: true },
+      orderBy: { publishedAt: "desc" },
+    })
+
+    digestPages = articles.map((article) => ({
+      url: `${APP_URL}/digest/${article.slug}`,
+      lastModified: article.updatedAt,
+      changeFrequency: "monthly" as const,
+      priority: 0.6,
+    }))
+  } catch {
+    // If DB is unavailable during build, skip digest pages
+  }
+
+  return [...staticPages, ...landingPages, ...entityPages, ...newsPages, ...digestPages]
 }

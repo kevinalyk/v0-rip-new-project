@@ -131,19 +131,16 @@ export async function getPageSearchQueries(pagePath: string, days = 28): Promise
 
 /** Submit a URL for indexing via the Indexing API (separate from GSC) */
 export async function submitUrlForIndexing(url: string): Promise<boolean> {
-  try {
-    const auth = new google.auth.OAuth2(
-      process.env.GSC_CLIENT_ID,
-      process.env.GSC_CLIENT_SECRET
-    )
-    auth.setCredentials({ refresh_token: process.env.GSC_REFRESH_TOKEN })
+  const auth = new google.auth.OAuth2(
+    process.env.GSC_CLIENT_ID,
+    process.env.GSC_CLIENT_SECRET
+  )
+  auth.setCredentials({ refresh_token: process.env.GSC_REFRESH_TOKEN })
 
-    const indexing = google.indexing({ version: "v3", auth })
-    await indexing.urlNotifications.publish({
-      requestBody: { url, type: "URL_UPDATED" },
-    })
-    return true
-  } catch {
-    return false
-  }
+  const indexing = google.indexing({ version: "v3", auth })
+  const response = await indexing.urlNotifications.publish({
+    requestBody: { url, type: "URL_UPDATED" },
+  })
+  console.log(`[gsc] Submitted ${url} — status ${response.status}`)
+  return true
 }

@@ -366,6 +366,7 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
       {breadcrumbData && (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbData) }} />
       )}
+      <AdBanner showAd={showAd} />
       <div className="flex justify-center gap-4">
         <div className="flex-1 min-w-0">
           <DirectoryProfileContent slug={slug} initialData={initialData} />
@@ -373,7 +374,6 @@ export default async function DirectorySlugPage({ params }: { params: Promise<{ 
         </div>
         <AdSidebar showAd={showSidebarAd} />
       </div>
-      <AdBanner showAd={showAd} />
     </>
   )
 }

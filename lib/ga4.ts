@@ -20,11 +20,14 @@ function getGA4Client() {
 
   console.log(`[ga4] Initialising client — email: ${email.slice(0, 20)}... key starts: ${privateKey.slice(0, 28)}`)
 
+  // Force REST transport — gRPC fails in Vercel serverless environments
+  // because they don't support the persistent TCP connections gRPC requires.
   return new BetaAnalyticsDataClient({
     credentials: {
       client_email: email,
       private_key: privateKey,
     },
+    fallback: "rest",
   })
 }
 

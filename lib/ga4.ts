@@ -1,11 +1,28 @@
 import { BetaAnalyticsDataClient } from "@google-analytics/data"
 
 function getGA4Client() {
-  const privateKey = process.env.GA4_PRIVATE_KEY?.replace(/\\n/g, "\n")
+  const email = process.env.GA4_CLIENT_EMAIL
+  const rawKey = process.env.GA4_PRIVATE_KEY
+
+  if (!email || !rawKey) {
+    throw new Error(`GA4 credentials missing — GA4_CLIENT_EMAIL: ${!!email}, GA4_PRIVATE_KEY: ${!!rawKey}`)
+  }
+
+  // Normalise the key: handle both literal \\n (Vercel env var paste) and real newlines,
+  // and strip any surrounding quotes that may have been included in the value.
+  const privateKey = rawKey
+    .replace(/^["']|["']$/g, "")   // strip surrounding quotes
+    .replace(/\\n/g, "\n")          // literal \n → real newline
+
+  if (!privateKey.includes("-----BEGIN")) {
+    throw new Error("GA4_PRIVATE_KEY does not look like a valid PEM key — check the env var value in Vercel")
+  }
+
+  console.log(`[ga4] Initialising client — email: ${email.slice(0, 20)}... key starts: ${privateKey.slice(0, 28)}`)
 
   return new BetaAnalyticsDataClient({
     credentials: {
-      client_email: process.env.GA4_CLIENT_EMAIL,
+      client_email: email,
       private_key: privateKey,
     },
   })

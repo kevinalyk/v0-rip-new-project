@@ -131,21 +131,21 @@ export async function getPageSearchQueries(pagePath: string, days = 28): Promise
 
 /** Submit a URL for indexing via the Google Indexing API.
  *
- *  The Indexing API requires a Service Account — OAuth2 credentials
- *  (GSC_CLIENT_ID / GSC_CLIENT_SECRET) are for Search Console queries only.
- *
- *  Set GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
- *  (PEM key with literal \n newlines) as env vars, then add the service
- *  account email as an Owner in GSC property settings.
+ *  Uses the GA4 service account (GA4_CLIENT_EMAIL + GA4_PRIVATE_KEY).
+ *  The service account must be added as an Owner in GSC property settings.
+ *  OAuth2 credentials (GSC_CLIENT_ID / GSC_CLIENT_SECRET) only work for
+ *  Search Console queries, not the Indexing API.
  */
 export async function submitUrlForIndexing(url: string): Promise<boolean> {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
-  const rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+  // Reuse the same service account already configured for GA4
+  const email = process.env.GA4_CLIENT_EMAIL
+  const rawKey = process.env.GA4_PRIVATE_KEY
 
   if (!email || !rawKey) {
     throw new Error(
-      "Missing GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY env vars. " +
-      "The Indexing API requires a service account, not OAuth2 credentials."
+      "Missing GA4_CLIENT_EMAIL or GA4_PRIVATE_KEY env vars — " +
+      "the Indexing API requires a service account JWT (not OAuth2). " +
+      "Make sure the service account is also added as an Owner in GSC."
     )
   }
 

@@ -46,21 +46,28 @@ export interface TopPage {
 export async function getTopPages(days = 30, limit = 20): Promise<TopPage[]> {
   const client = getGA4Client()
   const propertyId = process.env.GA4_PROPERTY_ID
+  console.log(`[ga4] getTopPages — property: properties/${propertyId}, days: ${days}`)
 
-  const [response] = await client.runReport({
-    property: `properties/${propertyId}`,
-    dateRanges: [{ startDate: `${days}daysAgo`, endDate: "today" }],
-    dimensions: [{ name: "pagePath" }],
-    metrics: [{ name: "screenPageViews" }, { name: "sessions" }],
-    orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
-    limit,
-  })
-
-  return (response.rows ?? []).map((row) => ({
-    pagePath: row.dimensionValues?.[0]?.value ?? "",
-    pageViews: parseInt(row.metricValues?.[0]?.value ?? "0", 10),
-    sessions: parseInt(row.metricValues?.[1]?.value ?? "0", 10),
-  }))
+  try {
+    const [response] = await client.runReport({
+      property: `properties/${propertyId}`,
+      dateRanges: [{ startDate: `${days}daysAgo`, endDate: "today" }],
+      dimensions: [{ name: "pagePath" }],
+      metrics: [{ name: "screenPageViews" }, { name: "sessions" }],
+      orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
+      limit,
+    })
+    console.log(`[ga4] getTopPages — got ${response.rows?.length ?? 0} rows`)
+    return (response.rows ?? []).map((row) => ({
+      pagePath: row.dimensionValues?.[0]?.value ?? "",
+      pageViews: parseInt(row.metricValues?.[0]?.value ?? "0", 10),
+      sessions: parseInt(row.metricValues?.[1]?.value ?? "0", 10),
+    }))
+  } catch (err) {
+    const msg = err instanceof Error ? `${err.message} | stack: ${err.stack?.slice(0, 300)}` : JSON.stringify(err)
+    console.error(`[ga4] getTopPages error: ${msg}`)
+    throw err
+  }
 }
 
 /** Fetch metrics for a specific page path */
@@ -102,20 +109,27 @@ export async function getPageMetrics(pagePath: string, days = 30): Promise<PageM
 export async function getSearchTerms(days = 30, limit = 50): Promise<{ term: string; sessions: number }[]> {
   const client = getGA4Client()
   const propertyId = process.env.GA4_PROPERTY_ID
+  console.log(`[ga4] getSearchTerms — property: properties/${propertyId}, days: ${days}`)
 
-  const [response] = await client.runReport({
-    property: `properties/${propertyId}`,
-    dateRanges: [{ startDate: `${days}daysAgo`, endDate: "today" }],
-    dimensions: [{ name: "sessionGoogleAdsKeyword" }],
-    metrics: [{ name: "sessions" }],
-    orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
-    limit,
-  })
-
-  return (response.rows ?? [])
-    .filter((row) => row.dimensionValues?.[0]?.value && row.dimensionValues[0].value !== "(not set)")
-    .map((row) => ({
-      term: row.dimensionValues?.[0]?.value ?? "",
-      sessions: parseInt(row.metricValues?.[0]?.value ?? "0", 10),
-    }))
+  try {
+    const [response] = await client.runReport({
+      property: `properties/${propertyId}`,
+      dateRanges: [{ startDate: `${days}daysAgo`, endDate: "today" }],
+      dimensions: [{ name: "sessionGoogleAdsKeyword" }],
+      metrics: [{ name: "sessions" }],
+      orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+      limit,
+    })
+    console.log(`[ga4] getSearchTerms — got ${response.rows?.length ?? 0} rows`)
+    return (response.rows ?? [])
+      .filter((row) => row.dimensionValues?.[0]?.value && row.dimensionValues[0].value !== "(not set)")
+      .map((row) => ({
+        term: row.dimensionValues?.[0]?.value ?? "",
+        sessions: parseInt(row.metricValues?.[0]?.value ?? "0", 10),
+      }))
+  } catch (err) {
+    const msg = err instanceof Error ? `${err.message} | stack: ${err.stack?.slice(0, 300)}` : JSON.stringify(err)
+    console.error(`[ga4] getSearchTerms error: ${msg}`)
+    throw err
+  }
 }

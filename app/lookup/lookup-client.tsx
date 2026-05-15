@@ -477,10 +477,10 @@ function SearchResults({
         </p>
       </div>
       {results.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
-          <Search className="w-8 h-8 text-gray-400 mx-auto mb-3" />
+        <div className="bg-white border border-gray-200 rounded-xl p-5 sm:p-8 text-center">
+          <Search className="w-7 h-7 text-gray-400 mx-auto mb-2" />
           <p className="text-gray-900 font-medium mb-1">No results found</p>
-          <p className="text-gray-600 text-sm leading-relaxed">
+          <p className="text-gray-600 text-sm leading-relaxed text-left sm:text-center">
             We don&apos;t have any campaigns or political groups matching that{" "}
             {queryType === "phone" ? "phone number" : "email address"} in our database yet.
           </p>
@@ -536,31 +536,31 @@ function HistoryPanel({
   return (
     <div className="mt-6 bg-white border border-gray-200 rounded-xl overflow-hidden">
       {/* Panel header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+      <div className="flex items-center gap-2 px-4 sm:px-5 py-3 sm:py-4 border-b border-gray-200">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+          className="flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1"
         >
-          <Clock className="w-4 h-4 text-gray-600" />
-          <span className="text-gray-700 text-sm font-medium">
+          <Clock className="w-4 h-4 text-gray-600 flex-shrink-0" />
+          <span className="text-gray-700 text-sm font-medium truncate">
             Recent searches ({history.length})
           </span>
           {open ? (
-            <ChevronUp className="w-3.5 h-3.5 text-gray-600" />
+            <ChevronUp className="w-3.5 h-3.5 text-gray-600 flex-shrink-0" />
           ) : (
-            <ChevronDown className="w-3.5 h-3.5 text-gray-600" />
+            <ChevronDown className="w-3.5 h-3.5 text-gray-600 flex-shrink-0" />
           )}
         </button>
         {open && (
           <button
             type="button"
             onClick={onClearAll}
-            className="flex items-center gap-1.5 text-gray-400 hover:text-red-400 text-xs transition-colors"
+            className="flex items-center gap-1.5 text-gray-400 hover:text-red-400 text-xs transition-colors flex-shrink-0"
             aria-label="Clear all searches"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            Clear all
+            <span className="hidden sm:inline">Clear all</span>
           </button>
         )}
       </div>
@@ -586,11 +586,11 @@ function HistoryPanel({
                       {item.query}
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 ml-2">
                     <span className="text-gray-400 text-xs">
                       {item.results.length} result{item.results.length !== 1 ? "s" : ""}
                     </span>
-                    <span className="text-gray-400 text-xs">
+                    <span className="hidden sm:inline text-gray-400 text-xs">
                       {new Date(item.createdAt).toLocaleDateString()}
                     </span>
                     {expandedId === item.id ? (

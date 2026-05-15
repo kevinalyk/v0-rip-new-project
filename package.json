@@ -12,6 +12,7 @@
   "dependencies": {
     "@ai-sdk/openai": "3.0.26",
     "@azure/msal-node": "^2.15.0",
+    "@google-analytics/data": "^6.0.0",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "@neondatabase/serverless": "^0.10.1",
     "@prisma/client": "5.22.0",
@@ -58,6 +59,7 @@
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.5",
     "embla-carousel-react": "8.6.0",
+    "googleapis": "^171.4.0",
     "imap": "^0.8.19",
     "input-otp": "1.4.2",
     "isomorphic-fetch": "^3.0.0",

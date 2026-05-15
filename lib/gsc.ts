@@ -129,18 +129,46 @@ export async function getPageSearchQueries(pagePath: string, days = 28): Promise
   }))
 }
 
-/** Submit a URL for indexing via the Indexing API (separate from GSC) */
+/** Submit a URL for indexing via the Google Indexing API.
+ *
+ *  The Indexing API requires a Service Account — OAuth2 credentials
+ *  (GSC_CLIENT_ID / GSC_CLIENT_SECRET) are for Search Console queries only.
+ *
+ *  Set GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+ *  (PEM key with literal \n newlines) as env vars, then add the service
+ *  account email as an Owner in GSC property settings.
+ */
 export async function submitUrlForIndexing(url: string): Promise<boolean> {
-  const auth = new google.auth.OAuth2(
-    process.env.GSC_CLIENT_ID,
-    process.env.GSC_CLIENT_SECRET
-  )
-  auth.setCredentials({ refresh_token: process.env.GSC_REFRESH_TOKEN })
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
+  const rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+
+  if (!email || !rawKey) {
+    throw new Error(
+      "Missing GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY env vars. " +
+      "The Indexing API requires a service account, not OAuth2 credentials."
+    )
+  }
+
+  // Vercel stores multiline env vars with literal \n — convert back to real newlines
+  const privateKey = rawKey.replace(/\\n/g, "\n")
+
+  const auth = new google.auth.JWT({
+    email,
+    key: privateKey,
+    scopes: ["https://www.googleapis.com/auth/indexing"],
+  })
 
   const indexing = google.indexing({ version: "v3", auth })
-  const response = await indexing.urlNotifications.publish({
-    requestBody: { url, type: "URL_UPDATED" },
-  })
-  console.log(`[gsc] Submitted ${url} — status ${response.status}`)
-  return true
+
+  try {
+    const response = await indexing.urlNotifications.publish({
+      requestBody: { url, type: "URL_UPDATED" },
+    })
+    console.log(`[gsc] Submitted ${url} — HTTP ${response.status}`)
+    return true
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error(`[gsc] Failed to submit ${url}: ${message}`)
+    throw err
+  }
 }

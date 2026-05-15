@@ -347,7 +347,6 @@ function AdModal({ onClose }: { onClose: () => void }) {
             className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 transition-colors text-xs"
             aria-label="Close advertisement"
           >
-            <X className="w-3.5 h-3.5" />
             {countdown > 0 ? `Close in ${countdown}s` : "Close"}
           </button>
         </div>
@@ -877,12 +876,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
         <header className="border-b border-gray-200 bg-gray-50 sticky top-0 z-40">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="bg-red-500 rounded-lg p-1.5">
-                <Search className="w-4 h-4 text-gray-900" />
-              </div>
-              <span className="text-gray-900 font-semibold text-sm leading-tight hidden sm:block">
-                Who&apos;s Contacting Me?
-              </span>
+              <span className="text-red-500 font-bold text-base tracking-tight">inbox.gop</span>
             </div>
 
             <div className="flex items-center gap-3">
@@ -1056,12 +1050,12 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
           <p className="text-center text-gray-400 text-xs">
             Powered by{" "}
             <a
-              href="https://app.rip-tool.com"
+              href="https://inbox.gop"
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-gray-600 transition-colors"
             >
-              RIP Tool
+              Inbox.GOP
             </a>{" "}
             &middot;{" "}
             <a href="/terms" className="hover:text-gray-600 transition-colors">Terms</a>

@@ -4,11 +4,12 @@ import { prisma } from "@/lib/prisma"
 
 // Called by Vercel Cron or manually — submits recently published digest articles to GSC for indexing
 export async function GET(request: Request) {
-  // Vercel Cron sends the CRON_SECRET as a Bearer token automatically
+  // Allow Vercel's own cron runner (x-vercel-cron header) OR a valid Bearer token
   const authHeader = request.headers.get("authorization")
+  const isVercelCron = request.headers.get("x-vercel-cron") === "1"
   const cronSecret = process.env.CRON_SECRET
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!isVercelCron && cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     console.error("[cron/gsc-index] Unauthorized request")
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }

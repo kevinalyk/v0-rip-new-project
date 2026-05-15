@@ -63,7 +63,7 @@ export function SeoDashboardContent() {
     setIndexing(true)
     setIndexResult(null)
     try {
-      const res = await fetch("/api/cron/gsc-index")
+      const res = await fetch("/api/admin/trigger-gsc-index", { method: "POST" })
       const json = await res.json()
       setIndexResult({ message: json.message || JSON.stringify(json), ok: res.ok })
     } catch (e) {

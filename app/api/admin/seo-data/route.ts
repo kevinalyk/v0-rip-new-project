@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { verifyToken } from "@/lib/auth"
 import { cookies } from "next/headers"
 import { getTopPages, getTopSearchTerms } from "@/lib/ga4"
-import { getTopQueries, getTopPages as getGscTopPages } from "@/lib/gsc"
+import { getTopSearchQueries as getTopQueries, getTopSearchPages as getGscTopPages } from "@/lib/gsc"
 
 export async function GET(request: Request) {
   try {

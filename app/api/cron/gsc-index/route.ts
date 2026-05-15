@@ -4,12 +4,16 @@ import { prisma } from "@/lib/prisma"
 
 // Called by Vercel Cron or manually — submits recently published digest articles to GSC for indexing
 export async function GET(request: Request) {
+  // Vercel Cron sends the CRON_SECRET as a Bearer token automatically
   const authHeader = request.headers.get("authorization")
   const cronSecret = process.env.CRON_SECRET
 
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    console.error("[cron/gsc-index] Unauthorized request")
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  console.log("[cron/gsc-index] Starting GSC indexing run")
 
   const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
@@ -25,7 +29,10 @@ export async function GET(request: Request) {
       take: 20,
     })
 
+    console.log(`[cron/gsc-index] Found ${articles.length} articles to index since ${cutoff.toISOString()}`)
+
     if (articles.length === 0) {
+      console.log("[cron/gsc-index] No recent articles found, exiting")
       return NextResponse.json({ message: "No recent articles to index", submitted: 0 })
     }
 

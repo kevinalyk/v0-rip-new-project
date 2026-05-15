@@ -136,12 +136,13 @@ export async function getPageSearchQueries(pagePath: string, days = 28): Promise
  *  served at /{key}.txt (public/36eb0f0e16708d33d6019f044cbb32e9.txt).
  */
 export async function submitUrlForIndexing(url: string): Promise<boolean> {
-  const key = process.env.INDEXNOW_KEY
+  // Trim to strip any accidental whitespace/newlines added during env var setup
+  const key = (process.env.INDEXNOW_KEY ?? "").trim()
   if (!key) {
     throw new Error("Missing INDEXNOW_KEY env var")
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
+  const siteUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.rip-tool.com").trim()
   const host = new URL(siteUrl).host
 
   const body = {

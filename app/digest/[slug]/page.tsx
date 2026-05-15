@@ -31,7 +31,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const description = article.summary || stripHtml(article.body).slice(0, 160).trim()
     const url = `${BASE_URL}/digest/${article.slug}`
     const publishedTime = article.publishedAt.toISOString()
-    const ogImageUrl = article.imageUrl ?? `${url}/opengraph-image`
+    // Always use the dynamic OG image route — it will layer the article imageUrl as a background if present
+    const ogImageUrl = `${url}/opengraph-image`
 
     return {
       title: `${article.title} - Intelligence Digest | Inbox.GOP`,

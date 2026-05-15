@@ -3,7 +3,6 @@
 import type React from "react"
 
 import { useState } from "react"
-import Image from "next/image"
 import { Menu, X } from "lucide-react"
 import { Sidebar } from "@/components/sidebar"
 import { Button } from "@/components/ui/button"
@@ -63,14 +62,7 @@ function AppLayout({ children, clientSlug, isAdminView = false, defaultCollapsed
         <header className="flex md:hidden items-center gap-3 px-4 py-3 border-b border-border bg-background sticky top-0 z-30">
           <Logo collapsed={false} variant="icon" />
           <div className="flex-1 flex items-center justify-center min-w-0">
-            <Image
-              src="/images/rip-wordmark.png"
-              alt="Republican Inboxing Protocol"
-              width={420}
-              height={84}
-              priority
-              className="h-8 w-auto max-w-full object-contain"
-            />
+            <span className="text-foreground font-bold text-xl tracking-tight">Inbox.GOP</span>
           </div>
           <Button
             variant="ghost"

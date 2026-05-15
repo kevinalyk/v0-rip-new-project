@@ -54,6 +54,17 @@ interface StoryItem {
   body: string
 }
 
+// Strip all HTML tags except <a> anchors (which become plain-text placeholders
+// we can restore after stripping). This lets Claude embed hyperlinks in story
+// bodies and have them survive the parse step.
+function stripTagsPreserveLinks(html: string): string {
+  // Replace </p> and <br> with a space to preserve word boundaries
+  let out = html.replace(/<\/p>/gi, " ").replace(/<br\s*\/?>/gi, " ")
+  // Keep anchor tags intact, strip everything else
+  out = out.replace(/<(?!\/?\s*a[\s>])[^>]+>/g, "")
+  return out.replace(/\s+/g, " ").trim()
+}
+
 function parseStories(html: string): { stories: StoryItem[]; remainder: string } | null {
   // Pattern: <strong>CATEGORY — Headline.</strong> Body text
   // Stop story body at the next story opener OR at a block-level structural element (table, h2, blockquote)
@@ -80,7 +91,8 @@ function parseStories(html: string): { stories: StoryItem[]; remainder: string }
 
     const category = match[1].trim()
     const headline = match[2].trim().replace(/\.$/, "")
-    const rawBody = match[3].replace(/<\/p>/g, "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim()
+    // Preserve <a> links, strip all other tags
+    const rawBody = stripTagsPreserveLinks(match[3])
     if (headline) stories.push({ category, headline, body: rawBody })
     lastStoryEnd = match.index + match[0].length
   }
@@ -132,7 +144,12 @@ function DigestBody({ html }: { html: string }) {
                 </span>
                 <div>
                   <p className="text-sm font-semibold leading-snug text-foreground mb-1">{s.headline}</p>
-                  {s.body && <p className="text-sm text-muted-foreground leading-relaxed">{s.body}</p>}
+                  {s.body && (
+                    <p
+                      className="text-sm text-muted-foreground leading-relaxed [&_a]:text-[#dc2a28] [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-[#b01f1d]"
+                      dangerouslySetInnerHTML={{ __html: s.body }}
+                    />
+                  )}
                 </div>
               </div>
             </div>

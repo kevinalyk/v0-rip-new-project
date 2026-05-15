@@ -42,6 +42,7 @@ import {
   Smartphone,
   Rocket,
   Newspaper,
+  TrendingUp,
 } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { useTheme } from "next-themes"
@@ -577,6 +578,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                       active={pathname === "/rip/admin/site-traffic"}
                       collapsed={false}
                       onClick={() => navigate("/rip/admin/site-traffic")}
+                    />
+                    <NavItem
+                      icon={<TrendingUp size={18} />}
+                      label="SEO Dashboard"
+                      active={pathname === "/rip/admin/seo-dashboard"}
+                      collapsed={false}
+                      onClick={() => navigate("/rip/admin/seo-dashboard")}
                     />
                   </div>
                 )}

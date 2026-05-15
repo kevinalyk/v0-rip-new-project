@@ -347,7 +347,6 @@ function AdModal({ onClose }: { onClose: () => void }) {
             className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 transition-colors text-xs"
             aria-label="Close advertisement"
           >
-            <X className="w-3.5 h-3.5" />
             {countdown > 0 ? `Close in ${countdown}s` : "Close"}
           </button>
         </div>

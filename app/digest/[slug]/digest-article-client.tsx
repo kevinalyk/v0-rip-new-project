@@ -54,6 +54,17 @@ interface StoryItem {
   body: string
 }
 
+// Strip all HTML tags except <a> anchors (which become plain-text placeholders
+// we can restore after stripping). This lets Claude embed hyperlinks in story
+// bodies and have them survive the parse step.
+function stripTagsPreserveLinks(html: string): string {
+  // Replace </p> and <br> with a space to preserve word boundaries
+  let out = html.replace(/<\/p>/gi, " ").replace(/<br\s*\/?>/gi, " ")
+  // Keep anchor tags intact, strip everything else
+  out = out.replace(/<(?!\/?\s*a[\s>])[^>]+>/g, "")
+  return out.replace(/\s+/g, " ").trim()
+}
+
 function parseStories(html: string): { stories: StoryItem[]; remainder: string } | null {
   // Pattern: <strong>CATEGORY — Headline.</strong> Body text
   // Stop story body at the next story opener OR at a block-level structural element (table, h2, blockquote)
@@ -68,7 +79,9 @@ function parseStories(html: string): { stories: StoryItem[]; remainder: string }
   let cursor = firstMatch.index
   const stories: StoryItem[] = []
 
-  const itemPattern = /<strong>([A-Z][A-Z &]+?)\s*[—–-]+\s*([^<]+?)<\/strong>\s*([\s\S]*?)(?=(?:<p[^>]*>)?\s*<strong>[A-Z][A-Z &]+?\s*[—–-]|<\s*(?:table|h2|h3|blockquote|hr)[\s>]|$)/gi
+  // Headline capture allows HTML inside <strong> (e.g. linked names): capture everything up to </strong>
+  // then strip tags from it afterwards.
+  const itemPattern = /<strong>([A-Z][A-Z &]+?)\s*[—–-]+\s*([\s\S]*?)<\/strong>\s*([\s\S]*?)(?=(?:<p[^>]*>|<li[^>]*>)?\s*<strong>[A-Z][A-Z &]+?\s*[—–-]|<\s*(?:table|h2|h3|blockquote|hr)[\s>]|$)/gi
   itemPattern.lastIndex = cursor
 
   let match
@@ -79,8 +92,10 @@ function parseStories(html: string): { stories: StoryItem[]; remainder: string }
     if (blockBreak.test(segment)) break
 
     const category = match[1].trim()
-    const headline = match[2].trim().replace(/\.$/, "")
-    const rawBody = match[3].replace(/<\/p>/g, "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim()
+    // Headline may contain inner HTML (linked names) — strip all tags for plain text display
+    const headline = match[2].replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().replace(/\.$/, "")
+    // Body: preserve <a> links, strip all other tags
+    const rawBody = stripTagsPreserveLinks(match[3])
     if (headline) stories.push({ category, headline, body: rawBody })
     lastStoryEnd = match.index + match[0].length
   }
@@ -93,6 +108,7 @@ function parseStories(html: string): { stories: StoryItem[]; remainder: string }
 }
 
 const PROSE_CLASSES = `prose prose-neutral dark:prose-invert max-w-none text-base leading-relaxed text-foreground
+  [&_a]:text-[#dc2a28] [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-[#b01f1d] [&_a]:transition-colors
   [&_img]:rounded-md [&_img]:max-w-full [&_img]:my-4
   [&_h2]:text-lg [&_h2]:font-bold [&_h2]:mt-6 [&_h2]:mb-2
   [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1
@@ -132,7 +148,12 @@ function DigestBody({ html }: { html: string }) {
                 </span>
                 <div>
                   <p className="text-sm font-semibold leading-snug text-foreground mb-1">{s.headline}</p>
-                  {s.body && <p className="text-sm text-muted-foreground leading-relaxed">{s.body}</p>}
+                  {s.body && (
+                    <p
+                      className="text-sm text-muted-foreground leading-relaxed [&_a]:text-[#dc2a28] [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-[#b01f1d]"
+                      dangerouslySetInnerHTML={{ __html: s.body }}
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -159,7 +180,7 @@ function DigestBody({ html }: { html: string }) {
   )
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Main component ──────────────────────��────────────────────────────────────
 export default function DigestArticleClient({
   slug,
   initialArticle,
@@ -299,12 +320,13 @@ export default function DigestArticleClient({
         {tags.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap mb-6">
             {tags.map((tag) => (
-              <span
+              <a
                 key={tag}
-                className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border"
+                href={`/digest/tag/${tag}`}
+                className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border hover:border-[#dc2a28]/40 hover:text-foreground transition-colors"
               >
                 {tag}
-              </span>
+              </a>
             ))}
           </div>
         )}

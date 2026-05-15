@@ -64,6 +64,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "body (HTML) is required" }, { status: 400 })
     }
 
+    // Sanitize <a> tags in the body:
+    // - Internal links (starting with /) get no target/rel changes
+    // - External links get target="_blank" rel="noopener noreferrer"
+    // - Strip any javascript: or data: hrefs for safety
+    const sanitizedBody = articleBody.replace(
+      /<a\s([^>]*)>/gi,
+      (_match, attrs: string) => {
+        const hrefMatch = attrs.match(/href=["']([^"']*)["']/i)
+        const href = hrefMatch?.[1] ?? ""
+        // Block dangerous protocols
+        if (/^(javascript|data|vbscript):/i.test(href.trim())) {
+          return `<a href="#"`
+        }
+        const isInternal = href.startsWith("/") || href.startsWith("#")
+        const targetRel = isInternal ? "" : ` target="_blank" rel="noopener noreferrer"`
+        // Rebuild with only href (strip any onclick or other event attrs for safety)
+        return `<a href="${href}"${targetRel}>`
+      }
+    )
+
     // --- Handle image ---
     let imageUrl: string | null = providedImageUrl ?? null
 
@@ -96,7 +116,7 @@ export async function POST(request: NextRequest) {
         slug,
         title: title.trim(),
         summary: summary?.trim() ?? null,
-        body: articleBody,
+        body: sanitizedBody,
         imageUrl,
         sources: validatedSources,
         tags: validatedTags,

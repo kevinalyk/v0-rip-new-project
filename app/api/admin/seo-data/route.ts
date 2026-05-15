@@ -1,17 +1,15 @@
-import { NextResponse } from "next/server"
-import { verifyToken } from "@/lib/auth"
-import { cookies } from "next/headers"
+import { type NextRequest, NextResponse } from "next/server"
+import { verifyAuth } from "@/lib/auth"
 import { getTopPages, getTopSearchTerms } from "@/lib/ga4"
 import { getTopSearchQueries as getTopQueries, getTopSearchPages as getGscTopPages } from "@/lib/gsc"
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get("token")?.value
-    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-    const user = await verifyToken(token)
-    if (!user || user.role !== "super_admin") {
+    const authResult = await verifyAuth(request)
+    if (!authResult.success || !authResult.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (authResult.user.role !== "super_admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 

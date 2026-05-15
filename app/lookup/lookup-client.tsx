@@ -477,10 +477,10 @@ function SearchResults({
         </p>
       </div>
       {results.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
-          <Search className="w-8 h-8 text-gray-400 mx-auto mb-3" />
+        <div className="bg-white border border-gray-200 rounded-xl p-5 sm:p-8 text-center">
+          <Search className="w-7 h-7 text-gray-400 mx-auto mb-2" />
           <p className="text-gray-900 font-medium mb-1">No results found</p>
-          <p className="text-gray-600 text-sm leading-relaxed">
+          <p className="text-gray-600 text-sm leading-relaxed text-left sm:text-center">
             We don&apos;t have any campaigns or political groups matching that{" "}
             {queryType === "phone" ? "phone number" : "email address"} in our database yet.
           </p>
@@ -536,31 +536,31 @@ function HistoryPanel({
   return (
     <div className="mt-6 bg-white border border-gray-200 rounded-xl overflow-hidden">
       {/* Panel header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+      <div className="flex items-center gap-2 px-4 sm:px-5 py-3 sm:py-4 border-b border-gray-200">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+          className="flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1"
         >
-          <Clock className="w-4 h-4 text-gray-600" />
-          <span className="text-gray-700 text-sm font-medium">
+          <Clock className="w-4 h-4 text-gray-600 flex-shrink-0" />
+          <span className="text-gray-700 text-sm font-medium truncate">
             Recent searches ({history.length})
           </span>
           {open ? (
-            <ChevronUp className="w-3.5 h-3.5 text-gray-600" />
+            <ChevronUp className="w-3.5 h-3.5 text-gray-600 flex-shrink-0" />
           ) : (
-            <ChevronDown className="w-3.5 h-3.5 text-gray-600" />
+            <ChevronDown className="w-3.5 h-3.5 text-gray-600 flex-shrink-0" />
           )}
         </button>
         {open && (
           <button
             type="button"
             onClick={onClearAll}
-            className="flex items-center gap-1.5 text-gray-400 hover:text-red-400 text-xs transition-colors"
+            className="flex items-center gap-1.5 text-gray-400 hover:text-red-400 text-xs transition-colors flex-shrink-0"
             aria-label="Clear all searches"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            Clear all
+            <span className="hidden sm:inline">Clear all</span>
           </button>
         )}
       </div>
@@ -586,11 +586,11 @@ function HistoryPanel({
                       {item.query}
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 ml-2">
                     <span className="text-gray-400 text-xs">
                       {item.results.length} result{item.results.length !== 1 ? "s" : ""}
                     </span>
-                    <span className="text-gray-400 text-xs">
+                    <span className="hidden sm:inline text-gray-400 text-xs">
                       {new Date(item.createdAt).toLocaleDateString()}
                     </span>
                     {expandedId === item.id ? (
@@ -930,23 +930,29 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
 
           <main className="flex-1 min-w-0 max-w-2xl">
             {/* Hero */}
-            <div className="mb-8 text-center">
-              <h1 className="text-gray-900 text-3xl sm:text-4xl font-bold leading-tight text-balance mb-4">
+            <div className="mb-6 text-center">
+              <h1 className="text-gray-900 text-2xl sm:text-4xl font-bold leading-tight text-balance mb-3">
                 {"Who's Contacting Me?"}
               </h1>
-              <p className="text-gray-500 text-sm sm:text-base leading-relaxed text-pretty max-w-lg mx-auto">
-                Political campaigns send a lot of emails and texts. These messages are a vital way campaigns get their message out so they can win elections, but if you want to opt out we created a simple tool to help.
+              {/* On mobile show a condensed single paragraph; on desktop show all three */}
+              <p className="sm:hidden text-gray-500 text-sm leading-relaxed max-w-xs mx-auto text-left">
+                Enter a phone number or email address below and {"we'll"} scan our database to identify which political campaigns are using it. Contact campaigns directly to opt out of their messages.
               </p>
-              <p className="text-gray-500 text-sm sm:text-base leading-relaxed text-pretty max-w-lg mx-auto mt-3">
-                Below you can enter the number or email you are getting messages from and {"we'll"} scan our database for any campaign using it to send.
-              </p>
-              <p className="text-gray-500 text-sm sm:text-base leading-relaxed text-pretty max-w-lg mx-auto mt-3">
-                The best way to opt out of solicitations is to contact campaigns directly because they are the ones sending the messages.
-              </p>
+              <div className="hidden sm:block">
+                <p className="text-gray-500 text-base leading-relaxed text-pretty max-w-lg mx-auto">
+                  Political campaigns send a lot of emails and texts. These messages are a vital way campaigns get their message out so they can win elections, but if you want to opt out we created a simple tool to help.
+                </p>
+                <p className="text-gray-500 text-base leading-relaxed text-pretty max-w-lg mx-auto mt-3">
+                  Below you can enter the number or email you are getting messages from and {"we'll"} scan our database for any campaign using it to send.
+                </p>
+                <p className="text-gray-500 text-base leading-relaxed text-pretty max-w-lg mx-auto mt-3">
+                  The best way to opt out of solicitations is to contact campaigns directly because they are the ones sending the messages.
+                </p>
+              </div>
             </div>
 
             {/* Search form */}
-            <form onSubmit={handleSubmit} className="flex gap-2">
+            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
                 <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
                   {query.includes("@") ? (
@@ -960,14 +966,14 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
                   value={query}
                   onChange={(e) => { setQuery(e.target.value); setError("") }}
                   placeholder="Enter a phone number or email address..."
-                  className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-3 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors"
+                  className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-3.5 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors"
                   aria-label="Phone number or email address"
                 />
               </div>
               <button
                 type="submit"
                 disabled={loading || query.trim().length < 3}
-                className="bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 font-semibold rounded-xl px-5 py-3 text-sm transition-colors flex-shrink-0 flex items-center gap-2"
+                className="bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 font-semibold rounded-xl px-5 py-3.5 text-sm transition-colors flex-shrink-0 flex items-center justify-center gap-2 w-full sm:w-auto"
               >
                 {loading ? (
                   <span className="flex items-center gap-2">
@@ -977,7 +983,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
                 ) : (
                   <>
                     <Search className="w-4 h-4" />
-                    <span className="hidden sm:inline">Search</span>
+                    <span>Search</span>
                   </>
                 )}
               </button>

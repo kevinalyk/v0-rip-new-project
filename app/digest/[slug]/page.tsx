@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   try {
     const article = await prisma.digestArticle.findUnique({
       where: { slug: params.slug },
-      select: { title: true, slug: true, summary: true, body: true, publishedAt: true, imageUrl: true },
+      select: { title: true, slug: true, summary: true, body: true, publishedAt: true, updatedAt: true, imageUrl: true, tags: true },
     })
 
     if (!article) return { title: "Article Not Found - Inbox.GOP" }
@@ -35,8 +35,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const ogImageUrl = `${url}/opengraph-image`
 
     return {
-      title: `${article.title} - Intelligence Digest | Inbox.GOP`,
+      title: `${article.title} | Inbox.GOP`,
       description,
+      robots: { index: true, follow: true },
+      alternates: { canonical: url },
       openGraph: {
         title: article.title,
         description,
@@ -44,6 +46,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         siteName: "Inbox.GOP",
         type: "article",
         publishedTime,
+        modifiedTime: article.updatedAt?.toISOString() ?? publishedTime,
+        tags: Array.isArray(article.tags) ? (article.tags as string[]) : undefined,
         images: [{ url: ogImageUrl, width: 1200, height: 630, alt: article.title }],
       },
       twitter: {
@@ -117,24 +121,60 @@ export default async function DigestArticlePage({ params }: Props) {
     console.error("[DigestArticlePage] failed to pre-fetch article:", err)
   }
 
+  const articleUrl = initialArticle ? `${BASE_URL}/digest/${initialArticle.slug}` : null
+
   const articleJsonLd = initialArticle
     ? {
         "@context": "https://schema.org",
         "@type": "NewsArticle",
-        headline: initialArticle.title,
+        headline: initialArticle.title.slice(0, 110),
         description: initialArticle.summary || undefined,
+        url: articleUrl,
         datePublished: initialArticle.publishedAt,
         dateModified: initialArticle.updatedAt,
-        url: `${BASE_URL}/digest/${initialArticle.slug}`,
-        ...(initialArticle.imageUrl && { image: { "@type": "ImageObject", url: initialArticle.imageUrl } }),
+        author: {
+          "@type": "Organization",
+          name: "Inbox.GOP Research Team",
+          url: BASE_URL,
+        },
         publisher: {
           "@type": "Organization",
           name: "Inbox.GOP",
           url: BASE_URL,
+          logo: {
+            "@type": "ImageObject",
+            url: `${BASE_URL}/images/rip-wordmark.png`,
+            width: 600,
+            height: 60,
+          },
         },
+        image: {
+          "@type": "ImageObject",
+          url: initialArticle.imageUrl ?? `${BASE_URL}/og-candidate-directory.png`,
+          width: 1200,
+          height: 630,
+        },
+        articleSection: "Political Intelligence",
         ...(initialArticle.tags && initialArticle.tags.length > 0 && {
           keywords: initialArticle.tags.join(", "),
         }),
+        isAccessibleForFree: true,
+        isPartOf: {
+          "@type": "Periodical",
+          name: "Inbox.GOP Intelligence Digest",
+          url: `${BASE_URL}/digest`,
+        },
+      }
+    : null
+
+  const breadcrumbJsonLd = initialArticle
+    ? {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Intelligence Digest", item: `${BASE_URL}/digest` },
+          { "@type": "ListItem", position: 2, name: initialArticle.title, item: articleUrl },
+        ],
       }
     : null
 
@@ -144,6 +184,12 @@ export default async function DigestArticlePage({ params }: Props) {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+        />
+      )}
+      {breadcrumbJsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
         />
       )}
       <AppLayout clientSlug={clientSlug} defaultCollapsed={true}>

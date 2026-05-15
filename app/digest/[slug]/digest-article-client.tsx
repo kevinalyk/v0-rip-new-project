@@ -299,12 +299,13 @@ export default function DigestArticleClient({
         {tags.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap mb-6">
             {tags.map((tag) => (
-              <span
+              <a
                 key={tag}
-                className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border"
+                href={`/digest/tag/${tag}`}
+                className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border hover:border-[#dc2a28]/40 hover:text-foreground transition-colors"
               >
                 {tag}
-              </span>
+              </a>
             ))}
           </div>
         )}

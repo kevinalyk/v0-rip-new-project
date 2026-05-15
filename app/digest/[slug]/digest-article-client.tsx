@@ -79,7 +79,9 @@ function parseStories(html: string): { stories: StoryItem[]; remainder: string }
   let cursor = firstMatch.index
   const stories: StoryItem[] = []
 
-  const itemPattern = /<strong>([A-Z][A-Z &]+?)\s*[—–-]+\s*([^<]+?)<\/strong>\s*([\s\S]*?)(?=(?:<p[^>]*>)?\s*<strong>[A-Z][A-Z &]+?\s*[—–-]|<\s*(?:table|h2|h3|blockquote|hr)[\s>]|$)/gi
+  // Headline capture allows HTML inside <strong> (e.g. linked names): capture everything up to </strong>
+  // then strip tags from it afterwards.
+  const itemPattern = /<strong>([A-Z][A-Z &]+?)\s*[—–-]+\s*([\s\S]*?)<\/strong>\s*([\s\S]*?)(?=(?:<p[^>]*>|<li[^>]*>)?\s*<strong>[A-Z][A-Z &]+?\s*[—–-]|<\s*(?:table|h2|h3|blockquote|hr)[\s>]|$)/gi
   itemPattern.lastIndex = cursor
 
   let match
@@ -90,8 +92,9 @@ function parseStories(html: string): { stories: StoryItem[]; remainder: string }
     if (blockBreak.test(segment)) break
 
     const category = match[1].trim()
-    const headline = match[2].trim().replace(/\.$/, "")
-    // Preserve <a> links, strip all other tags
+    // Headline may contain inner HTML (linked names) — strip all tags for plain text display
+    const headline = match[2].replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().replace(/\.$/, "")
+    // Body: preserve <a> links, strip all other tags
     const rawBody = stripTagsPreserveLinks(match[3])
     if (headline) stories.push({ category, headline, body: rawBody })
     lastStoryEnd = match.index + match[0].length
@@ -105,6 +108,7 @@ function parseStories(html: string): { stories: StoryItem[]; remainder: string }
 }
 
 const PROSE_CLASSES = `prose prose-neutral dark:prose-invert max-w-none text-base leading-relaxed text-foreground
+  [&_a]:text-[#dc2a28] [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-[#b01f1d] [&_a]:transition-colors
   [&_img]:rounded-md [&_img]:max-w-full [&_img]:my-4
   [&_h2]:text-lg [&_h2]:font-bold [&_h2]:mt-6 [&_h2]:mb-2
   [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1
@@ -176,7 +180,7 @@ function DigestBody({ html }: { html: string }) {
   )
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Main component ──────────────────────��────────────────────────────────────
 export default function DigestArticleClient({
   slug,
   initialArticle,

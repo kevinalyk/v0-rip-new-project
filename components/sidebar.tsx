@@ -136,7 +136,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
   }, [userRole])
 
   // Paths that are not client-scoped — don't overwrite the selected client slug
-  const NON_CLIENT_PATHS = ["news", "login", "share", "directory"]
+  const NON_CLIENT_PATHS = ["news", "login", "share", "directory", "digest", "about", "privacy", "terms", "lookup"]
 
   useEffect(() => {
     const pathParts = pathname.split("/").filter(Boolean)
@@ -244,7 +244,10 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
     }
   }
 
-  const isPublicPath = pathname === "/news" || pathname.startsWith("/news/") || pathname === "/directory" || pathname.startsWith("/directory/")
+  const isPublicPath =
+    pathname === "/news" || pathname.startsWith("/news/") ||
+    pathname === "/directory" || pathname.startsWith("/directory/") ||
+    pathname === "/digest" || pathname.startsWith("/digest/")
   const isUnauthenticated = authLoaded && !userRole
 
   // Minimal sidebar for unauthenticated visitors on public pages

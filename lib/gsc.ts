@@ -129,51 +129,46 @@ export async function getPageSearchQueries(pagePath: string, days = 28): Promise
   }))
 }
 
-/** Submit one or more URLs for indexing via IndexNow.
+/** Submit a URL for indexing via the Google Indexing API.
  *
- *  IndexNow is supported by Bing, Yandex, and (via Bing's pipeline) Google.
- *  It requires no service account or OAuth — just an INDEXNOW_KEY env var
- *  and a verification file at /{key}.txt in the public directory containing
- *  only the key value on a single line.
- *
- *  Generate a key once with: crypto.randomUUID().replace(/-/g, "")
- *  Set it as INDEXNOW_KEY, create public/{key}.txt, and you're done.
+ *  Uses the GA4 service account (GA4_CLIENT_EMAIL + GA4_PRIVATE_KEY).
+ *  The service account must be added as an Owner in GSC property settings.
+ *  OAuth2 credentials (GSC_CLIENT_ID / GSC_CLIENT_SECRET) only work for
+ *  Search Console queries, not the Indexing API.
  */
 export async function submitUrlForIndexing(url: string): Promise<boolean> {
-  return submitUrlsForIndexing([url])
-}
+  // Reuse the same service account already configured for GA4
+  const email = process.env.GA4_CLIENT_EMAIL
+  const rawKey = process.env.GA4_PRIVATE_KEY
 
-export async function submitUrlsForIndexing(urls: string[]): Promise<boolean> {
-  const key = process.env.INDEXNOW_KEY
-
-  if (!key) {
+  if (!email || !rawKey) {
     throw new Error(
-      "Missing INDEXNOW_KEY env var. Generate a key (e.g. a random hex string), " +
-      "set it as INDEXNOW_KEY, and create public/{key}.txt containing just the key."
+      "Missing GA4_CLIENT_EMAIL or GA4_PRIVATE_KEY env vars — " +
+      "the Indexing API requires a service account JWT (not OAuth2). " +
+      "Make sure the service account is also added as an Owner in GSC."
     )
   }
 
-  const host = "app.rip-tool.com"
-  const keyLocation = `https://${host}/${key}.txt`
+  // Vercel stores multiline env vars with literal \n — convert back to real newlines
+  const privateKey = rawKey.replace(/\\n/g, "\n")
 
-  const body = {
-    host,
-    key,
-    keyLocation,
-    urlList: urls,
-  }
-
-  const response = await fetch("https://api.indexnow.org/indexnow", {
-    method: "POST",
-    headers: { "Content-Type": "application/json; charset=utf-8" },
-    body: JSON.stringify(body),
+  const auth = new google.auth.JWT({
+    email,
+    key: privateKey,
+    scopes: ["https://www.googleapis.com/auth/indexing"],
   })
 
-  if (!response.ok && response.status !== 202) {
-    const text = await response.text()
-    throw new Error(`IndexNow returned HTTP ${response.status}: ${text}`)
-  }
+  const indexing = google.indexing({ version: "v3", auth })
 
-  console.log(`[indexnow] Submitted ${urls.length} URL(s) — HTTP ${response.status}`)
-  return true
+  try {
+    const response = await indexing.urlNotifications.publish({
+      requestBody: { url, type: "URL_UPDATED" },
+    })
+    console.log(`[gsc] Submitted ${url} — HTTP ${response.status}`)
+    return true
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error(`[gsc] Failed to submit ${url}: ${message}`)
+    throw err
+  }
 }

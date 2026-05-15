@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { submitUrlsForIndexing } from "@/lib/gsc"
+import { submitUrlForIndexing } from "@/lib/gsc"
 import { prisma } from "@/lib/prisma"
 
 // Called by Vercel Cron or manually — submits recently published digest articles to GSC for indexing
@@ -37,21 +37,29 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: "No recent articles to index", submitted: 0 })
     }
 
-    const urls = articles.map((a) => `${APP_URL}/digest/${a.slug}`)
+    const results: { slug: string; success: boolean; error?: string }[] = []
 
-    try {
-      await submitUrlsForIndexing(urls)
-      console.log(`[cron/gsc-index] Successfully submitted ${urls.length} URL(s) via IndexNow`)
-      return NextResponse.json({
-        message: `Submitted ${urls.length} URL(s) via IndexNow.`,
-        submitted: urls.length,
-        urls,
-      })
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : "Unknown error"
-      console.error(`[cron/gsc-index] IndexNow submission failed: ${errMsg}`)
-      return NextResponse.json({ error: errMsg }, { status: 500 })
+    for (const article of articles) {
+      const url = `${APP_URL}/digest/${article.slug}`
+      try {
+        await submitUrlForIndexing(url)
+        results.push({ slug: article.slug, success: true })
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : "Unknown error"
+        console.error(`[cron/gsc-index] Failed to submit ${url}: ${errMsg}`)
+        results.push({ slug: article.slug, success: false, error: errMsg })
+      }
     }
+
+    const succeeded = results.filter((r) => r.success).length
+    const failed = results.filter((r) => !r.success).length
+
+    return NextResponse.json({
+      message: `Submitted ${succeeded} URLs to GSC. ${failed} failed.`,
+      submitted: succeeded,
+      failed,
+      results,
+    })
   } catch (err) {
     console.error("[cron/gsc-index] Error:", err)
     return NextResponse.json(

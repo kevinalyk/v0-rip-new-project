@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyAuth } from "@/lib/auth"
-import { getTopPages, getTopSearchTerms } from "@/lib/ga4"
+import { getTopPages, getSearchTerms as getTopSearchTerms } from "@/lib/ga4"
 import { getTopSearchQueries as getTopQueries, getTopSearchPages as getGscTopPages } from "@/lib/gsc"
 
 export async function GET(request: NextRequest) {

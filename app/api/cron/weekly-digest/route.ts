@@ -181,7 +181,7 @@ export async function GET(request: Request) {
       try {
         const users = await prisma.user.findMany({
           where: { clientId: client.id, weeklyDigestEnabled: true },
-          select: { email: true, firstName: true },
+          select: { id: true, email: true, firstName: true },
         })
 
         let sent = 0
@@ -196,6 +196,7 @@ export async function GET(request: Request) {
             weekEnd: weekEndLabel,
             items: top10,
             clientSlug: client.slug,
+            userId: user.id,
           })
           if (ok) {
             sent++

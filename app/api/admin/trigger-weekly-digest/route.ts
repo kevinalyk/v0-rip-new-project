@@ -231,7 +231,7 @@ export async function POST(request: NextRequest) {
             weeklyDigestEnabled: true,
             ...(emailOverride ? { email: emailOverride } : {}),
           },
-          select: { email: true, firstName: true },
+          select: { id: true, email: true, firstName: true },
         })
 
         let sent = 0
@@ -246,6 +246,7 @@ export async function POST(request: NextRequest) {
             weekEnd: weekEndLabel,
             items: top10,
             clientSlug: client.slug,
+            userId: user.id,
           })
           if (ok) sent++
           else failed++

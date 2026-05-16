@@ -1078,6 +1078,7 @@ export async function sendWeeklyDigest(params: {
   weekEnd: string   // e.g. "Saturday, May 10, 2026"
   items: WeeklyDigestItem[]
   clientSlug: string
+  userId: string
 }): Promise<boolean> {
   const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
   const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN
@@ -1087,12 +1088,12 @@ export async function sendWeeklyDigest(params: {
     return false
   }
 
-  const { to, firstName, weekStart, weekEnd, items, clientSlug } = params
+  const { to, firstName, weekStart, weekEnd, items, clientSlug, userId } = params
 
   const APP_URL = "https://app.rip-tool.com"
-  const feedUrl = `${APP_URL}/${clientSlug}/ci/campaigns`
-  const subscriptionsUrl = `${APP_URL}/${clientSlug}/ci/subscriptions`
-  const settingsUrl = `${APP_URL}/${clientSlug}/account/settings`
+  const feedUrl = generateTrackedLink(userId, "weekly_digest", "feed", `/${clientSlug}/ci/campaigns`, APP_URL)
+  const subscriptionsUrl = generateTrackedLink(userId, "weekly_digest", "subscriptions", `/${clientSlug}/ci/subscriptions`, APP_URL)
+  const settingsUrl = generateTrackedLink(userId, "weekly_digest", "settings", `/${clientSlug}/account/settings`, APP_URL)
   const logoUrl = `${APP_URL}/images/IconOnly_Transparent_NoBuffer.png`
 
   const greeting = firstName ? `Hi ${firstName},` : "Hi there,"
@@ -1136,7 +1137,11 @@ export async function sendWeeklyDigest(params: {
       const icon = item.kind === "email" ? emailIcon : smsIcon
       const displaySubject = item.subject.length > 50 ? item.subject.slice(0, 50) + "…" : item.subject
 
-      const directoryUrl = item.entitySlug ? `${APP_URL}/directory/${item.entitySlug}` : null
+      const trackedShareUrl = generateTrackedLink(userId, "weekly_digest", "campaign", item.shareUrl, APP_URL)
+      const directoryDestination = item.entitySlug ? `/directory/${item.entitySlug}` : null
+      const trackedDirectoryUrl = directoryDestination
+        ? generateTrackedLink(userId, "weekly_digest", "entity_profile", directoryDestination, APP_URL)
+        : null
 
       const partyBadge = item.party
         ? `<span style="display:inline-block;padding:1px 6px;border-radius:20px;font-size:10px;font-weight:700;color:#ffffff;background:${partyColor(item.party)};margin-right:4px;">${partyLabel(item.party)}</span>`
@@ -1145,8 +1150,8 @@ export async function sendWeeklyDigest(params: {
         ? `<span style="display:inline-block;padding:1px 6px;border-radius:20px;font-size:10px;font-weight:600;color:#374151;background:#e5e7eb;margin-right:4px;">${item.state}</span>`
         : ""
 
-      const entityLink = directoryUrl
-        ? `<a href="${directoryUrl}" target="_blank" style="font-size:11px;font-weight:600;color:#9ca3af;text-decoration:none;">${item.entityName}</a>`
+      const entityLink = trackedDirectoryUrl
+        ? `<a href="${trackedDirectoryUrl}" target="_blank" style="font-size:11px;font-weight:600;color:#9ca3af;text-decoration:none;">${item.entityName}</a>`
         : `<span style="font-size:11px;font-weight:600;color:#9ca3af;">${item.entityName}</span>`
 
       const rankLabel = `<span style="font-size:11px;font-weight:700;color:#4b5563;margin-right:10px;min-width:18px;display:inline-block;">#${i + 1}</span>`
@@ -1158,7 +1163,7 @@ export async function sendWeeklyDigest(params: {
               <tr>
                 <td style="vertical-align:middle;width:100%;">
                   ${rankLabel}${icon}
-                  <a href="${item.shareUrl}" target="_blank" style="font-size:12px;color:#e5e7eb;text-decoration:none;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-block;max-width:calc(100% - 140px);">${displaySubject}</a>
+                  <a href="${trackedShareUrl}" target="_blank" style="font-size:12px;color:#e5e7eb;text-decoration:none;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-block;max-width:calc(100% - 140px);">${displaySubject}</a>
                 </td>
               </tr>
               <tr>

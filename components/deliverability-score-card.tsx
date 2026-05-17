@@ -9,7 +9,7 @@ interface DeliverabilityData {
   hasData: boolean
   locked: boolean
   scoreOutOf100: number | null
-  checkedAt?: string
+  sendCount?: number | null
   inboxRate?: number | null
   inboxCount?: number | null
   spamCount?: number | null
@@ -203,9 +203,9 @@ export function DeliverabilityScoreCard({ slug, clientSlug, isAuthenticated }: P
             Professional Plan
           </span>
         )}
-        {!data.locked && data.checkedAt && (
+        {!data.locked && (
           <span className="text-xs text-muted-foreground">
-            Based on most recent send
+            {data.sendCount ? `Across ${data.sendCount} send${data.sendCount === 1 ? "" : "s"}` : "All-time average"}
           </span>
         )}
       </div>
@@ -223,7 +223,7 @@ export function DeliverabilityScoreCard({ slug, clientSlug, isAuthenticated }: P
                 {score !== null && score >= 80 ? "Strong deliverability" : score !== null && score >= 60 ? "Room for improvement" : "Deliverability issues detected"}
               </p>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Based on {Object.keys(data.checks ?? {}).length} authentication and compliance checks across the most recent email send.
+                Averaged across {data.sendCount ?? "all"} send{data.sendCount === 1 ? "" : "s"} — {Object.keys(data.checks ?? {}).length} authentication and compliance checks.
               </p>
               {data.inboxRate !== null && data.inboxRate !== undefined && (
                 <div className="flex items-center gap-4 mt-3">

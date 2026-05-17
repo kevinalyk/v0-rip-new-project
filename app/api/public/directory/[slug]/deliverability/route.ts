@@ -55,16 +55,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Entity not found" }, { status: 404 })
     }
 
-    // Get the most recent campaign that has a compliance record for this entity
-    const latestCampaignWithCompliance = await prisma.competitiveInsightCampaign.findFirst({
+    // Get ALL campaigns with compliance records for this entity to aggregate all-time data
+    const campaignsWithCompliance = await prisma.competitiveInsightCampaign.findMany({
       where: {
         entityId: entity.id,
         compliance: { isNot: null },
       },
-      orderBy: { dateReceived: "desc" },
       select: {
-        id: true,
-        dateReceived: true,
         inboxCount: true,
         spamCount: true,
         inboxRate: true,
@@ -83,57 +80,77 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             noDeceptiveEmojisInSubject: true,
             hasSingleFromAddress: true,
             totalScore: true,
-            section1Score: true,
-            section2Score: true,
-            section3Score: true,
-            section4Score: true,
-            checkedAt: true,
           },
         },
       },
     })
 
     // No compliance data exists for this entity at all
-    if (!latestCampaignWithCompliance?.compliance) {
+    if (campaignsWithCompliance.length === 0) {
       return NextResponse.json({ hasData: false, locked: !hasProfessionalAccess })
     }
 
-    const compliance = latestCampaignWithCompliance.compliance
-    const totalScore = compliance.totalScore ?? null
-    // Convert 0.0–1.0 score to 0–100
-    const scoreOutOf100 = totalScore !== null ? Math.round(totalScore * 100) : null
+    const count = campaignsWithCompliance.length
+
+    // Average the totalScore across all records (stored as 0.0–1.0)
+    const avgTotalScore =
+      campaignsWithCompliance.reduce((sum, c) => sum + (c.compliance?.totalScore ?? 0), 0) / count
+    const scoreOutOf100 = Math.round(avgTotalScore * 100)
 
     // Non-professional users get a locked response with only enough info for the teaser
     if (!hasProfessionalAccess) {
       return NextResponse.json({
         hasData: true,
         locked: true,
-        scoreOutOf100, // we DO send the score — the frontend blurs/obscures it visually
+        scoreOutOf100,
+        sendCount: count,
       })
     }
+
+    // Aggregate inbox/spam counts and rate across all sends
+    const totalInboxCount = campaignsWithCompliance.reduce((sum, c) => sum + (c.inboxCount ?? 0), 0)
+    const totalSpamCount = campaignsWithCompliance.reduce((sum, c) => sum + (c.spamCount ?? 0), 0)
+    const totalSeeds = totalInboxCount + totalSpamCount
+    const avgInboxRate = totalSeeds > 0 ? totalInboxCount / totalSeeds : null
+
+    // For each boolean check, use majority-wins across all records
+    type CheckKey = "spf" | "dkim" | "dmarc" | "dmarcAlignment" | "tls" | "oneClickUnsubscribe" |
+      "unsubscribeLinkInBody" | "bothSpfAndDkim" | "validMessageId" | "noFakeReplyPrefix" |
+      "noDeceptiveEmojisInSubject" | "singleFromAddress"
+
+    const checkFields: Record<CheckKey, keyof NonNullable<typeof campaignsWithCompliance[0]["compliance"]>> = {
+      spf: "hasSpf",
+      dkim: "hasDkim",
+      dmarc: "hasDmarc",
+      dmarcAlignment: "hasDmarcAlignment",
+      tls: "hasTls",
+      oneClickUnsubscribe: "hasOneClickUnsubscribeHeaders",
+      unsubscribeLinkInBody: "hasUnsubscribeLinkInBody",
+      bothSpfAndDkim: "hasBothSpfAndDkim",
+      validMessageId: "hasValidMessageId",
+      noFakeReplyPrefix: "noFakeReplyPrefix",
+      noDeceptiveEmojisInSubject: "noDeceptiveEmojisInSubject",
+      singleFromAddress: "hasSingleFromAddress",
+    }
+
+    const aggregatedChecks = Object.fromEntries(
+      Object.entries(checkFields).map(([key, field]) => {
+        const trueCount = campaignsWithCompliance.filter(
+          (c) => c.compliance?.[field] === true
+        ).length
+        return [key, trueCount / count >= 0.5] // majority wins
+      })
+    )
 
     return NextResponse.json({
       hasData: true,
       locked: false,
       scoreOutOf100,
-      checkedAt: compliance.checkedAt,
-      inboxRate: latestCampaignWithCompliance.inboxRate,
-      inboxCount: latestCampaignWithCompliance.inboxCount,
-      spamCount: latestCampaignWithCompliance.spamCount,
-      checks: {
-        spf: compliance.hasSpf,
-        dkim: compliance.hasDkim,
-        dmarc: compliance.hasDmarc,
-        dmarcAlignment: compliance.hasDmarcAlignment,
-        tls: compliance.hasTls,
-        oneClickUnsubscribe: compliance.hasOneClickUnsubscribeHeaders,
-        unsubscribeLinkInBody: compliance.hasUnsubscribeLinkInBody,
-        bothSpfAndDkim: compliance.hasBothSpfAndDkim,
-        validMessageId: compliance.hasValidMessageId,
-        noFakeReplyPrefix: compliance.noFakeReplyPrefix,
-        noDeceptiveEmojisInSubject: compliance.noDeceptiveEmojisInSubject,
-        singleFromAddress: compliance.hasSingleFromAddress,
-      },
+      sendCount: count,
+      inboxRate: avgInboxRate,
+      inboxCount: totalInboxCount,
+      spamCount: totalSpamCount,
+      checks: aggregatedChecks,
     })
   } catch (error) {
     console.error("[deliverability] Error:", error)

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Lock, ShieldCheck, ShieldAlert, CheckCircle2, XCircle, AlertCircle, ExternalLink } from "lucide-react"
+import { Lock, ShieldCheck, ShieldAlert, CheckCircle2, XCircle, AlertCircle, ExternalLink, ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface DeliverabilityData {
@@ -153,6 +153,7 @@ interface Props {
 export function DeliverabilityScoreCard({ slug, clientSlug, isAuthenticated }: Props) {
   const [data, setData] = useState<DeliverabilityData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [checksExpanded, setChecksExpanded] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -227,7 +228,10 @@ export function DeliverabilityScoreCard({ slug, clientSlug, isAuthenticated }: P
               {data.inboxRate !== null && data.inboxRate !== undefined && (
                 <div className="flex items-center gap-4 mt-3">
                   <div className="text-center">
-                    <p className="text-lg font-bold text-green-500">{Math.round((data.inboxRate ?? 0) * 100)}%</p>
+                    <p className="text-lg font-bold text-green-500">
+                      {/* inboxRate may be 0–1 float or 0–100 integer depending on DB value */}
+                      {Math.round((data.inboxRate > 1 ? data.inboxRate : data.inboxRate * 100))}%
+                    </p>
                     <p className="text-xs text-muted-foreground">Inbox Rate</p>
                   </div>
                   {data.inboxCount != null && (
@@ -278,56 +282,66 @@ export function DeliverabilityScoreCard({ slug, clientSlug, isAuthenticated }: P
 
       {/* Checks breakdown — only shown when unlocked */}
       {!data.locked && data.checks && (
-        <div className="px-5 pb-5">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-            Authentication &amp; Compliance Checks
-          </p>
-          <div className="rounded-lg border border-border bg-background/50 px-4 py-1">
-            {Object.entries(data.checks).map(([key, value]) => {
-              const meta = CHECK_META[key]
-              if (!meta) return null
-              return (
-                <CheckRow
-                  key={key}
-                  label={meta.label}
-                  value={value}
-                  description={meta.improvement}
-                />
-              )
-            })}
-          </div>
+        <div className="border-t border-border">
+          {/* Collapsible toggle */}
+          <button
+            onClick={() => setChecksExpanded((v) => !v)}
+            className="w-full flex items-center justify-between px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+          >
+            <span>Authentication &amp; Compliance Checks</span>
+            {checksExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </button>
 
-          {/* How to improve — only show if there are failing checks */}
-          {failingChecks.length > 0 && (
-            <div className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
-              <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <AlertCircle className="h-3.5 w-3.5" />
-                How to Improve
-              </p>
-              <div className="flex flex-col gap-2">
-                {failingChecks.map(([key]) => {
+          {checksExpanded && (
+            <div className="px-5 pb-5">
+              <div className="rounded-lg border border-border bg-background/50 px-4 py-1">
+                {Object.entries(data.checks).map(([key, value]) => {
                   const meta = CHECK_META[key]
                   if (!meta) return null
                   return (
-                    <div key={key} className="flex items-start gap-2">
-                      <XCircle className="h-3.5 w-3.5 text-red-500 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <span className="text-xs font-semibold text-foreground">{meta.label}: </span>
-                        <span className="text-xs text-muted-foreground">{meta.improvement}</span>
-                      </div>
-                    </div>
+                    <CheckRow
+                      key={key}
+                      label={meta.label}
+                      value={value}
+                      description={meta.improvement}
+                    />
                   )
                 })}
               </div>
-              <a
-                href="https://support.google.com/mail/answer/81126"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mt-3 transition-colors"
-              >
-                <ExternalLink className="h-3 w-3" />
-                Google Bulk Sender Guidelines
-              </a>
+
+              {/* How to improve — only show if there are failing checks */}
+              {failingChecks.length > 0 && (
+                <div className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+                  <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    How to Improve
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {failingChecks.map(([key]) => {
+                      const meta = CHECK_META[key]
+                      if (!meta) return null
+                      return (
+                        <div key={key} className="flex items-start gap-2">
+                          <XCircle className="h-3.5 w-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <span className="text-xs font-semibold text-foreground">{meta.label}: </span>
+                            <span className="text-xs text-muted-foreground">{meta.improvement}</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <a
+                    href="https://support.google.com/mail/answer/81126"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mt-3 transition-colors"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Google Bulk Sender Guidelines
+                  </a>
+                </div>
+              )}
             </div>
           )}
         </div>

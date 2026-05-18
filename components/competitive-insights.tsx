@@ -298,7 +298,7 @@ export function CompetitiveInsights({
   const [senderSearchTerm, setSenderSearchTerm] = useState("") // Declared senderSearchTerm
   const senderSearchInputRef = useRef<HTMLInputElement>(null) // Declare senderSearchInputRef
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null)
-  const [campaignHeaders, setCampaignHeaders] = useState<{ hasHeaders: boolean; parsed?: import("@/app/api/campaigns/[id]/headers/route").ParsedHeader[] } | null>(null)
+  const [campaignHeaders, setCampaignHeaders] = useState<{ hasHeaders: boolean; parsed?: { name: string; value: string; category: string; status?: string }[] } | null>(null)
   const [headersLoading, setHeadersLoading] = useState(false)
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loading, setLoading] = useState(true)
@@ -989,27 +989,19 @@ export function CompetitiveInsights({
     }
   }, [selectedCampaign])
 
-  // Fetch raw headers when a non-SMS campaign is selected (Pro/Enterprise only)
+  // Fetch raw headers when a non-SMS campaign is selected (API enforces plan gating)
   useEffect(() => {
     if (!selectedCampaign || selectedCampaign.type === "sms") {
       setCampaignHeaders(null)
       return
     }
-    const hasPlanAccess =
-      resolvedPlan === "all" ||
-      resolvedPlan === "enterprise" ||
-      resolvedUser?.role === "super_admin" ||
-      clientSlug === "rip"
-    if (!hasPlanAccess) return
-
     setHeadersLoading(true)
-    console.log("[v0] fetching headers for campaign id:", selectedCampaign.id, "plan:", resolvedPlan)
     fetch(`/api/campaigns/${selectedCampaign.id}/headers`, { credentials: "include" })
-      .then((r) => { console.log("[v0] headers response status:", r.status); return r.json() })
-      .then((data) => { console.log("[v0] headers data:", data); setCampaignHeaders(data) })
-      .catch((e) => { console.log("[v0] headers fetch error:", e); setCampaignHeaders(null) })
+      .then((r) => r.ok ? r.json() : Promise.resolve({ hasHeaders: false }))
+      .then((data) => setCampaignHeaders(data))
+      .catch(() => setCampaignHeaders(null))
       .finally(() => setHeadersLoading(false))
-  }, [selectedCampaign, resolvedPlan, resolvedUser])
+  }, [selectedCampaign])
 
   // Measured natural height of the rendered email iframe content
   const [iframeContentHeight, setIframeContentHeight] = useState<number>(800)

@@ -66,6 +66,9 @@ const INTERMEDIATE_REDIRECT_DOMAINS = [
   "ow.ly",
   "buff.ly",
   "dlvr.it",
+  "us-gop.co",
+  "gop.cm",
+  "act.gop.com",
 ]
 
 function isIntermediateRedirect(url: string): boolean {

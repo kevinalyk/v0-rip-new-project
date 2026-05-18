@@ -1188,7 +1188,7 @@ export async function sendWeeklyDigest(params: {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Weekly Top 10 Digest - Inbox.GOP</title>
+  <title>Weekly Top ${items.length} Digest - Inbox.GOP</title>
 </head>
 <body style="margin:0;padding:0;background:#030712;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#030712;padding:32px 16px;">
@@ -1203,7 +1203,7 @@ export async function sendWeeklyDigest(params: {
                 <tr>
                   <td style="vertical-align:middle;">
                     <img src="${logoUrl}" alt="Inbox.GOP" width="28" height="28" style="display:inline-block;vertical-align:middle;margin-right:8px;" />
-                    <span style="font-size:13px;color:#6b7280;font-weight:500;vertical-align:middle;">Weekly Top 10</span>
+                    <span style="font-size:13px;color:#6b7280;font-weight:500;vertical-align:middle;">Weekly Top ${items.length}</span>
                   </td>
                   <td style="text-align:right;vertical-align:middle;">
                     <span style="font-size:12px;color:#4b5563;">${weekStart} – ${weekEnd}</span>
@@ -1264,7 +1264,7 @@ export async function sendWeeklyDigest(params: {
 
   const text = `${greeting}
 
-Weekly Top 10 Digest - Inbox.GOP
+Weekly Top ${items.length} Digest - Inbox.GOP
 ${weekStart} – ${weekEnd}
 
 ${items

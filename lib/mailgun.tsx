@@ -1188,7 +1188,7 @@ export async function sendWeeklyDigest(params: {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Weekly Top ${items.length} Digest - Inbox.GOP</title>
+  <title>Weekly Top Content - Inbox.GOP</title>
 </head>
 <body style="margin:0;padding:0;background:#030712;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#030712;padding:32px 16px;">
@@ -1203,7 +1203,7 @@ export async function sendWeeklyDigest(params: {
                 <tr>
                   <td style="vertical-align:middle;">
                     <img src="${logoUrl}" alt="Inbox.GOP" width="28" height="28" style="display:inline-block;vertical-align:middle;margin-right:8px;" />
-                    <span style="font-size:13px;color:#6b7280;font-weight:500;vertical-align:middle;">Weekly Top ${items.length}</span>
+                    <span style="font-size:13px;color:#6b7280;font-weight:500;vertical-align:middle;">Weekly Top Content</span>
                   </td>
                   <td style="text-align:right;vertical-align:middle;">
                     <span style="font-size:12px;color:#4b5563;">${weekStart} – ${weekEnd}</span>
@@ -1221,7 +1221,7 @@ export async function sendWeeklyDigest(params: {
                   <td style="vertical-align:top;">
                     <p style="margin:0 0 4px;font-size:15px;color:#f9fafb;font-weight:600;">${greeting}</p>
                     <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">
-                      Here are the <strong style="color:#e5e7eb;">top ${items.length} most-viewed</strong> emails and SMS from across Inbox.GOP over the past week.
+                      Here are the <strong style="color:#e5e7eb;">most-viewed</strong> emails and SMS from across Inbox.GOP over the past week.
                     </p>
                   </td>
                   <td style="text-align:right;vertical-align:top;padding-left:16px;white-space:nowrap;">
@@ -1264,7 +1264,7 @@ export async function sendWeeklyDigest(params: {
 
   const text = `${greeting}
 
-Weekly Top ${items.length} Digest - Inbox.GOP
+Weekly Top Content - Inbox.GOP
 ${weekStart} – ${weekEnd}
 
 ${items
@@ -1287,7 +1287,7 @@ To stop receiving this digest, update your email settings: ${settingsUrl}
   const formData = new FormData()
   formData.append("from", `Inbox.GOP Digest <digest@${MAILGUN_DOMAIN}>`)
   formData.append("to", to)
-  formData.append("subject", `Weekly Top 10 - Inbox.GOP`)
+  formData.append("subject", `Weekly Top Content - Inbox.GOP`)
   formData.append("html", html)
   formData.append("text", text)
 

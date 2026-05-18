@@ -11,7 +11,6 @@ import { Loader2, Lock, Mail, MessageSquare, Building2, User, Users, ArrowLeft, 
 import { CiEntitySubscribeButton } from "@/components/ci-entity-subscribe-button"
 import { nameToSlug } from "@/lib/directory-utils"
 import { RelatedEntities } from "@/components/related-entities"
-import { DeliverabilityScoreCard } from "@/components/deliverability-score-card"
 
 interface Mapping {
   id: string
@@ -380,13 +379,6 @@ export function DirectoryProfileContent({ slug, initialData }: { slug: string; i
             )}
           </div>
         )}
-
-        {/* Deliverability Score Card */}
-        <DeliverabilityScoreCard
-          slug={slug}
-          clientSlug={clientSlug}
-          isAuthenticated={isAuthenticated}
-        />
 
         {/* Domains & Short Codes */}
         {(emailIdentifiers.length > 0 || shortCodes.length > 0) && (

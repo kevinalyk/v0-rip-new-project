@@ -148,9 +148,11 @@ interface Props {
   slug: string
   clientSlug: string
   isAuthenticated: boolean
+  /** When true, renders as unlocked regardless of the API response (used from the reports page) */
+  forceUnlocked?: boolean
 }
 
-export function DeliverabilityScoreCard({ slug, clientSlug, isAuthenticated }: Props) {
+export function DeliverabilityScoreCard({ slug, clientSlug, isAuthenticated, forceUnlocked }: Props) {
   const [data, setData] = useState<DeliverabilityData | null>(null)
   const [loading, setLoading] = useState(true)
   const [checksExpanded, setChecksExpanded] = useState(false)
@@ -178,16 +180,21 @@ export function DeliverabilityScoreCard({ slug, clientSlug, isAuthenticated }: P
   // Don't render if no compliance data exists for this entity
   if (!data || !data.hasData) return null
 
+  // Allow the reports page to force-unlock the card even if the API returns locked
+  const displayData: DeliverabilityData = forceUnlocked && data.locked
+    ? { ...data, locked: false }
+    : data
+
   const upgradeHref = isAuthenticated
     ? `/${clientSlug}/billing`
     : "/login"
   const upgradeCta = isAuthenticated ? "Upgrade to Professional" : "Sign In to View"
 
-  const failingChecks = data.locked
+  const failingChecks = displayData.locked
     ? []
-    : Object.entries(data.checks ?? {}).filter(([, v]) => v === false)
+    : Object.entries(displayData.checks ?? {}).filter(([, v]) => v === false)
 
-  const score = data.scoreOutOf100
+  const score = displayData.scoreOutOf100
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden mb-8">
@@ -197,52 +204,52 @@ export function DeliverabilityScoreCard({ slug, clientSlug, isAuthenticated }: P
           <ShieldCheck className="h-4 w-4 text-[#dc2a28]" />
           <h2 className="font-semibold text-sm">Deliverability Score</h2>
         </div>
-        {data.locked && (
+        {displayData.locked && (
           <span className="text-xs font-medium text-[#dc2a28] flex items-center gap-1">
             <Lock className="h-3 w-3" />
             Professional Plan
           </span>
         )}
-        {!data.locked && (
+        {!displayData.locked && (
           <span className="text-xs text-muted-foreground">
-            {data.sendCount ? `Across ${data.sendCount} send${data.sendCount === 1 ? "" : "s"}` : "All-time average"}
+            {displayData.sendCount ? `Across ${displayData.sendCount} send${displayData.sendCount === 1 ? "" : "s"}` : "All-time average"}
           </span>
         )}
       </div>
 
       {/* Score row */}
-      <div className={`flex items-center gap-6 p-5 ${data.locked ? "relative" : ""}`}>
-        <div className={data.locked ? "filter blur-sm pointer-events-none select-none" : ""}>
+      <div className={`flex items-center gap-6 p-5 ${displayData.locked ? "relative" : ""}`}>
+        <div className={displayData.locked ? "filter blur-sm pointer-events-none select-none" : ""}>
           <ScoreRing score={score} locked={false} />
         </div>
 
-        <div className={`flex-1 ${data.locked ? "filter blur-sm pointer-events-none select-none" : ""}`}>
-          {!data.locked ? (
+        <div className={`flex-1 ${displayData.locked ? "filter blur-sm pointer-events-none select-none" : ""}`}>
+          {!displayData.locked ? (
             <>
               <p className="text-sm font-medium mb-1">
                 {score !== null && score >= 80 ? "Strong deliverability" : score !== null && score >= 60 ? "Room for improvement" : "Deliverability issues detected"}
               </p>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Averaged across {data.sendCount ?? "all"} send{data.sendCount === 1 ? "" : "s"} — {Object.keys(data.checks ?? {}).length} authentication and compliance checks.
+                Averaged across {displayData.sendCount ?? "all"} send{displayData.sendCount === 1 ? "" : "s"} — {Object.keys(displayData.checks ?? {}).length} authentication and compliance checks.
               </p>
-              {data.inboxRate !== null && data.inboxRate !== undefined && (
+              {displayData.inboxRate !== null && displayData.inboxRate !== undefined && (
                 <div className="flex items-center gap-4 mt-3">
                   <div className="text-center">
                     <p className="text-lg font-bold text-green-500">
                       {/* inboxRate may be 0–1 float or 0–100 integer depending on DB value */}
-                      {Math.round((data.inboxRate > 1 ? data.inboxRate : data.inboxRate * 100))}%
+                      {Math.round((displayData.inboxRate > 1 ? displayData.inboxRate : displayData.inboxRate * 100))}%
                     </p>
                     <p className="text-xs text-muted-foreground">Inbox Rate</p>
                   </div>
-                  {data.inboxCount != null && (
+                  {displayData.inboxCount != null && (
                     <div className="text-center">
-                      <p className="text-lg font-bold">{data.inboxCount}</p>
+                      <p className="text-lg font-bold">{displayData.inboxCount}</p>
                       <p className="text-xs text-muted-foreground">Inboxed</p>
                     </div>
                   )}
-                  {data.spamCount != null && (
+                  {displayData.spamCount != null && (
                     <div className="text-center">
-                      <p className="text-lg font-bold text-red-500">{data.spamCount}</p>
+                      <p className="text-lg font-bold text-red-500">{displayData.spamCount}</p>
                       <p className="text-xs text-muted-foreground">Spam</p>
                     </div>
                   )}
@@ -262,7 +269,7 @@ export function DeliverabilityScoreCard({ slug, clientSlug, isAuthenticated }: P
         </div>
 
         {/* Locked overlay */}
-        {data.locked && (
+        {displayData.locked && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-card/60 backdrop-blur-[2px] rounded-b-none z-10 gap-3 px-4">
             <div className="flex flex-col items-center gap-2 text-center">
               <ShieldAlert className="h-7 w-7 text-[#dc2a28]" />
@@ -281,7 +288,7 @@ export function DeliverabilityScoreCard({ slug, clientSlug, isAuthenticated }: P
       </div>
 
       {/* Checks breakdown — only shown when unlocked */}
-      {!data.locked && data.checks && (
+      {!displayData.locked && displayData.checks && (
         <div className="border-t border-border">
           {/* Collapsible toggle */}
           <button
@@ -295,7 +302,7 @@ export function DeliverabilityScoreCard({ slug, clientSlug, isAuthenticated }: P
           {checksExpanded && (
             <div className="px-5 pb-5">
               <div className="rounded-lg border border-border bg-background/50 px-4 py-1">
-                {Object.entries(data.checks).map(([key, value]) => {
+                {Object.entries(displayData.checks).map(([key, value]) => {
                   const meta = CHECK_META[key]
                   if (!meta) return null
                   return (

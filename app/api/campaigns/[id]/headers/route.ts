@@ -102,6 +102,9 @@ function parseRawHeaders(raw: string): ParsedHeader[] {
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
+    const campaignId = params.id
+    console.log("[v0] headers route - campaignId:", campaignId)
+
     const user = await getAuthenticatedUser(request)
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -124,11 +127,12 @@ export async function GET(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: "Upgrade required" }, { status: 403 })
     }
 
-    // Fetch the CI campaign's rawHeaders
     const campaign = await prisma.competitiveInsightCampaign.findUnique({
-      where: { id: params.id },
+      where: { id: campaignId },
       select: { rawHeaders: true, type: true },
     })
+
+    console.log("[v0] headers route - found:", !!campaign, "type:", campaign?.type, "hasRawHeaders:", !!campaign?.rawHeaders)
 
     if (!campaign) {
       return NextResponse.json({ error: "Campaign not found" }, { status: 404 })

@@ -996,14 +996,18 @@ export function CompetitiveInsights({
       return
     }
     const hasPlanAccess =
-      resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin"
+      resolvedPlan === "all" ||
+      resolvedPlan === "enterprise" ||
+      resolvedUser?.role === "super_admin" ||
+      clientSlug === "rip"
     if (!hasPlanAccess) return
 
     setHeadersLoading(true)
+    console.log("[v0] fetching headers for campaign id:", selectedCampaign.id, "plan:", resolvedPlan)
     fetch(`/api/campaigns/${selectedCampaign.id}/headers`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((data) => setCampaignHeaders(data))
-      .catch(() => setCampaignHeaders(null))
+      .then((r) => { console.log("[v0] headers response status:", r.status); return r.json() })
+      .then((data) => { console.log("[v0] headers data:", data); setCampaignHeaders(data) })
+      .catch((e) => { console.log("[v0] headers fetch error:", e); setCampaignHeaders(null) })
       .finally(() => setHeadersLoading(false))
   }, [selectedCampaign, resolvedPlan, resolvedUser])
 
@@ -2699,15 +2703,18 @@ export function CompetitiveInsights({
                   </DialogHeader>
 
                   <Tabs defaultValue="preview" className="mt-4">
-                    <TabsList className={`grid w-full ${(resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin") && selectedCampaign.type !== "sms" ? "grid-cols-3" : "grid-cols-2"}`}>
-                      <TabsTrigger value="preview">
-                        {selectedCampaign.type === "sms" ? "Message" : "Email Preview"}
-                      </TabsTrigger>
-                      <TabsTrigger value="links">CTA Links ({selectedCampaign.ctaLinks.length})</TabsTrigger>
-                      {(resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin") && selectedCampaign.type !== "sms" && (
-                        <TabsTrigger value="headers">Headers</TabsTrigger>
-                      )}
-                    </TabsList>
+                    {(() => {
+                      const showHeaders = (resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin" || clientSlug === "rip") && selectedCampaign.type !== "sms"
+                      return (
+                        <TabsList className={`grid w-full ${showHeaders ? "grid-cols-3" : "grid-cols-2"}`}>
+                          <TabsTrigger value="preview">
+                            {selectedCampaign.type === "sms" ? "Message" : "Email Preview"}
+                          </TabsTrigger>
+                          <TabsTrigger value="links">CTA Links ({selectedCampaign.ctaLinks.length})</TabsTrigger>
+                          {showHeaders && <TabsTrigger value="headers">Headers</TabsTrigger>}
+                        </TabsList>
+                      )
+                    })()}
 
                     <TabsContent value="preview" className="mt-4">
                       {selectedCampaign.type === "sms" ? (
@@ -2754,7 +2761,7 @@ export function CompetitiveInsights({
                       )}
                     </TabsContent>
 
-                    {(resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin") && selectedCampaign.type !== "sms" && (
+                    {(resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin" || clientSlug === "rip") && selectedCampaign.type !== "sms" && (
                       <TabsContent value="headers" className="mt-4">
                         {headersLoading ? (
                           <div className="flex items-center justify-center py-12 text-muted-foreground text-sm gap-2">

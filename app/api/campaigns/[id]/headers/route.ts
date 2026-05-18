@@ -147,8 +147,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
       where: { id: campaignId },
       select: {
         rawHeaders: true,
-        assignmentMethod: true,
-        seedEmail: { select: { seedEmail: true } },
+        seenBySeedEmails: true,
       },
     })
 
@@ -160,13 +159,12 @@ export async function GET(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ hasHeaders: false })
     }
 
-    // Build a scrubbed copy of rawHeaders — replace the seed local part anywhere it appears
+    // Scrub all seed email local parts from the raw headers before parsing
     let scrubbed = campaign.rawHeaders
-    const seedAddress = campaign.seedEmail?.seedEmail
-    if (seedAddress) {
-      const localPart = seedAddress.split("@")[0]
+    const seedEmails = Array.isArray(campaign.seenBySeedEmails) ? (campaign.seenBySeedEmails as string[]) : []
+    for (const addr of seedEmails) {
+      const localPart = typeof addr === "string" ? addr.split("@")[0] : null
       if (localPart) {
-        // Escape for use in regex, then replace all occurrences (case-insensitive)
         const escaped = localPart.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
         scrubbed = scrubbed.replace(new RegExp(escaped, "gi"), "[redacted]")
       }

@@ -1203,7 +1203,7 @@ export async function sendWeeklyDigest(params: {
                 <tr>
                   <td style="vertical-align:middle;">
                     <img src="${logoUrl}" alt="Inbox.GOP" width="28" height="28" style="display:inline-block;vertical-align:middle;margin-right:8px;" />
-                    <span style="font-size:13px;color:#6b7280;font-weight:500;vertical-align:middle;">Weekly Top Content</span>
+                    <span style="font-size:13px;color:#6b7280;font-weight:500;vertical-align:middle;">Weekly Top ${items.length}</span>
                   </td>
                   <td style="text-align:right;vertical-align:middle;">
                     <span style="font-size:12px;color:#4b5563;">${weekStart} – ${weekEnd}</span>
@@ -1221,7 +1221,7 @@ export async function sendWeeklyDigest(params: {
                   <td style="vertical-align:top;">
                     <p style="margin:0 0 4px;font-size:15px;color:#f9fafb;font-weight:600;">${greeting}</p>
                     <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">
-                      Here are the <strong style="color:#e5e7eb;">most-viewed</strong> emails and SMS from across Inbox.GOP over the past week.
+                      Here are the <strong style="color:#e5e7eb;">top ${items.length} most-viewed</strong> emails and SMS from across Inbox.GOP over the past week.
                     </p>
                   </td>
                   <td style="text-align:right;vertical-align:top;padding-left:16px;white-space:nowrap;">

@@ -48,8 +48,7 @@ function stripQueryParams(url: string): string {
   }
 }
 
-// Known intermediate redirect domains — if fetch lands here, leave finalUrl unset
-// so the unwrap-links cron can re-resolve it with its JS-aware resolver
+// Known intermediate redirect domains — if fetch lands here, keep following
 const INTERMEDIATE_REDIRECT_DOMAINS = [
   "t.ly",
   "bit.ly",
@@ -57,6 +56,9 @@ const INTERMEDIATE_REDIRECT_DOMAINS = [
   "ow.ly",
   "buff.ly",
   "dlvr.it",
+  "us-gop.co",
+  "gop.cm",
+  "act.gop.com",
 ]
 
 function isIntermediateRedirect(url: string): boolean {
@@ -68,83 +70,122 @@ function isIntermediateRedirect(url: string): boolean {
   }
 }
 
+// Try every technique to extract a redirect URL from an HTML body
+function extractRedirectFromHtml(html: string, baseUrl: string): string | null {
+  const patterns = [
+    // JS location redirects
+    /window\.location(?:\.href)?\s*=\s*["']([^"']+)["']/i,
+    /location\.replace\s*\(\s*["']([^"']+)["']\s*\)/i,
+    /location\.href\s*=\s*["']([^"']+)["']/i,
+    // Meta refresh
+    /<meta[^>]+http-equiv=["']?refresh["']?[^>]+content=["'][^;]+;\s*url=([^"'>\s]+)/i,
+    /<meta[^>]+content=["'][^;]+;\s*url=([^"'>\s]+)[^>]+http-equiv=["']?refresh["']?/i,
+    // t.ly specific — wraps the real URL in a plain <a> with id="link"
+    /<a[^>]+id=["']link["'][^>]+href=["']([^"']+)["']/i,
+    // Generic canonical/redirect anchor
+    /<a[^>]+href=["'](https?:\/\/[^"']+)["'][^>]*>/i,
+  ]
+  for (const pattern of patterns) {
+    const match = html.match(pattern)
+    if (match?.[1]?.startsWith("http")) {
+      return match[1]
+    }
+  }
+  return null
+}
+
+/**
+ * Resolve a single URL to its final destination, following all hops including
+ * JS-redirect intermediaries like t.ly, us-gop.co, etc.
+ */
+async function resolveToFinal(startUrl: string): Promise<string> {
+  const MAX_HOPS = 12
+  let currentUrl = startUrl
+
+  for (let hop = 0; hop < MAX_HOPS; hop++) {
+    try {
+      const response = await fetch(currentUrl, {
+        method: "HEAD",
+        redirect: "follow",
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+      })
+
+      const landed = response.url || currentUrl
+
+      // If HTTP redirects already took us somewhere non-intermediate, we're done
+      if (landed !== currentUrl && !isIntermediateRedirect(landed)) {
+        return landed
+      }
+
+      // If we're on an intermediate (or haven't moved), fetch the HTML and parse redirect
+      const getResponse = await fetch(landed, {
+        method: "GET",
+        redirect: "follow",
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+      })
+
+      // HTTP redirect chain from GET may have gone further
+      if (getResponse.url && getResponse.url !== landed && !isIntermediateRedirect(getResponse.url)) {
+        return getResponse.url
+      }
+
+      const html = await getResponse.text()
+      const next = extractRedirectFromHtml(html, getResponse.url || landed)
+
+      if (next && next !== currentUrl) {
+        currentUrl = next
+        continue
+      }
+
+      // Nothing more to follow — return wherever we are
+      return getResponse.url || landed
+    } catch {
+      // Network error — return best we have so far
+      return currentUrl
+    }
+  }
+
+  return currentUrl
+}
+
 /**
  * Resolve shortened URLs to their final destination
- * Similar to resolveRedirects from competitive-insights-utils
  */
 export async function resolveShortenedUrls(urls: string[]): Promise<Array<{ url: string; finalUrl?: string }>> {
   const results = await Promise.all(
     urls.map(async (url) => {
       try {
-        // Follow redirects to get final URL
-        const response = await fetch(url, {
-          method: "HEAD",
-          redirect: "follow",
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          },
-        })
-
-        let finalUrl = stripQueryParams(response.url)
-
-        // If we landed on a known intermediate redirect (e.g. t.ly/redirect),
-        // do a follow-up GET and parse the JS redirect to get the true final URL
-        if (isIntermediateRedirect(finalUrl)) {
-          try {
-            const getResponse = await fetch(finalUrl, {
-              method: "GET",
-              redirect: "follow",
-              headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-              },
-            })
-
-            // First try following HTTP redirects (response.url after redirect: "follow")
-            if (getResponse.url && getResponse.url !== finalUrl && !isIntermediateRedirect(getResponse.url)) {
-              finalUrl = stripQueryParams(getResponse.url)
-            } else {
-              // Fall back to parsing JS redirect patterns from the HTML body
-              const html = await getResponse.text()
-              const jsPatterns = [
-                /window\.location(?:\.href)?\s*=\s*["']([^"']+)["']/i,
-                /location\.replace\s*\(\s*["']([^"']+)["']\s*\)/i,
-                /location\.href\s*=\s*["']([^"']+)["']/i,
-                /<meta[^>]+http-equiv=["']refresh["'][^>]+content=["'][^;]+;\s*url=([^"']+)["']/i,
-              ]
-              for (const pattern of jsPatterns) {
-                const match = html.match(pattern)
-                if (match?.[1]?.startsWith("http")) {
-                  finalUrl = stripQueryParams(match[1])
-                  break
-                }
-              }
-            }
-          } catch {
-            // If the follow-up GET fails, leave finalUrl as-is and let the cron retry later
-          }
-        }
-
-        // Only include finalUrl if it's different from original
+        const finalUrl = stripQueryParams(await resolveToFinal(url))
         if (finalUrl !== url) {
           return { url, finalUrl }
         }
-
         return { url }
       } catch (error: any) {
         const code = error?.cause?.code ?? error?.code ?? ""
-        const isCertOrNetworkError = ["CERT_HAS_EXPIRED", "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "ENOTFOUND", "ECONNREFUSED", "ETIMEDOUT"].includes(code)
+        const isCertOrNetworkError = [
+          "CERT_HAS_EXPIRED",
+          "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+          "ENOTFOUND",
+          "ECONNREFUSED",
+          "ETIMEDOUT",
+        ].includes(code)
         if (isCertOrNetworkError) {
-          console.warn(`[SMS Link Extractor] Skipping redirect resolution for ${url} (${code}) — using original URL`)
+          console.warn(`[SMS Link Extractor] Skipping ${url} (${code})`)
         } else {
           console.error(`[SMS Link Extractor] Error resolving ${url}:`, error)
         }
-        // Return original URL if resolution fails
         return { url }
       }
     }),
   )
-
   return results
 }
 

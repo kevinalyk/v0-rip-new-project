@@ -298,6 +298,8 @@ export function CompetitiveInsights({
   const [senderSearchTerm, setSenderSearchTerm] = useState("") // Declared senderSearchTerm
   const senderSearchInputRef = useRef<HTMLInputElement>(null) // Declare senderSearchInputRef
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null)
+  const [campaignHeaders, setCampaignHeaders] = useState<{ hasHeaders: boolean; parsed?: import("@/app/api/campaigns/[id]/headers/route").ParsedHeader[] } | null>(null)
+  const [headersLoading, setHeadersLoading] = useState(false)
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -982,12 +984,28 @@ export function CompetitiveInsights({
   useEffect(() => {
     if (selectedCampaign && selectedCampaign.type !== "sms" && typeof window !== "undefined") {
       const isMobile = window.matchMedia("(max-width: 767px)").matches
-      // Reset to a sensible default based on viewport so the 600px email fits
       setEmailZoom(isMobile ? 60 : 100)
-      // Reset measured iframe height when opening a new campaign
       setIframeContentHeight(800)
     }
   }, [selectedCampaign])
+
+  // Fetch raw headers when a non-SMS campaign is selected (Pro/Enterprise only)
+  useEffect(() => {
+    if (!selectedCampaign || selectedCampaign.type === "sms") {
+      setCampaignHeaders(null)
+      return
+    }
+    const hasPlanAccess =
+      resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin"
+    if (!hasPlanAccess) return
+
+    setHeadersLoading(true)
+    fetch(`/api/campaigns/${selectedCampaign.id}/headers`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((data) => setCampaignHeaders(data))
+      .catch(() => setCampaignHeaders(null))
+      .finally(() => setHeadersLoading(false))
+  }, [selectedCampaign, resolvedPlan, resolvedUser])
 
   // Measured natural height of the rendered email iframe content
   const [iframeContentHeight, setIframeContentHeight] = useState<number>(800)
@@ -2681,11 +2699,14 @@ export function CompetitiveInsights({
                   </DialogHeader>
 
                   <Tabs defaultValue="preview" className="mt-4">
-                    <TabsList className="grid w-full grid-cols-2">
+                    <TabsList className={`grid w-full ${(resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin") && selectedCampaign.type !== "sms" ? "grid-cols-3" : "grid-cols-2"}`}>
                       <TabsTrigger value="preview">
                         {selectedCampaign.type === "sms" ? "Message" : "Email Preview"}
                       </TabsTrigger>
                       <TabsTrigger value="links">CTA Links ({selectedCampaign.ctaLinks.length})</TabsTrigger>
+                      {(resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin") && selectedCampaign.type !== "sms" && (
+                        <TabsTrigger value="headers">Headers</TabsTrigger>
+                      )}
                     </TabsList>
 
                     <TabsContent value="preview" className="mt-4">
@@ -2732,6 +2753,51 @@ export function CompetitiveInsights({
                         </div>
                       )}
                     </TabsContent>
+
+                    {(resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin") && selectedCampaign.type !== "sms" && (
+                      <TabsContent value="headers" className="mt-4">
+                        {headersLoading ? (
+                          <div className="flex items-center justify-center py-12 text-muted-foreground text-sm gap-2">
+                            <span className="animate-spin inline-block h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
+                            Loading headers...
+                          </div>
+                        ) : !campaignHeaders?.hasHeaders ? (
+                          <div className="rounded-lg border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
+                            No headers available for this email.
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {/* Auth headers first — grouped */}
+                            {(["auth", "identity", "routing", "other"] as const).map((cat) => {
+                              const rows = (campaignHeaders.parsed ?? []).filter((h) => h.category === cat)
+                              if (rows.length === 0) return null
+                              const label = cat === "auth" ? "Authentication" : cat === "identity" ? "Identity & Addressing" : cat === "routing" ? "Routing" : "Other"
+                              return (
+                                <div key={cat} className="rounded-lg border overflow-hidden">
+                                  <div className="px-3 py-2 bg-muted/40 border-b">
+                                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
+                                  </div>
+                                  <div className="divide-y">
+                                    {rows.map((h, i) => (
+                                      <div key={i} className="flex gap-3 px-3 py-2 text-xs font-mono hover:bg-muted/20 transition-colors">
+                                        <div className="flex items-start gap-2 w-52 shrink-0">
+                                          {h.status === "pass" && <span className="mt-0.5 h-2 w-2 rounded-full bg-green-500 shrink-0" />}
+                                          {h.status === "fail" && <span className="mt-0.5 h-2 w-2 rounded-full bg-red-500 shrink-0" />}
+                                          {h.status === "neutral" && <span className="mt-0.5 h-2 w-2 rounded-full bg-yellow-500 shrink-0" />}
+                                          {!h.status && <span className="mt-0.5 h-2 w-2 shrink-0" />}
+                                          <span className="text-muted-foreground truncate">{h.name}</span>
+                                        </div>
+                                        <span className="break-all text-foreground leading-relaxed">{h.value}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </TabsContent>
+                    )}
 
                     <TabsContent value="links" className="mt-4">
                       {selectedCampaign.ctaLinks.length > 0 ? (

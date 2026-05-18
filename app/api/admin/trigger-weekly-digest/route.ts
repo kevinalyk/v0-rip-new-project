@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
 
     // ── Fetch all active entities on the platform ────────────────────────────
     const allEntities = await prisma.ciEntity.findMany({
-      where: { isActive: true },
+      where: { type: { not: "data_broker" } },
       select: { id: true, name: true, party: true, state: true },
     })
     const entityIds = allEntities.map((e) => e.id)
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
         dateReceived: { gte: windowStart, lt: windowEnd },
         isHidden: false,
         isDeleted: false,
-        donationPlatform: { in: ["winred", "actblue"] },
+
       },
       select: {
         id: true,
@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
         createdAt: { gte: windowStart, lt: windowEnd },
         isHidden: false,
         isDeleted: false,
-        assignmentMethod: { in: ["auto_winred", "auto_actblue"] },
+
       },
       select: {
         id: true,

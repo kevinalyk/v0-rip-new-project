@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
 
     // ── Fetch all active entities on the platform ────────────────────────────
     const allEntities = await prisma.ciEntity.findMany({
-      where: { isActive: true },
+      where: { type: { not: "data_broker" } },
       select: { id: true, name: true, party: true, state: true },
     })
     const entityIds = allEntities.map((e) => e.id)

@@ -73,7 +73,7 @@ export async function GET(request: Request) {
 
     // ── Fetch all active entities and build top 10 (shared across all clients) ─
     const allEntities = await prisma.ciEntity.findMany({
-      where: { isActive: true },
+      where: { type: { not: "data_broker" } },
       select: { id: true, name: true, party: true, state: true },
     })
     const entityIds = allEntities.map((e) => e.id)

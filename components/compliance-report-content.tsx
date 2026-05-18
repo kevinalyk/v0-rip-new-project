@@ -20,14 +20,72 @@ interface ComplianceReportContentProps {
   clientSlug: string
 }
 
+function EntityRow({
+  entity,
+  onSelect,
+  partyColor,
+}: {
+  entity: Entity
+  onSelect: (e: Entity) => void
+  partyColor: (party: string | null) => string
+}) {
+  return (
+    <div
+      onClick={() => onSelect(entity)}
+      className="flex items-center gap-3 px-2 py-2 hover:bg-muted rounded-md cursor-pointer"
+    >
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">{entity.name}</p>
+        {(entity.type || entity.state) && (
+          <p className="text-xs text-muted-foreground">
+            {[entity.type, entity.state].filter(Boolean).join(" · ")}
+          </p>
+        )}
+      </div>
+      {entity.party && (
+        <span className={`text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 ${partyColor(entity.party)}`}>
+          {entity.party.charAt(0).toUpperCase() + entity.party.slice(1)}
+        </span>
+      )}
+    </div>
+  )
+}
+
 export function ComplianceReportContent({ clientSlug }: ComplianceReportContentProps) {
   const [popoverOpen, setPopoverOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<Entity[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null)
+  const [followedEntities, setFollowedEntities] = useState<Entity[]>([])
   const searchInputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Fetch followed entities on mount
+  useEffect(() => {
+    const fetchFollowed = async () => {
+      try {
+        const res = await fetch(`/api/ci/subscriptions/check-all?clientSlug=${clientSlug}`, { credentials: "include" })
+        if (!res.ok) return
+        const data = await res.json()
+        const ids: string[] = data.entityIds ?? []
+        if (ids.length === 0) return
+
+        // Fetch entity details for each followed ID
+        const detailsRes = await fetch(
+          `/api/public/ci-entities?ids=${ids.join(",")}&pageSize=50`,
+          { credentials: "include" }
+        )
+        if (detailsRes.ok) {
+          const detailsData = await detailsRes.json()
+          setFollowedEntities(detailsData.entities ?? [])
+        }
+      } catch {
+        // silently fail
+      }
+    }
+    fetchFollowed()
+  }, [clientSlug])
 
   // Focus search input when popover opens
   useEffect(() => {
@@ -56,7 +114,12 @@ export function ComplianceReportContent({ clientSlug }: ComplianceReportContentP
         )
         if (res.ok) {
           const data = await res.json()
-          setResults(data.entities ?? [])
+          // Surface followed entities first, then the rest
+          const followedIds = new Set(followedEntities.map((e) => e.id))
+          const all: Entity[] = data.entities ?? []
+          const followed = all.filter((e) => followedIds.has(e.id))
+          const others = all.filter((e) => !followedIds.has(e.id))
+          setResults([...followed, ...others])
         }
       } catch {
         // silently fail
@@ -64,7 +127,7 @@ export function ComplianceReportContent({ clientSlug }: ComplianceReportContentP
         setSearchLoading(false)
       }
     }, 300)
-  }, [query])
+  }, [query, followedEntities])
 
   const handleSelect = (entity: Entity) => {
     setSelectedEntity(entity)
@@ -131,29 +194,37 @@ export function ComplianceReportContent({ clientSlug }: ComplianceReportContentP
               ) : query.trim() && results.length === 0 ? (
                 <div className="py-6 text-center text-sm text-muted-foreground">No entities found</div>
               ) : !query.trim() ? (
-                <div className="py-6 text-center text-sm text-muted-foreground">Start typing to search...</div>
+                followedEntities.length > 0 ? (
+                  <>
+                    <p className="px-2 pb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Following</p>
+                    {followedEntities.map((entity) => (
+                      <EntityRow key={entity.id} entity={entity} onSelect={handleSelect} partyColor={partyColor} />
+                    ))}
+                    <p className="px-2 pt-2 pb-1 text-xs text-muted-foreground">Type to search all entities...</p>
+                  </>
+                ) : (
+                  <div className="py-6 text-center text-sm text-muted-foreground">Start typing to search...</div>
+                )
               ) : (
-                results.map((entity) => (
-                  <div
-                    key={entity.id}
-                    onClick={() => handleSelect(entity)}
-                    className="flex items-center gap-3 px-2 py-2 hover:bg-muted rounded-md cursor-pointer"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{entity.name}</p>
-                      {(entity.type || entity.state) && (
-                        <p className="text-xs text-muted-foreground">
-                          {[entity.type, entity.state].filter(Boolean).join(" · ")}
-                        </p>
-                      )}
-                    </div>
-                    {entity.party && (
-                      <span className={`text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 ${partyColor(entity.party)}`}>
-                        {entity.party.charAt(0).toUpperCase() + entity.party.slice(1)}
-                      </span>
-                    )}
-                  </div>
-                ))
+                <>
+                  {/* In search results, label followed entities */}
+                  {results.some((e) => followedEntities.some((f) => f.id === e.id)) && (
+                    <p className="px-2 pb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Following</p>
+                  )}
+                  {results.map((entity, i) => {
+                    const isFollowed = followedEntities.some((f) => f.id === entity.id)
+                    const prevIsFollowed = i > 0 && followedEntities.some((f) => f.id === results[i - 1].id)
+                    const showOthersLabel = !isFollowed && (i === 0 || prevIsFollowed)
+                    return (
+                      <div key={entity.id}>
+                        {showOthersLabel && results.some((e) => followedEntities.some((f) => f.id === e.id)) && (
+                          <p className="px-2 pt-2 pb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">All Results</p>
+                        )}
+                        <EntityRow entity={entity} onSelect={handleSelect} partyColor={partyColor} />
+                      </div>
+                    )
+                  })}
+                </>
               )}
             </div>
           </PopoverContent>

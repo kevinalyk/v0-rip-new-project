@@ -1,8 +1,10 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
-import { Search, ShieldCheck, X, Loader2 } from "lucide-react"
+import { Search, ShieldCheck, X, Loader2, ChevronDown } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { DeliverabilityScoreCard } from "@/components/deliverability-score-card"
 
 interface Entity {
@@ -19,30 +21,28 @@ interface ComplianceReportContentProps {
 }
 
 export function ComplianceReportContent({ clientSlug }: ComplianceReportContentProps) {
+  const [popoverOpen, setPopoverOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<Entity[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null)
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Close dropdown on outside click
+  // Focus search input when popover opens
   useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false)
-      }
+    if (popoverOpen) {
+      setTimeout(() => searchInputRef.current?.focus(), 50)
+    } else {
+      setQuery("")
+      setResults([])
     }
-    document.addEventListener("mousedown", handleClick)
-    return () => document.removeEventListener("mousedown", handleClick)
-  }, [])
+  }, [popoverOpen])
 
   // Debounced search
   useEffect(() => {
-    if (!query.trim() || selectedEntity) {
+    if (!query.trim()) {
       setResults([])
-      setDropdownOpen(false)
       return
     }
 
@@ -51,13 +51,12 @@ export function ComplianceReportContent({ clientSlug }: ComplianceReportContentP
       setSearchLoading(true)
       try {
         const res = await fetch(
-          `/api/public/ci-entities?search=${encodeURIComponent(query.trim())}&pageSize=10`,
+          `/api/public/ci-entities?search=${encodeURIComponent(query.trim())}&pageSize=20`,
           { credentials: "include" }
         )
         if (res.ok) {
           const data = await res.json()
           setResults(data.entities ?? [])
-          setDropdownOpen((data.entities ?? []).length > 0)
         }
       } catch {
         // silently fail
@@ -65,13 +64,11 @@ export function ComplianceReportContent({ clientSlug }: ComplianceReportContentP
         setSearchLoading(false)
       }
     }, 300)
-  }, [query, selectedEntity])
+  }, [query])
 
   const handleSelect = (entity: Entity) => {
     setSelectedEntity(entity)
-    setQuery(entity.name)
-    setDropdownOpen(false)
-    setResults([])
+    setPopoverOpen(false)
   }
 
   const handleClear = () => {
@@ -95,68 +92,78 @@ export function ComplianceReportContent({ clientSlug }: ComplianceReportContentP
           Deliverability Score
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Search for any entity to view their email authentication, compliance scores, and inbox placement data.
+          Select any entity to view their email authentication, compliance scores, and inbox placement data.
         </p>
       </div>
 
-      {/* Entity search */}
-      <div ref={containerRef} className="relative max-w-lg">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value)
-              if (selectedEntity) setSelectedEntity(null)
-            }}
-            onFocus={() => {
-              if (results.length > 0) setDropdownOpen(true)
-            }}
-            placeholder="Search for a campaign, PAC, or candidate..."
-            className="pl-9 pr-9"
-          />
-          {(query || selectedEntity) && (
-            <button
-              onClick={handleClear}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
-        {/* Dropdown */}
-        {dropdownOpen && results.length > 0 && (
-          <div className="absolute z-50 top-full mt-1 w-full rounded-lg border border-border bg-card shadow-lg overflow-hidden">
-            {searchLoading ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      {/* Entity selector — Popover matching the CI filter style */}
+      <div className="flex items-center gap-2">
+        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-full max-w-sm justify-between">
+              <span className={selectedEntity ? "text-foreground" : "text-muted-foreground"}>
+                {selectedEntity ? selectedEntity.name : "Select an entity..."}
+              </span>
+              <ChevronDown className="ml-2 h-4 w-4 opacity-50 shrink-0" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[380px] p-0" align="start">
+            {/* Sticky search input */}
+            <div className="sticky top-0 z-50 bg-background p-2 border-b">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <Input
+                  ref={searchInputRef}
+                  placeholder="Search entities..."
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="h-8 pl-8"
+                />
               </div>
-            ) : (
-              results.map((entity) => (
-                <button
-                  key={entity.id}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => handleSelect(entity)}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/50 transition-colors border-b border-border/50 last:border-0"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{entity.name}</p>
-                    {(entity.type || entity.state) && (
-                      <p className="text-xs text-muted-foreground">
-                        {[entity.type, entity.state].filter(Boolean).join(" · ")}
-                      </p>
+            </div>
+
+            {/* Results list */}
+            <div className="max-h-[280px] overflow-y-auto p-2">
+              {searchLoading ? (
+                <div className="flex items-center justify-center py-6">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : query.trim() && results.length === 0 ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">No entities found</div>
+              ) : !query.trim() ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">Start typing to search...</div>
+              ) : (
+                results.map((entity) => (
+                  <div
+                    key={entity.id}
+                    onClick={() => handleSelect(entity)}
+                    className="flex items-center gap-3 px-2 py-2 hover:bg-muted rounded-md cursor-pointer"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{entity.name}</p>
+                      {(entity.type || entity.state) && (
+                        <p className="text-xs text-muted-foreground">
+                          {[entity.type, entity.state].filter(Boolean).join(" · ")}
+                        </p>
+                      )}
+                    </div>
+                    {entity.party && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 ${partyColor(entity.party)}`}>
+                        {entity.party.charAt(0).toUpperCase() + entity.party.slice(1)}
+                      </span>
                     )}
                   </div>
-                  {entity.party && (
-                    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 ${partyColor(entity.party)}`}>
-                      {entity.party.charAt(0).toUpperCase() + entity.party.slice(1)}
-                    </span>
-                  )}
-                </button>
-              ))
-            )}
-          </div>
+                ))
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {/* Clear selection */}
+        {selectedEntity && (
+          <Button variant="ghost" size="icon" onClick={handleClear} className="shrink-0">
+            <X className="h-4 w-4" />
+          </Button>
         )}
       </div>
 

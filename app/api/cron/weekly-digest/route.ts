@@ -73,7 +73,7 @@ export async function GET(request: Request) {
 
     // ── Fetch all active entities and build top 10 (shared across all clients) ─
     const allEntities = await prisma.ciEntity.findMany({
-      where: { isActive: true },
+      where: { type: { not: "data_broker" } },
       select: { id: true, name: true, party: true, state: true },
     })
     const entityIds = allEntities.map((e) => e.id)
@@ -91,7 +91,6 @@ export async function GET(request: Request) {
           dateReceived: { gte: windowStart, lt: windowEnd },
           isHidden: false,
           isDeleted: false,
-          donationPlatform: { in: ["winred", "actblue"] },
         },
         select: { id: true, entityId: true, subject: true, senderEmail: true, dateReceived: true, viewCount: true, shareToken: true },
       }),
@@ -101,7 +100,6 @@ export async function GET(request: Request) {
           createdAt: { gte: windowStart, lt: windowEnd },
           isHidden: false,
           isDeleted: false,
-          assignmentMethod: { in: ["auto_winred", "auto_actblue"] },
         },
         select: { id: true, entityId: true, message: true, phoneNumber: true, createdAt: true, viewCount: true, shareToken: true },
       }),

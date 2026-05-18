@@ -145,21 +145,36 @@ export async function GET(request: Request, { params }: { params: { id: string }
 
     const campaign = await prisma.competitiveInsightCampaign.findUnique({
       where: { id: campaignId },
-      select: { rawHeaders: true, assignmentMethod: true },
+      select: {
+        rawHeaders: true,
+        assignmentMethod: true,
+        seedEmail: { select: { seedEmail: true } },
+      },
     })
 
     if (!campaign) {
       return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
     }
 
-    // SMS campaigns use assignmentMethod starting with "auto_" and won't have rawHeaders anyway
     if (!campaign.rawHeaders) {
       return NextResponse.json({ hasHeaders: false })
     }
 
-    const parsed = parseRawHeaders(campaign.rawHeaders)
+    // Build a scrubbed copy of rawHeaders — replace the seed local part anywhere it appears
+    let scrubbed = campaign.rawHeaders
+    const seedAddress = campaign.seedEmail?.seedEmail
+    if (seedAddress) {
+      const localPart = seedAddress.split("@")[0]
+      if (localPart) {
+        // Escape for use in regex, then replace all occurrences (case-insensitive)
+        const escaped = localPart.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+        scrubbed = scrubbed.replace(new RegExp(escaped, "gi"), "[redacted]")
+      }
+    }
 
-    return NextResponse.json({ hasHeaders: true, raw: campaign.rawHeaders, parsed })
+    const parsed = parseRawHeaders(scrubbed)
+
+    return NextResponse.json({ hasHeaders: true, parsed })
   } catch (error) {
     console.error("Error fetching campaign headers:", error)
     return NextResponse.json({ error: "Failed to fetch headers" }, { status: 500 })

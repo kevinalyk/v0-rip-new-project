@@ -1,26 +1,34 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { getServerSession } from "@/lib/auth"
+import { getAuthenticatedUser } from "@/lib/auth"
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession()
+    const user = await getAuthenticatedUser(request)
 
-    if (!session) {
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // clientId and clientSlug are stored directly in the JWT payload
+    const clientId: string | undefined = user.clientId as string | undefined
+    const clientSlug: string | undefined = user.clientSlug as string | undefined
+
+    if (!clientId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     // Require "all" (Professional) or "enterprise" plan, or internal RIP client
     const client = await prisma.client.findUnique({
-      where: { id: session.user.clientId },
-      select: { subscriptionPlan: true, slug: true },
+      where: { id: clientId },
+      select: { subscriptionPlan: true },
     })
 
     const hasAccess =
       client?.subscriptionPlan === "all" ||
       client?.subscriptionPlan === "enterprise" ||
-      client?.slug === "rip" ||
-      session.user.role === "super_admin"
+      clientSlug === "rip" ||
+      user.role === "super_admin"
 
     if (!hasAccess) {
       return NextResponse.json({ error: "Upgrade required" }, { status: 403 })

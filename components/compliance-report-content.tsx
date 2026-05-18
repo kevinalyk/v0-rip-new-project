@@ -240,18 +240,13 @@ export function ComplianceReportContent({ clientSlug }: ComplianceReportContentP
 
       {/* Results */}
       {selectedEntity ? (
-        selectedEntity.slug ? (
-          <DeliverabilityScoreCard
-            slug={selectedEntity.slug}
-            clientSlug={clientSlug}
-            isAuthenticated={true}
-            forceUnlocked={true}
-          />
-        ) : (
-          <div className="rounded-lg border border-border bg-card p-8 text-center text-muted-foreground text-sm">
-            No deliverability data available for this entity.
-          </div>
-        )
+        <DeliverabilityScoreCard
+          slug={selectedEntity.slug ?? "_"}
+          entityId={selectedEntity.id}
+          clientSlug={clientSlug}
+          isAuthenticated={true}
+          forceUnlocked={true}
+        />
       ) : (
         /* Empty state */
         <div className="rounded-lg border border-dashed border-border bg-card/50 p-12 text-center space-y-3">

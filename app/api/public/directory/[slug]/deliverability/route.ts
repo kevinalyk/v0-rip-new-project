@@ -44,12 +44,25 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
-    // Find the entity by slug
-    const entities = await prisma.ciEntity.findMany({
-      where: { type: { not: "data_broker" } },
-      select: { id: true, name: true },
-    })
-    const entity = entities.find((e) => nameToSlug(e.name) === slug)
+    // Support lookup by entityId query param (from reports page) OR by slug (from directory page)
+    const entityId = request.nextUrl.searchParams.get("entityId")
+
+    let entity: { id: string; name: string } | null = null
+
+    if (entityId) {
+      // Direct ID lookup — fast and accurate
+      entity = await prisma.ciEntity.findUnique({
+        where: { id: entityId },
+        select: { id: true, name: true },
+      })
+    } else {
+      // Slug-based lookup — used from the public directory pages
+      const entities = await prisma.ciEntity.findMany({
+        where: { type: { not: "data_broker" } },
+        select: { id: true, name: true },
+      })
+      entity = entities.find((e) => nameToSlug(e.name) === slug) ?? null
+    }
 
     if (!entity) {
       return NextResponse.json({ error: "Entity not found" }, { status: 404 })

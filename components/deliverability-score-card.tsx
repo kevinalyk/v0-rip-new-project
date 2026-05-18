@@ -148,11 +148,13 @@ interface Props {
   slug: string
   clientSlug: string
   isAuthenticated: boolean
+  /** Direct entity ID — when provided, lookup is by ID (fast & accurate). Used from reports page. */
+  entityId?: string
   /** When true, renders as unlocked regardless of the API response (used from the reports page) */
   forceUnlocked?: boolean
 }
 
-export function DeliverabilityScoreCard({ slug, clientSlug, isAuthenticated, forceUnlocked }: Props) {
+export function DeliverabilityScoreCard({ slug, clientSlug, isAuthenticated, entityId, forceUnlocked }: Props) {
   const [data, setData] = useState<DeliverabilityData | null>(null)
   const [loading, setLoading] = useState(true)
   const [checksExpanded, setChecksExpanded] = useState(false)
@@ -160,7 +162,10 @@ export function DeliverabilityScoreCard({ slug, clientSlug, isAuthenticated, for
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch(`/api/public/directory/${slug}/deliverability`, {
+        const url = entityId
+          ? `/api/public/directory/${slug || "_"}/deliverability?entityId=${encodeURIComponent(entityId)}`
+          : `/api/public/directory/${slug}/deliverability`
+        const res = await fetch(url, {
           credentials: "include",
         })
         if (res.ok) {
@@ -173,7 +178,7 @@ export function DeliverabilityScoreCard({ slug, clientSlug, isAuthenticated, for
       }
     }
     fetchData()
-  }, [slug])
+  }, [slug, entityId])
 
   // Don't render until we know if data exists
   if (loading) return null

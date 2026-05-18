@@ -84,7 +84,13 @@ function parseRawHeaders(raw: string): ParsedHeader[] {
     "x-campaign",
   ])
 
+  // Redact recipient fields to protect seed email addresses
+  const REDACTED_FIELDS = new Set(["to", "delivered-to", "x-original-to", "x-forwarded-to"])
+
   return headers.map(({ name, value }) => {
+    if (REDACTED_FIELDS.has(name.toLowerCase())) {
+      return { name, value: "[redacted]", category: "identity" as const, status: undefined }
+    }
     const nameLower = name.toLowerCase()
     let category: ParsedHeader["category"] = "other"
     let status: ParsedHeader["status"] | undefined

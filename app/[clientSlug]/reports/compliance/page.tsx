@@ -35,6 +35,7 @@ export default function ComplianceReportPage() {
   }, [clientSlug])
 
   const hasProfessionalAccess =
+    subscriptionPlan === "all" ||
     subscriptionPlan === "professional" ||
     subscriptionPlan === "enterprise" ||
     clientSlug === "rip"

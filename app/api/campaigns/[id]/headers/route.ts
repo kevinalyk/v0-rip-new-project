@@ -11,11 +11,23 @@ export interface ParsedHeader {
 
 // Parse raw header string into structured key/value pairs
 function parseRawHeaders(raw: string): ParsedHeader[] {
+  // The rawHeaders field sometimes contains the full email (body + headers concatenated).
+  // Headers always start with a "Header-Name: value" pattern. Find the first line that
+  // looks like a real email header (Received:, Authentication-Results:, DKIM-Signature:, etc.)
+  // and slice from there.
   const lines = raw.split(/\r?\n/)
+  const HEADER_START_RE = /^[A-Za-z0-9\-]+\s*:/
+  const firstHeaderIdx = lines.findIndex((l) => HEADER_START_RE.test(l))
+  const headerLines = firstHeaderIdx >= 0 ? lines.slice(firstHeaderIdx) : lines
+
+  // Stop at the first blank line (separates headers from body)
+  const blankIdx = headerLines.findIndex((l) => l.trim() === "")
+  const onlyHeaderLines = blankIdx >= 0 ? headerLines.slice(0, blankIdx) : headerLines
+
   const headers: { name: string; value: string }[] = []
   let current: { name: string; value: string } | null = null
 
-  for (const line of lines) {
+  for (const line of onlyHeaderLines) {
     if (/^\s/.test(line)) {
       // Continuation line
       if (current) current.value += " " + line.trim()

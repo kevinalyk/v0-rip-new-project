@@ -319,6 +319,7 @@ export async function getAllEntitiesWithCounts(options?: {
   search?: string
   ballotpedia?: string
   sortBy?: "name" | "newest" | "oldest"
+  ids?: string[]
 }) {
   try {
     const page = options?.page || 1
@@ -329,6 +330,11 @@ export async function getAllEntitiesWithCounts(options?: {
     const where: any = {
       // Never show data brokers in the public/user-facing directory
       type: { not: "data_broker" },
+    }
+
+    // Filter by specific IDs (used for fetching followed entity details)
+    if (options?.ids && options.ids.length > 0) {
+      where.id = { in: options.ids }
     }
 
     if (options?.party && options.party !== "all") {

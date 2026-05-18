@@ -466,6 +466,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                     collapsed={false}
                     onClick={() => navigate(`/${getClientSlug()}/reports/inboxing`)}
                   />
+                  <NavItem
+                    icon={<ShieldCheck size={18} />}
+                    label="Deliverability"
+                    active={pathname.includes("/reports/compliance")}
+                    collapsed={false}
+                    onClick={() => navigate(`/${getClientSlug()}/reports/compliance`)}
+                  />
                 </div>
               )}
             </>

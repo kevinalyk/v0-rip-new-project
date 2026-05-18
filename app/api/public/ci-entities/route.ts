@@ -19,6 +19,8 @@ export async function GET(request: NextRequest) {
     const state = searchParams.get("state") || undefined
     const type = searchParams.get("type") || undefined
     const search = searchParams.get("search") || undefined
+    const idsParam = searchParams.get("ids")
+    const ids = idsParam ? idsParam.split(",").filter(Boolean) : undefined
 
     const result = await getAllEntitiesWithCounts({
       page,
@@ -27,6 +29,7 @@ export async function GET(request: NextRequest) {
       state,
       type,
       search,
+      ids,
     })
 
     return NextResponse.json(result)

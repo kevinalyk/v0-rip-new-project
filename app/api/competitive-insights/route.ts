@@ -547,6 +547,28 @@ export async function GET(request: NextRequest) {
       throw dbError
     }
 
+    // Build a subject send-count map across all email campaigns in the DB.
+    // We normalize subjects (handling personalized names) in JS, then group and count.
+    // Only email campaigns (not SMS) are counted.
+    const allSubjectRows = await prisma.competitiveInsightCampaign.findMany({
+      select: { subject: true, dateReceived: true },
+    })
+    // Map: normalizedSubject -> { count, firstSeen, lastSeen }
+    const subjectStats = new Map<string, { count: number; firstSeen: string; lastSeen: string }>()
+    for (const row of allSubjectRows) {
+      const key = normalizeSubject(row.subject || "")
+      if (!key) continue
+      const date = row.dateReceived ? new Date(row.dateReceived).toISOString() : new Date().toISOString()
+      const existing = subjectStats.get(key)
+      if (!existing) {
+        subjectStats.set(key, { count: 1, firstSeen: date, lastSeen: date })
+      } else {
+        existing.count++
+        if (date < existing.firstSeen) existing.firstSeen = date
+        if (date > existing.lastSeen) existing.lastSeen = date
+      }
+    }
+
     const parsedEmailInsights = emailInsights.map((insight) => {
       let ctaLinks = []
       let tags = []
@@ -572,6 +594,9 @@ export async function GET(request: NextRequest) {
         console.error("[v0] Error parsing tags for insight", insight.id, e)
         tags = []
       }
+
+      const normalizedKey = normalizeSubject(insight.subject || "")
+      const stats = subjectStats.get(normalizedKey)
       
       return {
         ...insight,
@@ -580,6 +605,9 @@ export async function GET(request: NextRequest) {
         tags,
         clientId: insight.clientId,
         source: insight.source,
+        sendCount: stats?.count ?? 1,
+        firstSeen: stats?.firstSeen ?? null,
+        lastSeen: stats?.lastSeen ?? null,
       }
     })
 

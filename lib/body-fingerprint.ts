@@ -15,11 +15,13 @@ export const SIMILARITY_THRESHOLD = 0.65
 /** Strip HTML and extract readable text */
 function stripHtml(html: string): string {
   return html
-    // Remove <style>...</style> blocks
+    // Remove <style>...</style> blocks entirely
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
-    // Remove <script>...</script> blocks
+    // Remove <script>...</script> blocks entirely
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
-    // Replace block-level tags with spaces
+    // Remove hidden preview-text spacer divs (display:none / max-height:0)
+    .replace(/<div[^>]*(?:display\s*:\s*none|max-height\s*:\s*0)[^>]*>[\s\S]*?<\/div>/gi, " ")
+    // Replace block-level closing tags with spaces
     .replace(/<\/(p|div|li|tr|td|th|br|h[1-6]|blockquote)[^>]*>/gi, " ")
     // Strip remaining tags
     .replace(/<[^>]+>/g, "")
@@ -31,6 +33,10 @@ function stripHtml(html: string): string {
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
     .replace(/&[a-z]+;/gi, " ")
+    // Remove zero-width and invisible Unicode spacers used for preview text padding
+    .replace(/[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF\uFFA0]/g, "")
+    // Remove ## repeated symbol patterns used as preview text padding
+    .replace(/(#\s*){2,}/g, " ")
 }
 
 /** Normalize text to strip personalization and boilerplate */

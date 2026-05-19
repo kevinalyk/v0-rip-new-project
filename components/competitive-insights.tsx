@@ -2239,7 +2239,7 @@ export function CompetitiveInsights({
                                   className="text-xs bg-purple-100 dark:bg-purple-950 border-purple-300 dark:border-purple-700 text-purple-800 dark:text-purple-300"
                                 >
                                   <RefreshCw className="h-3 w-3 mr-1" />
-                                  Sent {campaign.sendCount}x
+                                  Subject sent {campaign.sendCount}x
                                 </Badge>
                               )}
                             </div>
@@ -2627,7 +2627,7 @@ export function CompetitiveInsights({
                               <div className="flex items-center gap-2 text-sm">
                                 <RefreshCw className="h-4 w-4 flex-shrink-0 text-purple-500" />
                                 <span className="font-medium text-purple-600 dark:text-purple-400">
-                                  Sent {selectedCampaign.sendCount} times
+                                  This subject line has been sent {selectedCampaign.sendCount} times
                                 </span>
                               </div>
                             )}

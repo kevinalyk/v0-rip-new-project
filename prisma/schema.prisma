@@ -759,7 +759,7 @@ model IpSenderMapping {
   @@index([rdapChecked])
 }
 
-// ─── Who's Contacting Me? — public lookup tool ────────────────────────────────
+// ─── Who's Contacting Me? ��� public lookup tool ────────────────────────────────
 
 model LookupSearch {
   id        String   @id @default(cuid())
@@ -773,4 +773,21 @@ model LookupSearch {
 
   @@index([userId])
   @@index([query])
+}
+
+// ─── Internal Changelog ───────────────────────────────────────────────────────
+
+model Changelog {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @db.Text  // Full description — written for Claude/blog readability
+  category    String   // "feature" | "improvement" | "fix" | "admin"
+  plan        String?  // e.g. "all", "enterprise", null = affects all users
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?  // User ID of who created the entry
+
+  @@index([category])
+  @@index([publishedAt])
 }

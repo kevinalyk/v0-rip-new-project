@@ -42,6 +42,7 @@ import {
   Smartphone,
   Rocket,
   Newspaper,
+  ScrollText,
   TrendingUp,
 } from "lucide-react"
 import { Logo } from "@/components/logo"
@@ -553,6 +554,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                       active={pathname === "/rip/admin/compliance"}
                       collapsed={false}
                       onClick={() => navigate("/rip/admin/compliance")}
+                    />
+                    <NavItem
+                      icon={<ScrollText size={18} />}
+                      label="Changelog"
+                      active={pathname === "/rip/admin/changelog"}
+                      collapsed={false}
+                      onClick={() => navigate("/rip/admin/changelog")}
                     />
                     <NavItem
                       icon={<ShieldAlert size={18} />}

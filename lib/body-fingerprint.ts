@@ -19,8 +19,8 @@ function stripHtml(html: string): string {
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
     // Remove <script>...</script> blocks entirely
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
-    // Remove hidden preview-text spacer divs (display:none / max-height:0)
-    .replace(/<div[^>]*(?:display\s*:\s*none|max-height\s*:\s*0)[^>]*>[\s\S]*?<\/div>/gi, " ")
+    // Remove hidden preview-text divs — catches display:none, max-height:0/0px, opacity:0, overflow:hidden combos
+    .replace(/<div[^>]*(?:display\s*:\s*none|max-height\s*:\s*0\s*(?:px)?;?|opacity\s*:\s*0)[^>]*>[\s\S]*?<\/div>/gi, " ")
     // Replace block-level closing tags with spaces
     .replace(/<\/(p|div|li|tr|td|th|br|h[1-6]|blockquote)[^>]*>/gi, " ")
     // Strip remaining tags

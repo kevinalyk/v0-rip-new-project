@@ -2689,7 +2689,7 @@ export function CompetitiveInsights({
                   )}
 
                   {/* ── Normal campaign detail view ── */}
-                  {!similarView && (
+                  {!similarView && (<>
                   <DialogHeader>
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
                       <div className="flex-1 min-w-0 pr-8 md:pr-0">
@@ -2998,7 +2998,7 @@ export function CompetitiveInsights({
                       )}
                     </TabsContent>
                   </Tabs>
-                  )}
+                  </>)}
                 </>
               )}
             </DialogContent>

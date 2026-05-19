@@ -4,54 +4,71 @@ import { getAuthenticatedUser } from "@/lib/auth"
 import { computeBodyFingerprint } from "@/lib/body-fingerprint"
 
 /**
- * One-time backfill: compute bodyFingerprint for all existing campaigns that have
- * emailContent but no fingerprint yet.
+ * Paginated backfill: compute bodyFingerprint for campaigns that have emailContent but no fingerprint.
+ * Call repeatedly with increasing offset until hasMore = false.
  *
- * Hit POST /api/admin/backfill-body-fingerprints (super_admin only).
- * Safe to run multiple times — only processes rows where bodyFingerprint IS NULL.
+ * GET  /api/admin/backfill-body-fingerprints          — returns total pending count
+ * POST /api/admin/backfill-body-fingerprints?offset=0&batchSize=500
  */
+export async function GET(request: NextRequest) {
+  const user = await getAuthenticatedUser(request)
+  if (!user || user.role !== "super_admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const total = await prisma.competitiveInsightCampaign.count({
+    where: { emailContent: { not: null }, bodyFingerprint: null },
+  })
+
+  return NextResponse.json({ total })
+}
+
 export async function POST(request: NextRequest) {
   const user = await getAuthenticatedUser(request)
   if (!user || user.role !== "super_admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  const { searchParams } = new URL(request.url)
+  const offset = parseInt(searchParams.get("offset") ?? "0", 10)
+  const batchSize = Math.min(parseInt(searchParams.get("batchSize") ?? "500", 10), 1000)
+
   const rows = await prisma.competitiveInsightCampaign.findMany({
-    where: {
-      emailContent: { not: null },
-      bodyFingerprint: null,
-    },
+    where: { emailContent: { not: null }, bodyFingerprint: null },
     select: { id: true, emailContent: true },
+    orderBy: { createdAt: "asc" },
+    skip: offset,
+    take: batchSize,
   })
 
   let processed = 0
   let skipped = 0
-  const BATCH = 50
 
-  for (let i = 0; i < rows.length; i += BATCH) {
-    const batch = rows.slice(i, i + BATCH)
+  await Promise.all(
+    rows.map(async (row) => {
+      const fp = computeBodyFingerprint(row.emailContent ?? "")
+      if (fp === "[]") {
+        skipped++
+        return
+      }
+      await prisma.competitiveInsightCampaign.update({
+        where: { id: row.id },
+        data: { bodyFingerprint: fp },
+      })
+      processed++
+    }),
+  )
 
-    await Promise.all(
-      batch.map(async (row) => {
-        const fp = computeBodyFingerprint(row.emailContent ?? "")
-        if (fp === "[]") {
-          skipped++
-          return
-        }
-        await prisma.competitiveInsightCampaign.update({
-          where: { id: row.id },
-          data: { bodyFingerprint: fp },
-        })
-        processed++
-      }),
-    )
-  }
+  // Count remaining after this batch
+  const remaining = await prisma.competitiveInsightCampaign.count({
+    where: { emailContent: { not: null }, bodyFingerprint: null },
+  })
 
   return NextResponse.json({
     ok: true,
-    total: rows.length,
     processed,
     skipped,
-    message: `Backfill complete. ${processed} fingerprints written, ${skipped} skipped (no usable content).`,
+    remaining,
+    hasMore: remaining > 0,
   })
 }

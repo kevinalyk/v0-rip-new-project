@@ -303,6 +303,18 @@ export function AdminContent({ user }: AdminContentProps) {
     samples: Array<{ id: string; subject: string; platform: string }>
   } | null>(null)
 
+  // Body fingerprint backfill state
+  const [fingerprintPending, setFingerprintPending] = useState<number | null>(null)
+  const [fingerprintOffset, setFingerprintOffset] = useState(0)
+  const [isBackfillingFingerprints, setIsBackfillingFingerprints] = useState(false)
+  const [fingerprintBatchResults, setFingerprintBatchResults] = useState<{
+    processed: number
+    skipped: number
+    remaining: number
+    hasMore: boolean
+    totalProcessed: number
+  } | null>(null)
+
   // Fetch message stats on component mount and when date range changes
   useEffect(() => {
     const fetchMessageStats = async () => {
@@ -1646,6 +1658,50 @@ const downloadActBluePatterns = () => {
       toast.error("Failed to scrape Ballotpedia")
     } finally {
       setIsScrapingBallotpedia(false)
+    }
+  }
+
+  const handleCheckFingerprintPending = async () => {
+    try {
+      const res = await fetch("/api/admin/backfill-body-fingerprints", { credentials: "include" })
+      const data = await res.json()
+      setFingerprintPending(data.total)
+      setFingerprintOffset(0)
+      setFingerprintBatchResults(null)
+    } catch {
+      toast.error("Failed to check pending count")
+    }
+  }
+
+  const handleRunFingerprintBatch = async (batchSize: number) => {
+    setIsBackfillingFingerprints(true)
+    try {
+      const res = await fetch(
+        `/api/admin/backfill-body-fingerprints?offset=${fingerprintOffset}&batchSize=${batchSize}`,
+        { method: "POST", credentials: "include" },
+      )
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || "Batch failed"); return }
+
+      const prevTotal = fingerprintBatchResults?.totalProcessed ?? 0
+      setFingerprintBatchResults({
+        processed: data.processed,
+        skipped: data.skipped,
+        remaining: data.remaining,
+        hasMore: data.hasMore,
+        totalProcessed: prevTotal + data.processed,
+      })
+      setFingerprintPending(data.remaining)
+      setFingerprintOffset((o) => o + batchSize)
+      if (!data.hasMore) {
+        toast.success("All fingerprints backfilled!")
+      } else {
+        toast.success(`Batch done — ${data.processed} written, ${data.remaining.toLocaleString()} remaining`)
+      }
+    } catch {
+      toast.error("Batch failed")
+    } finally {
+      setIsBackfillingFingerprints(false)
     }
   }
 
@@ -3303,6 +3359,64 @@ const downloadActBluePatterns = () => {
                 </div>
               )}
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Body Fingerprint Backfill */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Body Fingerprint Backfill</CardTitle>
+          <CardDescription>
+            Computes and stores a <code>bodyFingerprint</code> for every email campaign that has body content but no
+            fingerprint yet. Used for "similar body copy" send-count detection. Run in batches to avoid timeouts — 500
+            rows per click is safe.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={handleCheckFingerprintPending} disabled={isBackfillingFingerprints}>
+              Check Pending
+            </Button>
+            {fingerprintPending !== null && (
+              <>
+                <Button
+                  onClick={() => handleRunFingerprintBatch(500)}
+                  disabled={isBackfillingFingerprints || !fingerprintBatchResults?.hasMore && fingerprintBatchResults !== null}
+                >
+                  {isBackfillingFingerprints ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Run 500
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleRunFingerprintBatch(1000)}
+                  disabled={isBackfillingFingerprints || !fingerprintBatchResults?.hasMore && fingerprintBatchResults !== null}
+                >
+                  {isBackfillingFingerprints ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Run 1,000
+                </Button>
+              </>
+            )}
+          </div>
+
+          {fingerprintPending !== null && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: "Pending", value: fingerprintPending.toLocaleString() },
+                { label: "Total Written", value: (fingerprintBatchResults?.totalProcessed ?? 0).toLocaleString(), highlight: true },
+                { label: "Last Batch Written", value: fingerprintBatchResults?.processed ?? "—" },
+                { label: "Last Batch Skipped", value: fingerprintBatchResults?.skipped ?? "—" },
+              ].map(({ label, value, highlight }) => (
+                <div key={label} className="rounded-lg border p-3 text-center">
+                  <div className={`text-2xl font-bold ${highlight ? "text-green-600" : ""}`}>{value}</div>
+                  <div className="text-xs text-muted-foreground mt-1">{label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {fingerprintBatchResults && !fingerprintBatchResults.hasMore && (
+            <p className="text-sm text-green-600 font-medium">All fingerprints have been backfilled.</p>
           )}
         </CardContent>
       </Card>

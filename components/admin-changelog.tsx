@@ -21,8 +21,6 @@ type ChangelogEntry = {
 }
 
 const CATEGORIES = ["feature", "improvement", "fix", "admin"] as const
-const PLANS = ["all_users", "all", "enterprise"] as const
-
 const CATEGORY_COLORS: Record<string, string> = {
   feature:     "bg-blue-500/15 text-blue-400 border-blue-500/30",
   improvement: "bg-green-500/15 text-green-400 border-green-500/30",
@@ -30,17 +28,10 @@ const CATEGORY_COLORS: Record<string, string> = {
   admin:       "bg-purple-500/15 text-purple-400 border-purple-500/30",
 }
 
-const PLAN_LABELS: Record<string, string> = {
-  all_users:  "All Users",
-  all:        "Professional",
-  enterprise: "Enterprise",
-}
-
 const EMPTY_FORM = {
   title: "",
   description: "",
   category: "feature" as string,
-  plan: "" as string,
   publishedAt: new Date().toISOString().slice(0, 10),
 }
 
@@ -80,7 +71,6 @@ export function AdminChangelog() {
       title: entry.title,
       description: entry.description,
       category: entry.category,
-      plan: entry.plan ?? "",
       publishedAt: entry.publishedAt.slice(0, 10),
     })
     setDialogOpen(true)
@@ -94,7 +84,6 @@ export function AdminChangelog() {
         title: form.title,
         description: form.description,
         category: form.category,
-        plan: form.plan || null,
         publishedAt: form.publishedAt,
       }
       if (editingId) {
@@ -133,8 +122,7 @@ export function AdminChangelog() {
     const filtered = filterCategory === "all" ? entries : entries.filter((e) => e.category === filterCategory)
     const text = filtered.map((e) => {
       const date = new Date(e.publishedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
-      const planLabel = e.plan ? ` [${PLAN_LABELS[e.plan] ?? e.plan}]` : ""
-      return `## ${e.title}${planLabel}\nDate: ${date} | Category: ${e.category}\n\n${e.description}`
+      return `## ${e.title}\nDate: ${date} | Category: ${e.category}\n\n${e.description}`
     }).join("\n\n---\n\n")
     navigator.clipboard.writeText(text)
     setCopied(true)
@@ -205,11 +193,7 @@ export function AdminChangelog() {
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${CATEGORY_COLORS[entry.category] ?? "bg-muted text-muted-foreground border-border"}`}>
                       {entry.category}
                     </span>
-                    {entry.plan && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-muted/50 text-muted-foreground border-border">
-                        {PLAN_LABELS[entry.plan] ?? entry.plan}
-                      </span>
-                    )}
+
                     <span className="text-xs text-muted-foreground">
                       {new Date(entry.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                     </span>
@@ -271,7 +255,7 @@ export function AdminChangelog() {
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Category</Label>
                 <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
@@ -282,20 +266,6 @@ export function AdminChangelog() {
                     {CATEGORIES.map((c) => (
                       <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Plan <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
-                <Select value={form.plan || "none"} onValueChange={(v) => setForm((f) => ({ ...f, plan: v === "none" ? "" : v }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All users" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">All users</SelectItem>
-                    <SelectItem value="all">Professional</SelectItem>
-                    <SelectItem value="enterprise">Enterprise</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

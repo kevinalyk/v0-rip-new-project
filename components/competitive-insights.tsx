@@ -364,6 +364,35 @@ export function CompetitiveInsights({
   const [assignEntitySearch, setAssignEntitySearch] = useState("")
   const [assigningCampaignId, setAssigningCampaignId] = useState<string | number | null>(null)
 
+  // Similar campaigns drill-down view (inside detail dialog)
+  const [similarView, setSimilarView] = useState<{
+    type: "subject" | "body"
+    loading: boolean
+    matches: Array<{
+      id: string
+      subject: string
+      senderName: string | null
+      senderEmail: string | null
+      dateReceived: string
+      shareToken: string | null
+      entity: { name: string; party: string | null; type: string | null } | null
+    }>
+  } | null>(null)
+
+  const openSimilarView = async (type: "subject" | "body") => {
+    if (!selectedCampaign) return
+    setSimilarView({ type, loading: true, matches: [] })
+    try {
+      const params = new URLSearchParams({ id: String(selectedCampaign.id), type })
+      if (clientSlug) params.append("clientSlug", clientSlug)
+      const res = await fetch(`/api/competitive-insights/similar?${params}`)
+      const data = await res.json()
+      setSimilarView({ type, loading: false, matches: data.matches ?? [] })
+    } catch {
+      setSimilarView({ type, loading: false, matches: [] })
+    }
+  }
+
   // Pre-select entity from URL ?sender= param (e.g. navigating from Directory)
   useEffect(() => {
     const senderParam = searchParams.get("sender")
@@ -2570,10 +2599,97 @@ export function CompetitiveInsights({
 
         {/* Campaign Detail Dialog */}
         {selectedCampaign && (
-          <Dialog open={!!selectedCampaign} onOpenChange={() => setSelectedCampaign(null)}>
+          <Dialog open={!!selectedCampaign} onOpenChange={() => { setSelectedCampaign(null); setSimilarView(null) }}>
             <DialogContent className="!max-w-[1400px] !w-[95vw] md:!w-[85vw] max-h-[90vh] md:max-h-[85vh] overflow-y-auto p-4 md:p-6">
               {selectedCampaign && (
                 <>
+                  {/* ── Similar campaigns drill-down view ── */}
+                  {similarView && (
+                    <div className="flex flex-col gap-4">
+                      <DialogHeader>
+                        <div className="flex items-center gap-3">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 -ml-2 shrink-0"
+                            onClick={() => setSimilarView(null)}
+                          >
+                            <ChevronLeft className="h-4 w-4 mr-1" />
+                            Back
+                          </Button>
+                          <DialogTitle className="text-base md:text-lg">
+                            {similarView.type === "subject"
+                              ? `Other sends with this subject line`
+                              : `Other sends with similar body copy`}
+                          </DialogTitle>
+                        </div>
+                        <DialogDescription className="text-xs text-muted-foreground pl-10">
+                          Deduplicated by day — one row per unique send date.
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      {similarView.loading ? (
+                        <div className="flex items-center justify-center py-16">
+                          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : similarView.matches.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
+                          <RefreshCw className="h-8 w-8 opacity-30" />
+                          <p className="text-sm">No other sends found.</p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col divide-y divide-border rounded-lg border overflow-hidden">
+                          {similarView.matches.map((match) => (
+                            <button
+                              key={match.id}
+                              className="flex items-start gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors group"
+                              onClick={() => {
+                                if (match.shareToken) {
+                                  window.open(`${window.location.origin}/share/${match.shareToken}`, "_blank")
+                                }
+                              }}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-foreground truncate group-hover:underline underline-offset-2">
+                                  {match.subject}
+                                </p>
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                                  {match.entity && (
+                                    <span className="text-xs text-muted-foreground font-medium">
+                                      {match.entity.name}
+                                    </span>
+                                  )}
+                                  {match.senderName && match.senderName !== match.entity?.name && (
+                                    <span className="text-xs text-muted-foreground">
+                                      via {match.senderName}
+                                    </span>
+                                  )}
+                                  {match.senderEmail && (
+                                    <span className="text-xs text-muted-foreground opacity-70 truncate">
+                                      {match.senderEmail}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(match.dateReceived).toLocaleDateString()}
+                                </span>
+                                {match.shareToken ? (
+                                  <ExternalLink className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                                ) : (
+                                  <span className="text-xs text-muted-foreground opacity-50">No link</span>
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── Normal campaign detail view ── */}
+                  {!similarView && (
                   <DialogHeader>
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
                       <div className="flex-1 min-w-0 pr-8 md:pr-0">
@@ -2632,20 +2748,28 @@ export function CompetitiveInsights({
                               {new Date(selectedCampaign.dateReceived).toLocaleDateString()}
                             </div>
                             {selectedCampaign.type !== "sms" && (selectedCampaign.sendCount ?? 1) >= 2 && (resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin") && (
-                              <div className="flex items-center gap-2 text-sm">
+                              <button
+                                className="flex items-center gap-2 text-sm group w-fit"
+                                onClick={() => openSimilarView("subject")}
+                              >
                                 <RefreshCw className="h-4 w-4 flex-shrink-0 text-purple-500" />
-                                <span className="font-medium text-purple-600 dark:text-purple-400">
+                                <span className="font-medium text-purple-600 dark:text-purple-400 group-hover:underline underline-offset-2">
                                   This subject line has been sent {selectedCampaign.sendCount} times
                                 </span>
-                              </div>
+                                <ChevronRight className="h-3.5 w-3.5 text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </button>
                             )}
                             {selectedCampaign.type !== "sms" && (selectedCampaign.bodySendCount ?? 1) >= 2 && (resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin") && (
-                              <div className="flex items-center gap-2 text-sm">
+                              <button
+                                className="flex items-center gap-2 text-sm group w-fit"
+                                onClick={() => openSimilarView("body")}
+                              >
                                 <RefreshCw className="h-4 w-4 flex-shrink-0 text-blue-500" />
-                                <span className="font-medium text-blue-600 dark:text-blue-400">
+                                <span className="font-medium text-blue-600 dark:text-blue-400 group-hover:underline underline-offset-2">
                                   Similar body copy has been sent {selectedCampaign.bodySendCount} times
                                 </span>
-                              </div>
+                                <ChevronRight className="h-3.5 w-3.5 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </button>
                             )}
                           </div>
                         </DialogDescription>
@@ -2802,7 +2926,7 @@ export function CompetitiveInsights({
                           </div>
                         ) : (
                           <div className="space-y-3">
-                            {/* Auth headers first — grouped */}
+                            {/* Auth headers first �� grouped */}
                             {(["auth", "identity", "routing", "other"] as const).map((cat) => {
                               const rows = (campaignHeaders.parsed ?? []).filter((h) => h.category === cat)
                               if (rows.length === 0) return null
@@ -2874,6 +2998,7 @@ export function CompetitiveInsights({
                       )}
                     </TabsContent>
                   </Tabs>
+                  )}
                 </>
               )}
             </DialogContent>

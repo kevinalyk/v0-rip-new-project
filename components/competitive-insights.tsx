@@ -115,6 +115,7 @@ interface Campaign {
   sendCount?: number
   firstSeen?: string | null
   lastSeen?: string | null
+  bodySendCount?: number
 }
 
 interface DateRange {
@@ -2242,6 +2243,15 @@ export function CompetitiveInsights({
                                   Subject sent {campaign.sendCount}x
                                 </Badge>
                               )}
+                              {campaign.type !== "sms" && (campaign.bodySendCount ?? 1) >= 2 && (resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin") && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs bg-blue-100 dark:bg-blue-950 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-300"
+                                >
+                                  <RefreshCw className="h-3 w-3 mr-1" />
+                                  Body sent {campaign.bodySendCount}x
+                                </Badge>
+                              )}
                             </div>
 
                             {/* Row 3: number/email */}
@@ -2628,6 +2638,14 @@ export function CompetitiveInsights({
                                 <RefreshCw className="h-4 w-4 flex-shrink-0 text-purple-500" />
                                 <span className="font-medium text-purple-600 dark:text-purple-400">
                                   This subject line has been sent {selectedCampaign.sendCount} times
+                                </span>
+                              </div>
+                            )}
+                            {selectedCampaign.type !== "sms" && (selectedCampaign.bodySendCount ?? 1) >= 2 && (resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin") && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <RefreshCw className="h-4 w-4 flex-shrink-0 text-blue-500" />
+                                <span className="font-medium text-blue-600 dark:text-blue-400">
+                                  Similar body copy has been sent {selectedCampaign.bodySendCount} times
                                 </span>
                               </div>
                             )}

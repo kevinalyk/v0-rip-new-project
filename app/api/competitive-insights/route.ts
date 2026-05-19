@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
 import { normalizeSubject } from "@/lib/campaign-detector"
+import { parseFingerprint, jaccardSimilarity, SIMILARITY_THRESHOLD } from "@/lib/body-fingerprint"
 
 export async function GET(request: NextRequest) {
   try {
@@ -547,12 +548,11 @@ export async function GET(request: NextRequest) {
       throw dbError
     }
 
-    // Build a subject send-count map across all email campaigns in the DB.
-    // We normalize subjects (handling personalized names) in JS, then group and count.
-    // Only email campaigns (not SMS) are counted.
+    // Pull all campaigns for subject + body similarity counting
     const allSubjectRows = await prisma.competitiveInsightCampaign.findMany({
-      select: { subject: true, dateReceived: true },
+      select: { id: true, subject: true, dateReceived: true, bodyFingerprint: true },
     })
+
     // Map: normalizedSubject -> { count, firstSeen, lastSeen }
     const subjectStats = new Map<string, { count: number; firstSeen: string; lastSeen: string }>()
     for (const row of allSubjectRows) {
@@ -567,6 +567,22 @@ export async function GET(request: NextRequest) {
         if (date < existing.firstSeen) existing.firstSeen = date
         if (date > existing.lastSeen) existing.lastSeen = date
       }
+    }
+
+    // Pre-parse all fingerprints for body similarity (only rows that have one)
+    const fingerprintRows = allSubjectRows
+      .filter((r) => r.bodyFingerprint && r.bodyFingerprint !== "[]")
+      .map((r) => ({ id: r.id, fp: parseFingerprint(r.bodyFingerprint) }))
+
+    // For each insight in the current page, count how many DB rows have similar body copy
+    // Uses Jaccard similarity — O(page_size × fingerprint_count), fast in practice
+    function countBodySimilar(insightFp: Set<string>): number {
+      if (insightFp.size === 0) return 1
+      let count = 0
+      for (const row of fingerprintRows) {
+        if (jaccardSimilarity(insightFp, row.fp) >= SIMILARITY_THRESHOLD) count++
+      }
+      return count
     }
 
     const parsedEmailInsights = emailInsights.map((insight) => {
@@ -597,6 +613,9 @@ export async function GET(request: NextRequest) {
 
       const normalizedKey = normalizeSubject(insight.subject || "")
       const stats = subjectStats.get(normalizedKey)
+
+      const insightFp = parseFingerprint(insight.bodyFingerprint)
+      const bodySendCount = countBodySimilar(insightFp)
       
       return {
         ...insight,
@@ -608,6 +627,7 @@ export async function GET(request: NextRequest) {
         sendCount: stats?.count ?? 1,
         firstSeen: stats?.firstSeen ?? null,
         lastSeen: stats?.lastSeen ?? null,
+        bodySendCount,
       }
     })
 

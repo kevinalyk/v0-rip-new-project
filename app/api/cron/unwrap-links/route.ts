@@ -130,15 +130,38 @@ async function resolveRedirects(url: string): Promise<string> {
           },
         })
 
-        // t.ly and similar JS-redirect shorteners return 200 but redirect via JS — force GET
-        if (response.status === 200 && isIntermediateRedirect(currentUrl)) {
+        // t.ly uses a JS API call to resolve — call their API directly
+        if (response.status === 200 && currentUrl.includes("t.ly/")) {
+          try {
+            const slug = new URL(currentUrl).pathname.replace(/^\//, "")
+            if (slug && slug !== "redirect") {
+              const apiRes = await customFetch(`https://t.ly/api/link?alias=${slug}`, {
+                method: "GET",
+                timeout: 8000,
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                  Accept: "application/json, text/plain, */*",
+                  Referer: "https://t.ly/",
+                },
+              })
+              if (apiRes.body) {
+                const json = JSON.parse(apiRes.body)
+                const dest = json?.long_url || json?.url || json?.destination
+                if (dest && dest.startsWith("http")) {
+                  currentUrl = dest
+                  redirectCount++
+                  continue
+                }
+              }
+            }
+          } catch {}
+          // Fall through to HTML parsing as a backup
           const getResponse = await customFetch(currentUrl, {
             method: "GET",
             timeout: 10000,
             headers: {
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
               Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-              "Accept-Language": "en-US,en;q=0.5",
             },
           })
           const html = getResponse.body || ""

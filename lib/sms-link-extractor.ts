@@ -121,6 +121,31 @@ async function resolveToFinal(startUrl: string): Promise<string> {
         return landed
       }
 
+      // t.ly uses a client-side API call — hit their API directly
+      if (landed.includes("t.ly/")) {
+        try {
+          const slug = new URL(landed).pathname.replace(/^\//, "")
+          if (slug && slug !== "redirect") {
+            const apiRes = await fetch(`https://t.ly/api/link?alias=${slug}`, {
+              method: "GET",
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                Accept: "application/json, text/plain, */*",
+                Referer: "https://t.ly/",
+              },
+            })
+            if (apiRes.ok) {
+              const json = await apiRes.json()
+              const dest = json?.long_url || json?.url || json?.destination
+              if (dest && dest.startsWith("http")) {
+                currentUrl = dest
+                continue
+              }
+            }
+          }
+        } catch {}
+      }
+
       // If we're on an intermediate (or haven't moved), fetch the HTML and parse redirect
       const getResponse = await fetch(landed, {
         method: "GET",

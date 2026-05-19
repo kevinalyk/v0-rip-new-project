@@ -2233,7 +2233,7 @@ export function CompetitiveInsights({
                                   {campaign.entity.state}
                                 </Badge>
                               )}
-                              {campaign.type !== "sms" && (campaign.sendCount ?? 1) >= 2 && (
+                              {campaign.type !== "sms" && (campaign.sendCount ?? 1) >= 2 && (resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin") && (
                                 <Badge
                                   variant="outline"
                                   className="text-xs bg-purple-100 dark:bg-purple-950 border-purple-300 dark:border-purple-700 text-purple-800 dark:text-purple-300"
@@ -2623,25 +2623,11 @@ export function CompetitiveInsights({
                               <Calendar className="h-4 w-4 flex-shrink-0" />
                               {new Date(selectedCampaign.dateReceived).toLocaleDateString()}
                             </div>
-                            {selectedCampaign.type !== "sms" && (selectedCampaign.sendCount ?? 1) >= 2 && (
+                            {selectedCampaign.type !== "sms" && (selectedCampaign.sendCount ?? 1) >= 2 && (resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin") && (
                               <div className="flex items-center gap-2 text-sm">
                                 <RefreshCw className="h-4 w-4 flex-shrink-0 text-purple-500" />
-                                <span>
-                                  <span className="font-medium text-purple-600 dark:text-purple-400">
-                                    Sent {selectedCampaign.sendCount} times
-                                  </span>
-                                  <span className="text-muted-foreground">
-                                    {" — first seen "}
-                                    {selectedCampaign.firstSeen
-                                      ? new Date(selectedCampaign.firstSeen).toLocaleDateString()
-                                      : "unknown"}
-                                    {selectedCampaign.lastSeen && selectedCampaign.firstSeen !== selectedCampaign.lastSeen && (
-                                      <>
-                                        {", most recently "}
-                                        {new Date(selectedCampaign.lastSeen).toLocaleDateString()}
-                                      </>
-                                    )}
-                                  </span>
+                                <span className="font-medium text-purple-600 dark:text-purple-400">
+                                  Sent {selectedCampaign.sendCount} times
                                 </span>
                               </div>
                             )}

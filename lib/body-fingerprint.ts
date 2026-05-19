@@ -37,6 +37,14 @@ function stripHtml(html: string): string {
 function normalizeText(text: string): string {
   return text
     .toLowerCase()
+    // Strip FreeMarker template blocks: <#if ...>...</#if>, <#else>, ${...}
+    .replace(/<#[^>]*>/g, " ")
+    .replace(/<\/#[^>]*>/g, " ")
+    .replace(/\$\{[^}]*\}/g, " ")
+    // Strip any leftover < > angle-bracket constructs that aren't real words
+    .replace(/<[^>]{0,80}>/g, " ")
+    // Remove [Omitted] placeholder tokens
+    .replace(/\[omitted\]/gi, " ")
     // Remove URLs
     .replace(/https?:\/\/[^\s]+/g, "__url__")
     // Remove email addresses

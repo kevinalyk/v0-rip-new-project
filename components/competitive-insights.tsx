@@ -113,8 +113,6 @@ interface Campaign {
   source?: string | null
   sendingProvider?: string | null
   sendCount?: number
-  firstSeen?: string | null
-  lastSeen?: string | null
   bodySendCount?: number
 }
 

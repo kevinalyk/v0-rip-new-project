@@ -553,36 +553,43 @@ export async function GET(request: NextRequest) {
       select: { id: true, subject: true, dateReceived: true, bodyFingerprint: true },
     })
 
-    // Map: normalizedSubject -> { count, firstSeen, lastSeen }
-    const subjectStats = new Map<string, { count: number; firstSeen: string; lastSeen: string }>()
+    // Helper: collapse a Date to a YYYY-MM-DD string for daily dedup
+    const toDay = (d: Date | string | null) =>
+      d ? new Date(d).toISOString().slice(0, 10) : "unknown"
+
+    // Subject send count — deduplicated by (normalizedSubject + calendar day).
+    // If 5 seed emails all received the same blast on the same day, that counts as 1 unique send.
+    // Map: normalizedSubject -> Set of unique days it was sent
+    const subjectDays = new Map<string, Set<string>>()
     for (const row of allSubjectRows) {
       const key = normalizeSubject(row.subject || "")
       if (!key) continue
-      const date = row.dateReceived ? new Date(row.dateReceived).toISOString() : new Date().toISOString()
-      const existing = subjectStats.get(key)
-      if (!existing) {
-        subjectStats.set(key, { count: 1, firstSeen: date, lastSeen: date })
-      } else {
-        existing.count++
-        if (date < existing.firstSeen) existing.firstSeen = date
-        if (date > existing.lastSeen) existing.lastSeen = date
-      }
+      const day = toDay(row.dateReceived)
+      if (!subjectDays.has(key)) subjectDays.set(key, new Set())
+      subjectDays.get(key)!.add(day)
+    }
+    // Convert to { count } map for lookup
+    const subjectStats = new Map<string, { count: number }>()
+    for (const [key, days] of subjectDays) {
+      subjectStats.set(key, { count: days.size })
     }
 
-    // Pre-parse all fingerprints for body similarity (only rows that have one)
+    // Body similarity — deduplicated by (fingerprint group + calendar day).
+    // Pre-parse fingerprints and attach the send day for dedup during per-insight counting.
     const fingerprintRows = allSubjectRows
       .filter((r) => r.bodyFingerprint && r.bodyFingerprint !== "[]")
-      .map((r) => ({ id: r.id, fp: parseFingerprint(r.bodyFingerprint) }))
+      .map((r) => ({ id: r.id, fp: parseFingerprint(r.bodyFingerprint), day: toDay(r.dateReceived) }))
 
-    // For each insight in the current page, count how many DB rows have similar body copy
-    // Uses Jaccard similarity — O(page_size × fingerprint_count), fast in practice
+    // For each insight, count unique days where a similar body was sent (Jaccard >= threshold)
     function countBodySimilar(insightFp: Set<string>): number {
       if (insightFp.size === 0) return 1
-      let count = 0
+      const uniqueDays = new Set<string>()
       for (const row of fingerprintRows) {
-        if (jaccardSimilarity(insightFp, row.fp) >= SIMILARITY_THRESHOLD) count++
+        if (jaccardSimilarity(insightFp, row.fp) >= SIMILARITY_THRESHOLD) {
+          uniqueDays.add(row.day)
+        }
       }
-      return count
+      return uniqueDays.size || 1
     }
 
     const parsedEmailInsights = emailInsights.map((insight) => {
@@ -625,8 +632,6 @@ export async function GET(request: NextRequest) {
         clientId: insight.clientId,
         source: insight.source,
         sendCount: stats?.count ?? 1,
-        firstSeen: stats?.firstSeen ?? null,
-        lastSeen: stats?.lastSeen ?? null,
         bodySendCount,
       }
     })

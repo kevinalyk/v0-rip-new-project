@@ -548,39 +548,70 @@ export async function GET(request: NextRequest) {
       throw dbError
     }
 
-    // Pull all campaigns for subject + body similarity counting
-    const allSubjectRows = await prisma.competitiveInsightCampaign.findMany({
-      select: { id: true, subject: true, dateReceived: true, bodyFingerprint: true },
-    })
+    // ── Send-count helpers ──────────────────────────────────────────────────────
+    // Both counts operate only on the current page's rows to avoid loading tens of
+    // thousands of rows into memory on every request.
 
-    // Helper: collapse a Date to a YYYY-MM-DD string for daily dedup
     const toDay = (d: Date | string | null) =>
       d ? new Date(d).toISOString().slice(0, 10) : "unknown"
 
-    // Subject send count — deduplicated by (normalizedSubject + calendar day).
-    // If 5 seed emails all received the same blast on the same day, that counts as 1 unique send.
-    // Map: normalizedSubject -> Set of unique days it was sent
-    const subjectDays = new Map<string, Set<string>>()
-    for (const row of allSubjectRows) {
-      const key = normalizeSubject(row.subject || "")
-      if (!key) continue
-      const day = toDay(row.dateReceived)
-      if (!subjectDays.has(key)) subjectDays.set(key, new Set())
-      subjectDays.get(key)!.add(day)
-    }
-    // Convert to { count } map for lookup
+    // Subject count: for each insight on this page, count how many distinct calendar
+    // days another campaign with the same normalised subject was received.
+    // We fetch only the (subject, dateReceived) pairs — no fingerprint blobs.
+    const uniqueSubjectKeys = [
+      ...new Set(
+        emailInsights
+          .map((i) => normalizeSubject(i.subject || ""))
+          .filter(Boolean)
+      ),
+    ]
+
     const subjectStats = new Map<string, { count: number }>()
-    for (const [key, days] of subjectDays) {
-      subjectStats.set(key, { count: days.size })
+    if (uniqueSubjectKeys.length > 0) {
+      // Fetch just the dates for matching subjects — no body content loaded
+      const subjectDateRows = await prisma.competitiveInsightCampaign.findMany({
+        where: { subject: { in: emailInsights.map((i) => i.subject).filter(Boolean) } },
+        select: { subject: true, dateReceived: true },
+      })
+      const subjectDays = new Map<string, Set<string>>()
+      for (const row of subjectDateRows) {
+        const key = normalizeSubject(row.subject || "")
+        if (!key) continue
+        if (!subjectDays.has(key)) subjectDays.set(key, new Set())
+        subjectDays.get(key)!.add(toDay(row.dateReceived))
+      }
+      for (const [key, days] of subjectDays) {
+        subjectStats.set(key, { count: days.size })
+      }
     }
 
-    // Body similarity — deduplicated by (fingerprint group + calendar day).
-    // Pre-parse fingerprints and attach the send day for dedup during per-insight counting.
-    const fingerprintRows = allSubjectRows
-      .filter((r) => r.bodyFingerprint && r.bodyFingerprint !== "[]")
-      .map((r) => ({ id: r.id, fp: parseFingerprint(r.bodyFingerprint), day: toDay(r.dateReceived) }))
+    // Body count: for each insight on this page that has a fingerprint, fetch only
+    // the fingerprints of other campaigns — but cap at a safe limit so we never
+    // blow memory. We use a random sample of up to MAX_FP_ROWS rows.
+    const MAX_FP_ROWS = 3000
+    const fingerprintRows: Array<{ fp: Set<string>; day: string }> = []
 
-    // For each insight, count unique days where a similar body was sent (Jaccard >= threshold)
+    const pageHasFingerprints = emailInsights.some(
+      (i) => i.bodyFingerprint && i.bodyFingerprint !== "[]"
+    )
+    if (pageHasFingerprints) {
+      const fpSampleRows = await prisma.competitiveInsightCampaign.findMany({
+        where: {
+          bodyFingerprint: { not: null },
+          NOT: { bodyFingerprint: "[]" },
+        },
+        select: { bodyFingerprint: true, dateReceived: true },
+        take: MAX_FP_ROWS,
+        orderBy: { dateReceived: "desc" },
+      })
+      for (const r of fpSampleRows) {
+        fingerprintRows.push({
+          fp: parseFingerprint(r.bodyFingerprint),
+          day: toDay(r.dateReceived),
+        })
+      }
+    }
+
     function countBodySimilar(insightFp: Set<string>): number {
       if (insightFp.size === 0) return 1
       const uniqueDays = new Set<string>()

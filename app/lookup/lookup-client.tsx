@@ -311,23 +311,12 @@ function AdModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     if (adInitialized.current) return
-
-    function tryPush() {
-      if (adInitialized.current) return
-      try {
-        const adsbyg = (window as any).adsbygoogle
-        if (!adsbyg || !adsbyg.loaded) {
-          setTimeout(tryPush, 300)
-          return
-        }
-        adInitialized.current = true
-        adsbyg.push({})
-      } catch {
-        // safe to ignore
-      }
+    try {
+      adInitialized.current = true
+      ;((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({})
+    } catch {
+      // safe to ignore
     }
-
-    setTimeout(tryPush, 100)
   }, [])
 
   return (

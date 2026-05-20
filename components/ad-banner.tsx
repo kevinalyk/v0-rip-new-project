@@ -11,23 +11,12 @@ export default function AdBanner({ showAd }: AdBannerProps) {
 
   useEffect(() => {
     if (!showAd || pushed.current) return
-
-    function tryPush() {
-      if (pushed.current) return
-      try {
-        const adsbyg = (window as any).adsbygoogle
-        if (!adsbyg || !adsbyg.loaded) {
-          setTimeout(tryPush, 300)
-          return
-        }
-        pushed.current = true
-        adsbyg.push({})
-      } catch {
-        // safe to ignore
-      }
+    try {
+      pushed.current = true
+      ;((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({})
+    } catch {
+      // safe to ignore
     }
-
-    setTimeout(tryPush, 100)
   }, [showAd])
 
   if (!showAd) return null

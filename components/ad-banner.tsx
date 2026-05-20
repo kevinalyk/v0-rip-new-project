@@ -22,14 +22,14 @@ export default function AdBanner({ showAd }: AdBannerProps) {
   if (!showAd) return null
 
   return (
-    <div className="w-full flex justify-center py-1" style={{ minHeight: "92px" }} aria-label="Advertisement">
+    <div className="w-full py-1" aria-label="Advertisement">
       <ins
         className="adsbygoogle"
-        style={{ display: "inline-block", width: "728px", height: "90px" }}
+        style={{ display: "block" }}
         data-ad-client="ca-pub-5715074898343065"
         data-ad-slot="7325494279"
-        data-ad-format="horizontal"
-        data-full-width-responsive="false"
+        data-ad-format="auto"
+        data-full-width-responsive="true"
       />
     </div>
   )

@@ -1509,7 +1509,7 @@ export function CompetitiveInsights({
         </div>
       )}
 
-      <Card className="mb-6">
+      <Card className="mb-6 shadow-none">
         <CardContent className="pt-6">
           <div
             className={`space-y-4 ${shouldShowPaywall || shouldShowPreview ? "pointer-events-none opacity-50" : ""}`}

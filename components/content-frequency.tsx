@@ -223,7 +223,7 @@ function ExpandedSends({
   )
 }
 
-// ─── Table ────────────────────────────────────────────────────────────────────
+// ─── Table ─────────────────��──────────────────────────────────────────────────
 
 function FrequencyTable({
   rows,
@@ -252,7 +252,7 @@ function FrequencyTable({
           <tr className="border-b text-muted-foreground text-xs uppercase tracking-wide">
             <th className="py-3 px-4 w-4" />
             <th className="text-left py-3 px-4 font-medium">
-              {type === "subject" ? "Subject Line" : type === "email-body" ? "Email Body Preview" : "SMS Preview"}
+              {type === "subject" ? "Subject Line" : type === "email-body" ? "Example Subject" : "SMS Preview"}
             </th>
             <th className="text-left py-3 px-4 font-medium">Entity</th>
             <th className="text-right py-3 px-4 font-medium">Send Days</th>
@@ -271,7 +271,7 @@ function FrequencyTable({
               type === "subject"
                 ? row.subject
                 : type === "email-body"
-                ? row.example_preview || row.example_subject
+                ? row.example_subject  // use subject as the readable label — body preview contains raw HTML
                 : row.example_message
 
             return (

@@ -32,7 +32,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
 export async function DELETE(request: NextRequest, { params }: Params) {
   try {
     const auth = await verifyAuth(request)
-    if (!auth || auth.role !== "super_admin") {
+    if (!auth?.success || auth.user?.role !== "super_admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 

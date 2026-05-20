@@ -1,7 +1,7 @@
 import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
-import Script from "next/script"
+
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "sonner"
@@ -32,6 +32,13 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="google-adsense-account" content="ca-pub-5715074898343065" />
+        {/* Plain script tag required — Next.js <Script> adds data-nscript which AdSense rejects */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5715074898343065"
+          crossOrigin="anonymous"
+        />
       </head>
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
@@ -40,11 +47,7 @@ export default function RootLayout({
             <Toaster />
           </DomainProvider>
         </ThemeProvider>
-        <Script
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5715074898343065"
-          crossOrigin="anonymous"
-          strategy="afterInteractive"
-        />
+
       </body>
     </html>
   )

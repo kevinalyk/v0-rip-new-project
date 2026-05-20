@@ -271,7 +271,6 @@ function FrequencyTable({
             <th className="text-left py-3 px-4 font-medium">
               {type === "subject" ? "Subject Line" : type === "email-body" ? "Example Subject" : "SMS Preview"}
             </th>
-            <th className="text-left py-3 px-4 font-medium">Entity</th>
             <th className="text-right py-3 px-4 font-medium">Send Days</th>
             <th className="text-right py-3 px-4 font-medium">Last Sent</th>
             <th className="py-3 px-4 w-8" />
@@ -301,23 +300,6 @@ function FrequencyTable({
                   <td className="py-3 px-4 text-muted-foreground font-mono text-xs">{i + 1}</td>
                   <td className="py-3 px-4 max-w-md">
                     <p className="leading-relaxed text-foreground">{truncate(preview)}</p>
-                  </td>
-                  <td className="py-3 px-4">
-                    {row.entity_name ? (
-                      <div className="flex flex-col gap-1">
-                        <span className="font-medium text-xs">{row.entity_name}</span>
-                        {row.entity_party && (
-                          <Badge
-                            variant={partyColor(row.entity_party) as any}
-                            className="w-fit text-[10px] px-1.5 py-0"
-                          >
-                            {partyLabel(row.entity_party)}
-                          </Badge>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">Unassigned</span>
-                    )}
                   </td>
                   <td className="py-3 px-4 text-right">
                     <span className="inline-flex items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-xs px-2.5 py-1 min-w-[2rem]">

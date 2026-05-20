@@ -223,7 +223,7 @@ export default function SharePageClient({ isAuthenticated, token }: SharePageCli
   }
 
   return (
-    <div className="min-h-screen bg-background py-6 px-4">
+    <div className="min-h-screen bg-background flex items-start justify-center py-6 px-4 md:items-center">
       <div className="max-w-[1400px] w-full md:w-[85vw] mx-auto rounded-lg border bg-card shadow-sm overflow-y-auto p-4 md:p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4 flex-1">

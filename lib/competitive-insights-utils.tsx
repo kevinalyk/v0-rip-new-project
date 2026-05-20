@@ -7,6 +7,7 @@ import http from "http"
 import { URL } from "url"
 import { getRedactedNames, applyRedaction, clearRedactionCache, findUniqueRedactedSubject } from "@/lib/redaction-utils"
 import { detectDonationPlatform } from "@/lib/detect-donation-platform"
+import { computeBodyFingerprint } from "@/lib/body-fingerprint"
 
 // Custom fetch using Node's http/https modules to properly handle SSL
 async function customFetch(
@@ -1561,6 +1562,10 @@ export async function processCompetitiveInsights(
           tags: JSON.stringify(tags),
           emailPreview: redactedEmailPreview || existing.emailPreview,
           emailContent: redactedEmailContent || existing.emailContent,
+          // Compute fingerprint if we now have content but didn't before
+          bodyFingerprint: !existing.bodyFingerprint && redactedEmailContent
+            ? computeBodyFingerprint(redactedEmailContent)
+            : existing.bodyFingerprint,
         },
       })
       // Already existed in DB — not a new campaign
@@ -1609,6 +1614,7 @@ export async function processCompetitiveInsights(
             tags: JSON.stringify(tags),
             emailPreview: redactedEmailPreview,
             emailContent: redactedEmailContent,
+            bodyFingerprint: redactedEmailContent ? computeBodyFingerprint(redactedEmailContent) : null,
             entityId,
             assignmentMethod,
             assignedAt: entityId ? new Date() : null,

@@ -204,10 +204,27 @@ function ExpandedSends({
           className="bg-muted/30 border-b last:border-0 hover:bg-muted/50 cursor-pointer transition-colors group"
         >
           <td className="py-2.5 px-4 w-4" />
-          <td className="py-2.5 pl-10 pr-4 max-w-md" colSpan={2}>
+          <td className="py-2.5 pl-10 pr-4 max-w-md">
             <p className="text-xs text-foreground leading-relaxed">{truncate(send.preview, 140)}</p>
             {send.sendingNumber && (
               <p className="text-[10px] text-muted-foreground mt-0.5">From: {send.sendingNumber}</p>
+            )}
+          </td>
+          <td className="py-2.5 px-4">
+            {send.entityName ? (
+              <div className="flex flex-col gap-1">
+                <span className="font-medium text-xs">{send.entityName}</span>
+                {send.entityParty && (
+                  <Badge
+                    variant={partyColor(send.entityParty) as any}
+                    className="w-fit text-[10px] px-1.5 py-0"
+                  >
+                    {partyLabel(send.entityParty)}
+                  </Badge>
+                )}
+              </div>
+            ) : (
+              <span className="text-muted-foreground text-xs">—</span>
             )}
           </td>
           <td className="py-2.5 px-4" />

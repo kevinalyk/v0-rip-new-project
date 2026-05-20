@@ -309,7 +309,7 @@ function FrequencyTable({
                   <td className="py-3 px-4 text-right text-muted-foreground text-xs whitespace-nowrap">
                     {formatDate(row.last_sent)}
                   </td>
-                  <td className="py-3 px-4 text-right">
+                  <td className="py-3 px-4 text-right" colSpan={2}>
                     {isExpanded
                       ? <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />
                       : <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto" />

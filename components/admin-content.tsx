@@ -303,11 +303,23 @@ export function AdminContent({ user }: AdminContentProps) {
     samples: Array<{ id: string; subject: string; platform: string }>
   } | null>(null)
 
-  // Body fingerprint backfill state
+  // Body fingerprint backfill state (email)
   const [fingerprintPending, setFingerprintPending] = useState<number | null>(null)
   const [fingerprintOffset, setFingerprintOffset] = useState(0)
   const [isBackfillingFingerprints, setIsBackfillingFingerprints] = useState(false)
   const [fingerprintBatchResults, setFingerprintBatchResults] = useState<{
+    processed: number
+    skipped: number
+    remaining: number
+    hasMore: boolean
+    totalProcessed: number
+  } | null>(null)
+
+  // SMS fingerprint backfill state
+  const [smsFingerprintPending, setSmsFingerprintPending] = useState<number | null>(null)
+  const [smsFingerprintOffset, setSmsFingerprintOffset] = useState(0)
+  const [isBackfillingSmsFp, setIsBackfillingSmsFp] = useState(false)
+  const [smsFingerprintResults, setSmsFingerprintResults] = useState<{
     processed: number
     skipped: number
     remaining: number
@@ -1665,11 +1677,56 @@ const downloadActBluePatterns = () => {
     try {
       const res = await fetch("/api/admin/backfill-body-fingerprints", { credentials: "include" })
       const data = await res.json()
-      setFingerprintPending(data.total)
+      setFingerprintPending(data.emailTotal ?? data.total)
+      setSmsFingerprintPending(data.smsTotal ?? null)
       setFingerprintOffset(0)
       setFingerprintBatchResults(null)
     } catch {
       toast.error("Failed to check pending count")
+    }
+  }
+
+  const handleCheckSmsFingerprintPending = async () => {
+    try {
+      const res = await fetch("/api/admin/backfill-body-fingerprints", { credentials: "include" })
+      const data = await res.json()
+      setSmsFingerprintPending(data.smsTotal ?? 0)
+      setSmsFingerprintOffset(0)
+      setSmsFingerprintResults(null)
+    } catch {
+      toast.error("Failed to check SMS pending count")
+    }
+  }
+
+  const handleRunSmsFingerprintBatch = async (batchSize: number) => {
+    setIsBackfillingSmsFp(true)
+    try {
+      const res = await fetch(
+        `/api/admin/backfill-body-fingerprints?target=sms&offset=${smsFingerprintOffset}&batchSize=${batchSize}`,
+        { method: "POST", credentials: "include" },
+      )
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || "Batch failed"); return }
+
+      const prevTotal = smsFingerprintResults?.totalProcessed ?? 0
+      setSmsFingerprintResults({
+        processed: data.processed,
+        skipped: data.skipped,
+        remaining: data.remaining,
+        hasMore: data.hasMore,
+        totalProcessed: prevTotal + data.processed,
+      })
+      setSmsFingerprintPending(data.remaining)
+      setSmsFingerprintOffset((o) => o + batchSize)
+      if (!data.hasMore) {
+        toast.success("All SMS fingerprints backfilled!")
+      } else {
+        toast.success(`Batch done — ${data.processed} written, ${data.remaining.toLocaleString()} remaining`)
+      }
+    } catch {
+      toast.error("SMS batch failed")
+    } finally {
+      setIsBackfillingSmsFp(false)
     }
   }
 
@@ -1975,7 +2032,7 @@ const downloadActBluePatterns = () => {
         </CardContent>
       </Card>
 
-      {/* ── Weekly Digest Trigger ──────────────────────────────────────────── */}
+      {/* ── Weekly Digest Trigger ────────────────���─────────────────────────── */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -3417,6 +3474,64 @@ const downloadActBluePatterns = () => {
 
           {fingerprintBatchResults && !fingerprintBatchResults.hasMore && (
             <p className="text-sm text-green-600 font-medium">All fingerprints have been backfilled.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* SMS Fingerprint Backfill */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">SMS Fingerprint Backfill</CardTitle>
+          <CardDescription>
+            Computes and stores a <code>bodyFingerprint</code> for every SMS message that has body content but no
+            fingerprint yet. Used for &quot;similar message copy&quot; send-count detection. Uses 3-word shingles
+            optimised for short texts. Run in batches to avoid timeouts.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={handleCheckSmsFingerprintPending} disabled={isBackfillingSmsFp}>
+              Check Pending
+            </Button>
+            {smsFingerprintPending !== null && (
+              <>
+                <Button
+                  onClick={() => handleRunSmsFingerprintBatch(500)}
+                  disabled={isBackfillingSmsFp || (!smsFingerprintResults?.hasMore && smsFingerprintResults !== null)}
+                >
+                  {isBackfillingSmsFp ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Run 500
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleRunSmsFingerprintBatch(1000)}
+                  disabled={isBackfillingSmsFp || (!smsFingerprintResults?.hasMore && smsFingerprintResults !== null)}
+                >
+                  {isBackfillingSmsFp ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Run 1,000
+                </Button>
+              </>
+            )}
+          </div>
+
+          {smsFingerprintPending !== null && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: "Pending", value: smsFingerprintPending.toLocaleString() },
+                { label: "Total Written", value: (smsFingerprintResults?.totalProcessed ?? 0).toLocaleString(), highlight: true },
+                { label: "Last Batch Written", value: smsFingerprintResults?.processed ?? "—" },
+                { label: "Last Batch Skipped", value: smsFingerprintResults?.skipped ?? "—" },
+              ].map(({ label, value, highlight }) => (
+                <div key={label} className="rounded-lg border p-3 text-center">
+                  <div className={`text-2xl font-bold ${highlight ? "text-green-600" : ""}`}>{value}</div>
+                  <div className="text-xs text-muted-foreground mt-1">{label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {smsFingerprintResults && !smsFingerprintResults.hasMore && (
+            <p className="text-sm text-green-600 font-medium">All SMS fingerprints have been backfilled.</p>
           )}
         </CardContent>
       </Card>

@@ -6,10 +6,20 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, CalendarIcon, RotateCcw } from "lucide-react"
+import { Loader2, CalendarIcon, RotateCcw, ChevronDown, ChevronRight, ExternalLink } from "lucide-react"
 import { Input } from "@/components/ui/input"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+interface SendRow {
+  id: string
+  shareToken: string
+  date: string
+  preview: string
+  entityName: string | null
+  entityParty: string | null
+  sendingNumber?: string | null
+}
 
 interface FrequencyRow {
   subject?: string
@@ -144,15 +154,88 @@ function FilterBar({
   )
 }
 
+// ─── Expanded sends row ───────────────────────────────────────────────────────
+
+function ExpandedSends({
+  rowKey,
+  type,
+  clientSlug,
+}: {
+  rowKey: string
+  type: "subject" | "email-body" | "sms-body"
+  clientSlug: string
+}) {
+  const params = new URLSearchParams({ type, key: rowKey, clientSlug })
+  const { data, isLoading, error } = useSWR<{ sends: SendRow[] }>(
+    `/api/reports/content-frequency/sends?${params.toString()}`,
+    fetcher,
+    { keepPreviousData: false }
+  )
+
+  if (isLoading) {
+    return (
+      <tr>
+        <td colSpan={6} className="py-4 px-10 bg-muted/30">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Loading sends…
+          </div>
+        </td>
+      </tr>
+    )
+  }
+
+  if (error || !data?.sends?.length) {
+    return (
+      <tr>
+        <td colSpan={6} className="py-4 px-10 bg-muted/30 text-muted-foreground text-xs">
+          {error ? "Failed to load sends." : "No individual sends found."}
+        </td>
+      </tr>
+    )
+  }
+
+  return (
+    <>
+      {data.sends.map((send) => (
+        <tr
+          key={send.id}
+          onClick={() => window.open(`/share/${send.shareToken}`, "_blank")}
+          className="bg-muted/30 border-b last:border-0 hover:bg-muted/50 cursor-pointer transition-colors group"
+        >
+          <td className="py-2.5 px-4 w-4" />
+          <td className="py-2.5 pl-10 pr-4 max-w-md" colSpan={2}>
+            <p className="text-xs text-foreground leading-relaxed">{truncate(send.preview, 140)}</p>
+            {send.sendingNumber && (
+              <p className="text-[10px] text-muted-foreground mt-0.5">From: {send.sendingNumber}</p>
+            )}
+          </td>
+          <td className="py-2.5 px-4" />
+          <td className="py-2.5 px-4 text-right text-muted-foreground text-xs whitespace-nowrap">
+            {formatDate(send.date)}
+          </td>
+          <td className="py-2.5 px-4 text-right">
+            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors ml-auto" />
+          </td>
+        </tr>
+      ))}
+    </>
+  )
+}
+
 // ─── Table ────────────────────────────────────────────────────────────────────
 
 function FrequencyTable({
   rows,
   type,
+  clientSlug,
 }: {
   rows: FrequencyRow[]
   type: "subject" | "email-body" | "sms-body"
+  clientSlug: string
 }) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null)
+
   if (rows.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
@@ -167,17 +250,23 @@ function FrequencyTable({
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b text-muted-foreground text-xs uppercase tracking-wide">
-            <th className="text-left py-3 px-4 w-8 font-medium">#</th>
+            <th className="py-3 px-4 w-4" />
             <th className="text-left py-3 px-4 font-medium">
               {type === "subject" ? "Subject Line" : type === "email-body" ? "Email Body Preview" : "SMS Preview"}
             </th>
             <th className="text-left py-3 px-4 font-medium">Entity</th>
             <th className="text-right py-3 px-4 font-medium">Send Days</th>
             <th className="text-right py-3 px-4 font-medium">Last Sent</th>
+            <th className="py-3 px-4 w-8" />
           </tr>
         </thead>
         <tbody>
           {rows.map((row, i) => {
+            const rowKey =
+              type === "subject"
+                ? (row.subject ?? "")
+                : (row.body_fingerprint ?? "")
+            const isExpanded = expandedKey === rowKey + i
             const preview =
               type === "subject"
                 ? row.subject
@@ -186,37 +275,57 @@ function FrequencyTable({
                 : row.example_message
 
             return (
-              <tr key={row.example_id + i} className="border-b last:border-0 hover:bg-muted/40 transition-colors">
-                <td className="py-3 px-4 text-muted-foreground font-mono text-xs">{i + 1}</td>
-                <td className="py-3 px-4 max-w-md">
-                  <p className="leading-relaxed text-foreground">{truncate(preview)}</p>
-                </td>
-                <td className="py-3 px-4">
-                  {row.entity_name ? (
-                    <div className="flex flex-col gap-1">
-                      <span className="font-medium text-xs">{row.entity_name}</span>
-                      {row.entity_party && (
-                        <Badge
-                          variant={partyColor(row.entity_party) as any}
-                          className="w-fit text-[10px] px-1.5 py-0"
-                        >
-                          {partyLabel(row.entity_party)}
-                        </Badge>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground text-xs">Unassigned</span>
-                  )}
-                </td>
-                <td className="py-3 px-4 text-right">
-                  <span className="inline-flex items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-xs px-2.5 py-1 min-w-[2rem]">
-                    {row.send_days}
-                  </span>
-                </td>
-                <td className="py-3 px-4 text-right text-muted-foreground text-xs whitespace-nowrap">
-                  {formatDate(row.last_sent)}
-                </td>
-              </tr>
+              <>
+                <tr
+                  key={row.example_id + i}
+                  onClick={() => setExpandedKey(isExpanded ? null : rowKey + i)}
+                  className="border-b hover:bg-muted/40 transition-colors cursor-pointer select-none"
+                >
+                  <td className="py-3 px-4 text-muted-foreground font-mono text-xs">{i + 1}</td>
+                  <td className="py-3 px-4 max-w-md">
+                    <p className="leading-relaxed text-foreground">{truncate(preview)}</p>
+                  </td>
+                  <td className="py-3 px-4">
+                    {row.entity_name ? (
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium text-xs">{row.entity_name}</span>
+                        {row.entity_party && (
+                          <Badge
+                            variant={partyColor(row.entity_party) as any}
+                            className="w-fit text-[10px] px-1.5 py-0"
+                          >
+                            {partyLabel(row.entity_party)}
+                          </Badge>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">Unassigned</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    <span className="inline-flex items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-xs px-2.5 py-1 min-w-[2rem]">
+                      {row.send_days}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-right text-muted-foreground text-xs whitespace-nowrap">
+                    {formatDate(row.last_sent)}
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    {isExpanded
+                      ? <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />
+                      : <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto" />
+                    }
+                  </td>
+                </tr>
+                {isExpanded && (
+                  <ExpandedSends
+                    key={"exp-" + rowKey + i}
+                    rowKey={rowKey}
+                    type={type}
+                    clientSlug={clientSlug}
+                  />
+                )}
+              </>
             )
           })}
         </tbody>
@@ -318,7 +427,7 @@ export function ContentFrequency({ clientSlug }: { clientSlug: string }) {
         {/* Table */}
         {!isLoading && !error && data && (
           <div className="rounded-lg border bg-card shadow-none">
-            <FrequencyTable rows={tabRows} type={tab} />
+            <FrequencyTable rows={tabRows} type={tab} clientSlug={clientSlug} />
           </div>
         )}
       </Tabs>

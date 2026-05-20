@@ -203,22 +203,22 @@ function ExpandedSends({
           onClick={() => window.open(`/share/${send.shareToken}`, "_blank")}
           className="bg-muted/30 border-b last:border-0 hover:bg-muted/50 cursor-pointer transition-colors group"
         >
-          <td className="py-2.5 px-4 w-4" />
+          {/* col 1: rank placeholder */}
+          <td className="py-2.5 px-4 w-8" />
+          {/* col 2: content */}
           <td className="py-2.5 pl-10 pr-4 max-w-md">
             <p className="text-xs text-foreground leading-relaxed">{truncate(send.preview, 140)}</p>
             {send.sendingNumber && (
               <p className="text-[10px] text-muted-foreground mt-0.5">From: {send.sendingNumber}</p>
             )}
           </td>
+          {/* col 3: entity — filled for child rows */}
           <td className="py-2.5 px-4">
             {send.entityName ? (
               <div className="flex flex-col gap-1">
                 <span className="font-medium text-xs">{send.entityName}</span>
                 {send.entityParty && (
-                  <Badge
-                    variant={partyColor(send.entityParty) as any}
-                    className="w-fit text-[10px] px-1.5 py-0"
-                  >
+                  <Badge variant={partyColor(send.entityParty) as any} className="w-fit text-[10px] px-1.5 py-0">
                     {partyLabel(send.entityParty)}
                   </Badge>
                 )}
@@ -227,10 +227,13 @@ function ExpandedSends({
               <span className="text-muted-foreground text-xs">—</span>
             )}
           </td>
+          {/* col 4: total sends — blank for child */}
           <td className="py-2.5 px-4" />
+          {/* col 5: sent date */}
           <td className="py-2.5 px-4 text-right text-muted-foreground text-xs whitespace-nowrap">
             {formatDate(send.date)}
           </td>
+          {/* col 6: external link */}
           <td className="py-2.5 px-4 text-right">
             <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors ml-auto" />
           </td>
@@ -267,12 +270,13 @@ function FrequencyTable({
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b text-muted-foreground text-xs uppercase tracking-wide">
-            <th className="py-3 px-4 w-4" />
+            <th className="py-3 px-4 w-8" />
             <th className="text-left py-3 px-4 font-medium">
               {type === "subject" ? "Subject Line" : type === "email-body" ? "Example Subject" : "SMS Preview"}
             </th>
-            <th className="text-right py-3 px-4 font-medium">Send Days</th>
-            <th className="text-right py-3 px-4 font-medium">Last Sent</th>
+            <th className="text-left py-3 px-4 font-medium">Entity</th>
+            <th className="text-right py-3 px-4 font-medium">Total Sends</th>
+            <th className="text-right py-3 px-4 font-medium">Sent Date</th>
             <th className="py-3 px-4 w-8" />
           </tr>
         </thead>
@@ -297,19 +301,26 @@ function FrequencyTable({
                   onClick={() => setExpandedKey(isExpanded ? null : rowKey + i)}
                   className="border-b hover:bg-muted/40 transition-colors cursor-pointer select-none"
                 >
-                  <td className="py-3 px-4 text-muted-foreground font-mono text-xs">{i + 1}</td>
+                  {/* col 1: rank */}
+                  <td className="py-3 px-4 text-muted-foreground font-mono text-xs w-8">{i + 1}</td>
+                  {/* col 2: content */}
                   <td className="py-3 px-4 max-w-md">
                     <p className="leading-relaxed text-foreground">{truncate(preview)}</p>
                   </td>
+                  {/* col 3: entity — blank on parent */}
+                  <td className="py-3 px-4" />
+                  {/* col 4: total sends */}
                   <td className="py-3 px-4 text-right">
                     <span className="inline-flex items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-xs px-2.5 py-1 min-w-[2rem]">
                       {row.send_days}
                     </span>
                   </td>
+                  {/* col 5: sent date */}
                   <td className="py-3 px-4 text-right text-muted-foreground text-xs whitespace-nowrap">
                     {formatDate(row.last_sent)}
                   </td>
-                  <td className="py-3 px-4 text-right" colSpan={2}>
+                  {/* col 6: chevron */}
+                  <td className="py-3 px-4 text-right">
                     {isExpanded
                       ? <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />
                       : <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto" />

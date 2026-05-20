@@ -366,7 +366,7 @@ export function CompetitiveInsights({
 
   // Similar campaigns drill-down view (inside detail dialog)
   const [similarView, setSimilarView] = useState<{
-    type: "subject" | "body"
+    type: "subject" | "body" | "sms-body"
     loading: boolean
     matches: Array<{
       id: string
@@ -379,7 +379,7 @@ export function CompetitiveInsights({
     }>
   } | null>(null)
 
-  const openSimilarView = async (type: "subject" | "body") => {
+  const openSimilarView = async (type: "subject" | "body" | "sms-body") => {
     if (!selectedCampaign) return
     setSimilarView({ type, loading: true, matches: [] })
     try {
@@ -2279,6 +2279,15 @@ export function CompetitiveInsights({
                                   Body sent {campaign.bodySendCount}x
                                 </Badge>
                               )}
+                              {campaign.type === "sms" && (campaign.sendCount ?? 1) >= 2 && (resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin") && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs bg-green-100 dark:bg-green-950 border-green-300 dark:border-green-700 text-green-800 dark:text-green-300"
+                                >
+                                  <RefreshCw className="h-3 w-3 mr-1" />
+                                  Sent {campaign.sendCount}x
+                                </Badge>
+                              )}
                             </div>
 
                             {/* Row 3: number/email */}
@@ -2620,6 +2629,8 @@ export function CompetitiveInsights({
                           <DialogTitle className="text-base md:text-lg">
                             {similarView.type === "subject"
                               ? `Other sends with this subject line`
+                              : similarView.type === "sms-body"
+                              ? `Other sends with similar message copy`
                               : `Other sends with similar body copy`}
                           </DialogTitle>
                         </div>
@@ -2769,6 +2780,18 @@ export function CompetitiveInsights({
                                   Similar body copy has been sent {selectedCampaign.bodySendCount} times
                                 </span>
                                 <ChevronRight className="h-3.5 w-3.5 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </button>
+                            )}
+                            {selectedCampaign.type === "sms" && (selectedCampaign.sendCount ?? 1) >= 2 && (resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin") && (
+                              <button
+                                className="flex items-center gap-2 text-sm group w-fit"
+                                onClick={() => openSimilarView("sms-body")}
+                              >
+                                <RefreshCw className="h-4 w-4 flex-shrink-0 text-green-500" />
+                                <span className="font-medium text-green-600 dark:text-green-400 group-hover:underline underline-offset-2">
+                                  Similar message has been sent {selectedCampaign.sendCount} times
+                                </span>
+                                <ChevronRight className="h-3.5 w-3.5 text-green-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                               </button>
                             )}
                           </div>

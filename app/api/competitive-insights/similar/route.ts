@@ -2,17 +2,24 @@ import { type NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
 import { normalizeSubject } from "@/lib/campaign-detector"
-import { parseFingerprint, jaccardSimilarity, SIMILARITY_THRESHOLD } from "@/lib/body-fingerprint"
+import { parseFingerprint, jaccardSimilarity, SIMILARITY_THRESHOLD, SMS_SIMILARITY_THRESHOLD } from "@/lib/body-fingerprint"
 import { nanoid } from "nanoid"
 
 /** Ensure a campaign has a shareToken, generating and persisting one if missing. */
-async function ensureShareToken(id: string, existing: string | null): Promise<string> {
+async function ensureShareToken(id: string, existing: string | null, table: "email" | "sms" = "email"): Promise<string> {
   if (existing) return existing
   const token = nanoid(16)
-  await prisma.competitiveInsightCampaign.update({
-    where: { id },
-    data: { shareToken: token, shareTokenCreatedAt: new Date() },
-  })
+  if (table === "sms") {
+    await prisma.smsQueue.update({
+      where: { id },
+      data: { shareToken: token, shareTokenCreatedAt: new Date() },
+    })
+  } else {
+    await prisma.competitiveInsightCampaign.update({
+      where: { id },
+      data: { shareToken: token, shareTokenCreatedAt: new Date() },
+    })
+  }
   return token
 }
 
@@ -122,6 +129,58 @@ export async function GET(request: NextRequest) {
         // Strip bodyFingerprint from response
         const { bodyFingerprint: _fp, ...rest } = row
         matches.push({ ...rest, shareToken })
+      }
+
+      return NextResponse.json({ matches, sourceId: id })
+    }
+
+    if (type === "sms-body") {
+      // Source must be an SmsQueue row
+      const smsSource = await prisma.smsQueue.findUnique({
+        where: { id },
+        select: { id: true, bodyFingerprint: true, createdAt: true },
+      })
+      if (!smsSource) return NextResponse.json({ error: "SMS not found" }, { status: 404 })
+
+      const sourceFp = parseFingerprint(smsSource.bodyFingerprint)
+      if (sourceFp.size === 0) return NextResponse.json({ matches: [], sourceId: id })
+
+      const allSms = await prisma.smsQueue.findMany({
+        where: {
+          isDeleted: false,
+          bodyFingerprint: { not: null },
+        },
+        select: {
+          id: true,
+          message: true,
+          phoneNumber: true,
+          createdAt: true,
+          shareToken: true,
+          bodyFingerprint: true,
+          entity: { select: { name: true, party: true, type: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      })
+
+      const seenDays = new Set<string>()
+      const matches = []
+      for (const row of allSms) {
+        if (row.id === id) continue
+        const fp = parseFingerprint(row.bodyFingerprint)
+        if (jaccardSimilarity(sourceFp, fp) < SMS_SIMILARITY_THRESHOLD) continue
+        const day = toDay(row.createdAt)
+        if (seenDays.has(day)) continue
+        seenDays.add(day)
+        const shareToken = await ensureShareToken(row.id, row.shareToken, "sms")
+        const { bodyFingerprint: _fp, ...rest } = row
+        matches.push({
+          ...rest,
+          shareToken,
+          subject: row.message?.substring(0, 100) || "SMS Message",
+          senderName: row.phoneNumber || "Unknown",
+          senderEmail: row.phoneNumber || "",
+          dateReceived: row.createdAt.toISOString(),
+        })
       }
 
       return NextResponse.json({ matches, sourceId: id })

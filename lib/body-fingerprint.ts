@@ -1,16 +1,21 @@
 /**
- * Body fingerprinting for email similarity detection.
+ * Body fingerprinting for email and SMS similarity detection.
  *
- * Strategy:
+ * Email strategy:
  * 1. Strip all HTML tags, CSS, and boilerplate
  * 2. Normalize personalized tokens (names, amounts, URLs)
  * 3. Build a set of overlapping 5-word shingles
- * 4. Jaccard similarity = |A ∩ B| / |A ∪ B|
+ * 4. Jaccard similarity = |A ∩ B| / |A ∪ B|, threshold 0.65
  *
- * Emails with Jaccard >= SIMILARITY_THRESHOLD are considered "same copy".
+ * SMS strategy:
+ * 1. Plain text — skip HTML stripping entirely
+ * 2. Same normalization (URLs, amounts, names)
+ * 3. 3-word shingles (messages are short; 5-word shingles are too sparse)
+ * 4. Jaccard threshold 0.55 (lower because short texts have naturally lower max Jaccard)
  */
 
 export const SIMILARITY_THRESHOLD = 0.65
+export const SMS_SIMILARITY_THRESHOLD = 0.55
 
 /** Strip HTML and extract readable text */
 function stripHtml(html: string): string {
@@ -100,6 +105,20 @@ export function computeBodyFingerprint(html: string): string {
   // Need at least ~40 chars of real content to be meaningful
   if (text.length < 40) return "[]"
   const shingles = shingle(text, 5)
+  if (shingles.size === 0) return "[]"
+  return JSON.stringify([...shingles].sort())
+}
+
+/**
+ * Compute a compact fingerprint from a raw SMS message body (plain text).
+ * Uses 3-word shingles for better coverage on short messages.
+ * Returns a JSON array of shingles (sorted for determinism).
+ */
+export function computeSmsFingerprint(message: string): string {
+  if (!message?.trim()) return "[]"
+  const text = normalizeText(message) // no HTML stripping needed
+  if (text.length < 20) return "[]"
+  const shingles = shingle(text, 3) // 3-word shingles for short texts
   if (shingles.size === 0) return "[]"
   return JSON.stringify([...shingles].sort())
 }

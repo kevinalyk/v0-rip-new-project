@@ -614,6 +614,27 @@ export async function GET(request: NextRequest) {
       }
     })
 
+    // SMS send count: count distinct days the same phone number sent the same normalized message
+    const smsPhoneNumbers = [...new Set(smsMessages.map((s) => s.phoneNumber).filter(Boolean))] as string[]
+    const smsSendStats = new Map<string, number>() // key: `${phoneNumber}__${normalizedMsg}` → day count
+    if (smsPhoneNumbers.length > 0) {
+      const smsCountRows = await prisma.$queryRawUnsafe<{ phone: string; normalized_msg: string; cnt: bigint }[]>(
+        `SELECT "phoneNumber" AS phone,
+                LEFT(LOWER(REGEXP_REPLACE(message, 'https?://\\S+|\\$[\\d,]+(\\.[0-9]{2})?|\\b\\d{5,}\\b|[[:space:]]+', ' ', 'g')), 120) AS normalized_msg,
+                COUNT(DISTINCT DATE("createdAt")) AS cnt
+         FROM "SmsQueue"
+         WHERE "phoneNumber" = ANY($1::text[])
+           AND message IS NOT NULL
+           AND "isDeleted" = false
+         GROUP BY "phoneNumber", normalized_msg`,
+        smsPhoneNumbers
+      )
+      for (const row of smsCountRows) {
+        const key = `${row.phone}__${row.normalized_msg}`
+        smsSendStats.set(key, Number(row.cnt))
+      }
+    }
+
     const parsedSmsInsights = smsMessages.map((sms) => {
       let ctaLinks = []
       
@@ -623,6 +644,14 @@ export async function GET(request: NextRequest) {
         console.error("[v0] Error parsing ctaLinks for SMS", sms.id, e)
         ctaLinks = []
       }
+
+      const normalizedMsg = (sms.message || "")
+        .toLowerCase()
+        .replace(/https?:\/\/\S+|\$[\d,]+(\.\d{2})?|\b\d{5,}\b|\s+/g, " ")
+        .substring(0, 120)
+        .trim()
+      const smsKey = `${sms.phoneNumber}__${normalizedMsg}`
+      const sendCount = smsSendStats.get(smsKey) ?? 1
       
       return {
         id: sms.id,
@@ -639,6 +668,7 @@ export async function GET(request: NextRequest) {
         tags: [],
         emailPreview: sms.message || "",
         emailContent: sms.message || null,
+        bodyFingerprint: sms.bodyFingerprint || null,
         entityId: sms.entityId,
         entity: sms.entity || null,
         phoneNumber: sms.phoneNumber,
@@ -649,6 +679,8 @@ export async function GET(request: NextRequest) {
         shareCount: sms.shareCount || 0,
         shareViewCount: sms.shareViewCount || 0,
         viewCount: sms.viewCount || 0,
+        sendCount,
+        shareToken: sms.shareToken || null,
       }
     })
 

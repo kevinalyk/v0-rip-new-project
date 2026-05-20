@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
           shareToken: true,
           createdAt: true,
           message: true,
-          sendingNumber: true,
+          phoneNumber: true,
           entity: { select: { name: true, party: true } },
         },
         orderBy: { createdAt: "desc" },
@@ -145,7 +145,7 @@ export async function GET(request: NextRequest) {
           preview: r.message || "",
           entityName: r.entity?.name ?? null,
           entityParty: r.entity?.party ?? null,
-          sendingNumber: r.sendingNumber,
+          sendingNumber: r.phoneNumber,
         }))
       )
 

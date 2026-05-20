@@ -75,7 +75,8 @@ export async function GET(request: NextRequest) {
           id: r.id,
           shareToken: await ensureShareToken(r.id, r.shareToken),
           date: r.dateReceived?.toISOString() ?? "",
-          preview: r.emailPreview || r.subject || "",
+          // For subject drilldown just show the subject — no body preview
+          preview: r.subject || "",
           entityName: r.entity?.name ?? null,
           entityParty: r.entity?.party ?? null,
         }))
@@ -96,7 +97,6 @@ export async function GET(request: NextRequest) {
           shareToken: true,
           dateReceived: true,
           subject: true,
-          emailPreview: true,
           entity: { select: { name: true, party: true } },
         },
         orderBy: { dateReceived: "desc" },
@@ -108,7 +108,8 @@ export async function GET(request: NextRequest) {
           id: r.id,
           shareToken: await ensureShareToken(r.id, r.shareToken),
           date: r.dateReceived?.toISOString() ?? "",
-          preview: r.emailPreview || r.subject || "",
+          // Show subject as the label for each body send
+          preview: r.subject || "",
           entityName: r.entity?.name ?? null,
           entityParty: r.entity?.party ?? null,
         }))

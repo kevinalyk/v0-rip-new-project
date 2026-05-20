@@ -3,6 +3,18 @@ import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
 import { normalizeSubject } from "@/lib/campaign-detector"
 import { parseFingerprint, jaccardSimilarity, SIMILARITY_THRESHOLD } from "@/lib/body-fingerprint"
+import { nanoid } from "nanoid"
+
+/** Ensure a campaign has a shareToken, generating and persisting one if missing. */
+async function ensureShareToken(id: string, existing: string | null): Promise<string> {
+  if (existing) return existing
+  const token = nanoid(16)
+  await prisma.competitiveInsightCampaign.update({
+    where: { id },
+    data: { shareToken: token, shareTokenCreatedAt: new Date() },
+  })
+  return token
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -71,7 +83,8 @@ export async function GET(request: NextRequest) {
         const day = toDay(row.dateReceived)
         if (seenDays.has(day)) continue
         seenDays.add(day)
-        matches.push(row)
+        const shareToken = await ensureShareToken(row.id, row.shareToken)
+        matches.push({ ...row, shareToken })
       }
 
       return NextResponse.json({ matches, sourceId: id })
@@ -105,9 +118,10 @@ export async function GET(request: NextRequest) {
         const day = toDay(row.dateReceived)
         if (seenDays.has(day)) continue
         seenDays.add(day)
+        const shareToken = await ensureShareToken(row.id, row.shareToken)
         // Strip bodyFingerprint from response
         const { bodyFingerprint: _fp, ...rest } = row
-        matches.push(rest)
+        matches.push({ ...rest, shareToken })
       }
 
       return NextResponse.json({ matches, sourceId: id })

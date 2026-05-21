@@ -206,9 +206,7 @@ function ExpandedSends({
           onClick={() => window.open(`/share/${send.shareToken}`, "_blank")}
           className="bg-muted/30 border-b last:border-0 hover:bg-muted/50 cursor-pointer transition-colors group"
         >
-          {/* col 1: rank placeholder */}
-          <td className="py-2.5 px-4 w-8" />
-          {/* col 2: content */}
+          {/* col 1: content */}
           <td className="py-2.5 pl-10 pr-4 max-w-md">
             <p className="text-xs text-foreground leading-relaxed">{truncate(send.preview, 140)}</p>
             {send.sendingNumber && (
@@ -260,7 +258,6 @@ function FrequencyTable({
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b text-muted-foreground text-xs uppercase tracking-wide">
-            <th className="py-3 px-4 w-8" />
             <th className="text-left py-3 px-4 font-medium">
               {type === "subject" ? "Subject Line" : type === "email-body" ? "Example Subject" : "SMS Preview"}
             </th>
@@ -291,9 +288,7 @@ function FrequencyTable({
                   onClick={() => setExpandedKey(isExpanded ? null : rowKey + i)}
                   className="border-b hover:bg-muted/40 transition-colors cursor-pointer select-none"
                 >
-                  {/* col 1: rank */}
-                  <td className="py-3 px-4 text-muted-foreground font-mono text-xs w-8">{i + 1}</td>
-                  {/* col 2: content */}
+                  {/* col 1: content */}
                   <td className="py-3 px-4 max-w-md">
                     <p className="leading-relaxed text-foreground">{truncate(preview)}</p>
                   </td>

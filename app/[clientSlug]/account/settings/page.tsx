@@ -20,6 +20,8 @@ export default function AccountSettingsPage() {
   const [savingDigest, setSavingDigest] = useState(false)
   const [weeklyDigestEnabled, setWeeklyDigestEnabled] = useState(true)
   const [savingWeeklyDigest, setSavingWeeklyDigest] = useState(false)
+  const [productUpdateEnabled, setProductUpdateEnabled] = useState(true)
+  const [savingProductUpdate, setSavingProductUpdate] = useState(false)
 
   useEffect(() => {
     checkAuth()
@@ -82,6 +84,7 @@ export default function AccountSettingsPage() {
         const data = await response.json()
         setDigestEnabled(data.digestEnabled ?? true)
         setWeeklyDigestEnabled(data.weeklyDigestEnabled ?? true)
+        setProductUpdateEnabled(data.productUpdateEnabled ?? true)
       }
     } catch (error) {
       console.error("Error fetching user settings:", error)
@@ -112,6 +115,27 @@ export default function AccountSettingsPage() {
       toast.error("Failed to save setting")
     } finally {
       setSavingWeeklyDigest(false)
+    }
+  }
+
+  const handleProductUpdateToggle = async (enabled: boolean) => {
+    setProductUpdateEnabled(enabled)
+    setSavingProductUpdate(true)
+    try {
+      const response = await fetch("/api/user/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productUpdateEnabled: enabled }),
+        credentials: "include",
+      })
+      if (!response.ok) throw new Error("Failed to save")
+      toast.success(enabled ? "Product updates enabled" : "Product updates disabled")
+    } catch (error) {
+      console.error("Error saving product update setting:", error)
+      setProductUpdateEnabled(!enabled)
+      toast.error("Failed to save setting")
+    } finally {
+      setSavingProductUpdate(false)
     }
   }
 
@@ -221,6 +245,33 @@ export default function AccountSettingsPage() {
                     checked={weeklyDigestEnabled}
                     onCheckedChange={handleWeeklyDigestToggle}
                     disabled={savingWeeklyDigest}
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-border" />
+
+              <div className="flex items-center justify-between py-4">
+                <div className="flex items-start gap-3">
+                  <Mail className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
+                  <div className="space-y-1">
+                    <Label htmlFor="product-update-toggle" className="text-sm font-medium cursor-pointer">
+                      Product Updates
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      Receive a weekly newsletter with the latest features and improvements to Inbox.GOP, sent every Thursday.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 ml-6 shrink-0">
+                  {savingProductUpdate && (
+                    <Loader2 size={14} className="animate-spin text-muted-foreground" />
+                  )}
+                  <Switch
+                    id="product-update-toggle"
+                    checked={productUpdateEnabled}
+                    onCheckedChange={handleProductUpdateToggle}
+                    disabled={savingProductUpdate}
                   />
                 </div>
               </div>

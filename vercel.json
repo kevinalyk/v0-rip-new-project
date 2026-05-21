@@ -74,6 +74,10 @@
     {
       "path": "/api/cron/gsc-index",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/product-update",
+      "schedule": "0 17 * * 4"
     }
   ]
 }

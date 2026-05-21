@@ -39,8 +39,13 @@ function extractImageTokens(html: string): string {
     }
   }
   if (seen.size === 0) return ""
-  // Sort for determinism, then join as space-separated synthetic tokens
-  return [...seen].sort().map((_, i) => `__img_${i}__`).join(" ")
+  // Convert each URL to a short deterministic hash token so different URLs produce different tokens
+  return [...seen].sort().map((u) => {
+    // Simple djb2-style hash — good enough for differentiating image URLs
+    let h = 5381
+    for (let i = 0; i < u.length; i++) h = ((h << 5) + h) ^ u.charCodeAt(i)
+    return `__img_${(h >>> 0).toString(36)}__`
+  }).join(" ")
 }
 
 /** Strip HTML and extract readable text */

@@ -215,21 +215,8 @@ function ExpandedSends({
               <p className="text-[10px] text-muted-foreground mt-0.5">From: {send.sendingNumber}</p>
             )}
           </td>
-          {/* col 3: entity — filled for child rows */}
-          <td className="py-2.5 px-4">
-            {send.entityName ? (
-              <div className="flex flex-col gap-1">
-                <span className="font-medium text-xs">{send.entityName}</span>
-                {send.entityParty && (
-                  <Badge variant={partyColor(send.entityParty) as any} className="w-fit text-[10px] px-1.5 py-0">
-                    {partyLabel(send.entityParty)}
-                  </Badge>
-                )}
-              </div>
-            ) : (
-              <span className="text-muted-foreground text-xs">—</span>
-            )}
-          </td>
+          {/* col 3: entity — blank on child rows, shown on parent */}
+          <td className="py-2.5 px-4" />
           {/* col 4: total sends — blank for child */}
           <td className="py-2.5 px-4" />
           {/* col 5: sent date */}
@@ -310,8 +297,21 @@ function FrequencyTable({
                   <td className="py-3 px-4 max-w-md">
                     <p className="leading-relaxed text-foreground">{truncate(preview)}</p>
                   </td>
-                  {/* col 3: entity — blank on parent */}
-                  <td className="py-3 px-4" />
+                  {/* col 3: entity — shown on parent */}
+                  <td className="py-3 px-4">
+                    {row.entity_name ? (
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium text-xs">{row.entity_name}</span>
+                        {row.entity_party && (
+                          <Badge variant={partyColor(row.entity_party) as any} className="w-fit text-[10px] px-1.5 py-0">
+                            {partyLabel(row.entity_party)}
+                          </Badge>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    )}
+                  </td>
                   {/* col 4: total sends */}
                   <td className="py-3 px-4 text-right">
                     <span className="inline-flex items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-xs px-2.5 py-1 min-w-[2rem]">

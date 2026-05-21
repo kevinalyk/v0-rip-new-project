@@ -550,20 +550,19 @@ export async function GET(request: NextRequest) {
     // ── Send-count helpers ──────────────────────────────────────────────────────
     // Both counts are computed via raw SQL on the DB side — no rows loaded into JS memory.
 
-    // Subject count: one SQL query returns COUNT(DISTINCT day) per subject for this page.
+    // Subject count: count distinct send days per subject+entity combination.
     const pageSubjects = emailInsights.map((i) => i.subject).filter(Boolean) as string[]
     const subjectStats = new Map<string, { count: number }>()
     if (pageSubjects.length > 0) {
-      // Raw SQL: group by subject, count distinct calendar days received
-      const rows = await prisma.$queryRawUnsafe<{ subject: string; cnt: bigint }[]>(
-        `SELECT subject, COUNT(DISTINCT DATE("dateReceived")) AS cnt
+      const rows = await prisma.$queryRawUnsafe<{ subject: string; entity_id: string | null; cnt: bigint }[]>(
+        `SELECT subject, "entityId" AS entity_id, COUNT(DISTINCT DATE("dateReceived")) AS cnt
          FROM "CompetitiveInsightCampaign"
          WHERE subject = ANY($1::text[])
-         GROUP BY subject`,
+         GROUP BY subject, "entityId"`,
         pageSubjects
       )
       for (const row of rows) {
-        const key = normalizeSubject(row.subject || "")
+        const key = `${normalizeSubject(row.subject || "")}__${row.entity_id ?? ""}`
         if (!key) continue
         const existing = subjectStats.get(key)
         const n = Number(row.cnt)
@@ -597,7 +596,7 @@ export async function GET(request: NextRequest) {
         tags = []
       }
 
-      const normalizedKey = normalizeSubject(insight.subject || "")
+      const normalizedKey = `${normalizeSubject(insight.subject || "")}__${insight.entityId ?? ""}`
       const stats = subjectStats.get(normalizedKey)
 
       const bodySendCount = 1 // computed lazily via /api/competitive-insights/similar on detail open
@@ -616,21 +615,21 @@ export async function GET(request: NextRequest) {
 
     // SMS send count: count distinct days the same phone number sent the same normalized message
     const smsPhoneNumbers = [...new Set(smsMessages.map((s) => s.phoneNumber).filter(Boolean))] as string[]
-    const smsSendStats = new Map<string, number>() // key: `${phoneNumber}__${normalizedMsg}` → day count
+    const smsSendStats = new Map<string, number>() // key: `${entityId}__${normalizedMsg}` → day count
     if (smsPhoneNumbers.length > 0) {
-      const smsCountRows = await prisma.$queryRawUnsafe<{ phone: string; normalized_msg: string; cnt: bigint }[]>(
-        `SELECT "phoneNumber" AS phone,
+      const smsCountRows = await prisma.$queryRawUnsafe<{ entity_id: string | null; normalized_msg: string; cnt: bigint }[]>(
+        `SELECT "entityId" AS entity_id,
                 LEFT(LOWER(REGEXP_REPLACE(message, 'https?://\\S+|\\$[\\d,]+(\\.[0-9]{2})?|\\b\\d{5,}\\b|[[:space:]]+', ' ', 'g')), 120) AS normalized_msg,
                 COUNT(DISTINCT DATE("createdAt")) AS cnt
          FROM "SmsQueue"
          WHERE "phoneNumber" = ANY($1::text[])
            AND message IS NOT NULL
            AND "isDeleted" = false
-         GROUP BY "phoneNumber", normalized_msg`,
+         GROUP BY "entityId", normalized_msg`,
         smsPhoneNumbers
       )
       for (const row of smsCountRows) {
-        const key = `${row.phone}__${row.normalized_msg}`
+        const key = `${row.entity_id ?? ""}__${row.normalized_msg}`
         smsSendStats.set(key, Number(row.cnt))
       }
     }
@@ -650,7 +649,7 @@ export async function GET(request: NextRequest) {
         .replace(/https?:\/\/\S+|\$[\d,]+(\.\d{2})?|\b\d{5,}\b|\s+/g, " ")
         .substring(0, 120)
         .trim()
-      const smsKey = `${sms.phoneNumber}__${normalizedMsg}`
+      const smsKey = `${sms.entityId ?? ""}__${normalizedMsg}`
       const sendCount = smsSendStats.get(smsKey) ?? 1
       
       return {

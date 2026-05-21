@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
 
     const items: ProductUpdateItem[] = announcements.map((a) => ({
       id: a.id,
+      slug: a.slug,
       title: a.title,
       body: a.body,
       imageUrl: a.imageUrl,

@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
     const dbUser = await prisma.user.findUnique({
       where: { id: userId },
-      select: { digestEnabled: true, weeklyDigestEnabled: true },
+      select: { digestEnabled: true, weeklyDigestEnabled: true, productUpdateEnabled: true },
     })
 
     if (!dbUser) {
@@ -30,6 +30,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       digestEnabled: dbUser.digestEnabled,
       weeklyDigestEnabled: dbUser.weeklyDigestEnabled,
+      productUpdateEnabled: dbUser.productUpdateEnabled,
     })
   } catch (error) {
     console.error("Error fetching user settings:", error)
@@ -55,7 +56,7 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json()
-    const { digestEnabled, weeklyDigestEnabled } = body
+    const { digestEnabled, weeklyDigestEnabled, productUpdateEnabled } = body
 
     if (digestEnabled !== undefined && typeof digestEnabled !== "boolean") {
       return NextResponse.json({ error: "digestEnabled must be a boolean" }, { status: 400 })
@@ -63,10 +64,14 @@ export async function PUT(request: Request) {
     if (weeklyDigestEnabled !== undefined && typeof weeklyDigestEnabled !== "boolean") {
       return NextResponse.json({ error: "weeklyDigestEnabled must be a boolean" }, { status: 400 })
     }
+    if (productUpdateEnabled !== undefined && typeof productUpdateEnabled !== "boolean") {
+      return NextResponse.json({ error: "productUpdateEnabled must be a boolean" }, { status: 400 })
+    }
 
     const updateData: Record<string, boolean> = {}
     if (digestEnabled !== undefined) updateData.digestEnabled = digestEnabled
     if (weeklyDigestEnabled !== undefined) updateData.weeklyDigestEnabled = weeklyDigestEnabled
+    if (productUpdateEnabled !== undefined) updateData.productUpdateEnabled = productUpdateEnabled
 
     await prisma.user.update({
       where: { id: userId },

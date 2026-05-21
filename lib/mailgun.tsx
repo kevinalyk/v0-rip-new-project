@@ -1312,3 +1312,172 @@ To stop receiving this digest, update your email settings: ${settingsUrl}
     return false
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Product Update Email
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ProductUpdateItem = {
+  id: string
+  title: string
+  body: string
+  imageUrl: string | null
+  publishedAt: Date
+}
+
+export async function sendProductUpdateEmail(params: {
+  to: string
+  firstName: string | null
+  items: ProductUpdateItem[]
+  clientSlug: string
+  userId: string
+}): Promise<boolean> {
+  const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
+  const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN
+
+  if (!MAILGUN_API_KEY || !MAILGUN_DOMAIN) {
+    console.error("Mailgun credentials not configured")
+    return false
+  }
+
+  const { to, firstName, items, clientSlug, userId } = params
+  const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
+
+  const settingsUrl = generateTrackedLink(userId, "product_update", "settings", `/${clientSlug}/account/settings`, APP_URL)
+  const whatsNewUrl = generateTrackedLink(userId, "product_update", "whats_new", `/whats-new`, APP_URL)
+  const logoUrl = `${APP_URL}/images/IconOnly_Transparent_NoBuffer.png`
+
+  const greeting = firstName ? `Hi ${firstName},` : "Hi there,"
+
+  const formatDate = (date: Date) =>
+    new Intl.DateTimeFormat("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "America/New_York",
+    }).format(date)
+
+  const itemsHtml = items
+    .map((item, i) => {
+      const borderTop = i > 0 ? "margin-top:24px;padding-top:24px;border-top:1px solid #1f2937;" : ""
+      const imageBlock = item.imageUrl
+        ? `<img src="${item.imageUrl}" alt="${item.title}" width="552" style="display:block;width:100%;max-width:552px;border-radius:6px;margin-bottom:16px;" />`
+        : ""
+      return `
+        <tr>
+          <td style="${borderTop}">
+            ${imageBlock}
+            <p style="margin:0 0 4px;font-size:11px;color:#4b5563;font-weight:500;">${formatDate(item.publishedAt)}</p>
+            <h2 style="margin:0 0 10px;font-size:16px;font-weight:700;color:#f9fafb;line-height:1.4;">${item.title}</h2>
+            <div style="font-size:13px;color:#9ca3af;line-height:1.7;">${item.body.replace(/\n/g, "<br/>")}</div>
+          </td>
+        </tr>`
+    })
+    .join("")
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>What&apos;s New on Inbox.GOP</title>
+</head>
+<body style="margin:0;padding:0;background:#030712;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#030712;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+          <!-- Header -->
+          <tr>
+            <td style="padding:0 0 24px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;">
+                    <img src="${logoUrl}" alt="Inbox.GOP" width="28" height="28" style="display:inline-block;vertical-align:middle;margin-right:8px;" />
+                    <span style="font-size:13px;color:#6b7280;font-weight:500;vertical-align:middle;">What&apos;s New on Inbox.GOP</span>
+                  </td>
+                  <td style="text-align:right;vertical-align:middle;">
+                    <a href="${whatsNewUrl}" target="_blank" style="font-size:12px;color:#4b5563;text-decoration:none;">View all updates</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Intro card -->
+          <tr>
+            <td style="background:#111827;border-radius:8px 8px 0 0;padding:20px 24px;border-bottom:1px solid #1f2937;">
+              <p style="margin:0 0 4px;font-size:15px;color:#f9fafb;font-weight:600;">${greeting}</p>
+              <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">
+                Here&apos;s what we&apos;ve shipped this week — ${items.length} new update${items.length === 1 ? "" : "s"} for you.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Updates -->
+          <tr>
+            <td style="background:#111827;border-radius:0 0 8px 8px;padding:24px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                ${itemsHtml}
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:24px 0 0;">
+              <p style="margin:0;font-size:12px;color:#374151;text-align:center;line-height:1.8;">
+                You&apos;re receiving this because you have product updates enabled on
+                <a href="https://app.rip-tool.com" style="color:#6b7280;text-decoration:none;">app.rip-tool.com</a>.<br/>
+                To unsubscribe, visit your
+                <a href="${settingsUrl}" style="color:#6b7280;text-decoration:none;">email settings</a>.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+
+  const text = `${greeting}
+
+What's New on Inbox.GOP
+
+${items.map((item) => `${item.title}\n${formatDate(item.publishedAt)}\n\n${item.body}`).join("\n\n---\n\n")}
+
+View all updates: ${whatsNewUrl}
+To unsubscribe: ${settingsUrl}
+`
+
+  const formData = new FormData()
+  formData.append("from", `Inbox.GOP <digest@${MAILGUN_DOMAIN}>`)
+  formData.append("to", to)
+  formData.append("subject", `What's New on Inbox.GOP`)
+  formData.append("html", html)
+  formData.append("text", text)
+
+  try {
+    const response = await fetch(`https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`api:${MAILGUN_API_KEY}`).toString("base64")}`,
+      },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("Mailgun product update error:", response.status, errorText)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error sending product update email:", error)
+    return false
+  }
+}

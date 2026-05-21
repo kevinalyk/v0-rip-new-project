@@ -47,6 +47,16 @@ export function AdminContent({ user }: AdminContentProps) {
     window: { label: string }
     results: Array<{ email: string; sent: boolean; itemCount: number }>
   } | null>(null)
+  const [isTriggeringProductUpdate, setIsTriggeringProductUpdate] = useState(false)
+  const [productUpdateEmailOverride, setProductUpdateEmailOverride] = useState("")
+  const [productUpdateTriggerResult, setProductUpdateTriggerResult] = useState<{
+    sent: number
+    failed: number
+    itemCount: number
+    skipped?: boolean
+    reason?: string
+    results?: Array<{ email: string; sent: boolean; itemCount: number }>
+  } | null>(null)
   const [dailyStats, setDailyStats] = useState<DailyStats[]>([])
   const [loadingStats, setLoadingStats] = useState(true)
   const [dateRange, setDateRange] = useState({ days: 30 })
@@ -417,6 +427,38 @@ export function AdminContent({ user }: AdminContentProps) {
       toast.error("Failed to trigger weekly digest")
     } finally {
       setIsTriggeringWeeklyDigest(false)
+    }
+  }
+
+  const handleTriggerProductUpdate = async () => {
+    setIsTriggeringProductUpdate(true)
+    setProductUpdateTriggerResult(null)
+    try {
+      const body: Record<string, unknown> = {}
+      if (productUpdateEmailOverride.trim()) {
+        body.email = productUpdateEmailOverride.trim()
+      }
+      const response = await fetch("/api/admin/trigger-product-update", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setProductUpdateTriggerResult(data)
+        if (data.skipped) {
+          toast.info("No announcements in the last 7 days — nothing sent")
+        } else {
+          toast.success(`Product update sent to ${data.sent} user${data.sent === 1 ? "" : "s"} — ${data.itemCount} update${data.itemCount === 1 ? "" : "s"}`)
+        }
+      } else {
+        toast.error(data.error || "Failed to trigger product update")
+      }
+    } catch {
+      toast.error("Failed to trigger product update")
+    } finally {
+      setIsTriggeringProductUpdate(false)
     }
   }
 
@@ -2089,6 +2131,61 @@ const downloadActBluePatterns = () => {
                   {r.sent ? "✓" : "✗"} {r.email} — {r.itemCount} items
                 </p>
               ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Product Update Email Trigger ───────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mail size={16} />
+            Trigger Product Update Email
+          </CardTitle>
+          <CardDescription>
+            Manually send the weekly product update newsletter to all users (or override the recipient for testing). Pulls announcements published in the last 7 days. Skips if nothing new.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1 max-w-sm">
+            <label className="text-xs text-muted-foreground font-medium">Email override (optional)</label>
+            <Input
+              placeholder="test@example.com"
+              value={productUpdateEmailOverride}
+              onChange={(e) => setProductUpdateEmailOverride(e.target.value)}
+              className="text-sm"
+            />
+          </div>
+          <Button onClick={handleTriggerProductUpdate} disabled={isTriggeringProductUpdate} className="gap-2">
+            {isTriggeringProductUpdate ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Mail size={16} />
+                Send Product Update Now
+              </>
+            )}
+          </Button>
+          {productUpdateTriggerResult && (
+            <div className="mt-3 p-3 rounded-md bg-muted text-sm space-y-1">
+              {productUpdateTriggerResult.skipped ? (
+                <p className="text-muted-foreground">{productUpdateTriggerResult.reason}</p>
+              ) : (
+                <>
+                  <p className="font-medium">
+                    {productUpdateTriggerResult.itemCount} update{productUpdateTriggerResult.itemCount === 1 ? "" : "s"} — {productUpdateTriggerResult.sent} sent, {productUpdateTriggerResult.failed} failed
+                  </p>
+                  {productUpdateTriggerResult.results?.map((r, i) => (
+                    <p key={i} className="text-muted-foreground text-xs">
+                      {r.sent ? "✓" : "✗"} {r.email}
+                    </p>
+                  ))}
+                </>
+              )}
             </div>
           )}
         </CardContent>

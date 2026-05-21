@@ -96,8 +96,7 @@ export default function ContentFrequencyPage() {
   }, [clientSlug])
 
   const isSuperAdmin = userRole === "super_admin"
-  // Temporarily restricted to super_admins only while fixes are in progress
-  const hasAccess = isSuperAdmin
+  const hasAccess = isSuperAdmin || subscriptionPlan === "pro" || subscriptionPlan === "enterprise"
 
   if (loading) {
     return (

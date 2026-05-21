@@ -442,7 +442,7 @@ function EntityCard({ entity }: { entity: Entity }) {
   )
 }
 
-// ─── Results section ──���─────────────────────────────────────────────────────────
+// ─── Results section ──���────────────────────────────────��────────────────────────
 
 function SearchResults({
   query,
@@ -917,7 +917,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
           {/* Left sidebar */}
           <AdSidebar showAd={true} slot="5401962530" />
 
-          <main className="flex-1 min-w-0 max-w-2xl">
+          <main className="flex-1 min-w-0 w-full md:max-w-2xl">
             {/* Hero */}
             <div className="mb-6 text-center">
               <h1 className="text-gray-900 text-2xl sm:text-4xl font-bold leading-tight text-balance mb-3">

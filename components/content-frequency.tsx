@@ -160,12 +160,15 @@ function ExpandedSends({
   rowKey,
   type,
   clientSlug,
+  entityId,
 }: {
   rowKey: string
   type: "subject" | "email-body" | "sms-body"
   clientSlug: string
+  entityId: string | null
 }) {
   const params = new URLSearchParams({ type, key: rowKey, clientSlug })
+  if (entityId) params.set("entityId", entityId)
   const { data, isLoading, error } = useSWR<{ sends: SendRow[] }>(
     `/api/reports/content-frequency/sends?${params.toString()}`,
     fetcher,
@@ -333,6 +336,7 @@ function FrequencyTable({
                     rowKey={rowKey}
                     type={type}
                     clientSlug={clientSlug}
+                    entityId={row.entity_id ?? null}
                   />
                 )}
               </>

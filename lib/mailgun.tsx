@@ -1344,7 +1344,7 @@ export async function sendProductUpdateEmail(params: {
   const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
   const settingsUrl = generateTrackedLink(userId, "product_update", "settings", `/${clientSlug}/account/settings`, APP_URL)
-  const whatsNewUrl = generateTrackedLink(userId, "product_update", "whats_new", `/whats-new`, APP_URL)
+  const whatsNewUrl = generateTrackedLink(userId, "product_update", "whats_new", `/news`, APP_URL)
   const logoUrl = `${APP_URL}/images/IconOnly_Transparent_NoBuffer.png`
 
   const greeting = firstName ? `Hi ${firstName},` : "Hi there,"
@@ -1363,13 +1363,18 @@ export async function sendProductUpdateEmail(params: {
       const imageBlock = item.imageUrl
         ? `<img src="${item.imageUrl}" alt="${item.title}" width="552" style="display:block;width:100%;max-width:552px;border-radius:6px;margin-bottom:16px;" />`
         : ""
+      const articleUrl = generateTrackedLink(userId, "product_update", `article_${item.id}`, `/news/${item.id}`, APP_URL)
       return `
         <tr>
           <td style="${borderTop}">
             ${imageBlock}
             <p style="margin:0 0 4px;font-size:11px;color:#4b5563;font-weight:500;">${formatDate(item.publishedAt)}</p>
-            <h2 style="margin:0 0 10px;font-size:16px;font-weight:700;color:#f9fafb;line-height:1.4;">${item.title}</h2>
-            <div style="font-size:13px;color:#9ca3af;line-height:1.7;">${item.body.replace(/\n/g, "<br/>")}</div>
+            <h2 style="margin:0 0 10px;font-size:16px;font-weight:700;line-height:1.4;">
+              <a href="${articleUrl}" target="_blank" style="color:#f9fafb;text-decoration:none;">${item.title}</a>
+            </h2>
+            <div style="font-size:13px;color:#9ca3af;line-height:1.7;">
+              <a href="${articleUrl}" target="_blank" style="color:#9ca3af;text-decoration:none;">${item.body.replace(/\n/g, "<br/>")}</a>
+            </div>
           </td>
         </tr>`
     })

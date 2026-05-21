@@ -27,14 +27,17 @@ function extractImageTokens(html: string): string {
   const seen = new Set<string>()
   let match: RegExpExecArray | null
   while ((match = srcPattern.exec(html)) !== null) {
+    const src = match[1]
+    // Skip inline base64 data URIs — not meaningful image identities and extremely large
+    if (src.startsWith("data:")) continue
     try {
-      const url = new URL(match[1])
+      const url = new URL(src)
       // Drop tracking query params, keep protocol + host + pathname as the identity
       const normalized = `${url.protocol}//${url.host}${url.pathname}`
       seen.add(normalized)
     } catch {
       // If URL parsing fails, use the raw value stripped of query string
-      const raw = match[1].split("?")[0]
+      const raw = src.split("?")[0]
       if (raw) seen.add(raw)
     }
   }

@@ -24,7 +24,7 @@ export default function AdSidebar({ showAd, slot = "5401962530" }: AdSidebarProp
 
   return (
     <div
-      className="flex-shrink-0 self-center"
+      className="hidden md:block flex-shrink-0 self-center"
       style={{ width: "120px", minWidth: "120px", minHeight: "600px" }}
       aria-label="Advertisement"
     >

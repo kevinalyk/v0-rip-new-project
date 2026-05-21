@@ -1319,6 +1319,7 @@ To stop receiving this digest, update your email settings: ${settingsUrl}
 
 export type ProductUpdateItem = {
   id: string
+  slug: string
   title: string
   body: string
   imageUrl: string | null
@@ -1363,7 +1364,7 @@ export async function sendProductUpdateEmail(params: {
       const imageBlock = item.imageUrl
         ? `<img src="${item.imageUrl}" alt="${item.title}" width="552" style="display:block;width:100%;max-width:552px;border-radius:6px;margin-bottom:16px;" />`
         : ""
-      const articleUrl = generateTrackedLink(userId, "product_update", `article_${item.id}`, `/news/${item.id}`, APP_URL)
+      const articleUrl = generateTrackedLink(userId, "product_update", `article_${item.slug}`, `/news/${item.slug}`, APP_URL)
       return `
         <tr>
           <td style="${borderTop}">

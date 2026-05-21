@@ -57,10 +57,10 @@ const fetcher = (url: string) =>
   })
 
 function partyColor(party: string | null) {
-  if (!party) return "secondary"
-  if (party === "republican") return "destructive"
-  if (party === "democrat") return "default"
-  return "secondary"
+  if (!party) return "bg-muted text-muted-foreground"
+  if (party === "republican") return "bg-red-600 text-white"
+  if (party === "democrat") return "bg-blue-600 text-white"
+  return "bg-muted text-muted-foreground"
 }
 
 function partyLabel(party: string | null) {
@@ -298,7 +298,7 @@ function FrequencyTable({
                       <div className="flex flex-col gap-1">
                         <span className="font-medium text-xs">{row.entity_name}</span>
                         {row.entity_party && (
-                          <Badge variant={partyColor(row.entity_party) as any} className="w-fit text-[10px] px-1.5 py-0">
+                          <Badge className={`w-fit text-[10px] px-1.5 py-0 ${partyColor(row.entity_party)}`}>
                             {partyLabel(row.entity_party)}
                           </Badge>
                         )}

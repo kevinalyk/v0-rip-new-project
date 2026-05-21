@@ -555,7 +555,7 @@ export async function GET(request: NextRequest) {
     const subjectStats = new Map<string, { count: number }>() // key: `${entityId}__${normalizedSubject}`
     if (pageSubjects.length > 0) {
       const rows = await prisma.$queryRawUnsafe<{ subject: string; entity_id: string | null; cnt: bigint }[]>(
-        `SELECT subject, "entityId" AS entity_id, COUNT(DISTINCT DATE("dateReceived")) AS cnt
+        `SELECT subject, "entityId" AS entity_id, COUNT(DISTINCT DATE_TRUNC('hour', "dateReceived")) AS cnt
          FROM "CompetitiveInsightCampaign"
          WHERE subject = ANY($1::text[])
          GROUP BY subject, "entityId"`,
@@ -620,7 +620,7 @@ export async function GET(request: NextRequest) {
       const smsCountRows = await prisma.$queryRawUnsafe<{ entity_id: string | null; normalized_msg: string; cnt: bigint }[]>(
         `SELECT "entityId" AS entity_id,
                 LEFT(LOWER(REGEXP_REPLACE(message, 'https?://\\S+|\\$[\\d,]+(\\.[0-9]{2})?|\\b\\d{5,}\\b|[[:space:]]+', ' ', 'g')), 120) AS normalized_msg,
-                COUNT(DISTINCT DATE("createdAt")) AS cnt
+                COUNT(DISTINCT DATE_TRUNC('hour', "createdAt")) AS cnt
          FROM "SmsQueue"
          WHERE "phoneNumber" = ANY($1::text[])
            AND message IS NOT NULL

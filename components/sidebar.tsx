@@ -467,13 +467,15 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                     collapsed={false}
                     onClick={() => navigate(`/${getClientSlug()}/reports/inboxing`)}
                   />
-                  <NavItem
-                    icon={<TrendingUp size={18} />}
-                    label="Copy Frequency"
-                    active={pathname.includes("/reports/content")}
-                    collapsed={false}
-                    onClick={() => navigate(`/${getClientSlug()}/reports/content`)}
-                  />
+                  {userRole === "super_admin" && (
+                    <NavItem
+                      icon={<TrendingUp size={18} />}
+                      label="Copy Frequency"
+                      active={pathname.includes("/reports/content")}
+                      collapsed={false}
+                      onClick={() => navigate(`/${getClientSlug()}/reports/content`)}
+                    />
+                  )}
                   <NavItem
                     icon={<ShieldCheck size={18} />}
                     label="Deliverability"

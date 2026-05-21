@@ -2,7 +2,7 @@
 
 import { generateTrackedLink } from "./email-tracking"
 
-const ADMIN_NOTIFICATION_EMAIL = "kevinalyk@gmail.com"
+const ADMIN_NOTIFICATION_EMAIL = "kevin@rip-tool.com"
 
 async function sendMailgunEmail(subject: string, html: string, text: string): Promise<boolean> {
   const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY

@@ -32,7 +32,9 @@ export async function middleware(request: NextRequest) {
     // Who's Contacting Me? — public lookup tool (has its own auth)
     request.nextUrl.pathname === "/lookup" ||
     request.nextUrl.pathname.startsWith("/lookup/") ||
-    request.nextUrl.pathname.startsWith("/api/lookup/")
+    request.nextUrl.pathname.startsWith("/api/lookup/") ||
+    // Email click tracking — links are clicked from email clients with no session
+    request.nextUrl.pathname === "/api/track/click"
   ) {
     return NextResponse.next()
   }

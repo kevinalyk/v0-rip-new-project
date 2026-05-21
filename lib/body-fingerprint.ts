@@ -17,6 +17,32 @@
 export const SIMILARITY_THRESHOLD = 0.65
 export const SMS_SIMILARITY_THRESHOLD = 0.55
 
+/**
+ * Extract unique image src URLs from HTML and return a stable token string.
+ * Strips tracking query params (utm_*, etc.) so minor URL variations don't create false differences.
+ * Each distinct image path becomes a synthetic token like __img_0__, __img_1__, etc.
+ */
+function extractImageTokens(html: string): string {
+  const srcPattern = /<img[^>]+src=["']([^"']+)["']/gi
+  const seen = new Set<string>()
+  let match: RegExpExecArray | null
+  while ((match = srcPattern.exec(html)) !== null) {
+    try {
+      const url = new URL(match[1])
+      // Drop tracking query params, keep protocol + host + pathname as the identity
+      const normalized = `${url.protocol}//${url.host}${url.pathname}`
+      seen.add(normalized)
+    } catch {
+      // If URL parsing fails, use the raw value stripped of query string
+      const raw = match[1].split("?")[0]
+      if (raw) seen.add(raw)
+    }
+  }
+  if (seen.size === 0) return ""
+  // Sort for determinism, then join as space-separated synthetic tokens
+  return [...seen].sort().map((_, i) => `__img_${i}__`).join(" ")
+}
+
 /** Strip HTML and extract readable text */
 function stripHtml(html: string): string {
   return html
@@ -97,11 +123,16 @@ export function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
 
 /**
  * Compute a compact fingerprint from raw email HTML.
+ * Image src URLs are extracted first and prepended as synthetic tokens so that
+ * two emails with identical HTML structure but different hero images get distinct fingerprints.
  * Returns a JSON array of the shingles (sorted for determinism).
  */
 export function computeBodyFingerprint(html: string): string {
   if (!html?.trim()) return "[]"
-  const text = normalizeText(stripHtml(html))
+  const imageTokens = extractImageTokens(html)
+  const bodyText = normalizeText(stripHtml(html))
+  // Prepend image tokens so they participate in shingling alongside body text
+  const text = imageTokens ? `${imageTokens} ${bodyText}` : bodyText
   // Need at least ~40 chars of real content to be meaningful
   if (text.length < 40) return "[]"
   const shingles = shingle(text, 5)

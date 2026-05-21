@@ -70,7 +70,7 @@ export async function GET(request: Request) {
     }>>(`
       SELECT
         c.subject,
-        COUNT(DISTINCT DATE(c."dateReceived")) AS send_days,
+        COUNT(DISTINCT DATE_TRUNC('hour', c."dateReceived")) AS send_days,
         e.name AS entity_name,
         e.party AS entity_party,
         e.id AS entity_id,
@@ -86,7 +86,7 @@ export async function GET(request: Request) {
         ${toClause}
         ${sourceEmailClause}
       GROUP BY c.subject, e.name, e.party, e.id
-      HAVING COUNT(DISTINCT DATE(c."dateReceived")) > 1
+      HAVING COUNT(DISTINCT DATE_TRUNC('hour', c."dateReceived")) > 1
       ORDER BY send_days DESC, last_sent DESC
       LIMIT ${limit}
     `)
@@ -106,7 +106,7 @@ export async function GET(request: Request) {
     }>>(`
       SELECT
         c."bodyFingerprint" AS body_fingerprint,
-        COUNT(DISTINCT DATE(c."dateReceived")) AS send_days,
+        COUNT(DISTINCT DATE_TRUNC('hour', c."dateReceived")) AS send_days,
         e.name AS entity_name,
         e.party AS entity_party,
         e.id AS entity_id,
@@ -125,7 +125,7 @@ export async function GET(request: Request) {
         ${toClause}
         ${sourceEmailClause}
       GROUP BY c."bodyFingerprint", e.name, e.party, e.id
-      HAVING COUNT(DISTINCT DATE(c."dateReceived")) > 1
+      HAVING COUNT(DISTINCT DATE_TRUNC('hour', c."dateReceived")) > 1
       ORDER BY send_days DESC, last_sent DESC
       LIMIT ${limit}
     `)
@@ -143,7 +143,7 @@ export async function GET(request: Request) {
     }>>(`
       SELECT
         s."bodyFingerprint" AS body_fingerprint,
-        COUNT(DISTINCT DATE(s."createdAt")) AS send_days,
+        COUNT(DISTINCT DATE_TRUNC('hour', s."createdAt")) AS send_days,
         e.name AS entity_name,
         e.party AS entity_party,
         e.id AS entity_id,
@@ -161,7 +161,7 @@ export async function GET(request: Request) {
         ${smsToClause}
         ${sourceSmsClause}
       GROUP BY s."bodyFingerprint", e.name, e.party, e.id
-      HAVING COUNT(DISTINCT DATE(s."createdAt")) > 1
+      HAVING COUNT(DISTINCT DATE_TRUNC('hour', s."createdAt")) > 1
       ORDER BY send_days DESC, last_sent DESC
       LIMIT ${limit}
     `)

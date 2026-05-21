@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
     const clientSlug = searchParams.get("clientSlug")
     const type = searchParams.get("type") as "subject" | "email-body" | "sms-body" | null
     const key = searchParams.get("key") // subject string OR bodyFingerprint string
+    const entityId = searchParams.get("entityId") || null
 
     if (!type || !key) {
       return NextResponse.json({ error: "Missing type or key" }, { status: 400 })
@@ -57,6 +58,7 @@ export async function GET(request: NextRequest) {
           subject: key,
           isHidden: false,
           isDeleted: false,
+          ...(entityId ? { entityId } : {}),
         },
         select: {
           id: true,
@@ -91,6 +93,7 @@ export async function GET(request: NextRequest) {
           bodyFingerprint: key,
           isHidden: false,
           isDeleted: false,
+          ...(entityId ? { entityId } : {}),
         },
         select: {
           id: true,
@@ -124,6 +127,7 @@ export async function GET(request: NextRequest) {
           bodyFingerprint: key,
           isHidden: false,
           isDeleted: false,
+          ...(entityId ? { entityId } : {}),
         },
         select: {
           id: true,

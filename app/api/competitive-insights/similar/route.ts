@@ -61,13 +61,14 @@ export async function GET(request: NextRequest) {
     if (type === "subject") {
       const source = await prisma.competitiveInsightCampaign.findUnique({
         where: { id },
-        select: { id: true, subject: true, dateReceived: true },
+        select: { id: true, subject: true, dateReceived: true, entityId: true },
       })
       if (!source) return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
 
       const normalizedKey = normalizeSubject(source.subject || "")
 
       const all = await prisma.competitiveInsightCampaign.findMany({
+        where: source.entityId ? { entityId: source.entityId } : {},
         select: {
           id: true,
           subject: true,
@@ -99,7 +100,7 @@ export async function GET(request: NextRequest) {
     if (type === "body") {
       const source = await prisma.competitiveInsightCampaign.findUnique({
         where: { id },
-        select: { id: true, bodyFingerprint: true, dateReceived: true },
+        select: { id: true, bodyFingerprint: true, dateReceived: true, entityId: true },
       })
       if (!source) return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
 
@@ -107,7 +108,10 @@ export async function GET(request: NextRequest) {
       if (sourceFp.size === 0) return NextResponse.json({ matches: [], sourceId: id })
 
       const all = await prisma.competitiveInsightCampaign.findMany({
-        where: { bodyFingerprint: { not: null } },
+        where: {
+          bodyFingerprint: { not: null },
+          ...(source.entityId ? { entityId: source.entityId } : {}),
+        },
         select: {
           id: true,
           subject: true,
@@ -142,7 +146,7 @@ export async function GET(request: NextRequest) {
     if (type === "sms-body") {
       const smsSource = await prisma.smsQueue.findUnique({
         where: { id },
-        select: { id: true, bodyFingerprint: true, createdAt: true },
+        select: { id: true, bodyFingerprint: true, createdAt: true, entityId: true },
       })
       if (!smsSource) return NextResponse.json({ error: "SMS not found" }, { status: 404 })
 
@@ -153,6 +157,7 @@ export async function GET(request: NextRequest) {
         where: {
           isDeleted: false,
           bodyFingerprint: { not: null },
+          ...(smsSource.entityId ? { entityId: smsSource.entityId } : {}),
         },
         select: {
           id: true,

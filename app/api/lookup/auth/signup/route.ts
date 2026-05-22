@@ -85,12 +85,17 @@ export async function POST(request: NextRequest) {
 
     const token = await createLookupToken({ userId: user.id, email: user.email })
 
-    // Send admin notification non-blocking — don't let email failure affect signup
-    sendLookupSignupNotification({
-      email: user.email,
-      signupAt: new Date(),
-      ipAddress: ip !== "unknown" ? ip : undefined,
-    }).catch((err) => console.error("[lookup/signup] Admin notification failed:", err))
+    // Send admin notification — awaited so it completes before serverless function exits
+    try {
+      const emailSent = await sendLookupSignupNotification({
+        email: user.email,
+        signupAt: new Date(),
+        ipAddress: ip !== "unknown" ? ip : undefined,
+      })
+      console.log("[v0] Lookup signup notification sent:", emailSent)
+    } catch (err) {
+      console.error("[lookup/signup] Admin notification failed:", err)
+    }
 
     const response = NextResponse.json(
       { user: { id: user.id, email: user.email } },

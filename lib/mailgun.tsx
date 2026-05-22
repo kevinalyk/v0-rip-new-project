@@ -135,6 +135,79 @@ View account: ${profileUrl}
   return sendMailgunEmail("New Signup: " + clientName, html, text)
 }
 
+export async function sendLookupSignupNotification(params: {
+  email: string
+  signupAt: Date
+  ipAddress?: string
+}): Promise<boolean> {
+  const { email, signupAt, ipAddress } = params
+
+  const formattedDate = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+    timeZone: "America/New_York",
+  }).format(signupAt)
+
+  const lookupUrl = "https://app.rip-tool.com/lookup"
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 560px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
+        <div style="background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="background: #2563eb; padding: 24px 28px;">
+            <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Inbox.GOP Lookup</p>
+            <h1 style="margin: 4px 0 0 0; color: white; font-size: 22px; font-weight: 700;">New Lookup Signup</h1>
+          </div>
+          <div style="padding: 28px;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; width: 38%; vertical-align: top;">Email</td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px;"><a href="mailto:${email}" style="color: #2563eb; text-decoration: none;">${email}</a></td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; vertical-align: top;">Signed Up</td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px;">${formattedDate}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; vertical-align: top;">Type</td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px;"><span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">/lookup Signup</span></td>
+              </tr>
+              ${ipAddress ? `
+              <tr>
+                <td style="padding: 10px 0; font-size: 13px; color: #666; vertical-align: top;">IP Address</td>
+                <td style="padding: 10px 0; font-size: 14px; font-family: monospace; color: #888;">${ipAddress}</td>
+              </tr>` : ""}
+            </table>
+            <div style="margin-top: 24px; text-align: center;">
+              <a href="${lookupUrl}" style="display: inline-block; background: #2563eb; color: white; text-decoration: none; padding: 11px 24px; border-radius: 6px; font-size: 14px; font-weight: 600;">View Lookup</a>
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `
+
+  const text = `
+New Lookup Signup — Inbox.GOP
+
+Email:     ${email}
+Signed Up: ${formattedDate}
+Type:      /lookup Signup
+${ipAddress ? `IP Address: ${ipAddress}` : ""}
+
+View lookup: ${lookupUrl}
+  `.trim()
+
+  return sendMailgunEmail("New /lookup Signup: " + email, html, text)
+}
+
 export async function sendNewPaymentNotification(params: {
   clientId: string
   clientName?: string

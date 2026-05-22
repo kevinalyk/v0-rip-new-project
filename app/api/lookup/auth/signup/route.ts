@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import bcryptjs from "bcryptjs"
 import prisma from "@/lib/prisma"
 import { createLookupToken, LOOKUP_COOKIE } from "@/lib/lookup-auth"
+import { sendLookupSignupNotification } from "@/lib/mailgun"
 
 // Simple in-memory rate limiter — resets on cold start
 const attempts = new Map<string, { count: number; reset: number }>()
@@ -83,6 +84,13 @@ export async function POST(request: NextRequest) {
     })
 
     const token = await createLookupToken({ userId: user.id, email: user.email })
+
+    // Send admin notification non-blocking — don't let email failure affect signup
+    sendLookupSignupNotification({
+      email: user.email,
+      signupAt: new Date(),
+      ipAddress: ip !== "unknown" ? ip : undefined,
+    }).catch((err) => console.error("[lookup/signup] Admin notification failed:", err))
 
     const response = NextResponse.json(
       { user: { id: user.id, email: user.email } },

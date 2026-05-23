@@ -921,7 +921,7 @@ export async function sendFollowingDigest(params: {
             userId,
             "daily_digest",
             "entity_profile",
-            `/${clientSlug}/directory/${section.entitySlug}`,
+            `/directory/${section.entitySlug}`,
             APP_URL
           )
         : null

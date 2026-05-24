@@ -442,7 +442,7 @@ function EntityCard({ entity }: { entity: Entity }) {
   )
 }
 
-// ─── Results section ──���────────────────────────────────��────────────────────────
+// ─── Results section ──���────────────────────────────────���────────────────────────
 
 function SearchResults({
   query,
@@ -695,8 +695,43 @@ function HistoryPanel({
 
 // ─── FAQ accordion ────────────────────────────────────────────────────────────
 
-const FAQS: { question: string; answer: string }[] = [
-  // FAQs will be populated by the user
+const FAQS: { question: string; answer: React.ReactNode }[] = [
+  {
+    question: "Why do I receive so many fundraising emails and texts?",
+    answer:
+      "To win an election a campaign needs to raise money. Texts and emails are an important part of how they raise money from grassroots supporters.",
+  },
+  {
+    question: "Who sends fundraising emails and texts?",
+    answer: "These messages are sent by campaigns and political organizations themselves.",
+  },
+  {
+    question: "How can I stop fundraising emails and texts?",
+    answer:
+      "Replying STOP or clicking unsubscribe is the most straightforward way, however unsubscribing from one candidate's content does not unsubscribe from all candidates and you may be getting messaging from several different campaigns. This lookup tool is designed to help you better track who is messaging you so you can contact them and ask them to unsubscribe.",
+  },
+  {
+    question: "Do donation processors like WinRed send emails or texts or share my data?",
+    answer: (
+      <>
+        No — WinRed does not send these messages, nor do they provide a way for campaigns to send these messages. That all happens on other platforms that the campaigns and organizations use. WinRed also does not share donor data except with the campaign you donate to. What campaigns and organizations do with their donor data is up to them.{" "}
+        <a
+          href="https://support.winred.com/en/articles/9134210-donor-data-security-sharing"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-red-500 hover:text-red-600 underline transition-colors"
+        >
+          Learn more about WinRed donor data security
+        </a>
+        .
+      </>
+    ),
+  },
+  {
+    question: "What is Inbox.GOP?",
+    answer:
+      "Inbox.GOP is a tool for Republicans to track and manage fundraising and other campaign communications. We have compiled the largest database in existence of political email and text content. We set up this lookup tool based on that database to help donors identify who is messaging them.",
+  },
 ]
 
 function FaqSection() {
@@ -725,7 +760,7 @@ function FaqSection() {
               </button>
               {openIndex === i && (
                 <div className="px-6 pb-5">
-                  <p className="text-gray-500 text-sm leading-relaxed">{faq.answer}</p>
+                  <div className="text-gray-500 text-sm leading-relaxed">{faq.answer}</div>
                 </div>
               )}
             </div>

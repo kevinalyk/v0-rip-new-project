@@ -10,6 +10,7 @@ import { CampaignDetectionDialog } from "@/components/campaign-detection-dialog"
 import { CompetitiveInsightsDetectionDialog } from "@/components/competitive-insights-detection-dialog"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
 import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 
 // Define AdminContentProps if it's not defined elsewhere
 interface AdminContentProps {
@@ -99,6 +100,17 @@ export function AdminContent({ user }: AdminContentProps) {
     shareUrl: string
     candidatesEvaluated: number
   } | null>(null)
+  const [tweetPreview, setTweetPreview] = useState<{
+    tweetText: string
+    entity: string
+    type: string
+    score: number
+    shareUrl: string
+    candidatesEvaluated: number
+    lastParty: string | null
+    selectedParty: string | null
+  } | null>(null)
+  const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false)
 
   const [isDkimAuditing, setIsDkimAuditing] = useState(false)
   const [dkimAuditResults, setDkimAuditResults] = useState<{
@@ -3715,25 +3727,30 @@ const downloadActBluePatterns = () => {
             Post to Twitter/X
           </CardTitle>
           <CardDescription>
-            Scores all emails and SMS from the last 24 hours by engagement (share views, shares, views, follower count in system) and posts the top result to Twitter/X.
+            Scores all emails and SMS from the last 24 hours by engagement (share views, shares, views, follower count in system) and previews the top result before posting.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Preview (dry run) button — does NOT post or mark as posted */}
           <Button
             onClick={async () => {
               setIsPostingTweet(true)
-              setTweetResult(null)
+              setTweetPreview(null)
               try {
-                const res = await fetch("/api/admin/twitter-post", { method: "POST" })
+                const res = await fetch("/api/admin/twitter-post", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ dryRun: true }),
+                })
                 const data = await res.json()
                 if (res.ok) {
-                  setTweetResult(data)
-                  toast.success(`Posted tweet for ${data.entity}`)
+                  setTweetPreview(data)
+                  setIsPreviewDialogOpen(true)
                 } else {
-                  toast.error(data.error || "Failed to post tweet")
+                  toast.error(data.error || "Failed to preview tweet")
                 }
               } catch {
-                toast.error("Failed to post tweet")
+                toast.error("Failed to preview tweet")
               } finally {
                 setIsPostingTweet(false)
               }
@@ -3742,7 +3759,7 @@ const downloadActBluePatterns = () => {
             className="gap-2"
           >
             {isPostingTweet ? <Loader2 size={15} className="animate-spin" /> : <Twitter size={15} />}
-            {isPostingTweet ? "Selecting & posting..." : "Post Best Tweet Now"}
+            {isPostingTweet ? "Selecting best tweet..." : "Preview Best Tweet"}
           </Button>
 
           {tweetResult && (
@@ -3779,6 +3796,57 @@ const downloadActBluePatterns = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Tweet preview dialog */}
+      <Dialog open={isPreviewDialogOpen} onOpenChange={setIsPreviewDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Twitter size={16} />
+              Tweet Preview
+            </DialogTitle>
+            <DialogDescription>
+              This is what would be posted. No tweet has been sent and nothing has been marked as posted.
+            </DialogDescription>
+          </DialogHeader>
+
+          {tweetPreview && (
+            <div className="space-y-4 text-sm">
+              {/* Tweet text */}
+              <div className="bg-muted/50 rounded-md p-4 text-base leading-relaxed border">
+                {tweetPreview.tweetText}
+              </div>
+
+              {/* Char count */}
+              <div className="text-xs text-muted-foreground text-right">
+                {tweetPreview.tweetText.length} / 280 characters
+              </div>
+
+              {/* Metadata */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-muted-foreground border rounded-md p-3">
+                <div><span className="font-medium text-foreground">Entity:</span> {tweetPreview.entity}</div>
+                <div><span className="font-medium text-foreground">Type:</span> <span className="capitalize">{tweetPreview.type}</span></div>
+                <div><span className="font-medium text-foreground">Score:</span> {tweetPreview.score}</div>
+                <div><span className="font-medium text-foreground">Evaluated:</span> {tweetPreview.candidatesEvaluated} candidates</div>
+                <div><span className="font-medium text-foreground">Last party:</span> <span className="capitalize">{tweetPreview.lastParty ?? "none"}</span></div>
+                <div><span className="font-medium text-foreground">Selected party:</span> <span className="capitalize">{tweetPreview.selectedParty ?? "unknown"}</span></div>
+                <div className="col-span-2">
+                  <span className="font-medium text-foreground">Share page: </span>
+                  <a href={tweetPreview.shareUrl} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline break-all">
+                    {tweetPreview.shareUrl}
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsPreviewDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Scrape Ballotpedia State Elections */}
       <Card>

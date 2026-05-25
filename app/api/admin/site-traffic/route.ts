@@ -121,80 +121,86 @@ export async function GET(request: Request) {
       country: string | null
       city: string | null
       createdAt: Date
-      shareTokenSource: string | null
     }
 
     const recentVisitsRaw = excludeApi
       ? await prisma.$queryRaw<RawVisit[]>`
-          SELECT
-            deduped.*,
-            COALESCE(cic."shareTokenSource", sq."shareTokenSource") AS "shareTokenSource"
-          FROM (
-            SELECT DISTINCT ON (
-              ip,
-              COALESCE("userId", ip),
-              DATE_TRUNC('hour', "createdAt")
-            )
-              id, ip, "userAgent", referer, path, "statusCode",
-              "userEmail", "isAuthenticated", country, city, "createdAt"
-            FROM "SiteVisit"
-            WHERE "createdAt" >= ${startDate}
-              AND (
-                (path NOT LIKE '/api/%' AND path != '/login')
-                OR
-                (
-                  path LIKE '/api/%'
-                  AND referer IS NOT NULL
-                  AND referer NOT LIKE '%/login'
-                  AND referer NOT LIKE '%/login?%'
-                  AND length(referer) > 10
-                )
+          SELECT DISTINCT ON (
+            ip,
+            COALESCE("userId", ip),
+            DATE_TRUNC('hour', "createdAt")
+          )
+            id, ip, "userAgent", referer, path, "statusCode",
+            "userEmail", "isAuthenticated", country, city, "createdAt"
+          FROM "SiteVisit"
+          WHERE "createdAt" >= ${startDate}
+            AND (
+              (path NOT LIKE '/api/%' AND path != '/login')
+              OR
+              (
+                path LIKE '/api/%'
+                AND referer IS NOT NULL
+                AND referer NOT LIKE '%/login'
+                AND referer NOT LIKE '%/login?%'
+                AND length(referer) > 10
               )
-            ORDER BY
-              ip,
-              COALESCE("userId", ip),
-              DATE_TRUNC('hour', "createdAt"),
-              "createdAt" DESC
-          ) deduped
-          LEFT JOIN "CompetitiveInsightCampaign" cic
-            ON deduped.path LIKE '/share/%'
-            AND cic."shareToken" = SUBSTRING(deduped.path FROM 8)
-          LEFT JOIN "SmsQueue" sq
-            ON deduped.path LIKE '/share/%'
-            AND sq."shareToken" = SUBSTRING(deduped.path FROM 8)
+            )
+          ORDER BY
+            ip,
+            COALESCE("userId", ip),
+            DATE_TRUNC('hour', "createdAt"),
+            "createdAt" DESC
         `
       : await prisma.$queryRaw<RawVisit[]>`
-          SELECT
-            deduped.*,
-            COALESCE(cic."shareTokenSource", sq."shareTokenSource") AS "shareTokenSource"
-          FROM (
-            SELECT DISTINCT ON (
-              ip,
-              COALESCE("userId", ip),
-              DATE_TRUNC('hour', "createdAt")
-            )
-              id, ip, "userAgent", referer, path, "statusCode",
-              "userEmail", "isAuthenticated", country, city, "createdAt"
-            FROM "SiteVisit"
-            WHERE "createdAt" >= ${startDate}
-            ORDER BY
-              ip,
-              COALESCE("userId", ip),
-              DATE_TRUNC('hour', "createdAt"),
-              "createdAt" DESC
-          ) deduped
-          LEFT JOIN "CompetitiveInsightCampaign" cic
-            ON deduped.path LIKE '/share/%'
-            AND cic."shareToken" = SUBSTRING(deduped.path FROM 8)
-          LEFT JOIN "SmsQueue" sq
-            ON deduped.path LIKE '/share/%'
-            AND sq."shareToken" = SUBSTRING(deduped.path FROM 8)
+          SELECT DISTINCT ON (
+            ip,
+            COALESCE("userId", ip),
+            DATE_TRUNC('hour', "createdAt")
+          )
+            id, ip, "userAgent", referer, path, "statusCode",
+            "userEmail", "isAuthenticated", country, city, "createdAt"
+          FROM "SiteVisit"
+          WHERE "createdAt" >= ${startDate}
+          ORDER BY
+            ip,
+            COALESCE("userId", ip),
+            DATE_TRUNC('hour', "createdAt"),
+            "createdAt" DESC
         `
 
     // Sort by most recent and limit to 50
-    const recentVisits = recentVisitsRaw
+    const recentVisitsSorted = recentVisitsRaw
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 50)
+
+    // For /share/ paths, look up shareTokenSource in JS to avoid complex SQL join issues
+    const shareTokens = recentVisitsSorted
+      .filter(v => v.path.startsWith("/share/"))
+      .map(v => v.path.slice(7)) // strip leading "/share/"
+
+    const [emailSources, smsSources] = shareTokens.length > 0
+      ? await Promise.all([
+          prisma.competitiveInsightCampaign.findMany({
+            where: { shareToken: { in: shareTokens } },
+            select: { shareToken: true, shareTokenSource: true },
+          }),
+          prisma.smsQueue.findMany({
+            where: { shareToken: { in: shareTokens } },
+            select: { shareToken: true, shareTokenSource: true },
+          }),
+        ])
+      : [[], []]
+
+    const sourceMap = new Map<string, string | null>()
+    for (const r of emailSources) if (r.shareToken) sourceMap.set(r.shareToken, r.shareTokenSource)
+    for (const r of smsSources) if (r.shareToken) sourceMap.set(r.shareToken, r.shareTokenSource)
+
+    const recentVisits = recentVisitsSorted.map(v => ({
+      ...v,
+      shareTokenSource: v.path.startsWith("/share/")
+        ? (sourceMap.get(v.path.slice(7)) ?? null)
+        : null,
+    }))
 
     return NextResponse.json({
       summary: {
@@ -224,10 +230,7 @@ export async function GET(request: Request) {
         authenticated: Number(v.authenticated),
         anonymous: Number(v.anonymous)
       })),
-      recentVisits: recentVisits.map(v => ({
-        ...v,
-        shareTokenSource: v.shareTokenSource ?? null,
-      }))
+      recentVisits
     })
   } catch (error) {
     console.error("Error fetching site traffic:", error)

@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Activity, Users, UserX, Globe, RefreshCw, Clock } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Activity, Users, UserX, Globe, RefreshCw, Clock, Share2 } from "lucide-react"
 
 interface TrafficData {
   summary: {
@@ -30,6 +31,18 @@ interface TrafficData {
     statusCode: number | null
     userEmail: string | null
     isAuthenticated: boolean
+    country: string | null
+    city: string | null
+    createdAt: string
+    shareTokenSource: string | null
+  }>
+  shareVisits: Array<{
+    id: string
+    ip: string
+    userAgent: string | null
+    path: string
+    statusCode: number | null
+    userEmail: string | null
     country: string | null
     city: string | null
     createdAt: string
@@ -351,96 +364,176 @@ export function SiteTrafficContent() {
         </Card>
       </div>
 
-      {/* Recent Visits */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5" />
-                Recent Visits
-              </CardTitle>
-              <CardDescription>Latest 50 visits</CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={hideApiCalls}
-                  onChange={(e) => setHideApiCalls(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300"
-                />
-                <span>Hide API/Auth calls</span>
-              </label>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>IP</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Page</TableHead>
-                  <TableHead>User Agent</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.recentVisits.map((visit) => {
-                    const formattedPath = formatPath(visit.path, visit.referer)
-                  
-                    return (
-                    <TableRow key={visit.id}>
-                      <TableCell className="whitespace-nowrap text-sm">
-                        {formatDate(visit.createdAt)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={visit.isAuthenticated ? "default" : "secondary"}>
-                          {visit.statusCode}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">{visit.ip}</TableCell>
-                      <TableCell>
-                        {visit.city && visit.country 
-                          ? `${visit.city}, ${visit.country}`
-                          : visit.country || "-"}
-                      </TableCell>
-                      <TableCell>
-                        {visit.userEmail ? (
-                          <span className="text-green-600">{visit.userEmail}</span>
-                        ) : (
-                          <span className="text-muted-foreground">Anonymous</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm max-w-xs">
-                        {formattedPath ? (
-                          <span className="font-mono text-blue-600">
-                            {formattedPath}
-                            {visit.shareTokenSource && formattedPath.startsWith("/share/") && (
-                              <span className="font-sans text-xs text-muted-foreground ml-1 not-italic">
-                                ({visit.shareTokenSource})
-                              </span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground italic">API/Auth</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
-                        {truncateUserAgent(visit.userAgent)}
-                      </TableCell>
+      <Tabs defaultValue="recent">
+        <TabsList>
+          <TabsTrigger value="recent" className="flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            Recent Visits
+          </TabsTrigger>
+          <TabsTrigger value="share" className="flex items-center gap-2">
+            <Share2 className="h-4 w-4" />
+            Share Visits
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Recent Visits Tab */}
+        <TabsContent value="recent">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Recent Visits</CardTitle>
+                  <CardDescription>Latest 50 visits</CardDescription>
+                </div>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hideApiCalls}
+                    onChange={(e) => setHideApiCalls(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <span>Hide API/Auth calls</span>
+                </label>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Time</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>IP</TableHead>
+                      <TableHead>Location</TableHead>
+                      <TableHead>User</TableHead>
+                      <TableHead>Page</TableHead>
+                      <TableHead>User Agent</TableHead>
                     </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {data.recentVisits.map((visit) => {
+                      const formattedPath = formatPath(visit.path, visit.referer)
+                      return (
+                        <TableRow key={visit.id}>
+                          <TableCell className="whitespace-nowrap text-sm">
+                            {formatDate(visit.createdAt)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={visit.isAuthenticated ? "default" : "secondary"}>
+                              {visit.statusCode}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">{visit.ip}</TableCell>
+                          <TableCell>
+                            {visit.city && visit.country
+                              ? `${visit.city}, ${visit.country}`
+                              : visit.country || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {visit.userEmail ? (
+                              <span className="text-green-600">{visit.userEmail}</span>
+                            ) : (
+                              <span className="text-muted-foreground">Anonymous</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm max-w-xs">
+                            {formattedPath ? (
+                              <span className="font-mono text-blue-600">{formattedPath}</span>
+                            ) : (
+                              <span className="text-muted-foreground italic">API/Auth</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                            {truncateUserAgent(visit.userAgent)}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Share Visits Tab */}
+        <TabsContent value="share">
+          <Card>
+            <CardHeader>
+              <CardTitle>Share Link Visits</CardTitle>
+              <CardDescription>
+                Latest 200 visits to <span className="font-mono text-xs">/share/</span> links — last {data.summary.days} days
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Time</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>IP</TableHead>
+                      <TableHead>Location</TableHead>
+                      <TableHead>User</TableHead>
+                      <TableHead>Token</TableHead>
+                      <TableHead>Source</TableHead>
+                      <TableHead>User Agent</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.shareVisits.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                          No share link visits in this period
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      data.shareVisits.map((visit) => (
+                        <TableRow key={visit.id}>
+                          <TableCell className="whitespace-nowrap text-sm">
+                            {formatDate(visit.createdAt)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{visit.statusCode}</Badge>
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">{visit.ip}</TableCell>
+                          <TableCell>
+                            {visit.city && visit.country
+                              ? `${visit.city}, ${visit.country}`
+                              : visit.country || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {visit.userEmail ? (
+                              <span className="text-green-600">{visit.userEmail}</span>
+                            ) : (
+                              <span className="text-muted-foreground">Anonymous</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="font-mono text-sm text-blue-600">
+                            {visit.path.slice(7)}
+                          </TableCell>
+                          <TableCell>
+                            {visit.shareTokenSource ? (
+                              <Badge variant="outline" className="text-xs font-normal">
+                                {visit.shareTokenSource}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                            {truncateUserAgent(visit.userAgent)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

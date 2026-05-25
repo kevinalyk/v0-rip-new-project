@@ -379,40 +379,33 @@ export async function sendWelcomeEmail(params: {
         <div style="background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
           <div style="background: #dc2626; padding: 24px 28px;">
             <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Inbox.GOP</p>
-            <h1 style="margin: 4px 0 0 0; color: white; font-size: 22px; font-weight: 700;">Welcome to Inbox.GOP, ${firstName}!</h1>
-            <p style="margin: 6px 0 0 0; color: rgba(255,255,255,0.85); font-size: 14px;">Your account has been created successfully.</p>
+            <h1 style="margin: 4px 0 0 0; color: white; font-size: 22px; font-weight: 700;">Welcome to Inbox.GOP</h1>
           </div>
           <div style="padding: 28px;">
-            <p style="margin: 0 0 20px 0; font-size: 15px; color: #333;">Here are your account details. You can sign in at any time using your email address and the password you set during registration.</p>
-            <table style="width: 100%; border-collapse: collapse;">
-              <tr>
-                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; width: 38%; vertical-align: top;">Name</td>
-                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; font-weight: 600;">${firstName} ${lastName}</td>
-              </tr>
-              <tr>
-                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; vertical-align: top;">Email</td>
-                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px;">${email}</td>
-              </tr>
-              <tr>
-                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; vertical-align: top;">Organization</td>
-                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; font-weight: 600;">${organizationName}</td>
-              </tr>
-              <tr>
-                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; vertical-align: top;">Plan</td>
-                <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px;"><span style="background: #f3f4f6; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; color: #555;">${plan}</span></td>
-              </tr>
-              <tr>
-                <td style="padding: 10px 0; font-size: 13px; color: #666; vertical-align: top;">Account Created</td>
-                <td style="padding: 10px 0; font-size: 14px; color: #333;">${formattedDate}</td>
-              </tr>
-            </table>
-            <div style="margin-top: 28px; text-align: center;">
-              <a href="${loginUrl}" style="display: inline-block; background: #dc2626; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-size: 14px; font-weight: 600;">Sign In to Inbox.GOP</a>
+            <p style="margin: 0 0 16px 0; font-size: 15px; color: #1a1a1a;">Hi ${firstName},</p>
+            <p style="margin: 0 0 16px 0; font-size: 15px; color: #1a1a1a;">
+              Welcome to Inbox.GOP — the most comprehensive database of Republican political fundraising emails and SMS messages.
+            </p>
+            <p style="margin: 0 0 8px 0; font-size: 14px; color: #555; font-weight: 600;">With your free account you can:</p>
+            <ul style="margin: 0 0 20px 0; padding-left: 20px; font-size: 14px; color: #333; line-height: 1.8;">
+              <li>Browse the competitive insights database to see what campaigns and organizations are sending right now</li>
+              <li>View individual emails and SMS messages in full</li>
+              <li>Search across senders, subject lines, and content</li>
+            </ul>
+            <p style="margin: 0 0 16px 0; font-size: 14px; color: #555;">
+              Upgrading unlocks full history, the ability to follow specific entities, daily and weekly digest emails, and our full inboxing and seed testing tools.
+            </p>
+            <p style="margin: 0 0 24px 0; font-size: 15px; color: #1a1a1a;">
+              If you'd like a walkthrough of everything the platform can do, just reply to this email and we'll set up a time.
+            </p>
+            <div style="text-align: center; margin-bottom: 28px;">
+              <a href="${loginUrl}" style="display: inline-block; background: #dc2626; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-size: 15px; font-weight: 600;">Go to Inbox.GOP</a>
             </div>
-            <p style="margin: 24px 0 0 0; font-size: 13px; color: #888; text-align: center;">If you did not create this account, contact us at <a href="mailto:support@rip-tool.com" style="color: #dc2626; text-decoration: none;">support@rip-tool.com</a>.</p>
-          </div>
-          <div style="padding: 16px 28px; background: #f9fafb; border-top: 1px solid #f0f0f0; text-align: center;">
-            <p style="margin: 0; font-size: 12px; color: #999;">Inbox.GOP — Republican Inboxing Protocol</p>
+            <hr style="border: none; border-top: 1px solid #f0f0f0; margin: 0 0 20px 0;" />
+            <p style="margin: 0; font-size: 13px; color: #888; text-align: center;">
+              Questions? Just reply to this email.<br/>
+              <a href="https://app.rip-tool.com" style="color: #dc2626; text-decoration: none;">app.rip-tool.com</a>
+            </p>
           </div>
         </div>
       </body>
@@ -420,27 +413,29 @@ export async function sendWelcomeEmail(params: {
   `
 
   const text = `
-Welcome to Inbox.GOP, ${firstName}!
+Hi ${firstName},
 
-Your account has been created successfully. Here are your details:
+Welcome to Inbox.GOP — the most comprehensive database of Republican political fundraising emails and SMS messages.
 
-Name:         ${firstName} ${lastName}
-Email:        ${email}
-Organization: ${organizationName}
-Plan:         ${plan}
-Created:      ${formattedDate}
+With your free account you can:
+- Browse the competitive insights database to see what campaigns and organizations are sending right now
+- View individual emails and SMS messages in full
+- Search across senders, subject lines, and content
 
-Sign in here: ${loginUrl}
+Upgrading unlocks full history, the ability to follow specific entities, daily and weekly digest emails, and our full inboxing and seed testing tools.
 
-If you did not create this account, contact support@rip-tool.com.
+If you'd like a walkthrough of everything the platform can do, just reply to this email and we'll set up a time.
 
-— Inbox.GOP
+Go to Inbox.GOP: ${loginUrl}
+
+Questions? Just reply to this email.
   `.trim()
 
   const formData = new FormData()
   formData.append("from", `Inbox.GOP <inbox@${MAILGUN_DOMAIN}>`)
   formData.append("to", email)
-  formData.append("subject", `Welcome to Inbox.GOP, ${firstName}!`)
+  formData.append("h:Reply-To", "kevin@rip-tool.com, ryan@rip-tool.com")
+  formData.append("subject", `Welcome to Inbox.GOP, ${firstName}`)
   formData.append("html", html)
   formData.append("text", text)
 

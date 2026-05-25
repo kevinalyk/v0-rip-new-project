@@ -33,6 +33,7 @@ interface TrafficData {
     country: string | null
     city: string | null
     createdAt: string
+    shareTokenSource: string | null
   }>
 }
 
@@ -417,7 +418,14 @@ export function SiteTrafficContent() {
                       </TableCell>
                       <TableCell className="text-sm max-w-xs">
                         {formattedPath ? (
-                          <span className="font-mono text-blue-600">{formattedPath}</span>
+                          <span className="font-mono text-blue-600">
+                            {formattedPath}
+                            {visit.shareTokenSource && formattedPath.startsWith("/share/") && (
+                              <span className="font-sans text-xs text-muted-foreground ml-1 not-italic">
+                                ({visit.shareTokenSource})
+                              </span>
+                            )}
+                          </span>
                         ) : (
                           <span className="text-muted-foreground italic">API/Auth</span>
                         )}

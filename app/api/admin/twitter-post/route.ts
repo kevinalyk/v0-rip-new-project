@@ -286,9 +286,9 @@ export async function runTwitterPost(options: { dryRun?: boolean } = {}): Promis
   if (!shareToken) {
     shareToken = nanoid(16)
     if (winner.isSms) {
-      await prisma.smsQueue.update({ where: { id: winner.id }, data: { shareToken, shareTokenCreatedAt: new Date() } })
+      await prisma.smsQueue.update({ where: { id: winner.id }, data: { shareToken, shareTokenCreatedAt: new Date(), shareTokenSource: "Twitter" } })
     } else {
-      await prisma.competitiveInsightCampaign.update({ where: { id: winner.id }, data: { shareToken, shareTokenCreatedAt: new Date() } })
+      await prisma.competitiveInsightCampaign.update({ where: { id: winner.id }, data: { shareToken, shareTokenCreatedAt: new Date(), shareTokenSource: "Twitter" } })
     }
   }
 

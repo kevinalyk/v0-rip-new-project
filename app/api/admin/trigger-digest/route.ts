@@ -127,13 +127,13 @@ export async function POST(request: NextRequest) {
         const ensureEmailToken = async (id: string, existing: string | null): Promise<string> => {
           if (existing) return existing
           const token = nanoid(16)
-          await prisma.competitiveInsightCampaign.update({ where: { id }, data: { shareToken: token, shareTokenCreatedAt: new Date() } })
+          await prisma.competitiveInsightCampaign.update({ where: { id }, data: { shareToken: token, shareTokenCreatedAt: new Date(), shareTokenSource: "Daily Digest" } })
           return token
         }
         const ensureSmsToken = async (id: string, existing: string | null): Promise<string> => {
           if (existing) return existing
           const token = nanoid(16)
-          await prisma.smsQueue.update({ where: { id }, data: { shareToken: token, shareTokenCreatedAt: new Date() } })
+          await prisma.smsQueue.update({ where: { id }, data: { shareToken: token, shareTokenCreatedAt: new Date(), shareTokenSource: "Daily Digest" } })
           return token
         }
 

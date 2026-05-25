@@ -106,78 +106,82 @@ export async function GET(request: Request) {
     ` as Array<{ date: Date, authenticated: bigint, anonymous: bigint }>
 
     // Get recent visits - deduplicated: one row per unique ip+user combo per hour
+    // For /share/ paths, LEFT JOIN to get the shareTokenSource from the appropriate table
     // When excludeApi is true, only include visits where the path is not an API call
     // and the referer resolves to a meaningful page
+    type RawVisit = {
+      id: string
+      ip: string
+      userAgent: string | null
+      referer: string | null
+      path: string
+      statusCode: number | null
+      userEmail: string | null
+      isAuthenticated: boolean
+      country: string | null
+      city: string | null
+      createdAt: Date
+      shareTokenSource: string | null
+    }
+
     const recentVisitsRaw = excludeApi
-      ? await prisma.$queryRaw`
+      ? await prisma.$queryRaw<RawVisit[]>`
           SELECT DISTINCT ON (
-            ip,
-            COALESCE("userId", ip),
-            DATE_TRUNC('hour', "createdAt")
+            sv.ip,
+            COALESCE(sv."userId", sv.ip),
+            DATE_TRUNC('hour', sv."createdAt")
           )
-            id, ip, "userAgent", referer, path, "statusCode",
-            "userEmail", "isAuthenticated", country, city, "createdAt"
-          FROM "SiteVisit"
-          WHERE "createdAt" >= ${startDate}
+            sv.id, sv.ip, sv."userAgent", sv.referer, sv.path, sv."statusCode",
+            sv."userEmail", sv."isAuthenticated", sv.country, sv.city, sv."createdAt",
+            COALESCE(cic."shareTokenSource", sq."shareTokenSource") AS "shareTokenSource"
+          FROM "SiteVisit" sv
+          LEFT JOIN "CompetitiveInsightCampaign" cic
+            ON sv.path LIKE '/share/%'
+            AND cic."shareToken" = SUBSTRING(sv.path FROM 8)
+          LEFT JOIN "SmsQueue" sq
+            ON sv.path LIKE '/share/%'
+            AND sq."shareToken" = SUBSTRING(sv.path FROM 8)
+          WHERE sv."createdAt" >= ${startDate}
             AND (
-              -- Include non-API paths directly
-              (path NOT LIKE '/api/%' AND path != '/login')
+              (sv.path NOT LIKE '/api/%' AND sv.path != '/login')
               OR
-              -- Include API calls only if referer has a meaningful page (not login/root/empty)
               (
-                path LIKE '/api/%'
-                AND referer IS NOT NULL
-                AND referer NOT LIKE '%/login'
-                AND referer NOT LIKE '%/login?%'
-                AND length(referer) > 10
+                sv.path LIKE '/api/%'
+                AND sv.referer IS NOT NULL
+                AND sv.referer NOT LIKE '%/login'
+                AND sv.referer NOT LIKE '%/login?%'
+                AND length(sv.referer) > 10
               )
             )
           ORDER BY
-            ip,
-            COALESCE("userId", ip),
-            DATE_TRUNC('hour', "createdAt"),
-            "createdAt" DESC
-        ` as Array<{
-          id: string
-          ip: string
-          userAgent: string | null
-          referer: string | null
-          path: string
-          statusCode: number | null
-          userEmail: string | null
-          isAuthenticated: boolean
-          country: string | null
-          city: string | null
-          createdAt: Date
-        }>
-      : await prisma.$queryRaw`
+            sv.ip,
+            COALESCE(sv."userId", sv.ip),
+            DATE_TRUNC('hour', sv."createdAt"),
+            sv."createdAt" DESC
+        `
+      : await prisma.$queryRaw<RawVisit[]>`
           SELECT DISTINCT ON (
-            ip,
-            COALESCE("userId", ip),
-            DATE_TRUNC('hour', "createdAt")
+            sv.ip,
+            COALESCE(sv."userId", sv.ip),
+            DATE_TRUNC('hour', sv."createdAt")
           )
-            id, ip, "userAgent", referer, path, "statusCode",
-            "userEmail", "isAuthenticated", country, city, "createdAt"
-          FROM "SiteVisit"
-          WHERE "createdAt" >= ${startDate}
+            sv.id, sv.ip, sv."userAgent", sv.referer, sv.path, sv."statusCode",
+            sv."userEmail", sv."isAuthenticated", sv.country, sv.city, sv."createdAt",
+            COALESCE(cic."shareTokenSource", sq."shareTokenSource") AS "shareTokenSource"
+          FROM "SiteVisit" sv
+          LEFT JOIN "CompetitiveInsightCampaign" cic
+            ON sv.path LIKE '/share/%'
+            AND cic."shareToken" = SUBSTRING(sv.path FROM 8)
+          LEFT JOIN "SmsQueue" sq
+            ON sv.path LIKE '/share/%'
+            AND sq."shareToken" = SUBSTRING(sv.path FROM 8)
+          WHERE sv."createdAt" >= ${startDate}
           ORDER BY
-            ip,
-            COALESCE("userId", ip),
-            DATE_TRUNC('hour', "createdAt"),
-            "createdAt" DESC
-        ` as Array<{
-          id: string
-          ip: string
-          userAgent: string | null
-          referer: string | null
-          path: string
-          statusCode: number | null
-          userEmail: string | null
-          isAuthenticated: boolean
-          country: string | null
-          city: string | null
-          createdAt: Date
-        }>
+            sv.ip,
+            COALESCE(sv."userId", sv.ip),
+            DATE_TRUNC('hour', sv."createdAt"),
+            sv."createdAt" DESC
+        `
 
     // Sort by most recent and limit to 50
     const recentVisits = recentVisitsRaw
@@ -212,7 +216,10 @@ export async function GET(request: Request) {
         authenticated: Number(v.authenticated),
         anonymous: Number(v.anonymous)
       })),
-      recentVisits
+      recentVisits: recentVisits.map(v => ({
+        ...v,
+        shareTokenSource: v.shareTokenSource ?? null,
+      }))
     })
   } catch (error) {
     console.error("Error fetching site traffic:", error)

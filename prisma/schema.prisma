@@ -308,6 +308,7 @@ model CompetitiveInsightCampaign {
   source              String   @default("seed") // "seed" or "personal"
   shareToken          String?  @unique // Unique token for sharing
   shareTokenCreatedAt DateTime? // When the share token was created
+  shareTokenSource    String?  // Who/what generated the token: "User", "Daily Digest", "Weekly Digest", "Twitter", "Similar", "Content Frequency", "Unknown"
   shareCount          Int      @default(0) // How many times share button was clicked
   shareViewCount      Int      @default(0) // How many times shared link was viewed
   viewCount           Int      @default(0) // Total views (direct clicks + shared link views)
@@ -474,6 +475,7 @@ model SmsQueue {
   ctaLinks           String?   @db.Text // JSON array of CTA links extracted from message
   shareToken          String?  @unique // Unique token for sharing
   shareTokenCreatedAt DateTime? // When the share token was created
+  shareTokenSource    String?  // Who/what generated the token: "User", "Daily Digest", "Weekly Digest", "Twitter", "Similar", "Content Frequency", "Unknown"
   shareCount          Int      @default(0) // How many times share button was clicked
   shareViewCount      Int      @default(0) // How many times shared link was viewed
   viewCount           Int      @default(0) // Total views (direct clicks + shared link views)

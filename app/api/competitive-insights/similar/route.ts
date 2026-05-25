@@ -12,12 +12,12 @@ async function ensureShareToken(id: string, existing: string | null, table: "ema
   if (table === "sms") {
     await prisma.smsQueue.update({
       where: { id },
-      data: { shareToken: token, shareTokenCreatedAt: new Date() },
+      data: { shareToken: token, shareTokenCreatedAt: new Date(), shareTokenSource: "Similar" },
     })
   } else {
     await prisma.competitiveInsightCampaign.update({
       where: { id },
-      data: { shareToken: token, shareTokenCreatedAt: new Date() },
+      data: { shareToken: token, shareTokenCreatedAt: new Date(), shareTokenSource: "Similar" },
     })
   }
   return token

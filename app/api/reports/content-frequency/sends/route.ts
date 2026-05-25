@@ -8,9 +8,9 @@ async function ensureShareToken(id: string, existing: string | null, table: "ema
   if (existing) return existing
   const token = nanoid(16)
   if (table === "sms") {
-    await prisma.smsQueue.update({ where: { id }, data: { shareToken: token, shareTokenCreatedAt: new Date() } })
+    await prisma.smsQueue.update({ where: { id }, data: { shareToken: token, shareTokenCreatedAt: new Date(), shareTokenSource: "Content Frequency" } })
   } else {
-    await prisma.competitiveInsightCampaign.update({ where: { id }, data: { shareToken: token, shareTokenCreatedAt: new Date() } })
+    await prisma.competitiveInsightCampaign.update({ where: { id }, data: { shareToken: token, shareTokenCreatedAt: new Date(), shareTokenSource: "Content Frequency" } })
   }
   return token
 }

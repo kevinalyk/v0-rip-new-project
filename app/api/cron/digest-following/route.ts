@@ -144,7 +144,7 @@ export async function GET(request: Request) {
           const token = nanoid(16)
           await prisma.competitiveInsightCampaign.update({
             where: { id },
-            data: { shareToken: token, shareTokenCreatedAt: new Date() },
+            data: { shareToken: token, shareTokenCreatedAt: new Date(), shareTokenSource: "Daily Digest" },
           })
           return token
         }
@@ -154,7 +154,7 @@ export async function GET(request: Request) {
           const token = nanoid(16)
           await prisma.smsQueue.update({
             where: { id },
-            data: { shareToken: token, shareTokenCreatedAt: new Date() },
+            data: { shareToken: token, shareTokenCreatedAt: new Date(), shareTokenSource: "Daily Digest" },
           })
           return token
         }

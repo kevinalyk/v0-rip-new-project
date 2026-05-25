@@ -56,6 +56,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           data: {
             shareToken: newToken,
             shareTokenCreatedAt: now,
+            shareTokenSource: "User",
             shareCount: (campaign.shareCount || 0) + 1,
           },
           select: {
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           data: {
             shareToken: newToken,
             shareTokenCreatedAt: now,
+            shareTokenSource: "User",
             shareCount: (campaign.shareCount || 0) + 1,
           },
           select: {

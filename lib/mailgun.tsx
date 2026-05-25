@@ -386,14 +386,13 @@ export async function sendWelcomeEmail(params: {
             <p style="margin: 0 0 16px 0; font-size: 15px; color: #1a1a1a;">
               Welcome to Inbox.GOP — the most comprehensive database of Republican political fundraising emails and SMS messages.
             </p>
-            <p style="margin: 0 0 8px 0; font-size: 14px; color: #555; font-weight: 600;">With your free account you can:</p>
+            <p style="margin: 0 0 8px 0; font-size: 14px; color: #555; font-weight: 600;">Your free Starter plan gives you access to:</p>
             <ul style="margin: 0 0 20px 0; padding-left: 20px; font-size: 14px; color: #333; line-height: 1.8;">
-              <li>Browse the competitive insights database and see what campaigns and organizations are sending right now</li>
-              <li>View individual emails and SMS messages in full</li>
-              <li>Explore the publicly available political directory</li>
+              <li>The last 3 hours of email and SMS campaigns across the database</li>
+              <li>Basic campaign details for each message</li>
             </ul>
             <p style="margin: 0 0 16px 0; font-size: 14px; color: #555;">
-              Upgrading unlocks full search and filtering, complete send history, the ability to follow specific entities, daily and weekly digest emails, and our full inboxing and seed testing tools.
+              Upgrading unlocks deeper history, search and filtering, the ability to follow specific entities, analytics, daily and weekly digest emails, and our full inboxing and seed testing tools.
             </p>
             <p style="margin: 0 0 24px 0; font-size: 15px; color: #1a1a1a;">
               If you'd like a walkthrough of everything the platform can do, just reply to this email and we'll set up a time.
@@ -417,12 +416,11 @@ Hi ${firstName},
 
 Welcome to Inbox.GOP — the most comprehensive database of Republican political fundraising emails and SMS messages.
 
-With your free account you can:
-- Browse the competitive insights database and see what campaigns and organizations are sending right now
-- View individual emails and SMS messages in full
-- Explore the publicly available political directory
+Your free Starter plan gives you access to:
+- The last 3 hours of email and SMS campaigns across the database
+- Basic campaign details for each message
 
-Upgrading unlocks full search and filtering, complete send history, the ability to follow specific entities, daily and weekly digest emails, and our full inboxing and seed testing tools.
+Upgrading unlocks deeper history, search and filtering, the ability to follow specific entities, analytics, daily and weekly digest emails, and our full inboxing and seed testing tools.
 
 If you'd like a walkthrough of everything the platform can do, just reply to this email and we'll set up a time.
 

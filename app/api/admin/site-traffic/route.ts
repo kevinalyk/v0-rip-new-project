@@ -125,12 +125,7 @@ export async function GET(request: Request) {
 
     const recentVisitsRaw = excludeApi
       ? await prisma.$queryRaw<RawVisit[]>`
-          SELECT DISTINCT ON (
-            ip,
-            COALESCE("userId", ip),
-            DATE_TRUNC('hour', "createdAt")
-          )
-            id, ip, "userAgent", referer, path, "statusCode",
+          SELECT id, ip, "userAgent", referer, path, "statusCode",
             "userEmail", "isAuthenticated", country, city, "createdAt"
           FROM "SiteVisit"
           WHERE "createdAt" >= ${startDate}
@@ -145,33 +140,19 @@ export async function GET(request: Request) {
                 AND length(referer) > 10
               )
             )
-          ORDER BY
-            ip,
-            COALESCE("userId", ip),
-            DATE_TRUNC('hour', "createdAt"),
-            "createdAt" DESC
+          ORDER BY "createdAt" DESC
+          LIMIT 50
         `
       : await prisma.$queryRaw<RawVisit[]>`
-          SELECT DISTINCT ON (
-            ip,
-            COALESCE("userId", ip),
-            DATE_TRUNC('hour', "createdAt")
-          )
-            id, ip, "userAgent", referer, path, "statusCode",
+          SELECT id, ip, "userAgent", referer, path, "statusCode",
             "userEmail", "isAuthenticated", country, city, "createdAt"
           FROM "SiteVisit"
           WHERE "createdAt" >= ${startDate}
-          ORDER BY
-            ip,
-            COALESCE("userId", ip),
-            DATE_TRUNC('hour', "createdAt"),
-            "createdAt" DESC
+          ORDER BY "createdAt" DESC
+          LIMIT 50
         `
 
-    // Sort by most recent and limit to 50
     const recentVisitsSorted = recentVisitsRaw
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 50)
 
     // For /share/ paths, look up shareTokenSource in JS to avoid complex SQL join issues
     const shareTokens = recentVisitsSorted
@@ -202,11 +183,7 @@ export async function GET(request: Request) {
         : null,
     }))
 
-    console.log("[v0] shareTokens extracted:", shareTokens)
-    console.log("[v0] emailSources found:", emailSources.length, emailSources)
-    console.log("[v0] smsSources found:", smsSources.length, smsSources)
-    console.log("[v0] sourceMap:", Object.fromEntries(sourceMap))
-    console.log("[v0] sample recentVisits with share:", recentVisits.filter(v => v.path.startsWith("/share/")).slice(0, 3))
+
 
     return NextResponse.json({
       summary: {

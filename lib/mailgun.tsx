@@ -392,7 +392,7 @@ export async function sendWelcomeEmail(params: {
               <li>Basic campaign details for each message</li>
             </ul>
             <p style="margin: 0 0 16px 0; font-size: 14px; color: #555;">
-              Upgrading unlocks deeper history, search and filtering, the ability to follow specific entities, analytics, daily and weekly digest emails, and our full inboxing and seed testing tools.
+              Upgrading unlocks deeper history, search and filtering, the ability to follow specific entities, analytics, and our full inboxing and seed testing tools.
             </p>
             <p style="margin: 0 0 24px 0; font-size: 15px; color: #1a1a1a;">
               If you'd like a walkthrough of everything the platform can do, just reply to this email and we'll set up a time.
@@ -420,7 +420,7 @@ Your free Starter plan gives you access to:
 - The last 3 hours of email and SMS campaigns across the database
 - Basic campaign details for each message
 
-Upgrading unlocks deeper history, search and filtering, the ability to follow specific entities, analytics, daily and weekly digest emails, and our full inboxing and seed testing tools.
+Upgrading unlocks deeper history, search and filtering, the ability to follow specific entities, analytics, and our full inboxing and seed testing tools.
 
 If you'd like a walkthrough of everything the platform can do, just reply to this email and we'll set up a time.
 

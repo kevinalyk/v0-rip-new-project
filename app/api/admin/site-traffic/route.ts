@@ -168,18 +168,31 @@ export async function GET(request: Request) {
       shareTokenSource: string | null
     }
 
-    const shareVisitsRaw = await prisma.$queryRaw<ShareVisit[]>`
+    const shareVisitsRaw = await prisma.$queryRaw<(ShareVisit & { extractedToken: string | null })[]>`
       SELECT id, ip, "userAgent", path, "statusCode",
-        "userEmail", country, city, "createdAt", NULL::text AS "shareTokenSource"
+        "userEmail", country, city, "createdAt", NULL::text AS "shareTokenSource",
+        CASE
+          WHEN path LIKE '/share/%'
+            THEN SPLIT_PART(SPLIT_PART(path, '/share/', 2), '?', 1)
+          WHEN path LIKE '%/share/%'
+            THEN SPLIT_PART(SPLIT_PART(path, '/share/', 2), '?', 1)
+          WHEN path LIKE '%redirect=/share/%'
+            THEN SPLIT_PART(SPLIT_PART(path, '/share/', 2), '&', 1)
+          ELSE NULL
+        END AS "extractedToken"
       FROM "SiteVisit"
       WHERE "createdAt" >= ${startDate}
-        AND path LIKE '/share/%'
+        AND (
+          path LIKE '/share/%'
+          OR path LIKE '%/share/%'
+          OR path LIKE '%redirect=/share/%'
+        )
       ORDER BY "createdAt" DESC
       LIMIT 200
     `
 
     // Look up shareTokenSource for each unique token
-    const shareTokens = [...new Set(shareVisitsRaw.map(v => v.path.slice(7)))]
+    const shareTokens = [...new Set(shareVisitsRaw.map(v => v.extractedToken).filter(Boolean))] as string[]
 
     const [emailSources, smsSources] = shareTokens.length > 0
       ? await Promise.all([
@@ -198,9 +211,9 @@ export async function GET(request: Request) {
     for (const r of emailSources) if (r.shareToken) sourceMap.set(r.shareToken, r.shareTokenSource)
     for (const r of smsSources) if (r.shareToken) sourceMap.set(r.shareToken, r.shareTokenSource)
 
-    const shareVisits: ShareVisit[] = shareVisitsRaw.map(v => ({
+    const shareVisits: ShareVisit[] = shareVisitsRaw.map(({ extractedToken, ...v }) => ({
       ...v,
-      shareTokenSource: sourceMap.get(v.path.slice(7)) ?? null,
+      shareTokenSource: extractedToken ? (sourceMap.get(extractedToken) ?? null) : null,
     }))
 
 

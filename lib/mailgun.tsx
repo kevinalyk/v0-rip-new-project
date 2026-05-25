@@ -1068,7 +1068,7 @@ export async function sendFollowingDigest(params: {
                 You&apos;re receiving this because you follow entities on
                 <a href="https://app.rip-tool.com" style="color:#6b7280;text-decoration:none;">app.rip-tool.com</a>.<br/>
                 View the full feed at
-                <a href="${feedUrl}" style="color:#6b7280;text-decoration:none;">${feedUrl.replace("https://", "")}</a>.<br/>
+                <a href="${feedUrl}" style="color:#6b7280;text-decoration:none;">app.rip-tool.com</a>.<br/>
                 To stop receiving this digest, visit your
                 <a href="${settingsUrl}" style="color:#6b7280;text-decoration:none;">email settings</a>.
               </p>
@@ -1321,7 +1321,7 @@ export async function sendWeeklyDigest(params: {
                 You&apos;re receiving this because you follow entities on
                 <a href="https://app.rip-tool.com" style="color:#6b7280;text-decoration:none;">app.rip-tool.com</a>.<br/>
                 View the full feed at
-                <a href="${feedUrl}" style="color:#6b7280;text-decoration:none;">${feedUrl.replace("https://", "")}</a>.<br/>
+                <a href="${feedUrl}" style="color:#6b7280;text-decoration:none;">app.rip-tool.com</a>.<br/>
                 To stop receiving this digest, visit your
                 <a href="${settingsUrl}" style="color:#6b7280;text-decoration:none;">email settings</a>.
               </p>

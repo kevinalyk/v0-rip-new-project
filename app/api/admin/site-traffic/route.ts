@@ -121,80 +121,102 @@ export async function GET(request: Request) {
       country: string | null
       city: string | null
       createdAt: Date
-      shareTokenSource: string | null
     }
 
     const recentVisitsRaw = excludeApi
       ? await prisma.$queryRaw<RawVisit[]>`
-          SELECT
-            deduped.*,
-            COALESCE(cic."shareTokenSource", sq."shareTokenSource") AS "shareTokenSource"
-          FROM (
-            SELECT DISTINCT ON (
-              ip,
-              COALESCE("userId", ip),
-              DATE_TRUNC('hour', "createdAt")
-            )
-              id, ip, "userAgent", referer, path, "statusCode",
-              "userEmail", "isAuthenticated", country, city, "createdAt"
-            FROM "SiteVisit"
-            WHERE "createdAt" >= ${startDate}
-              AND (
-                (path NOT LIKE '/api/%' AND path != '/login')
-                OR
-                (
-                  path LIKE '/api/%'
-                  AND referer IS NOT NULL
-                  AND referer NOT LIKE '%/login'
-                  AND referer NOT LIKE '%/login?%'
-                  AND length(referer) > 10
-                )
+          SELECT id, ip, "userAgent", referer, path, "statusCode",
+            "userEmail", "isAuthenticated", country, city, "createdAt"
+          FROM "SiteVisit"
+          WHERE "createdAt" >= ${startDate}
+            AND (
+              (path NOT LIKE '/api/%' AND path != '/login')
+              OR
+              (
+                path LIKE '/api/%'
+                AND referer IS NOT NULL
+                AND referer NOT LIKE '%/login'
+                AND referer NOT LIKE '%/login?%'
+                AND length(referer) > 10
               )
-            ORDER BY
-              ip,
-              COALESCE("userId", ip),
-              DATE_TRUNC('hour', "createdAt"),
-              "createdAt" DESC
-          ) deduped
-          LEFT JOIN "CompetitiveInsightCampaign" cic
-            ON deduped.path LIKE '/share/%'
-            AND cic."shareToken" = SUBSTRING(deduped.path FROM 8)
-          LEFT JOIN "SmsQueue" sq
-            ON deduped.path LIKE '/share/%'
-            AND sq."shareToken" = SUBSTRING(deduped.path FROM 8)
+            )
+          ORDER BY "createdAt" DESC
+          LIMIT 50
         `
       : await prisma.$queryRaw<RawVisit[]>`
-          SELECT
-            deduped.*,
-            COALESCE(cic."shareTokenSource", sq."shareTokenSource") AS "shareTokenSource"
-          FROM (
-            SELECT DISTINCT ON (
-              ip,
-              COALESCE("userId", ip),
-              DATE_TRUNC('hour', "createdAt")
-            )
-              id, ip, "userAgent", referer, path, "statusCode",
-              "userEmail", "isAuthenticated", country, city, "createdAt"
-            FROM "SiteVisit"
-            WHERE "createdAt" >= ${startDate}
-            ORDER BY
-              ip,
-              COALESCE("userId", ip),
-              DATE_TRUNC('hour', "createdAt"),
-              "createdAt" DESC
-          ) deduped
-          LEFT JOIN "CompetitiveInsightCampaign" cic
-            ON deduped.path LIKE '/share/%'
-            AND cic."shareToken" = SUBSTRING(deduped.path FROM 8)
-          LEFT JOIN "SmsQueue" sq
-            ON deduped.path LIKE '/share/%'
-            AND sq."shareToken" = SUBSTRING(deduped.path FROM 8)
+          SELECT id, ip, "userAgent", referer, path, "statusCode",
+            "userEmail", "isAuthenticated", country, city, "createdAt"
+          FROM "SiteVisit"
+          WHERE "createdAt" >= ${startDate}
+          ORDER BY "createdAt" DESC
+          LIMIT 50
         `
 
-    // Sort by most recent and limit to 50
     const recentVisits = recentVisitsRaw
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 50)
+
+    // Share visits tab: dedicated query for /share/ paths with source lookup
+    type ShareVisit = {
+      id: string
+      ip: string
+      userAgent: string | null
+      path: string
+      statusCode: number | null
+      userEmail: string | null
+      country: string | null
+      city: string | null
+      createdAt: Date
+      shareTokenSource: string | null
+    }
+
+    const shareVisitsRaw = await prisma.$queryRaw<(ShareVisit & { extractedToken: string | null })[]>`
+      SELECT id, ip, "userAgent", path, "statusCode",
+        "userEmail", country, city, "createdAt", NULL::text AS "shareTokenSource",
+        CASE
+          WHEN path LIKE '/share/%'
+            THEN SPLIT_PART(SPLIT_PART(path, '/share/', 2), '?', 1)
+          WHEN path LIKE '%/share/%'
+            THEN SPLIT_PART(SPLIT_PART(path, '/share/', 2), '?', 1)
+          WHEN path LIKE '%redirect=/share/%'
+            THEN SPLIT_PART(SPLIT_PART(path, '/share/', 2), '&', 1)
+          ELSE NULL
+        END AS "extractedToken"
+      FROM "SiteVisit"
+      WHERE "createdAt" >= ${startDate}
+        AND (
+          path LIKE '/share/%'
+          OR path LIKE '%/share/%'
+          OR path LIKE '%redirect=/share/%'
+        )
+      ORDER BY "createdAt" DESC
+      LIMIT 200
+    `
+
+    // Look up shareTokenSource for each unique token
+    const shareTokens = [...new Set(shareVisitsRaw.map(v => v.extractedToken).filter(Boolean))] as string[]
+
+    const [emailSources, smsSources] = shareTokens.length > 0
+      ? await Promise.all([
+          prisma.competitiveInsightCampaign.findMany({
+            where: { shareToken: { in: shareTokens } },
+            select: { shareToken: true, shareTokenSource: true },
+          }),
+          prisma.smsQueue.findMany({
+            where: { shareToken: { in: shareTokens } },
+            select: { shareToken: true, shareTokenSource: true },
+          }),
+        ])
+      : [[], []]
+
+    const sourceMap = new Map<string, string | null>()
+    for (const r of emailSources) if (r.shareToken) sourceMap.set(r.shareToken, r.shareTokenSource)
+    for (const r of smsSources) if (r.shareToken) sourceMap.set(r.shareToken, r.shareTokenSource)
+
+    const shareVisits: ShareVisit[] = shareVisitsRaw.map(({ extractedToken, ...v }) => ({
+      ...v,
+      shareTokenSource: extractedToken ? (sourceMap.get(extractedToken) ?? null) : null,
+    }))
+
+
 
     return NextResponse.json({
       summary: {
@@ -224,10 +246,8 @@ export async function GET(request: Request) {
         authenticated: Number(v.authenticated),
         anonymous: Number(v.anonymous)
       })),
-      recentVisits: recentVisits.map(v => ({
-        ...v,
-        shareTokenSource: v.shareTokenSource ?? null,
-      }))
+      recentVisits,
+      shareVisits
     })
   } catch (error) {
     console.error("Error fetching site traffic:", error)

@@ -5,6 +5,10 @@ import { generateTrackedLink } from "./email-tracking"
 const ADMIN_NOTIFICATION_EMAIL = "kevin@rip-tool.com"
 
 async function sendMailgunEmail(subject: string, html: string, text: string): Promise<boolean> {
+  return sendMailgunEmailTo(ADMIN_NOTIFICATION_EMAIL, subject, html, text)
+}
+
+async function sendMailgunEmailTo(to: string, subject: string, html: string, text: string, replyTo?: string): Promise<boolean> {
   const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
   const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN
 
@@ -14,11 +18,12 @@ async function sendMailgunEmail(subject: string, html: string, text: string): Pr
   }
 
   const formData = new FormData()
-  formData.append("from", `Inbox.GOP Alerts <inbox@${MAILGUN_DOMAIN}>`)
-  formData.append("to", ADMIN_NOTIFICATION_EMAIL)
+  formData.append("from", `Inbox.GOP <inbox@${MAILGUN_DOMAIN}>`)
+  formData.append("to", to)
   formData.append("subject", subject)
   formData.append("html", html)
   formData.append("text", text)
+  if (replyTo) formData.append("h:Reply-To", replyTo)
 
   try {
     const response = await fetch(`https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`, {
@@ -31,15 +36,72 @@ async function sendMailgunEmail(subject: string, html: string, text: string): Pr
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error("Mailgun admin notification error:", response.status, errorText)
+      console.error("Mailgun email error:", response.status, errorText)
       return false
     }
 
     return true
   } catch (error) {
-    console.error("Error sending admin notification email:", error)
+    console.error("Error sending email:", error)
     return false
   }
+}
+
+export async function sendLookupWelcomeEmail(params: {
+  email: string
+}): Promise<boolean> {
+  const { email } = params
+  const lookupUrl = "https://app.rip-tool.com/lookup"
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 560px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
+        <div style="background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="background: #dc2626; padding: 24px 28px;">
+            <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Inbox.GOP</p>
+            <h1 style="margin: 4px 0 0 0; color: white; font-size: 22px; font-weight: 700;">Welcome to Inbox.GOP</h1>
+          </div>
+          <div style="padding: 28px;">
+            <p style="margin: 0 0 16px 0; font-size: 15px; color: #1a1a1a;">
+              Thanks for signing up. You now have access to our political fundraising email and SMS lookup tool — the largest database of its kind.
+            </p>
+            <p style="margin: 0 0 16px 0; font-size: 15px; color: #1a1a1a;">
+              Use it to look up any email address or phone number and see exactly which campaigns and organizations are messaging them, what they&apos;re saying, and how often they&apos;re sending.
+            </p>
+            <p style="margin: 0 0 24px 0; font-size: 15px; color: #1a1a1a;">
+              If you&apos;d like a walkthrough of the full Inbox.GOP platform — including competitive intelligence, digest emails, and more — just reply to this email and we&apos;ll set up a demo.
+            </p>
+            <div style="text-align: center; margin-bottom: 28px;">
+              <a href="${lookupUrl}" style="display: inline-block; background: #dc2626; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-size: 15px; font-weight: 600;">Start Using the Lookup Tool</a>
+            </div>
+            <hr style="border: none; border-top: 1px solid #f0f0f0; margin: 0 0 20px 0;" />
+            <p style="margin: 0; font-size: 13px; color: #888; text-align: center;">
+              Questions? Just reply to this email — we&apos;re happy to help.<br/>
+              <a href="https://app.rip-tool.com" style="color: #dc2626; text-decoration: none;">app.rip-tool.com</a>
+            </p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `
+
+  const text = `
+Welcome to Inbox.GOP
+
+Thanks for signing up. You now have access to our political fundraising email and SMS lookup tool — the largest database of its kind.
+
+Use it to look up any email address or phone number and see exactly which campaigns and organizations are messaging them, what they're saying, and how often they're sending.
+
+If you'd like a walkthrough of the full Inbox.GOP platform — including competitive intelligence, digest emails, and more — just reply to this email and we'll set up a demo.
+
+Start using the lookup tool: ${lookupUrl}
+
+Questions? Just reply to this email — we're happy to help.
+  `.trim()
+
+  return sendMailgunEmailTo(email, "Welcome to Inbox.GOP", html, text, ADMIN_NOTIFICATION_EMAIL)
 }
 
 export async function sendNewSignupNotification(params: {

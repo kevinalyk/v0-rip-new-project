@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import bcryptjs from "bcryptjs"
 import prisma from "@/lib/prisma"
 import { createLookupToken, LOOKUP_COOKIE } from "@/lib/lookup-auth"
-import { sendLookupSignupNotification } from "@/lib/mailgun"
+import { sendLookupSignupNotification, sendLookupWelcomeEmail } from "@/lib/mailgun"
 
 // Simple in-memory rate limiter — resets on cold start
 const attempts = new Map<string, { count: number; reset: number }>()
@@ -85,16 +85,18 @@ export async function POST(request: NextRequest) {
 
     const token = await createLookupToken({ userId: user.id, email: user.email })
 
-    // Send admin notification — awaited so it completes before serverless function exits
+    // Send admin notification and welcome email — awaited so they complete before function exits
     try {
-      const emailSent = await sendLookupSignupNotification({
-        email: user.email,
-        signupAt: new Date(),
-        ipAddress: ip !== "unknown" ? ip : undefined,
-      })
-      console.log("[v0] Lookup signup notification sent:", emailSent)
+      await Promise.all([
+        sendLookupSignupNotification({
+          email: user.email,
+          signupAt: new Date(),
+          ipAddress: ip !== "unknown" ? ip : undefined,
+        }),
+        sendLookupWelcomeEmail({ email: user.email }),
+      ])
     } catch (err) {
-      console.error("[lookup/signup] Admin notification failed:", err)
+      console.error("[lookup/signup] Email send failed:", err)
     }
 
     const response = NextResponse.json(

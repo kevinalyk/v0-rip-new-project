@@ -181,10 +181,11 @@ export async function runTwitterPost(options: { dryRun?: boolean } = {}): Promis
 
   // ── Fetch last posted party for alternation logic ─────────────────────
   const lastParty = await getLastPostedParty()
-  // Prefer the opposite party; fall back to any if no candidates from preferred party
-  const preferredParty = lastParty === "republican" ? "democrat" : lastParty === "democrat" ? "republican" : null
+  // TODO: re-enable Democrat alternation when ready
+  // const preferredParty = lastParty === "republican" ? "democrat" : lastParty === "democrat" ? "republican" : null
+  const preferredParty: string | null = null
 
-  // ── Fetch candidates — WinRed/ActBlue only ───────────────────────────
+  // ── Fetch candidates — WinRed only (ActBlue commented out for now) ───
   const emailCandidates = await prisma.competitiveInsightCampaign.findMany({
     where: {
       twitterPostedAt: null,
@@ -192,7 +193,7 @@ export async function runTwitterPost(options: { dryRun?: boolean } = {}): Promis
       isHidden: false,
       createdAt: { gte: since },
       entityId: { not: null },
-      donationPlatform: { in: ["winred", "actblue"] },
+      donationPlatform: { in: ["winred" /*, "actblue"*/] },
     },
     select: {
       id: true,
@@ -220,7 +221,7 @@ export async function runTwitterPost(options: { dryRun?: boolean } = {}): Promis
       isHidden: false,
       createdAt: { gte: since },
       entityId: { not: null },
-      assignmentMethod: { in: ["auto_winred", "auto_actblue"] },
+      assignmentMethod: { in: ["auto_winred" /*, "auto_actblue"*/] },
     },
     select: {
       id: true,

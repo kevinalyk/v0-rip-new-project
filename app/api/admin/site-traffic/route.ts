@@ -126,61 +126,69 @@ export async function GET(request: Request) {
 
     const recentVisitsRaw = excludeApi
       ? await prisma.$queryRaw<RawVisit[]>`
-          SELECT DISTINCT ON (
-            sv.ip,
-            COALESCE(sv."userId", sv.ip),
-            DATE_TRUNC('hour', sv."createdAt")
-          )
-            sv.id, sv.ip, sv."userAgent", sv.referer, sv.path, sv."statusCode",
-            sv."userEmail", sv."isAuthenticated", sv.country, sv.city, sv."createdAt",
+          SELECT
+            deduped.*,
             COALESCE(cic."shareTokenSource", sq."shareTokenSource") AS "shareTokenSource"
-          FROM "SiteVisit" sv
-          LEFT JOIN "CompetitiveInsightCampaign" cic
-            ON sv.path LIKE '/share/%'
-            AND cic."shareToken" = SUBSTRING(sv.path FROM 8)
-          LEFT JOIN "SmsQueue" sq
-            ON sv.path LIKE '/share/%'
-            AND sq."shareToken" = SUBSTRING(sv.path FROM 8)
-          WHERE sv."createdAt" >= ${startDate}
-            AND (
-              (sv.path NOT LIKE '/api/%' AND sv.path != '/login')
-              OR
-              (
-                sv.path LIKE '/api/%'
-                AND sv.referer IS NOT NULL
-                AND sv.referer NOT LIKE '%/login'
-                AND sv.referer NOT LIKE '%/login?%'
-                AND length(sv.referer) > 10
-              )
+          FROM (
+            SELECT DISTINCT ON (
+              ip,
+              COALESCE("userId", ip),
+              DATE_TRUNC('hour', "createdAt")
             )
-          ORDER BY
-            sv.ip,
-            COALESCE(sv."userId", sv.ip),
-            DATE_TRUNC('hour', sv."createdAt"),
-            sv."createdAt" DESC
+              id, ip, "userAgent", referer, path, "statusCode",
+              "userEmail", "isAuthenticated", country, city, "createdAt"
+            FROM "SiteVisit"
+            WHERE "createdAt" >= ${startDate}
+              AND (
+                (path NOT LIKE '/api/%' AND path != '/login')
+                OR
+                (
+                  path LIKE '/api/%'
+                  AND referer IS NOT NULL
+                  AND referer NOT LIKE '%/login'
+                  AND referer NOT LIKE '%/login?%'
+                  AND length(referer) > 10
+                )
+              )
+            ORDER BY
+              ip,
+              COALESCE("userId", ip),
+              DATE_TRUNC('hour', "createdAt"),
+              "createdAt" DESC
+          ) deduped
+          LEFT JOIN "CompetitiveInsightCampaign" cic
+            ON deduped.path LIKE '/share/%'
+            AND cic."shareToken" = SUBSTRING(deduped.path FROM 8)
+          LEFT JOIN "SmsQueue" sq
+            ON deduped.path LIKE '/share/%'
+            AND sq."shareToken" = SUBSTRING(deduped.path FROM 8)
         `
       : await prisma.$queryRaw<RawVisit[]>`
-          SELECT DISTINCT ON (
-            sv.ip,
-            COALESCE(sv."userId", sv.ip),
-            DATE_TRUNC('hour', sv."createdAt")
-          )
-            sv.id, sv.ip, sv."userAgent", sv.referer, sv.path, sv."statusCode",
-            sv."userEmail", sv."isAuthenticated", sv.country, sv.city, sv."createdAt",
+          SELECT
+            deduped.*,
             COALESCE(cic."shareTokenSource", sq."shareTokenSource") AS "shareTokenSource"
-          FROM "SiteVisit" sv
+          FROM (
+            SELECT DISTINCT ON (
+              ip,
+              COALESCE("userId", ip),
+              DATE_TRUNC('hour', "createdAt")
+            )
+              id, ip, "userAgent", referer, path, "statusCode",
+              "userEmail", "isAuthenticated", country, city, "createdAt"
+            FROM "SiteVisit"
+            WHERE "createdAt" >= ${startDate}
+            ORDER BY
+              ip,
+              COALESCE("userId", ip),
+              DATE_TRUNC('hour', "createdAt"),
+              "createdAt" DESC
+          ) deduped
           LEFT JOIN "CompetitiveInsightCampaign" cic
-            ON sv.path LIKE '/share/%'
-            AND cic."shareToken" = SUBSTRING(sv.path FROM 8)
+            ON deduped.path LIKE '/share/%'
+            AND cic."shareToken" = SUBSTRING(deduped.path FROM 8)
           LEFT JOIN "SmsQueue" sq
-            ON sv.path LIKE '/share/%'
-            AND sq."shareToken" = SUBSTRING(sv.path FROM 8)
-          WHERE sv."createdAt" >= ${startDate}
-          ORDER BY
-            sv.ip,
-            COALESCE(sv."userId", sv.ip),
-            DATE_TRUNC('hour', sv."createdAt"),
-            sv."createdAt" DESC
+            ON deduped.path LIKE '/share/%'
+            AND sq."shareToken" = SUBSTRING(deduped.path FROM 8)
         `
 
     // Sort by most recent and limit to 50

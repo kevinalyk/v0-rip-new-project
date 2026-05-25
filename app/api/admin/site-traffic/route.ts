@@ -202,6 +202,12 @@ export async function GET(request: Request) {
         : null,
     }))
 
+    console.log("[v0] shareTokens extracted:", shareTokens)
+    console.log("[v0] emailSources found:", emailSources.length, emailSources)
+    console.log("[v0] smsSources found:", smsSources.length, smsSources)
+    console.log("[v0] sourceMap:", Object.fromEntries(sourceMap))
+    console.log("[v0] sample recentVisits with share:", recentVisits.filter(v => v.path.startsWith("/share/")).slice(0, 3))
+
     return NextResponse.json({
       summary: {
         totalVisits,

@@ -510,7 +510,14 @@ export function SiteTrafficContent() {
                             )}
                           </TableCell>
                           <TableCell className="font-mono text-sm text-blue-600">
-                            {visit.path.slice(7)}
+                            {(() => {
+                              try {
+                                const u = new URL(visit.path)
+                                return u.pathname.includes("/share/") ? u.pathname.split("/share/")[1] : u.pathname
+                              } catch {
+                                return visit.path.includes("/share/") ? visit.path.split("/share/")[1].split("?")[0] : visit.path
+                              }
+                            })()}
                           </TableCell>
                           <TableCell>
                             {visit.shareTokenSource ? (

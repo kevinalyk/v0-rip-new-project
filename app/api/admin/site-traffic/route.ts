@@ -168,33 +168,21 @@ export async function GET(request: Request) {
       shareTokenSource: string | null
     }
 
-    // DEBUG: check what's actually in SiteVisit (no date filter)
-    const debugInfo = await prisma.$queryRaw<{ path: string; createdAt: Date }[]>`
-      SELECT path, "createdAt" FROM "SiteVisit"
-      ORDER BY "createdAt" DESC
-      LIMIT 20
-    `
-    console.log("[v0] startDate:", startDate.toISOString())
-    console.log("[v0] latest rows:", JSON.stringify(debugInfo.map(r => ({ path: r.path, createdAt: r.createdAt }))))
-
     const shareVisitsRaw = await prisma.$queryRaw<(ShareVisit & { extractedToken: string | null })[]>`
-      SELECT id, ip, "userAgent", path, "statusCode",
+      SELECT id, ip, "userAgent", referer AS path, "statusCode",
         "userEmail", country, city, "createdAt", NULL::text AS "shareTokenSource",
-        CASE
-          WHEN path LIKE '/share/%'
-            THEN SPLIT_PART(SPLIT_PART(path, '/share/', 2), '?', 1)
-          WHEN path LIKE '%/share/%'
-            THEN SPLIT_PART(SPLIT_PART(path, '/share/', 2), '?', 1)
-          WHEN path LIKE '%redirect=/share/%'
-            THEN SPLIT_PART(SPLIT_PART(path, '/share/', 2), '&', 1)
-          ELSE NULL
-        END AS "extractedToken"
+        SPLIT_PART(SPLIT_PART(
+          CASE
+            WHEN referer LIKE '%/share/%' THEN SPLIT_PART(referer, '/share/', 2)
+            WHEN referer LIKE '%redirect=/share/%' THEN SPLIT_PART(referer, '/share/', 2)
+            ELSE ''
+          END,
+        '?', 1), '&', 1) AS "extractedToken"
       FROM "SiteVisit"
       WHERE "createdAt" >= ${startDate}
         AND (
-          path LIKE '/share/%'
-          OR path LIKE '%/share/%'
-          OR path LIKE '%redirect=/share/%'
+          referer LIKE '%/share/%'
+          OR referer LIKE '%redirect=/share/%'
         )
       ORDER BY "createdAt" DESC
       LIMIT 200

@@ -52,6 +52,17 @@ export async function GET(request: Request) {
     const country = request.headers.get("x-vercel-ip-country") || null
     const city = request.headers.get("x-vercel-ip-city") || null
 
+    // Extract the actual page path from the referer header
+    let pagePath = "/api/auth/me"
+    if (referer) {
+      try {
+        const refererUrl = new URL(referer)
+        pagePath = refererUrl.pathname + (refererUrl.search || "")
+      } catch {
+        // keep default
+      }
+    }
+
     const currentUser = (await getCurrentUser()) as any
 
     if (!currentUser || !currentUser.userId) {
@@ -62,7 +73,7 @@ export async function GET(request: Request) {
         ip,
         userAgent,
         referer,
-        path: "/api/auth/me",
+        path: pagePath,
         statusCode: 401,
         isAuthenticated: false,
         country,
@@ -103,7 +114,7 @@ export async function GET(request: Request) {
       ip,
       userAgent,
       referer,
-      path: "/api/auth/me",
+      path: pagePath,
       statusCode: 200,
       userId: user.id,
       userEmail: user.email,

@@ -168,15 +168,6 @@ export async function GET(request: Request) {
       shareTokenSource: string | null
     }
 
-    // DEBUG: check what's actually in SiteVisit (no date filter)
-    const debugInfo = await prisma.$queryRaw<{ path: string; createdAt: Date }[]>`
-      SELECT path, "createdAt" FROM "SiteVisit"
-      ORDER BY "createdAt" DESC
-      LIMIT 20
-    `
-    console.log("[v0] startDate:", startDate.toISOString())
-    console.log("[v0] latest rows:", JSON.stringify(debugInfo.map(r => ({ path: r.path, createdAt: r.createdAt }))))
-
     const shareVisitsRaw = await prisma.$queryRaw<(ShareVisit & { extractedToken: string | null })[]>`
       SELECT id, ip, "userAgent", path, "statusCode",
         "userEmail", country, city, "createdAt", NULL::text AS "shareTokenSource",

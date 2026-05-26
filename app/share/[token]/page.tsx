@@ -145,6 +145,7 @@ export default async function SharePage({ params }: { params: { token: string } 
   // Twitter-posted shares bypass the login wall — check shareTokenSource
   const shareTokenSource = await getShareTokenSource(params.token)
   const isTwitterShare = shareTokenSource === "Twitter"
+  console.log("[v0] share token:", params.token, "| shareTokenSource:", shareTokenSource, "| isTwitterShare:", isTwitterShare)
 
   // If not authenticated, still render the page shell so generateMetadata
   // (and therefore OG tags) are always present for social crawlers.

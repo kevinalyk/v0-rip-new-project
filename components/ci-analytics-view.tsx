@@ -14,6 +14,7 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import { PaywallOverlay } from "@/components/paywall-overlay"
+import { CiSubjectPatternsView } from "@/components/ci-subject-patterns-view"
 
 interface DateRange {
   from?: Date
@@ -443,6 +444,25 @@ export function CiAnalyticsView({
               </CardContent>
             </Card>
           )}
+        </>
+      )}
+
+      {/* Subject Line Patterns — always visible when not paywalled */}
+      {!shouldShowPreview && (
+        <>
+          <div>
+            <h3 className="text-base font-semibold mb-1">Subject Line Patterns</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Structural patterns detected across subject lines, with inbox rate correlation.
+            </p>
+          </div>
+          <CiSubjectPatternsView
+            clientSlug={clientSlug}
+            selectedSender={selectedSender}
+            selectedPartyFilter={selectedPartyFilter}
+            selectedStateFilter={selectedStateFilter}
+            dateRange={dateRange}
+          />
         </>
       )}
     </div>

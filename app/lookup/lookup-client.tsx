@@ -442,7 +442,7 @@ function EntityCard({ entity }: { entity: Entity }) {
   )
 }
 
-// ─── Results section ──���────────────────────────────────���────────────────────────
+// ─── Results section ──���────────────────────────────────����────────────────────────
 
 function SearchResults({
   query,
@@ -467,11 +467,14 @@ function SearchResults({
       </div>
       {results.length === 0 ? (
         <div className="bg-white border border-gray-200 rounded-xl p-5 sm:p-8 text-center">
-          <Search className="w-7 h-7 text-gray-400 mx-auto mb-2" />
-          <p className="text-gray-900 font-medium mb-1">No results found</p>
-          <p className="text-gray-600 text-sm leading-relaxed text-left sm:text-center">
-            We don&apos;t have any campaigns or political groups matching that{" "}
-            {queryType === "phone" ? "phone number" : "email address"} in our database yet.
+          <Search className="w-7 h-7 text-gray-400 mx-auto mb-3" />
+          <p className="text-gray-900 font-medium mb-2">No match found</p>
+          <p className="text-gray-600 text-sm leading-relaxed text-left sm:text-center max-w-sm mx-auto">
+            We don&apos;t have a record for this {queryType === "phone" ? "number" : "address"} yet.
+            Our database grows continuously as new political{" "}
+            {queryType === "phone" ? "texts" : "emails"} come in — if this{" "}
+            {queryType === "phone" ? "number" : "address"} belongs to a campaign or PAC,
+            it will likely show up over time.
           </p>
         </div>
       ) : (

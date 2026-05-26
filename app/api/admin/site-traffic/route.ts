@@ -168,6 +168,15 @@ export async function GET(request: Request) {
       shareTokenSource: string | null
     }
 
+    // DEBUG: sample paths to understand what's actually stored
+    const samplePaths = await prisma.$queryRaw<{ path: string }[]>`
+      SELECT DISTINCT path FROM "SiteVisit"
+      WHERE "createdAt" >= ${startDate}
+      ORDER BY path
+      LIMIT 100
+    `
+    console.log("[v0] sample paths:", JSON.stringify(samplePaths.map(p => p.path)))
+
     const shareVisitsRaw = await prisma.$queryRaw<(ShareVisit & { extractedToken: string | null })[]>`
       SELECT id, ip, "userAgent", path, "statusCode",
         "userEmail", country, city, "createdAt", NULL::text AS "shareTokenSource",

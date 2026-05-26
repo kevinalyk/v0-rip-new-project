@@ -121,22 +121,44 @@ export async function generateMetadata({ params }: { params: { token: string } }
   }
 }
 
+async function getShareTokenSource(token: string): Promise<string | null> {
+  try {
+    const campaign = await prisma.competitiveInsightCampaign.findUnique({
+      where: { shareToken: token },
+      select: { shareTokenSource: true },
+    })
+    if (campaign) return campaign.shareTokenSource
+
+    const sms = await prisma.smsQueue.findUnique({
+      where: { shareToken: token },
+      select: { shareTokenSource: true },
+    })
+    return sms?.shareTokenSource ?? null
+  } catch {
+    return null
+  }
+}
+
 export default async function SharePage({ params }: { params: { token: string } }) {
   const user = await getSession()
 
+  // Twitter-posted shares bypass the login wall — check shareTokenSource
+  const shareTokenSource = await getShareTokenSource(params.token)
+  const isTwitterShare = shareTokenSource === "Twitter"
+
   // If not authenticated, still render the page shell so generateMetadata
   // (and therefore OG tags) are always present for social crawlers.
-  // SharePageClient handles the login-wall UI when isAuthenticated=false.
+  // SharePageClient handles the login-wall UI when !isAuthenticated && !isTwitterShare.
   const [showAd] = await Promise.all([
     shouldShowAd(),
-    // Only increment view count for real users, not crawlers
-    user ? incrementViewCount(params.token) : Promise.resolve(),
+    // Increment view count for real users; for Twitter shares also count anonymous views
+    (user || isTwitterShare) ? incrementViewCount(params.token) : Promise.resolve(),
   ])
 
   return (
     <>
       <AdBanner showAd={showAd} />
-      <SharePageClient isAuthenticated={!!user} token={params.token} />
+      <SharePageClient isAuthenticated={!!user} isTwitterShare={isTwitterShare} token={params.token} />
     </>
   )
 }

@@ -294,10 +294,19 @@ export default function SharePageClient({ isAuthenticated, isTwitterShare, token
                 </div>
               )}
             </div>
-            {isAuthenticated && (
+            {isAuthenticated ? (
               <Button variant="ghost" size="icon" onClick={handleClose} aria-label="Go to dashboard">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
+            ) : (
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Button size="sm" variant="outline" onClick={() => router.push(`/login?redirect=/share/${token}`)}>
+                  Sign in
+                </Button>
+                <Button size="sm" asChild>
+                  <a href="https://app.rip-tool.com/signup">Get Access</a>
+                </Button>
+              </div>
             )}
           </div>
 
@@ -391,26 +400,9 @@ export default function SharePageClient({ isAuthenticated, isTwitterShare, token
           </Tabs>
 
           <div className="mt-4 pt-4 border-t">
-            {!isAuthenticated ? (
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium">Inbox.GOP</p>
-                  <p className="text-xs text-muted-foreground">The largest database of Republican political fundraising emails and SMS</p>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <Button size="sm" variant="outline" onClick={() => router.push(`/login?redirect=/share/${token}`)}>
-                    Sign in
-                  </Button>
-                  <Button size="sm" asChild>
-                    <a href="https://app.rip-tool.com/signup">Get Access</a>
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground text-center">
-                Shared via <span className="font-medium">Inbox.GOP</span> • Competitive Intelligence Platform
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground text-center">
+              Shared via <span className="font-medium">Inbox.GOP</span> • Competitive Intelligence Platform
+            </p>
           </div>
       </div>
     </div>

@@ -121,31 +121,29 @@ export async function generateMetadata({ params }: { params: { token: string } }
   }
 }
 
-async function getShareTokenSource(token: string): Promise<string | null> {
+async function wasPostedToTwitter(token: string): Promise<boolean> {
   try {
     const campaign = await prisma.competitiveInsightCampaign.findUnique({
       where: { shareToken: token },
-      select: { shareTokenSource: true },
+      select: { twitterPostedAt: true },
     })
-    if (campaign) return campaign.shareTokenSource
+    if (campaign) return campaign.twitterPostedAt !== null
 
     const sms = await prisma.smsQueue.findUnique({
       where: { shareToken: token },
-      select: { shareTokenSource: true },
+      select: { twitterPostedAt: true },
     })
-    return sms?.shareTokenSource ?? null
+    return (sms?.twitterPostedAt ?? null) !== null
   } catch {
-    return null
+    return false
   }
 }
 
 export default async function SharePage({ params }: { params: { token: string } }) {
   const user = await getSession()
 
-  // Twitter-posted shares bypass the login wall — check shareTokenSource
-  const shareTokenSource = await getShareTokenSource(params.token)
-  const isTwitterShare = shareTokenSource === "Twitter"
-  console.log("[v0] share token:", params.token, "| shareTokenSource:", shareTokenSource, "| isTwitterShare:", isTwitterShare)
+  // Twitter-posted shares bypass the login wall — check twitterPostedAt
+  const isTwitterShare = await wasPostedToTwitter(params.token)
 
   // If not authenticated, still render the page shell so generateMetadata
   // (and therefore OG tags) are always present for social crawlers.

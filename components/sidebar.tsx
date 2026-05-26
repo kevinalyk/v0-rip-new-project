@@ -44,6 +44,7 @@ import {
   Newspaper,
   ScrollText,
   TrendingUp,
+  Type,
 } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { useTheme } from "next-themes"
@@ -476,6 +477,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                       onClick={() => navigate(`/${getClientSlug()}/reports/content`)}
                     />
                   )}
+                  <NavItem
+                    icon={<Type size={18} />}
+                    label="Subject Patterns"
+                    active={pathname.includes("/reports/subject-patterns")}
+                    collapsed={false}
+                    onClick={() => navigate(`/${getClientSlug()}/reports/subject-patterns`)}
+                  />
                   <NavItem
                     icon={<ShieldCheck size={18} />}
                     label="Deliverability"

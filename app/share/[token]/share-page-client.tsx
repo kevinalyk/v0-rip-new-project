@@ -32,22 +32,23 @@ interface Campaign {
 
 interface SharePageClientProps {
   isAuthenticated: boolean
+  isTwitterShare: boolean
   token: string
 }
 
-export default function SharePageClient({ isAuthenticated, token }: SharePageClientProps) {
+export default function SharePageClient({ isAuthenticated, isTwitterShare, token }: SharePageClientProps) {
   const router = useRouter()
   const [campaign, setCampaign] = useState<Campaign | null>(null)
-  const [loading, setLoading] = useState(isAuthenticated)
+  const [loading, setLoading] = useState(isAuthenticated || isTwitterShare)
   const [error, setError] = useState<string | null>(null)
   const [emailZoom, setEmailZoom] = useState(100)
   const [iframeContentHeight, setIframeContentHeight] = useState<number>(800)
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated || isTwitterShare) {
       fetchSharedCampaign()
     }
-  }, [token, isAuthenticated])
+  }, [token, isAuthenticated, isTwitterShare])
 
   // Auto-fit zoom on mobile when an email campaign loads
   useEffect(() => {
@@ -168,8 +169,8 @@ export default function SharePageClient({ isAuthenticated, token }: SharePageCli
     return text
   }
 
-  // Show login wall for unauthenticated users — OG tags still rendered server-side
-  if (!isAuthenticated) {
+  // Show login wall for unauthenticated users — except Twitter-posted shares which are public
+  if (!isAuthenticated && !isTwitterShare) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="max-w-md w-full text-center space-y-4">
@@ -279,7 +280,7 @@ export default function SharePageClient({ isAuthenticated, token }: SharePageCli
                     </div>
                   </div>
               </div>
-              {campaign.type === "email" && (
+              {campaign.type === "email" && isAuthenticated && (
                 <div className="flex flex-wrap items-center gap-2">
                   <Button variant="outline" size="sm" onClick={handleZoomOut} disabled={emailZoom <= 50}>
                     <ZoomOut className="h-4 w-4" />
@@ -293,15 +294,19 @@ export default function SharePageClient({ isAuthenticated, token }: SharePageCli
                 </div>
               )}
             </div>
-            <Button variant="ghost" size="icon" onClick={handleClose} aria-label="Go to dashboard">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
+            {isAuthenticated && (
+              <Button variant="ghost" size="icon" onClick={handleClose} aria-label="Go to dashboard">
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            )}
           </div>
 
           <Tabs defaultValue="preview" className="mt-4">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className={`grid w-full ${isAuthenticated ? "grid-cols-2" : "grid-cols-1"}`}>
               <TabsTrigger value="preview">{campaign.type === "sms" ? "Message" : "Email Preview"}</TabsTrigger>
-              <TabsTrigger value="links">CTA Links ({campaign.ctaLinks.length})</TabsTrigger>
+              {isAuthenticated && (
+                <TabsTrigger value="links">CTA Links ({campaign.ctaLinks.length})</TabsTrigger>
+              )}
             </TabsList>
 
             <TabsContent value="preview" className="mt-4">
@@ -385,10 +390,27 @@ export default function SharePageClient({ isAuthenticated, token }: SharePageCli
             </TabsContent>
           </Tabs>
 
-          <div className="mt-4 pt-4 border-t text-center">
-            <p className="text-xs text-muted-foreground">
-              Shared via <span className="font-medium">Inbox.GOP</span> • Competitive Intelligence Platform
-            </p>
+          <div className="mt-4 pt-4 border-t">
+            {!isAuthenticated ? (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium">Inbox.GOP</p>
+                  <p className="text-xs text-muted-foreground">The largest database of Republican political fundraising emails and SMS</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Button size="sm" variant="outline" onClick={() => router.push(`/login?redirect=/share/${token}`)}>
+                    Sign in
+                  </Button>
+                  <Button size="sm" asChild>
+                    <a href="https://app.rip-tool.com/signup">Get Access</a>
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground text-center">
+                Shared via <span className="font-medium">Inbox.GOP</span> • Competitive Intelligence Platform
+              </p>
+            )}
           </div>
       </div>
     </div>

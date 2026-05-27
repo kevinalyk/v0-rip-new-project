@@ -11,6 +11,10 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from "recharts"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
+import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Badge } from "@/components/ui/badge"
+import { Star, ChevronRight } from "lucide-react"
 import { format } from "date-fns"
 
 interface DateRange {
@@ -66,17 +70,37 @@ export default function SubjectPatternsPage() {
 
   // Filters
   const [selectedParty, setSelectedParty] = useState("all")
-  const [selectedEntity, setSelectedEntity] = useState("all")
+  const [selectedSenders, setSelectedSenders] = useState<string[]>([])
+  const [senderSearch, setSenderSearch] = useState("")
   const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined })
   const [isFromCalendarOpen, setIsFromCalendarOpen] = useState(false)
   const [isToCalendarOpen, setIsToCalendarOpen] = useState(false)
   const [entityList, setEntityList] = useState<string[]>([])
+  const [subscribedEntityIds, setSubscribedEntityIds] = useState<string[]>([])
+  const [allEntities, setAllEntities] = useState<{ id: string; name: string }[]>([])
+  const [entityFilterOpen, setEntityFilterOpen] = useState(false)
 
-  const isFiltersActive = selectedParty !== "all" || selectedEntity !== "all" || !!dateRange.from || !!dateRange.to
+  const isEntityFollowed = (name: string) => {
+    const entity = allEntities.find((e) => e.name === name)
+    return entity ? subscribedEntityIds.includes(entity.id) : false
+  }
+
+  const filteredSenders = entityList
+    .filter((s) => s.toLowerCase().includes(senderSearch.toLowerCase()))
+    .sort((a, b) => {
+      const aFollowed = isEntityFollowed(a)
+      const bFollowed = isEntityFollowed(b)
+      if (aFollowed && !bFollowed) return -1
+      if (!aFollowed && bFollowed) return 1
+      return a.localeCompare(b)
+    })
+
+  const isFiltersActive = selectedParty !== "all" || selectedSenders.length > 0 || !!dateRange.from || !!dateRange.to
 
   const resetFilters = () => {
     setSelectedParty("all")
-    setSelectedEntity("all")
+    setSelectedSenders([])
+    setSenderSearch("")
     setDateRange({ from: undefined, to: undefined })
   }
 
@@ -100,20 +124,22 @@ export default function SubjectPatternsPage() {
   useEffect(() => {
     const fetchEntities = async () => {
       try {
-        const res = await fetch(`/api/ci/campaigns?clientSlug=${clientSlug}&limit=500`, { credentials: "include" })
-        if (res.ok) {
-          const data = await res.json()
-          const names: string[] = Array.from(
-            new Set(
-              (data.campaigns ?? data.data ?? [])
-                .map((c: any) => c.entityName ?? c.entity?.name)
-                .filter(Boolean)
-            )
-          ).sort() as string[]
-          setEntityList(names)
+        const [sendersRes, subsRes] = await Promise.all([
+          fetch(`/api/competitive-insights/senders`, { credentials: "include" }),
+          fetch(`/api/ci/subscriptions/check-all?clientSlug=${clientSlug}`, { credentials: "include" }),
+        ])
+        if (sendersRes.ok) {
+          const data = await sendersRes.json()
+          const entities: { id: string; name: string }[] = data.entities ?? []
+          setAllEntities(entities)
+          setEntityList(entities.map((e) => e.name))
+        }
+        if (subsRes.ok) {
+          const subsData = await subsRes.json()
+          setSubscribedEntityIds(subsData.entityIds ?? [])
         }
       } catch {
-        // silently fail — entity dropdown just stays empty
+        // silently fail
       }
     }
     fetchEntities()
@@ -212,17 +238,58 @@ export default function SubjectPatternsPage() {
             </Select>
 
             {/* Entity filter */}
-            <Select value={selectedEntity} onValueChange={setSelectedEntity}>
-              <SelectTrigger className="w-full md:w-[220px]">
-                <SelectValue placeholder="All Entities" />
-              </SelectTrigger>
-              <SelectContent className="max-h-[300px]">
-                <SelectItem value="all">All Entities</SelectItem>
-                {entityList.map((name) => (
-                  <SelectItem key={name} value={name}>{name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={entityFilterOpen} onOpenChange={setEntityFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-full md:w-[200px] justify-between">
+                  {selectedSenders.length === 0 ? "Filter by entity" : `${selectedSenders.length} selected`}
+                  <ChevronRight className="ml-2 h-4 w-4 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0" align="start">
+                <div className="sticky top-0 z-50 bg-background p-2 border-b">
+                  <Input
+                    placeholder="Search entities..."
+                    value={senderSearch}
+                    onChange={(e) => setSenderSearch(e.target.value)}
+                    className="h-8"
+                  />
+                </div>
+                <div className="max-h-[240px] overflow-y-auto p-2">
+                  {selectedSenders.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full mb-2 text-xs"
+                      onClick={() => setSelectedSenders([])}
+                    >
+                      Clear all ({selectedSenders.length})
+                    </Button>
+                  )}
+                  {filteredSenders.filter((s) => s.trim() !== "").map((sender) => (
+                    <div
+                      key={sender}
+                      className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer"
+                      onClick={() =>
+                        setSelectedSenders((prev) =>
+                          prev.includes(sender) ? prev.filter((s) => s !== sender) : [...prev, sender]
+                        )
+                      }
+                    >
+                      <Checkbox checked={selectedSenders.includes(sender)} onCheckedChange={() => {}} />
+                      <span className="flex-1 truncate text-sm">{sender}</span>
+                      {isEntityFollowed(sender) && (
+                        <Badge variant="outline" className="text-xs bg-amber-100 dark:bg-amber-900 border-amber-300 dark:border-amber-700">
+                          <Star className="h-3 w-3" />
+                        </Badge>
+                      )}
+                    </div>
+                  ))}
+                  {filteredSenders.length === 0 && (
+                    <div className="p-4 text-center text-sm text-muted-foreground">No entities found</div>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
 
             {/* Date range */}
             <div className="flex items-center gap-2">
@@ -283,7 +350,7 @@ export default function SubjectPatternsPage() {
 
         <CiSubjectPatternsView
           clientSlug={clientSlug}
-          selectedSender={selectedEntity !== "all" ? [selectedEntity] : []}
+          selectedSender={selectedSenders}
           selectedPartyFilter={selectedParty}
           selectedStateFilter="all"
           dateRange={dateRange}

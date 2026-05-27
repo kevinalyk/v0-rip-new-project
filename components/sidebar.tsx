@@ -484,13 +484,15 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                       onClick={() => navigate(`/${getClientSlug()}/reports/subject-patterns`)}
                     />
                   )}
-                  <NavItem
-                    icon={<ShieldCheck size={18} />}
-                    label="Deliverability"
-                    active={pathname.includes("/reports/compliance")}
-                    collapsed={false}
-                    onClick={() => navigate(`/${getClientSlug()}/reports/compliance`)}
-                  />
+                  {userRole === "super_admin" && (
+                    <NavItem
+                      icon={<ShieldCheck size={18} />}
+                      label="Deliverability"
+                      active={pathname.includes("/reports/compliance")}
+                      collapsed={false}
+                      onClick={() => navigate(`/${getClientSlug()}/reports/compliance`)}
+                    />
+                  )}
                 </div>
               )}
             </>

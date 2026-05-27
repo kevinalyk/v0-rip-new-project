@@ -126,8 +126,9 @@ export default function ReportsReportingPage() {
   }
 
   const isFree = subscriptionPlan === "free"
+  const isBasic = subscriptionPlan === "paid"
 
-  if (isFree) {
+  if (isFree || isBasic) {
     return (
       <AppLayout clientSlug={clientSlug} isAdminView={clientSlug === "admin"}>
         <AdBanner showAd={true} />

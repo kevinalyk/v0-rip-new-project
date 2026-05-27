@@ -281,15 +281,17 @@ export async function runTwitterPost(options: { dryRun?: boolean } = {}): Promis
   const winner = preferredCandidates.length > 0 ? preferredCandidates[0] : allCandidates[0]
   const selectedParty = winner.entity?.party ?? null
 
-  // ── Ensure share token ────────────────────────────────────────────────
+  // ── Ensure share token — always stamp Twitter as the source ──────────
   let shareToken = winner.shareToken
   if (!shareToken) {
     shareToken = nanoid(16)
-    if (winner.isSms) {
-      await prisma.smsQueue.update({ where: { id: winner.id }, data: { shareToken, shareTokenCreatedAt: new Date(), shareTokenSource: "Twitter" } })
-    } else {
-      await prisma.competitiveInsightCampaign.update({ where: { id: winner.id }, data: { shareToken, shareTokenCreatedAt: new Date(), shareTokenSource: "Twitter" } })
-    }
+  }
+  // Always update so that Twitter is recorded as the source, even if another
+  // source (e.g. Weekly Digest) already set a token on this campaign.
+  if (winner.isSms) {
+    await prisma.smsQueue.update({ where: { id: winner.id }, data: { shareToken, shareTokenCreatedAt: new Date(), shareTokenSource: "Twitter" } })
+  } else {
+    await prisma.competitiveInsightCampaign.update({ where: { id: winner.id }, data: { shareToken, shareTokenCreatedAt: new Date(), shareTokenSource: "Twitter" } })
   }
 
   const shareUrl = `${baseUrl}/share/${shareToken}`

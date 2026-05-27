@@ -82,9 +82,9 @@ export default function SubjectPatternsPage() {
     )
   }
 
-  const hasAccess = subscriptionPlan === "pro" || subscriptionPlan === "enterprise"
+  const isFree = subscriptionPlan === "free"
 
-  if (!hasAccess) {
+  if (isFree) {
     return (
       <AppLayout clientSlug={clientSlug} isAdminView={clientSlug === "admin"}>
         <AdBanner showAd={true} />
@@ -101,9 +101,9 @@ export default function SubjectPatternsPage() {
                 <Lock className="h-7 w-7 text-[#dc2a28]" />
               </div>
               <div className="space-y-2">
-                <h2 className="text-2xl font-bold">Subject Line Analysis is a Professional Feature</h2>
+                <h2 className="text-2xl font-bold">Subject Line Analysis is a Paid Feature</h2>
                 <p className="text-muted-foreground text-sm">
-                  Upgrade to Professional or Enterprise to see which subject line patterns your competitors use most — and which ones actually land in the inbox.
+                  Upgrade to see which subject line patterns your competitors use most — and which ones actually land in the inbox.
                 </p>
               </div>
               <ul className="text-sm text-left space-y-2">

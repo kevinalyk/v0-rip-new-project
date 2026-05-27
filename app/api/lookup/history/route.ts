@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     const rows = await sql`
       SELECT id, query, "queryType", results, "createdAt"
       FROM "LookupSearch"
-      WHERE "userId" = ${session.userId}
+      WHERE "lookupUserId" = ${session.userId}
       ORDER BY "createdAt" DESC
       LIMIT 50
     `
@@ -45,13 +45,13 @@ export async function DELETE(request: NextRequest) {
       // Delete a single search — must belong to this user
       await sql`
         DELETE FROM "LookupSearch"
-        WHERE id = ${id} AND "userId" = ${session.userId}
+        WHERE id = ${id} AND "lookupUserId" = ${session.userId}
       `
     } else {
       // Clear all searches for this user
       await sql`
         DELETE FROM "LookupSearch"
-        WHERE "userId" = ${session.userId}
+        WHERE "lookupUserId" = ${session.userId}
       `
     }
 

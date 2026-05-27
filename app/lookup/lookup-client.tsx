@@ -442,7 +442,7 @@ function EntityCard({ entity }: { entity: Entity }) {
   )
 }
 
-// ─── Results section ──���────────────────────────────────������────────────────────────
+// ─── Results section ──���────────────────────────────────��������────────────────────────
 
 function SearchResults({
   query,
@@ -506,7 +506,7 @@ function HistoryPanel({
   onDeleteItem: (id: string) => void
   onClearAll: () => void
 }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [page, setPage] = useState(0)
 
@@ -526,43 +526,49 @@ function HistoryPanel({
   }
 
   return (
-    <div className="mt-6 bg-white border border-gray-200 rounded-xl overflow-hidden">
+    <div className="mt-4 bg-white border border-gray-200 rounded-xl overflow-hidden">
       {/* Panel header */}
-      <div className="flex items-center gap-2 px-4 sm:px-5 py-3 sm:py-4 border-b border-gray-200">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1"
-        >
-          <Clock className="w-4 h-4 text-gray-600 flex-shrink-0" />
-          <span className="text-gray-700 text-sm font-medium truncate">
-            Recent searches ({history.length})
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          <span className="text-[14px] font-medium text-[#374151]">
+            Recent searches
           </span>
-          {open ? (
-            <ChevronUp className="w-3.5 h-3.5 text-gray-600 flex-shrink-0" />
-          ) : (
-            <ChevronDown className="w-3.5 h-3.5 text-gray-600 flex-shrink-0" />
+          <span className="text-[13px] text-gray-400">({history.length})</span>
+        </div>
+        <div className="flex items-center gap-3">
+          {open && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onClearAll() }}
+              className="flex items-center gap-1 text-gray-400 hover:text-red-500 text-[13px] transition-colors"
+              aria-label="Clear all searches"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Clear all</span>
+            </button>
           )}
-        </button>
-        {open && (
-          <button
-            type="button"
-            onClick={onClearAll}
-            className="flex items-center gap-1.5 text-gray-400 hover:text-red-400 text-xs transition-colors flex-shrink-0"
-            aria-label="Clear all searches"
+          <svg
+            viewBox="0 0 24 24"
+            className="w-4 h-4 fill-none transition-transform duration-200"
+            style={{ stroke: "#9CA3AF", strokeWidth: 2, transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
+            aria-hidden="true"
           >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Clear all</span>
-          </button>
-        )}
-      </div>
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </div>
+      </button>
 
       {open && (
-        <div className="divide-y divide-[#2a2d3e]">
+        <div className="border-t border-gray-100 divide-y divide-gray-100">
           {pageItems.map((item) => (
             <div key={item.id}>
-              {/* Row header */}
-              <div className="flex items-center hover:bg-gray-100 transition-colors group">
+              {/* Row */}
+              <div className="flex items-center hover:bg-gray-50 transition-colors group">
                 <button
                   type="button"
                   onClick={() => handleRowClick(item)}
@@ -574,29 +580,31 @@ function HistoryPanel({
                     ) : (
                       <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                     )}
-                    <span className="text-gray-700 text-sm truncate group-hover:text-gray-900 transition-colors">
+                    <span className="text-[15px] text-[#111827] truncate">
                       {item.query}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 ml-2">
-                    <span className="text-gray-400 text-xs">
+                    <span className="text-[13px] text-gray-400">
                       {item.results.length} result{item.results.length !== 1 ? "s" : ""}
                     </span>
-                    <span className="hidden sm:inline text-gray-400 text-xs">
+                    <span className="hidden sm:inline text-[13px] text-gray-400">
                       {new Date(item.createdAt).toLocaleDateString()}
                     </span>
-                    {expandedId === item.id ? (
-                      <ChevronUp className="w-3.5 h-3.5 text-gray-600" />
-                    ) : (
-                      <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-                    )}
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="w-3.5 h-3.5 fill-none transition-transform duration-200"
+                      style={{ stroke: "#9CA3AF", strokeWidth: 2, transform: expandedId === item.id ? "rotate(180deg)" : "rotate(0deg)" }}
+                      aria-hidden="true"
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
                   </div>
                 </button>
-                {/* Per-row delete */}
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onDeleteItem(item.id) }}
-                  className="px-4 py-3 text-gray-400 hover:text-red-400 transition-colors flex-shrink-0"
+                  className="px-4 py-3 text-gray-300 hover:text-red-400 transition-colors flex-shrink-0"
                   aria-label={`Delete search for ${item.query}`}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -605,14 +613,14 @@ function HistoryPanel({
 
               {/* Expanded results */}
               {expandedId === item.id && (
-                <div className="px-5 pb-4 bg-[#13151f]">
+                <div className="px-5 pb-4 bg-gray-50 border-t border-gray-100">
                   {item.results.length === 0 ? (
-                    <p className="text-gray-400 text-xs py-3">
+                    <p className="text-gray-400 text-[13px] py-3">
                       No results were found for this search.
                     </p>
                   ) : (
                     <div className="pt-3 space-y-2">
-                      {item.results.map((entity) => (
+                      {item.results.map((entity: Entity) => (
                         <div
                           key={entity.id}
                           className="flex items-center gap-3 bg-white border border-gray-200 rounded-lg px-4 py-3"
@@ -1081,8 +1089,8 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
             <SearchResults query={lastQuery} queryType={lastQueryType} results={results} />
           )}
 
-          {/* History (logged-in users only) */}
-          {currentUser && historyLoaded && (
+          {/* History — collapsed by default, shown below current results */}
+          {currentUser && historyLoaded && history.length > 0 && (
             <HistoryPanel
               history={history}
               onViewItem={() => { setShowAdModal(true) }}

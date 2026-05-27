@@ -1,11 +1,11 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { useEffect, useState, useRef } from "react"
 import { AppLayout } from "@/components/app-layout"
-import { ComplianceReportContent } from "@/components/compliance-report-content"
-import { Lock, ShieldCheck, TrendingUp } from "lucide-react"
+import { AdminComplianceSummary } from "@/components/admin-compliance-summary"
 import { Button } from "@/components/ui/button"
+import { Loader2, Lock, ShieldCheck, TrendingUp } from "lucide-react"
 
 export default function ComplianceReportPage() {
   const params = useParams()
@@ -13,17 +13,25 @@ export default function ComplianceReportPage() {
   const clientSlug = params.clientSlug as string
 
   const [subscriptionPlan, setSubscriptionPlan] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchPlan = async () => {
+    const fetchData = async () => {
       try {
-        const res = await fetch(`/api/billing?clientSlug=${clientSlug}`, { credentials: "include" })
-        if (res.ok) {
-          const data = await res.json()
+        const [billingRes, meRes] = await Promise.all([
+          fetch(`/api/billing?clientSlug=${clientSlug}`, { credentials: "include" }),
+          fetch("/api/auth/me", { credentials: "include" }),
+        ])
+        if (billingRes.ok) {
+          const data = await billingRes.json()
           setSubscriptionPlan(data.client?.subscriptionPlan ?? "free")
         } else {
           setSubscriptionPlan("free")
+        }
+        if (meRes.ok) {
+          const me = await meRes.json()
+          setUserRole(me.user?.role ?? null)
         }
       } catch {
         setSubscriptionPlan("free")
@@ -31,25 +39,23 @@ export default function ComplianceReportPage() {
         setLoading(false)
       }
     }
-    fetchPlan()
+    fetchData()
   }, [clientSlug])
 
-  const hasProfessionalAccess =
-    subscriptionPlan === "all" ||
-    subscriptionPlan === "enterprise" ||
-    clientSlug === "rip"
+  const isSuperAdmin = userRole === "super_admin"
+  const hasAccess = isSuperAdmin || subscriptionPlan === "pro" || subscriptionPlan === "enterprise"
 
   if (loading) {
     return (
       <AppLayout clientSlug={clientSlug}>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#dc2a28]" />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       </AppLayout>
     )
   }
 
-  if (!hasProfessionalAccess) {
+  if (!hasAccess) {
     return (
       <AppLayout clientSlug={clientSlug}>
         <div className="relative overflow-hidden min-h-screen">
@@ -71,19 +77,19 @@ export default function ComplianceReportPage() {
               </div>
 
               <div className="space-y-2">
-                <h2 className="text-2xl font-bold">Deliverability Score is a Professional Feature</h2>
+                <h2 className="text-2xl font-bold">Deliverability is a Professional Feature</h2>
                 <p className="text-muted-foreground text-sm">
-                  Upgrade to the Professional plan to access email compliance scoring, authentication checks, and inbox placement analysis for any entity.
+                  Upgrade to Professional or Enterprise to access aggregated email compliance scoring and authentication analysis across Republican and Democrat senders.
                 </p>
               </div>
 
               <ul className="text-sm text-left space-y-2">
                 {[
                   "SPF, DKIM, DMARC authentication scores",
-                  "Inbox vs. spam placement rates per entity",
+                  "Inbox vs. spam placement rates by party",
                   "One-click unsubscribe compliance",
                   "Subject line and sender compliance checks",
-                  "How-to-improve recommendations",
+                  "Aggregated Republican vs. Democrat breakdown",
                 ].map((f) => (
                   <li key={f} className="flex items-start gap-2">
                     <ShieldCheck className="h-4 w-4 text-[#dc2a28] shrink-0 mt-0.5" />
@@ -109,8 +115,8 @@ export default function ComplianceReportPage() {
 
   return (
     <AppLayout clientSlug={clientSlug}>
-      <div className="container mx-auto px-4 py-6">
-        <ComplianceReportContent clientSlug={clientSlug} />
+      <div className="container mx-auto py-8 px-4">
+        <AdminComplianceSummary />
       </div>
     </AppLayout>
   )

@@ -442,7 +442,7 @@ function EntityCard({ entity }: { entity: Entity }) {
   )
 }
 
-// ─── Results section ──���────────────────────────────────����────────────────────────
+// ─── Results section ──���────────────────────────────────�����────────────────────────
 
 function SearchResults({
   query,
@@ -702,29 +702,31 @@ const FAQS: { question: string; answer: React.ReactNode }[] = [
   {
     question: "Why do I receive so many fundraising emails and texts?",
     answer:
-      "To win an election a campaign needs to raise money. Texts and emails are an important part of how they raise money from grassroots supporters.",
+      "Political campaigns rely heavily on email and text messaging to reach supporters, raise funds, and get out the vote. These are among the most effective and affordable tools available to campaigns of all sizes.",
   },
   {
     question: "Who sends fundraising emails and texts?",
-    answer: "These messages are sent by campaigns and political organizations themselves.",
+    answer:
+      "Messages come directly from political campaigns, PACs, party committees, and advocacy organizations. They use messaging vendors to send in bulk — the campaign controls your subscription.",
   },
   {
     question: "How can I stop fundraising emails and texts?",
     answer:
-      "Replying STOP or clicking unsubscribe is the most straightforward way, however unsubscribing from one candidate's content does not unsubscribe from all candidates and you may be getting messaging from several different campaigns. This lookup tool is designed to help you better track who is messaging you so you can contact them and ask them to unsubscribe.",
+      "The most effective way is to contact the campaign directly — they control the list. For texts, reply STOP. Use this tool to find out exactly who to contact.",
   },
   {
-    question: "Do donation processors like WinRed send emails or texts or share my data?",
+    question: "Do donation processors like WinRed share my data?",
     answer: (
       <>
-        No — WinRed does not send these messages, nor do they provide a way for campaigns to send these messages. That all happens on other platforms that the campaigns and organizations use. WinRed also does not share donor data except with the campaign you donate to. What campaigns and organizations do with their donor data is up to them.{" "}
+        Platforms like WinRed do not sell your data. When you donate, your information goes to the specific campaign you supported — and that campaign may contact you again in the future.{" "}
         <a
           href="https://support.winred.com/en/articles/9134210-donor-data-security-sharing"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-red-500 hover:text-red-600 underline transition-colors"
+          className="font-medium hover:underline"
+          style={{ color: "#1B3A6B" }}
         >
-          Learn more about WinRed donor data security
+          Learn more
         </a>
         .
       </>
@@ -733,7 +735,7 @@ const FAQS: { question: string; answer: React.ReactNode }[] = [
   {
     question: "What is Inbox.GOP?",
     answer:
-      "Inbox.GOP is a tool for Republicans to track and manage fundraising and other campaign communications. We have compiled the largest database in existence of political email and text content. We set up this lookup tool based on that database to help donors identify who is messaging them.",
+      "Inbox.GOP is the Republican Inboxing Protocol — a platform that tracks political messaging and helps both campaigns reach supporters effectively and citizens understand who is contacting them.",
   },
 ]
 
@@ -741,35 +743,35 @@ function FaqSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
 
   return (
-    <div className="mt-12 border-t border-gray-200 pt-10">
-      <h2 className="text-center text-gray-900 text-2xl font-bold mb-8">
-        Frequently Asked Questions
-      </h2>
-      <div className="space-y-3 max-w-2xl mx-auto">
-        {FAQS.length === 0 ? (
-          <p className="text-center text-gray-400 text-sm py-4">FAQs coming soon.</p>
-        ) : (
-          FAQS.map((faq, i) => (
-            <div key={i} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setOpenIndex(openIndex === i ? null : i)}
-                className="w-full flex items-center justify-between px-6 py-5 text-left"
-              >
-                <span className="text-gray-800 text-sm font-medium pr-4">{faq.question}</span>
-                <span className="text-red-500 text-lg font-light flex-shrink-0 leading-none">
-                  {openIndex === i ? "−" : "+"}
-                </span>
-              </button>
-              {openIndex === i && (
-                <div className="px-6 pb-5">
-                  <div className="text-gray-500 text-sm leading-relaxed">{faq.answer}</div>
-                </div>
-              )}
+    <div>
+      {FAQS.map((faq, i) => (
+        <div key={i} className={i < FAQS.length - 1 ? "border-b border-gray-100" : ""}>
+          <button
+            type="button"
+            onClick={() => setOpenIndex(openIndex === i ? null : i)}
+            className="w-full flex items-center justify-between px-6 py-[18px] text-left gap-4 hover:bg-gray-50 transition-colors"
+          >
+            <span className="text-[16px] font-medium text-[#111827]">{faq.question}</span>
+            <svg
+              viewBox="0 0 24 24"
+              className="w-[18px] h-[18px] fill-none flex-shrink-0 transition-transform duration-200"
+              style={{
+                stroke: openIndex === i ? "#B91C1C" : "#6B7280",
+                strokeWidth: 2,
+                transform: openIndex === i ? "rotate(180deg)" : "rotate(0deg)",
+              }}
+              aria-hidden="true"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {openIndex === i && (
+            <div className="px-6 pb-[18px] text-[15px] text-[#374151] leading-relaxed">
+              {faq.answer}
             </div>
-          ))
-        )}
-      </div>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
@@ -888,7 +890,7 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
   }
 
   return (
-    <div style={{ backgroundColor: "#f9fafb" }}>
+    <div style={{ backgroundColor: "#F7F8FA", minHeight: "100vh" }}>
       {showAuthGate && (
         <AuthGateModal
           defaultTab={authGateTab}
@@ -898,29 +900,40 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
       )}
       {showAdModal && <AdModal onClose={handleAdClose} />}
 
-      <div className="bg-gray-50 flex flex-col min-h-screen" style={{ backgroundColor: "#f9fafb" }}>
-        {/* Navbar */}
-        <header className="border-b border-gray-200 bg-gray-50 sticky top-0 z-40">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="bg-red-500 rounded-lg p-1.5">
-                <Search className="w-4 h-4 text-gray-900" />
+      <div style={{ backgroundColor: "#F7F8FA" }} className="flex flex-col min-h-screen">
+
+        {/* ── Navbar ── */}
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+          <div className="max-w-[860px] mx-auto px-4 sm:px-8 h-[60px] flex items-center justify-between gap-4">
+            {/* Logo */}
+            <div className="flex items-center gap-2.5">
+              <div
+                className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: "#1B3A6B" }}
+                aria-hidden="true"
+              >
+                <svg viewBox="0 0 24 24" className="w-[18px] h-[18px] stroke-white fill-none" strokeWidth="1.5">
+                  <polyline points="3 9 12 15 21 9" />
+                  <path d="M21 9V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9" />
+                  <path d="M3 9l9-7 9 7" />
+                </svg>
               </div>
-              <span className="text-gray-900 font-semibold text-sm leading-tight hidden sm:block">
-                Who&apos;s Contacting Me?
+              <span className="text-[#111827] font-semibold text-[17px]">
+                Inbox<span style={{ color: "#B91C1C" }}>.</span>GOP
               </span>
             </div>
 
-            <div className="flex items-center gap-3">
+            {/* Nav actions */}
+            <div className="flex items-center gap-1.5">
               {currentUser ? (
                 <>
-                  <span className="text-gray-600 text-xs hidden sm:block truncate max-w-[200px]">
+                  <span className="text-gray-500 text-sm hidden sm:block truncate max-w-[200px]">
                     {currentUser}
                   </span>
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 text-xs transition-colors"
+                    className="flex items-center gap-1.5 text-[#374151] hover:bg-gray-100 text-sm px-3 py-1.5 rounded-md transition-colors border border-transparent"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     Sign out
@@ -931,18 +944,19 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
                   <button
                     type="button"
                     onClick={() => { pendingSearchRef.current = null; setAuthGateTab("login"); setShowAuthGate(true) }}
-                    className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 text-xs transition-colors"
+                    className="text-[#374151] hover:bg-gray-100 text-[15px] px-3.5 py-1.5 rounded-md transition-colors"
                   >
-                    <LogIn className="w-3.5 h-3.5" />
                     Log in
                   </button>
                   <button
                     type="button"
                     onClick={() => { pendingSearchRef.current = null; setAuthGateTab("signup"); setShowAuthGate(true) }}
-                    className="flex items-center gap-1.5 bg-red-500 hover:bg-red-600 text-gray-900 text-xs font-medium rounded-lg px-3 py-1.5 transition-colors"
+                    className="text-white text-[15px] font-medium px-3.5 py-1.5 rounded-md transition-colors"
+                    style={{ backgroundColor: "#B91C1C" }}
+                    onMouseOver={e => (e.currentTarget.style.backgroundColor = "#991B1B")}
+                    onMouseOut={e => (e.currentTarget.style.backgroundColor = "#B91C1C")}
                   >
-                    <UserPlus className="w-3.5 h-3.5" />
-                    Sign up
+                    Sign up free
                   </button>
                 </>
               )}
@@ -950,157 +964,190 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
           </div>
         </header>
 
-        {/* Three-column layout */}
-        <div className="flex flex-grow max-w-full mx-auto w-full px-2 sm:px-4 py-4 gap-2 sm:gap-4 justify-center items-start">
-          {/* Left sidebar */}
-          <AdSidebar showAd={true} slot="5401962530" />
+        {/* ── Main content ── */}
+        <main className="flex-1 max-w-[860px] mx-auto w-full px-4 sm:px-8 py-10">
 
-          <main className="flex-1 min-w-0 w-full md:max-w-2xl">
-            {/* Hero */}
-            <div className="mb-6 text-center">
-              <h1 className="text-gray-900 text-2xl sm:text-4xl font-bold leading-tight text-balance mb-3">
-                {"Who's Contacting Me?"}
-              </h1>
-              {/* On mobile show a condensed single paragraph; on desktop show all three */}
-              <p className="sm:hidden text-gray-500 text-sm leading-relaxed max-w-xs mx-auto text-left">
-                Enter a phone number or email address below and {"we'll"} scan our database to identify which political campaigns are using it. Contact campaigns directly to opt out of their messages.
-              </p>
-              <div className="hidden sm:block">
-                <p className="text-gray-500 text-base leading-relaxed text-pretty max-w-lg mx-auto">
-                  Political campaigns send a lot of emails and texts. These messages are a vital way campaigns get their message out so they can win elections, but if you want to opt out we created a simple tool to help.
-                </p>
-                <p className="text-gray-500 text-base leading-relaxed text-pretty max-w-lg mx-auto mt-3">
-                  Below you can enter the number or email you are getting messages from and {"we'll"} scan our database for any campaign using it to send.
-                </p>
-                <p className="text-gray-500 text-base leading-relaxed text-pretty max-w-lg mx-auto mt-3">
-                  The best way to opt out of solicitations is to contact campaigns directly because they are the ones sending the messages.
-                </p>
-              </div>
+          {/* Page heading */}
+          <div className="mb-8">
+            <h1 className="text-[28px] font-semibold text-[#111827] mb-1 text-balance">
+              {"Who's Contacting Me?"}
+            </h1>
+            <p className="text-[16px] text-[#374151] leading-relaxed">
+              Enter a phone number or email address to identify which political campaign is behind it.
+            </p>
+          </div>
+
+          {/* Search card */}
+          <section
+            className="bg-white border border-gray-200 rounded-xl p-7 mb-6"
+            aria-label="Lookup search"
+          >
+            <div className="text-[15px] font-medium text-[#111827] mb-2.5" id="search-label">
+              Search by phone number or email address
             </div>
-
-            {/* Search form */}
-            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">
+            <div className="flex flex-col sm:flex-row gap-2.5" role="search">
               <div className="relative flex-1">
                 <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                  {query.includes("@") ? (
-                    <Mail className="w-4 h-4 text-gray-400" />
-                  ) : (
-                    <Phone className="w-4 h-4 text-gray-400" />
-                  )}
+                  <svg viewBox="0 0 24 24" className="w-[19px] h-[19px] stroke-gray-400 fill-none" strokeWidth="1.5" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
                 </div>
                 <input
                   type="text"
                   value={query}
                   onChange={(e) => { setQuery(e.target.value); setError("") }}
-                  placeholder="Enter a phone number or email address..."
-                  className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-3.5 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors"
-                  aria-label="Phone number or email address"
+                  placeholder="e.g. 202-555-0100 or campaign@example.com"
+                  aria-labelledby="search-label"
+                  aria-describedby="search-hint"
+                  autoComplete="off"
+                  className="w-full bg-white border border-gray-300 rounded-lg pl-[42px] pr-4 h-[44px] text-[16px] text-[#374151] placeholder-gray-400 focus:outline-none focus:border-[#1B3A6B] focus:ring-2 focus:ring-[#1B3A6B]/10 transition-colors"
                 />
               </div>
               <button
-                type="submit"
+                type="button"
+                onClick={(e) => { e.preventDefault(); handleSubmit(e as any) }}
                 disabled={loading || query.trim().length < 3}
-                className="bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 font-semibold rounded-xl px-5 py-3.5 text-sm transition-colors flex-shrink-0 flex items-center justify-center gap-2 w-full sm:w-auto"
+                className="h-[44px] text-white text-[16px] font-medium rounded-lg px-6 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 flex items-center justify-center gap-2 sm:w-auto w-full"
+                style={{ backgroundColor: "#B91C1C" }}
+                onMouseOver={e => { if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = "#991B1B" }}
+                onMouseOut={e => { e.currentTarget.style.backgroundColor = "#B91C1C" }}
               >
                 {loading ? (
-                  <span className="flex items-center gap-2">
+                  <>
                     <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     Searching...
-                  </span>
-                ) : (
-                  <>
-                    <Search className="w-4 h-4" />
-                    <span>Search</span>
                   </>
-                )}
+                ) : "Search"}
               </button>
-            </form>
+            </div>
 
-            {/* Guest nudge — shown below the form when not logged in */}
-            {!currentUser && (
-              <p className="mt-2 text-gray-400 text-xs">
+            {/* Auth note / logged-in indicator */}
+            {!currentUser ? (
+              <p className="mt-2.5 text-[14px] text-[#374151]" id="search-hint">
+                A free account is required to view results.{" "}
                 <button
                   type="button"
-                  onClick={() => { pendingSearchRef.current = null; setShowAuthGate(true) }}
-                  className="text-red-500 hover:underline"
+                  onClick={() => { pendingSearchRef.current = null; setAuthGateTab("signup"); setShowAuthGate(true) }}
+                  className="font-medium hover:underline"
+                  style={{ color: "#1B3A6B" }}
                 >
-                  Sign up or log in
+                  Sign up
                 </button>{" "}
-                to search and save your results.
+                or{" "}
+                <button
+                  type="button"
+                  onClick={() => { pendingSearchRef.current = null; setAuthGateTab("login"); setShowAuthGate(true) }}
+                  className="font-medium hover:underline"
+                  style={{ color: "#1B3A6B" }}
+                >
+                  log in
+                </button>{" "}
+                to search.
+              </p>
+            ) : (
+              <p className="mt-2.5 text-[14px] text-gray-500" id="search-hint">
+                Signed in as <span className="font-medium">{currentUser}</span>
               </p>
             )}
 
             {/* Error */}
             {error && (
-              <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 mt-3">
-                <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
-                <p className="text-red-400 text-sm">{error}</p>
+              <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 mt-3">
+                <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                <p className="text-red-600 text-sm">{error}</p>
               </div>
             )}
+          </section>
 
-            {/* Results */}
-            {results !== null && (
-              <SearchResults query={lastQuery} queryType={lastQueryType} results={results} />
-            )}
+          {/* Results */}
+          {results !== null && (
+            <SearchResults query={lastQuery} queryType={lastQueryType} results={results} />
+          )}
 
-            {/* History (logged-in users only) */}
-            {currentUser && historyLoaded && (
-              <HistoryPanel
-                history={history}
-                onViewItem={(item) => {
-                  // Show the ad modal when a user expands a past result
-                  setShowAdModal(true)
-                }}
-                onDeleteItem={async (id) => {
-                  await fetch(`/api/lookup/history?id=${id}`, { method: "DELETE" })
-                  setHistory((prev) => prev.filter((h) => h.id !== id))
-                }}
-                onClearAll={async () => {
-                  await fetch("/api/lookup/history", { method: "DELETE" })
-                  setHistory([])
-                }}
-              />
-            )}
+          {/* History (logged-in users only) */}
+          {currentUser && historyLoaded && (
+            <HistoryPanel
+              history={history}
+              onViewItem={() => { setShowAdModal(true) }}
+              onDeleteItem={async (id) => {
+                await fetch(`/api/lookup/history?id=${id}`, { method: "DELETE" })
+                setHistory((prev) => prev.filter((h) => h.id !== id))
+              }}
+              onClearAll={async () => {
+                await fetch("/api/lookup/history", { method: "DELETE" })
+                setHistory([])
+              }}
+            />
+          )}
 
-            {/* Empty state */}
-            {results === null && history.length === 0 && (
-              <div className="mt-10 text-center">
-                <div className="inline-flex items-center gap-2 text-gray-400 text-sm">
-                  <Search className="w-4 h-4" />
-                  <span>Enter a number or email above to get started</span>
+          {/* Divider */}
+          <div className="flex items-center gap-3 my-8 text-[14px] text-gray-500">
+            <div className="flex-1 border-t border-gray-200" />
+            or learn more below
+            <div className="flex-1 border-t border-gray-200" />
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8" aria-label="Database statistics">
+            {[
+              { n: "1M+", l: "Numbers & emails tracked" },
+              { n: "1,000+", l: "Political campaigns in database" },
+              { n: "Free", l: "Always free to search" },
+            ].map(({ n, l }) => (
+              <div key={l} className="bg-white border border-gray-200 rounded-xl px-6 py-5">
+                <div className="text-[26px] font-semibold text-[#111827] leading-none">{n}</div>
+                <div className="text-[14px] text-[#374151] mt-1 leading-snug">{l}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* How it works */}
+          <h2 className="text-[18px] font-semibold text-[#111827] mb-4">How it works</h2>
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-8" aria-label="Steps">
+            {[
+              { n: 1, title: "Create a free account", body: "Sign up in seconds — no credit card needed." },
+              { n: 2, title: "Enter a number or email", body: "Type in the phone number or email address you received a message from." },
+              { n: 3, title: "Instantly see who's behind it", body: "Get the campaign name and contact info so you can opt out directly." },
+            ].map(({ n, title, body }, i, arr) => (
+              <div
+                key={n}
+                className={`flex items-start gap-4 px-6 py-5 ${i < arr.length - 1 ? "border-b border-gray-100" : ""}`}
+              >
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-[14px] font-semibold flex-shrink-0 mt-0.5 border"
+                  style={{ backgroundColor: "#FEF2F2", color: "#B91C1C", borderColor: "#FCA5A5" }}
+                >
+                  {n}
+                </div>
+                <div>
+                  <h3 className="text-[16px] font-medium text-[#111827] mb-0.5">{title}</h3>
+                  <p className="text-[15px] text-[#374151] leading-relaxed">{body}</p>
                 </div>
               </div>
-            )}
+            ))}
+          </div>
 
-            {/* FAQ Section */}
+          {/* FAQ */}
+          <h2 className="text-[18px] font-semibold text-[#111827] mb-4">Frequently asked questions</h2>
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             <FaqSection />
-          </main>
+          </div>
 
-          {/* Right sidebar */}
-          <AdSidebar showAd={true} slot="9922824720" />
-        </div>
+        </main>
 
-        {/* Bottom banner above the footer line */}
-        <AdBanner showAd={true} />
-
-        {/* Footer links below the line */}
-        <div className="border-t border-gray-200 py-2">
-          <p className="text-center text-gray-400 text-xs">
+        {/* Footer */}
+        <footer className="bg-white border-t border-gray-200 mt-8 py-5 px-8 flex flex-wrap justify-center gap-6 text-[14px] text-gray-500">
+          <span>
             Powered by{" "}
-            <a
-              href="https://inbox.gop"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-gray-600 transition-colors"
-            >
+            <a href="https://inbox.gop" target="_blank" rel="noopener noreferrer" className="hover:text-gray-800 transition-colors">
               Inbox.GOP
-            </a>{" "}
-            &middot;{" "}
-            <a href="/terms" className="hover:text-gray-600 transition-colors">Terms</a>
-            {" "}&middot;{" "}
-            <a href="/privacy" className="hover:text-gray-600 transition-colors">Privacy</a>
-          </p>
-        </div>
+            </a>
+          </span>
+          <a href="/terms" className="hover:text-gray-800 transition-colors">Terms of service</a>
+          <a href="/privacy" className="hover:text-gray-800 transition-colors">Privacy policy</a>
+        </footer>
+
       </div>
     </div>
   )

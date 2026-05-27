@@ -118,12 +118,17 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.headers.get("origin") || "http://localhost:3000"
     const shareUrl = `${baseUrl}/share/${campaign.shareToken}`
 
-    // Fire-and-forget background OG screenshot generation so it's ready before Twitter crawls
-    const generateUrl = `${baseUrl}/api/og/share/${campaign.shareToken}/generate`
-    fetch(generateUrl, {
-      method: "POST",
-      headers: { "x-internal-secret": process.env.INTERNAL_API_SECRET || "" },
-    }).catch((err) => console.error("[share] OG generate trigger failed:", err))
+    // Trigger OG screenshot generation — awaited so Vercel doesn't kill it before it completes
+    try {
+      const generateUrl = `${baseUrl}/api/og/share/${campaign.shareToken}/generate`
+      await fetch(generateUrl, {
+        method: "POST",
+        headers: { "x-internal-secret": process.env.INTERNAL_API_SECRET || "" },
+      })
+    } catch (err) {
+      console.error("[share] OG generate trigger failed:", err)
+      // Non-fatal — share link still works, image will fall back to live render
+    }
 
     return NextResponse.json({
       shareUrl,

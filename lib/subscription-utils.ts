@@ -4,7 +4,10 @@ export type SubscriptionStatus = "active" | "cancelled" | "past_due"
 export interface PlanLimits {
   ciHistoryDays: number | null // null = unlimited
   ciFollowLimit: number | null // null = unlimited
-  hasPersonalEmail: boolean
+  canSearchCI: boolean // Whether this plan can use CI search/filter
+  hasPersonalEmail: boolean // Personal email (requested on paid; full access on all+)
+  hasPersonalNumbers: boolean // Personal numbers ($100 upcharge on paid; included on all+)
+  hasReports: boolean // Access to Trends, Inboxing, Copy Frequency, Subject Patterns, Compliance
   hasInboxTools: boolean
   seedTestsPerMonth: number | null // null = unlimited
   canAddOwnSeeds: boolean
@@ -23,7 +26,10 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
   free: {
     ciHistoryDays: 0.125, // Last 3 hours only (3/24 = 0.125 days)
     ciFollowLimit: 0, // Cannot follow
+    canSearchCI: false, // Free tier cannot search the CI feed
     hasPersonalEmail: false,
+    hasPersonalNumbers: false,
+    hasReports: false,
     hasInboxTools: false,
     seedTestsPerMonth: 0,
     canAddOwnSeeds: false,
@@ -31,8 +37,11 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
   },
   paid: {
     ciHistoryDays: 3, // 3 days of history
-    ciFollowLimit: 3, // Updated from 1 to 3 entities
-    hasPersonalEmail: false,
+    ciFollowLimit: 3,
+    canSearchCI: true,
+    hasPersonalEmail: true, // Requestable on Basic
+    hasPersonalNumbers: true, // Requestable on Basic ($100 upcharge)
+    hasReports: false, // Reports are Professional+
     hasInboxTools: false,
     seedTestsPerMonth: 0,
     canAddOwnSeeds: false,
@@ -41,7 +50,10 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
   all: {
     ciHistoryDays: null, // Full history
     ciFollowLimit: null, // Unlimited follows
+    canSearchCI: true,
     hasPersonalEmail: true,
+    hasPersonalNumbers: true,
+    hasReports: true,
     hasInboxTools: false,
     seedTestsPerMonth: 0,
     canAddOwnSeeds: false,
@@ -50,7 +62,10 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
   basic_inboxing: {
     ciHistoryDays: null, // Full history
     ciFollowLimit: null, // Unlimited follows
+    canSearchCI: true,
     hasPersonalEmail: true,
+    hasPersonalNumbers: true,
+    hasReports: true,
     hasInboxTools: true,
     seedTestsPerMonth: 5,
     canAddOwnSeeds: false,
@@ -59,7 +74,10 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
   enterprise: {
     ciHistoryDays: null, // Full history
     ciFollowLimit: null, // Unlimited follows
+    canSearchCI: true,
     hasPersonalEmail: true,
+    hasPersonalNumbers: true,
+    hasReports: true,
     hasInboxTools: true,
     seedTestsPerMonth: null, // Unlimited
     canAddOwnSeeds: true,

@@ -70,9 +70,10 @@ export default function PersonalNumbersPage() {
     )
   }
 
-  const isFree = subscriptionPlan === "free"
+  // Free tier is the only plan that cannot access personal numbers
+  const isLocked = subscriptionPlan === "free"
 
-  if (isFree) {
+  if (isLocked) {
     return (
       <AppLayout clientSlug={clientSlug} isAdminView={clientSlug === "admin"}>
         <AdBanner showAd={true} />

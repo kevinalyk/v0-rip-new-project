@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Check, Loader2, AlertTriangle } from "lucide-react"
+import { Check, X, Loader2, AlertTriangle, Minus } from "lucide-react"
 import { PLAN_PRICES, type SubscriptionPlan } from "@/lib/subscription-utils"
 import { createCICheckoutSession } from "@/app/actions/ci-stripe"
 import {
@@ -19,7 +18,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { cancelSubscription } from "@/app/actions/stripe"
-import { getPlanLimits } from "@/lib/subscription-utils"
 
 interface BillingData {
   client: {
@@ -31,38 +29,160 @@ interface BillingData {
   }
 }
 
-const CI_PLAN_FEATURES = {
-  free: ["Last 3 hours of campaigns", "Browse email and SMS campaigns", "Basic campaign details", "No follow feature"],
-  paid: [
-    "3 days of campaign history",
-    "Follow up to 3 entities/campaigns",
-    "Email and SMS campaigns",
-    "Campaign analytics",
-    "Advanced search and filtering",
-  ],
-  all: [
-    "Full campaign history (unlimited)",
-    "Follow unlimited entities/campaigns",
-    "Email and SMS campaigns",
-    "Advanced analytics",
-    "Personal email tracking (coming soon)",
-    "Priority support",
-  ],
-  basic_inboxing: [
-    "Everything in 'Professional'",
-    "Inbox Tools access",
-    "5 seed tests per month",
-    "Campaign monitoring",
-    "Deliverability insights",
-  ],
-  enterprise: [
-    "Everything in 'Advanced'",
-    "Unlimited seed tests",
-    "Add your own seed emails",
-    "Custom integrations",
-    "Dedicated account manager",
-    "White-glove support",
-  ],
+type CellValue = boolean | string
+
+interface FeatureRow {
+  label: string
+  note?: string
+  free: CellValue
+  paid: CellValue
+  all: CellValue
+  enterprise: CellValue
+}
+
+const FEATURE_SECTIONS: { heading: string; rows: FeatureRow[] }[] = [
+  {
+    heading: "Data Access",
+    rows: [
+      {
+        label: "Campaign history",
+        free: "3 hours",
+        paid: "3 days",
+        all: "Unlimited",
+        enterprise: "Unlimited",
+      },
+      {
+        label: "Browse email & SMS campaigns",
+        free: true,
+        paid: true,
+        all: true,
+        enterprise: true,
+      },
+      {
+        label: "Search & filter campaigns",
+        free: false,
+        paid: true,
+        all: true,
+        enterprise: true,
+      },
+      {
+        label: "Full directory access",
+        free: true,
+        paid: true,
+        all: true,
+        enterprise: true,
+      },
+    ],
+  },
+  {
+    heading: "Following & Monitoring",
+    rows: [
+      {
+        label: "Follow entities",
+        free: false,
+        paid: "Up to 3",
+        all: "Unlimited",
+        enterprise: "Unlimited",
+      },
+    ],
+  },
+  {
+    heading: "Personal Seeds",
+    rows: [
+      {
+        label: "Personal email (requested)",
+        free: false,
+        paid: true,
+        all: true,
+        enterprise: true,
+      },
+      {
+        label: "Personal number",
+        note: "$100/mo add-on on Basic",
+        free: false,
+        paid: true,
+        all: true,
+        enterprise: true,
+      },
+    ],
+  },
+  {
+    heading: "Reports",
+    rows: [
+      {
+        label: "Trends",
+        free: false,
+        paid: false,
+        all: true,
+        enterprise: true,
+      },
+      {
+        label: "Inboxing",
+        free: false,
+        paid: false,
+        all: true,
+        enterprise: true,
+      },
+      {
+        label: "Copy Frequency",
+        free: false,
+        paid: false,
+        all: true,
+        enterprise: true,
+      },
+      {
+        label: "Subject Patterns",
+        free: false,
+        paid: false,
+        all: true,
+        enterprise: true,
+      },
+      {
+        label: "Compliance",
+        free: false,
+        paid: false,
+        all: true,
+        enterprise: true,
+      },
+    ],
+  },
+  {
+    heading: "Account",
+    rows: [
+      {
+        label: "Users included",
+        free: "1",
+        paid: "1",
+        all: "3",
+        enterprise: "Custom",
+      },
+    ],
+  },
+]
+
+const PLANS: { key: SubscriptionPlan; label: string; price: string; description: string }[] = [
+  { key: "free", label: "Free", price: "$0", description: "Basic access" },
+  { key: "paid", label: "Basic", price: "$50/mo", description: "Essential tracking" },
+  { key: "all", label: "Professional", price: "$300/mo", description: "Full intelligence" },
+  { key: "enterprise", label: "Enterprise", price: "Custom", description: "Custom solutions" },
+]
+
+function CellDisplay({ value, planKey }: { value: CellValue; planKey: SubscriptionPlan }) {
+  if (typeof value === "boolean") {
+    if (value) {
+      return (
+        <div className="flex justify-center">
+          <Check className="h-5 w-5 text-[#dc2a28]" />
+        </div>
+      )
+    }
+    return (
+      <div className="flex justify-center">
+        <X className="h-4 w-4 text-muted-foreground/40" />
+      </div>
+    )
+  }
+  return <div className="text-center text-sm font-medium">{value}</div>
 }
 
 export function CIPricingContent() {
@@ -70,7 +190,6 @@ export function CIPricingContent() {
   const searchParams = useSearchParams()
   const [currentPlan, setCurrentPlan] = useState<SubscriptionPlan>("free")
   const [currentStatus, setCurrentStatus] = useState<string>("active")
-  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan>("free")
   const [loading, setLoading] = useState(true)
   const [checkingOutPlan, setCheckingOutPlan] = useState<SubscriptionPlan | null>(null)
   const [clientSlug, setClientSlug] = useState<string>("")
@@ -86,22 +205,13 @@ export function CIPricingContent() {
     setClientSlug(slug)
   }, [])
 
-  useEffect(() => {
-    const recommendedParam = searchParams.get("recommended")
-    if (recommendedParam === "all") {
-      setSelectedPlan("all")
-    }
-  }, [searchParams])
-
   const fetchBillingData = async () => {
     try {
       const response = await fetch("/api/billing")
       if (!response.ok) throw new Error("Failed to fetch billing data")
-
       const data: BillingData = await response.json()
       setCurrentPlan(data.client.subscriptionPlan)
       setCurrentStatus(data.client.subscriptionStatus)
-      setSelectedPlan(data.client.subscriptionPlan)
       setClientId(data.client.id)
       setSubscriptionRenewDate(data.client.subscriptionRenewDate || null)
     } catch (error) {
@@ -113,11 +223,9 @@ export function CIPricingContent() {
 
   const handleDowngradeToFree = async () => {
     if (!clientId) return
-
     try {
       setCanceling(true)
       await cancelSubscription(clientId, "plan")
-
       setShowCancelDialog(false)
       router.push(`/${clientSlug}/account/billing?cancelled=true`)
     } catch (error) {
@@ -129,9 +237,7 @@ export function CIPricingContent() {
   }
 
   const handleSelectPlan = async (plan: SubscriptionPlan) => {
-    if (plan === currentPlan && currentStatus === "active") {
-      return
-    }
+    if (plan === currentPlan && currentStatus === "active") return
 
     if (plan === "free") {
       if (currentPlan !== "free" && currentStatus === "active") {
@@ -142,13 +248,14 @@ export function CIPricingContent() {
       return
     }
 
+    if (plan === "enterprise") {
+      window.location.href = "mailto:support@rip-tool.com?subject=Enterprise Plan Inquiry"
+      return
+    }
+
     setCheckingOutPlan(plan)
     try {
-      const result = await createCICheckoutSession({
-        plan,
-        clientSlug,
-      })
-
+      const result = await createCICheckoutSession({ plan, clientSlug })
       if (result.url) {
         window.location.href = result.url
       }
@@ -160,21 +267,16 @@ export function CIPricingContent() {
     }
   }
 
-  const isCurrentPlan = (plan: SubscriptionPlan) => {
-    return currentStatus === "active" && currentPlan === plan
-  }
+  const isCurrentPlan = (plan: SubscriptionPlan) =>
+    currentStatus === "active" && currentPlan === plan
 
-  const getCurrentPlanFeatures = () => {
-    const limits = getPlanLimits(currentPlan)
-    return {
-      ciHistory: currentPlan === "paid" ? "3 days" : currentPlan === "free" ? "3 hours" : "unlimited",
-      followLimit:
-        limits.ciFollowLimit === null
-          ? "Unlimited"
-          : limits.ciFollowLimit === 0
-            ? "None"
-            : `Up to ${limits.ciFollowLimit}`,
-    }
+  const getRenewDateStr = () => {
+    if (!subscriptionRenewDate) return "the end of your billing period"
+    return new Date(subscriptionRenewDate).toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    })
   }
 
   if (loading) {
@@ -186,7 +288,7 @@ export function CIPricingContent() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-7xl">
+    <div className="container mx-auto py-8 px-4 max-w-6xl">
       <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -196,42 +298,29 @@ export function CIPricingContent() {
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-3">
               <p>
-                You're about to cancel your{" "}
+                You&apos;re about to cancel your{" "}
                 <strong>
                   {currentPlan === "paid"
                     ? "Basic"
                     : currentPlan === "all"
                       ? "Professional"
-                      : currentPlan === "basic_inboxing"
-                        ? "Advanced"
-                        : currentPlan}
+                      : "Enterprise"}
                 </strong>{" "}
                 subscription.
               </p>
               <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
                 <p className="font-semibold text-sm mb-2">After cancellation, you will lose access to:</p>
                 <ul className="text-sm space-y-1 ml-4 list-disc">
-                  <li>CI History: {getCurrentPlanFeatures().ciHistory} → 3 hours only</li>
-                  <li>Follow Entities: {getCurrentPlanFeatures().followLimit} → None</li>
-                  {currentPlan !== "paid" && <li>Reporting Section</li>}
-                  {(currentPlan === "basic_inboxing" || currentPlan === "enterprise") && (
-                    <>
-                      <li>Inbox Tools access</li>
-                      <li>Seed testing capabilities</li>
-                    </>
-                  )}
+                  <li>Campaign history beyond 3 hours</li>
+                  <li>CI search and filtering</li>
+                  <li>Follow entities</li>
+                  {currentPlan !== "paid" && <li>All reports</li>}
+                  {currentPlan !== "paid" && <li>Personal email & numbers</li>}
                 </ul>
               </div>
               <p className="text-sm">
-                You'll maintain full access to all your current features until{" "}
-                {subscriptionRenewDate
-                  ? new Date(subscriptionRenewDate).toLocaleDateString("en-US", {
-                      month: "long",
-                      day: "numeric",
-                      year: "numeric",
-                    })
-                  : "the end of your billing period"}
-                .
+                You&apos;ll maintain full access until{" "}
+                <strong>{getRenewDateStr()}</strong>.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -255,295 +344,153 @@ export function CIPricingContent() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="mb-8 text-center">
-        <h1 className="text-4xl font-bold mb-2">Competitive Insights Pricing</h1>
-        <p className="text-muted-foreground text-lg">Choose the plan that fits your campaign intelligence needs</p>
+      {/* Header */}
+      <div className="mb-10 text-center">
+        <h1 className="text-4xl font-bold mb-2">Plans & Pricing</h1>
+        <p className="text-muted-foreground text-lg">
+          Compare features across all tiers
+        </p>
       </div>
 
-      <div className="grid md:grid-cols-3 lg:grid-cols-3 gap-6 mb-8">
-        {/* Free Plan */}
-        <Card
-          className={`relative transition-all flex flex-col h-full ${
-            isCurrentPlan("free")
-              ? "ring-2 shadow-lg cursor-not-allowed opacity-90"
-              : selectedPlan === "free"
-                ? "ring-2 ring-primary shadow-lg cursor-pointer"
-                : "hover:shadow-md cursor-pointer"
-          }`}
-          style={isCurrentPlan("free") ? { borderColor: "#EB3847", borderWidth: "2px" } : undefined}
-          onClick={() => !isCurrentPlan("free") && setSelectedPlan("free")}
-        >
-          <CardHeader>
-            <div className="flex items-center justify-between mb-2">
-              <CardTitle>Starter</CardTitle>
-              {isCurrentPlan("free") && (
-                <Badge style={{ backgroundColor: "#EB3847", color: "white" }}>Current Plan</Badge>
-              )}
-            </div>
-            <CardDescription>Get started with basic access</CardDescription>
-            <div className="mt-4">
-              <span className="text-4xl font-bold">${PLAN_PRICES.free}</span>
-              <span className="text-muted-foreground">/month</span>
-            </div>
-          </CardHeader>
-          <CardContent className="flex-1">
-            <ul className="space-y-2">
-              {CI_PLAN_FEATURES.free.map((feature, index) => (
-                <li key={index} className="flex items-start gap-2 text-sm">
-                  <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                  <span>{feature}</span>
-                </li>
+      {/* Comparison Table */}
+      <div className="rounded-xl border overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b bg-muted/30">
+              {/* Feature column header */}
+              <th className="py-5 px-6 text-left font-medium text-muted-foreground w-[30%]">
+                Feature
+              </th>
+              {PLANS.map((plan) => (
+                <th key={plan.key} className="py-5 px-4 text-center w-[17.5%]">
+                  <div className="flex flex-col items-center gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-base">{plan.label}</span>
+                      {isCurrentPlan(plan.key) && (
+                        <Badge
+                          className="text-[10px] py-0 px-1.5 h-4"
+                          style={{ backgroundColor: "#dc2a28", color: "white" }}
+                        >
+                          Current
+                        </Badge>
+                      )}
+                    </div>
+                    <span className="text-sm font-bold">{plan.price}</span>
+                    <span className="text-xs text-muted-foreground">{plan.description}</span>
+                  </div>
+                </th>
               ))}
-            </ul>
-          </CardContent>
-          <CardFooter>
-            <Button
-              className="w-full"
-              variant="secondary"
-              disabled={isCurrentPlan("free")}
-              onClick={() => handleSelectPlan("free")}
-            >
-              {isCurrentPlan("free") ? "Current Plan" : "Free"}
-            </Button>
-          </CardFooter>
-        </Card>
+            </tr>
+          </thead>
 
-        {/* Paid Plan ($50) */}
-        <Card
-          className={`relative cursor-pointer transition-all flex flex-col h-full ${
-            isCurrentPlan("paid")
-              ? "ring-2 shadow-lg cursor-not-allowed opacity-90"
-              : selectedPlan === "paid"
-                ? "ring-2 ring-primary shadow-lg"
-                : "hover:shadow-md"
-          }`}
-          style={isCurrentPlan("paid") ? { borderColor: "#EB3847", borderWidth: "2px" } : undefined}
-          onClick={() => !isCurrentPlan("paid") && setSelectedPlan("paid")}
-        >
-          <CardHeader>
-            <div className="flex items-center justify-between mb-2">
-              <CardTitle>Basic</CardTitle>
-              {isCurrentPlan("paid") && (
-                <Badge style={{ backgroundColor: "#EB3847", color: "white" }}>Current Plan</Badge>
-              )}
-            </div>
-            <CardDescription>Essential campaign tracking</CardDescription>
-            <div className="mt-4">
-              <span className="text-4xl font-bold">${PLAN_PRICES.paid}</span>
-              <span className="text-muted-foreground">/month</span>
-            </div>
-          </CardHeader>
-          <CardContent className="flex-1">
-            <ul className="space-y-2">
-              {CI_PLAN_FEATURES.paid.map((feature, index) => (
-                <li key={index} className="flex items-start gap-2 text-sm">
-                  <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                  <span>{feature}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-          <CardFooter>
-            <Button
-              className="w-full"
-              style={
-                !isCurrentPlan("paid") && checkingOutPlan !== "paid"
-                  ? { backgroundColor: "#EB3847", color: "white" }
-                  : undefined
-              }
-              variant={isCurrentPlan("paid") ? "secondary" : "default"}
-              disabled={isCurrentPlan("paid") || checkingOutPlan !== null}
-              onClick={() => handleSelectPlan("paid")}
-            >
-              {checkingOutPlan === "paid" ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </>
-              ) : isCurrentPlan("paid") ? (
-                "Current Plan"
-              ) : (
-                "Get Started"
-              )}
-            </Button>
-          </CardFooter>
-        </Card>
+          <tbody>
+            {FEATURE_SECTIONS.map((section, sectionIdx) => (
+              <>
+                {/* Section heading row */}
+                <tr key={`section-${sectionIdx}`} className="border-t border-b bg-muted/10">
+                  <td
+                    colSpan={5}
+                    className="py-2.5 px-6 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                  >
+                    {section.heading}
+                  </td>
+                </tr>
 
-        {/* All of CI ($300) - RECOMMENDED */}
-        <Card
-          className={`relative cursor-pointer transition-all flex flex-col h-full ${
-            isCurrentPlan("all")
-              ? "ring-2 shadow-lg cursor-not-allowed opacity-90"
-              : selectedPlan === "all"
-                ? "ring-2 shadow-lg scale-105"
-                : "hover:shadow-md"
-          }`}
-          style={isCurrentPlan("all") ? { borderColor: "#EB3847", borderWidth: "2px" } : undefined}
-          onClick={() => !isCurrentPlan("all") && setSelectedPlan("all")}
-        >
-          <CardHeader>
-            <div className="flex items-center justify-between mb-2">
-              <CardTitle>Professional</CardTitle>
-              {isCurrentPlan("all") && (
-                <Badge style={{ backgroundColor: "#EB3847", color: "white" }}>Current Plan</Badge>
-              )}
-            </div>
-            <CardDescription>Complete campaign intelligence</CardDescription>
-            <div className="mt-4">
-              <span className="text-4xl font-bold">${PLAN_PRICES.all}</span>
-              <span className="text-muted-foreground">/month</span>
-            </div>
-          </CardHeader>
-          <CardContent className="flex-1">
-            <ul className="space-y-2">
-              {CI_PLAN_FEATURES.all.map((feature, index) => (
-                <li key={index} className="flex items-start gap-2 text-sm">
-                  <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                  <span>{feature}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-          <CardFooter>
-            <Button
-              className="w-full hover:opacity-90"
-              style={
-                !isCurrentPlan("all") && checkingOutPlan !== "all"
-                  ? { backgroundColor: "#EB3847", color: "white" }
-                  : undefined
-              }
-              variant={isCurrentPlan("all") ? "secondary" : "default"}
-              disabled={isCurrentPlan("all") || checkingOutPlan !== null}
-              onClick={() => handleSelectPlan("all")}
-            >
-              {checkingOutPlan === "all" ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </>
-              ) : isCurrentPlan("all") ? (
-                "Current Plan"
-              ) : (
-                "Get Started"
-              )}
-            </Button>
-          </CardFooter>
-        </Card>
+                {/* Feature rows */}
+                {section.rows.map((row, rowIdx) => (
+                  <tr
+                    key={`row-${sectionIdx}-${rowIdx}`}
+                    className={`border-b transition-colors hover:bg-muted/10 ${
+                      rowIdx % 2 === 1 ? "bg-muted/5" : ""
+                    }`}
+                  >
+                    <td className="py-3.5 px-6">
+                      <span className="text-sm">{row.label}</span>
+                      {row.note && (
+                        <span className="block text-xs text-muted-foreground mt-0.5">{row.note}</span>
+                      )}
+                    </td>
+                    {PLANS.map((plan) => (
+                      <td key={plan.key} className="py-3.5 px-4">
+                        <CellDisplay
+                          value={row[plan.key as keyof Omit<FeatureRow, "label" | "note">] as CellValue}
+                          planKey={plan.key}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </>
+            ))}
 
-        {/* Basic Inboxing ($1000) */}
-        {/* <Card
-          className={`relative cursor-pointer transition-all flex flex-col h-full ${
-            isCurrentPlan("basic_inboxing")
-              ? "ring-2 shadow-lg cursor-not-allowed opacity-90"
-              : selectedPlan === "basic_inboxing"
-                ? "ring-2 ring-primary shadow-lg"
-                : "hover:shadow-md"
-          }`}
-          style={isCurrentPlan("basic_inboxing") ? { borderColor: "#EB3847", borderWidth: "2px" } : undefined}
-          onClick={() => !isCurrentPlan("basic_inboxing") && setSelectedPlan("basic_inboxing")}
-        >
-          <CardHeader>
-            <div className="flex items-center justify-between mb-2">
-              <CardTitle>Advanced</CardTitle>
-              {isCurrentPlan("basic_inboxing") && (
-                <Badge style={{ backgroundColor: "#EB3847", color: "white" }}>Current Plan</Badge>
-              )}
-            </div>
-            <CardDescription>CI plus inbox monitoring</CardDescription>
-            <div className="mt-4">
-              <span className="text-4xl font-bold">${PLAN_PRICES.basic_inboxing}</span>
-              <span className="text-muted-foreground">/month</span>
-            </div>
-          </CardHeader>
-          <CardContent className="flex-1">
-            <ul className="space-y-2">
-              {CI_PLAN_FEATURES.basic_inboxing.map((feature, index) => (
-                <li key={index} className="flex items-start gap-2 text-sm">
-                  <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                  <span>{feature}</span>
-                </li>
+            {/* CTA row */}
+            <tr className="border-t bg-muted/20">
+              <td className="py-5 px-6" />
+              {PLANS.map((plan) => (
+                <td key={plan.key} className="py-5 px-4 text-center">
+                  {isCurrentPlan(plan.key) ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled
+                      className="w-full max-w-[140px]"
+                    >
+                      Current Plan
+                    </Button>
+                  ) : plan.key === "free" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full max-w-[140px]"
+                      onClick={() => handleSelectPlan("free")}
+                      disabled={checkingOutPlan !== null}
+                    >
+                      Downgrade
+                    </Button>
+                  ) : plan.key === "enterprise" ? (
+                    <Button
+                      size="sm"
+                      className="w-full max-w-[140px]"
+                      style={{ backgroundColor: "#dc2a28", color: "white" }}
+                      onClick={() => handleSelectPlan("enterprise")}
+                      disabled={checkingOutPlan !== null}
+                    >
+                      Contact Sales
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      className="w-full max-w-[140px]"
+                      style={
+                        checkingOutPlan !== plan.key
+                          ? { backgroundColor: "#dc2a28", color: "white" }
+                          : undefined
+                      }
+                      onClick={() => handleSelectPlan(plan.key)}
+                      disabled={checkingOutPlan !== null}
+                    >
+                      {checkingOutPlan === plan.key ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        "Get Started"
+                      )}
+                    </Button>
+                  )}
+                </td>
               ))}
-            </ul>
-          </CardContent>
-          <CardFooter>
-            <Button
-              className="w-full hover:opacity-90"
-              style={
-                !isCurrentPlan("basic_inboxing") && checkingOutPlan !== "basic_inboxing"
-                  ? { backgroundColor: "#EB3847", color: "white" }
-                  : undefined
-              }
-              variant={isCurrentPlan("basic_inboxing") ? "secondary" : "default"}
-              disabled={isCurrentPlan("basic_inboxing") || checkingOutPlan !== null}
-              onClick={() => handleSelectPlan("basic_inboxing")}
-            >
-              {checkingOutPlan === "basic_inboxing" ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </>
-              ) : isCurrentPlan("basic_inboxing") ? (
-                "Current Plan"
-              ) : (
-                "Get Started"
-              )}
-            </Button>
-          </CardFooter>
-        </Card> */}
-
-        {/* Enterprise */}
-        {/* <Card
-          className={`relative cursor-pointer transition-all flex flex-col h-full ${
-            isCurrentPlan("enterprise")
-              ? "ring-2 shadow-lg cursor-not-allowed opacity-90"
-              : selectedPlan === "enterprise"
-                ? "ring-2 ring-primary shadow-lg"
-                : "hover:shadow-md"
-          }`}
-          style={isCurrentPlan("enterprise") ? { borderColor: "#EB3847", borderWidth: "2px" } : undefined}
-          onClick={() => !isCurrentPlan("enterprise") && setSelectedPlan("enterprise")}
-        >
-          <CardHeader>
-            <div className="flex items-center justify-between mb-2">
-              <CardTitle>Enterprise</CardTitle>
-              {isCurrentPlan("enterprise") && (
-                <Badge style={{ backgroundColor: "#EB3847", color: "white" }}>Current Plan</Badge>
-              )}
-            </div>
-            <CardDescription>Custom solutions for large teams</CardDescription>
-            <div className="mt-4">
-              <span className="text-4xl font-bold">Custom</span>
-            </div>
-          </CardHeader>
-          <CardContent className="flex-1">
-            <ul className="space-y-2">
-              {CI_PLAN_FEATURES.enterprise.map((feature, index) => (
-                <li key={index} className="flex items-start gap-2 text-sm">
-                  <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                  <span>{feature}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-          <CardFooter>
-            <Button
-              className="w-full hover:opacity-90"
-              style={!isCurrentPlan("enterprise") ? { backgroundColor: "#EB3847", color: "white" } : undefined}
-              variant={isCurrentPlan("enterprise") ? "secondary" : "default"}
-              disabled={isCurrentPlan("enterprise")}
-              onClick={() => handleSelectPlan("enterprise")}
-            >
-              {isCurrentPlan("enterprise") ? "Current Plan" : "Contact Sales"}
-            </Button>
-          </CardFooter>
-        </Card> */}
+            </tr>
+          </tbody>
+        </table>
       </div>
 
-      <div className="text-center text-sm text-muted-foreground">
-        <p>All plans include access to our comprehensive political campaign database</p>
+      <div className="text-center text-sm text-muted-foreground mt-6">
+        <p>All plans include access to our comprehensive political campaign database.</p>
         <p className="mt-1">
-          Need help choosing?{" "}
-          <a href="mailto:support@rip-tool.com" className="text-primary hover:underline">
+          Questions?{" "}
+          <a href="mailto:support@rip-tool.com" className="text-[#dc2a28] hover:underline">
             Contact support
           </a>
         </p>

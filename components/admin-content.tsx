@@ -325,6 +325,20 @@ export function AdminContent({ user }: AdminContentProps) {
     samples: Array<{ id: string; subject: string; platform: string }>
   } | null>(null)
 
+  // Message types backfill state
+  const [messageTypesPending, setMessageTypesPending] = useState<number | null>(null)
+  const [messageTypesTotal, setMessageTypesTotal] = useState<number | null>(null)
+  const [messageTypesClassified, setMessageTypesClassified] = useState<number | null>(null)
+  const [isBackfillingMessageTypes, setIsBackfillingMessageTypes] = useState(false)
+  const [messageTypesCursor, setMessageTypesCursor] = useState<string | null>(null)
+  const [messageTypesBatchResults, setMessageTypesBatchResults] = useState<{
+    totalProcessed: number
+    totalClassified: number
+    remaining: number | null
+    hasMore: boolean
+    samples: Array<{ id: string; subject: string; types: string[] }>
+  } | null>(null)
+
   // Body fingerprint backfill state (email)
   const [fingerprintPending, setFingerprintPending] = useState<number | null>(null)
   const [fingerprintOffset, setFingerprintOffset] = useState(0)
@@ -1602,6 +1616,59 @@ const downloadActBluePatterns = () => {
       toast.error("Failed to unwrap campaign")
     } finally {
       setIsUnwrappingSingle(false)
+    }
+  }
+
+  const handleCheckMessageTypesPending = async () => {
+    try {
+      const res = await fetch("/api/admin/backfill-message-types", { credentials: "include" })
+      const data = await res.json()
+      if (res.ok) {
+        setMessageTypesPending(data.pending)
+        setMessageTypesTotal(data.total)
+        setMessageTypesClassified(data.classified)
+        toast.info(`${data.pending.toLocaleString()} campaigns pending classification`)
+      } else {
+        toast.error(data.error || "Failed to fetch pending count")
+      }
+    } catch {
+      toast.error("Failed to fetch pending count")
+    }
+  }
+
+  const handleRunMessageTypesBatch = async () => {
+    setIsBackfillingMessageTypes(true)
+    try {
+      const res = await fetch("/api/admin/backfill-message-types", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cursor: messageTypesCursor }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setMessageTypesCursor(data.hasMore ? data.cursor : null)
+        setMessageTypesBatchResults((prev) => ({
+          totalProcessed: (prev?.totalProcessed ?? 0) + data.processed,
+          totalClassified: (prev?.totalClassified ?? 0) + data.classified,
+          remaining: data.remaining ?? null,
+          hasMore: data.hasMore,
+          samples: data.samples?.length > 0 ? data.samples : (prev?.samples ?? []),
+        }))
+        if (data.hasMore) {
+          toast.success(`Batch done — ${data.classified} classified. ${data.remaining?.toLocaleString()} remaining. Click Run again.`)
+        } else {
+          toast.success(`Backfill complete — all campaigns classified.`)
+          setMessageTypesCursor(null)
+          setMessageTypesPending(0)
+        }
+      } else {
+        toast.error(data.error || "Backfill batch failed")
+      }
+    } catch {
+      toast.error("Backfill batch failed")
+    } finally {
+      setIsBackfillingMessageTypes(false)
     }
   }
 
@@ -3445,6 +3512,90 @@ const downloadActBluePatterns = () => {
                     {batchUnwrapResults.sms.errors.map((err, i) => (
                       <div key={`sms-${i}`} className="text-red-700">
                         <span className="font-medium">SMS {err.id}:</span> {err.phone} - {err.error}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Message Type Classification Backfill */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Backfill Message Types</CardTitle>
+          <CardDescription>
+            Classifies historical email campaigns into message type tags (fundraising ask, urgency, match offer, etc.)
+            using AI. Processes 25 at a time — newest first. New campaigns are classified automatically at ingest.
+            Run in batches by clicking &ldquo;Run Batch&rdquo; repeatedly until complete.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={handleCheckMessageTypesPending} disabled={isBackfillingMessageTypes}>
+              Check Pending
+            </Button>
+            {messageTypesPending !== null && (
+              <Button
+                onClick={handleRunMessageTypesBatch}
+                disabled={isBackfillingMessageTypes || messageTypesPending === 0}
+                className="gap-2"
+              >
+                {isBackfillingMessageTypes ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Classifying...
+                  </>
+                ) : (
+                  <>
+                    <Play size={16} />
+                    Run Batch (25)
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+
+          {messageTypesPending !== null && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {[
+                { label: "Pending", value: messageTypesPending.toLocaleString() },
+                { label: "Classified", value: (messageTypesClassified ?? 0).toLocaleString(), highlight: true },
+                { label: "Total", value: (messageTypesTotal ?? 0).toLocaleString() },
+              ].map(({ label, value, highlight }) => (
+                <div key={label} className="rounded-lg border p-3 text-center">
+                  <div className={`text-2xl font-bold ${highlight ? "text-green-600" : ""}`}>{value}</div>
+                  <div className="text-xs text-muted-foreground mt-1">{label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {messageTypesBatchResults && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {[
+                  { label: "Batches Processed", value: messageTypesBatchResults.totalProcessed },
+                  { label: "Classified This Run", value: messageTypesBatchResults.totalClassified, highlight: true },
+                  { label: "Remaining", value: messageTypesBatchResults.remaining?.toLocaleString() ?? (messageTypesBatchResults.hasMore ? "..." : "0") },
+                ].map(({ label, value, highlight }) => (
+                  <div key={label} className="rounded-lg border p-3 text-center">
+                    <div className={`text-2xl font-bold ${highlight ? "text-green-600" : ""}`}>{value}</div>
+                    <div className="text-xs text-muted-foreground mt-1">{label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {messageTypesBatchResults.samples.length > 0 && (
+                <div className="rounded-lg border p-3 space-y-1">
+                  <h4 className="text-sm font-semibold mb-2">Sample Classifications</h4>
+                  <div className="max-h-48 overflow-y-auto space-y-1">
+                    {messageTypesBatchResults.samples.map((s) => (
+                      <div key={s.id} className="text-xs flex gap-2">
+                        <span className="text-muted-foreground truncate flex-1">{s.subject}</span>
+                        <span className="shrink-0 font-medium text-blue-600">{s.types.join(", ")}</span>
                       </div>
                     ))}
                   </div>

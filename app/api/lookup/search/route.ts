@@ -105,11 +105,12 @@ export async function POST(request: NextRequest) {
       `
     }
 
-    // Persist the search
+    // Persist the search — lookupUserId is the standalone JWT identity,
+    // separate from the main app User table (no FK constraint)
     const searchId = crypto.randomUUID()
     const now = new Date().toISOString()
     await sql`
-      INSERT INTO "LookupSearch" (id, "userId", query, "queryType", results, "createdAt")
+      INSERT INTO "LookupSearch" (id, "lookupUserId", query, "queryType", results, "createdAt")
       VALUES (
         ${searchId},
         ${session.userId},

@@ -8,6 +8,7 @@ import { URL } from "url"
 import { getRedactedNames, applyRedaction, clearRedactionCache, findUniqueRedactedSubject } from "@/lib/redaction-utils"
 import { detectDonationPlatform } from "@/lib/detect-donation-platform"
 import { computeBodyFingerprint } from "@/lib/body-fingerprint"
+import { classifyMessageTypes } from "@/lib/message-classifier"
 
 // Custom fetch using Node's http/https modules to properly handle SSL
 async function customFetch(
@@ -1597,7 +1598,7 @@ export async function processCompetitiveInsights(
           }
         }
 
-        await prisma.competitiveInsightCampaign.create({
+        const newCampaign = await prisma.competitiveInsightCampaign.create({
           data: {
             senderEmail,
             senderName: redactedSenderName,
@@ -1623,6 +1624,21 @@ export async function processCompetitiveInsights(
             rawHeaders: rawHeaders ?? null,
           },
         })
+
+        // Classify message types fire-and-forget — don't block ingest
+        const classifySubject = rawSubject || redactedSubject
+        const classifyPreview = redactedEmailPreview || ""
+        classifyMessageTypes(classifySubject, classifyPreview)
+          .then((types) => {
+            if (types.length > 0) {
+              return prisma.competitiveInsightCampaign.update({
+                where: { id: newCampaign.id },
+                data: { messageTypes: types },
+              })
+            }
+          })
+          .catch((err) => console.error("[message-classifier] post-ingest classification failed:", err))
+
         // Genuinely new campaign created
         return true
       } catch (createError: any) {

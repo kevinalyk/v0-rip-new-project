@@ -107,9 +107,10 @@ export async function generateMetadata({ params }: { params: { token: string } }
       },
       twitter: {
         card: "summary_large_image",
+        site: "@InboxGOP",
         title,
         description,
-        images: [ogImageUrl],
+        images: [{ url: ogImageUrl, width: 1200, height: 630, alt: `${entityName} on Inbox.GOP` }],
       },
     }
   } catch (error) {

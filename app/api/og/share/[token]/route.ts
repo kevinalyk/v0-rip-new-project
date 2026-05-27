@@ -1,37 +1,14 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { type NextRequest } from "next/server"
+import { ImageResponse } from "next/og"
 import { PrismaClient } from "@prisma/client"
 
-export const runtime = "nodejs"
-export const maxDuration = 60
+export const runtime = "edge"
 
-const prisma = new PrismaClient()
+// Edge runtime can't use PrismaClient — use fetch to our own API instead
+// We query the DB via a lightweight internal helper using the Neon HTTP driver
+import { neon } from "@neondatabase/serverless"
 
-// Prepare email HTML identically to how the share page does it
-function prepareEmailHtml(html: string): string {
-  if (!html) return "<p>No content available.</p>"
-
-  // Disable all links (pointer-events: none)
-  let prepared = html.replace(/<a\s/gi, '<a style="pointer-events:none;cursor:default;" ')
-
-  // Inject base style reset
-  const baseStyle = `
-    <style>
-      * { max-width: 100% !important; box-sizing: border-box !important; }
-      body { margin: 0 !important; padding: 16px !important; font-family: Arial, sans-serif !important; background: #fff !important; }
-      img { max-width: 100% !important; height: auto !important; }
-      table { max-width: 100% !important; }
-      a { pointer-events: none !important; cursor: default !important; }
-    </style>
-  `
-
-  if (/<head[^>]*>/i.test(prepared)) {
-    prepared = prepared.replace(/<head[^>]*>/i, (m) => `${m}${baseStyle}`)
-  } else {
-    prepared = baseStyle + prepared
-  }
-
-  return prepared
-}
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
 export async function GET(
   _request: NextRequest,
@@ -40,77 +17,218 @@ export async function GET(
   const { token } = params
 
   try {
-    // Fetch campaign data
-    let emailHtml = ""
+    const sql = neon(process.env.DATABASE_URL!)
+
+    // Try email campaign first
+    const emailRows = await sql`
+      SELECT
+        cic.subject,
+        cic."rawSubject",
+        cic."senderName",
+        cic."inboxRate",
+        cic."dateReceived",
+        e.name AS "entityName",
+        e.party
+      FROM "CompetitiveInsightCampaign" cic
+      LEFT JOIN "Entity" e ON e.id = cic."entityId"
+      WHERE cic."shareToken" = ${token}
+      LIMIT 1
+    `
+
+    let entityName = ""
+    let subject = ""
+    let party = ""
+    let inboxRate: number | null = null
     let isSms = false
     let smsMessage = ""
 
-    const campaign = await prisma.competitiveInsightCampaign.findUnique({
-      where: { shareToken: token },
-      select: { emailContent: true, emailPreview: true },
-    })
-
-    if (campaign) {
-      emailHtml = campaign.emailContent || campaign.emailPreview || ""
+    if (emailRows.length > 0) {
+      const row = emailRows[0]
+      entityName = row.entityName || row.senderName || "Unknown Sender"
+      subject = row.rawSubject || row.subject || ""
+      party = row.party || ""
+      inboxRate = row.inboxRate != null ? Math.round(Number(row.inboxRate) * 100) : null
     } else {
-      const sms = await prisma.smsQueue.findUnique({
-        where: { shareToken: token },
-        select: { message: true },
-      })
-      if (sms) {
+      // Try SMS
+      const smsRows = await sql`
+        SELECT
+          sq.message,
+          sq."phoneNumber",
+          e.name AS "entityName",
+          e.party
+        FROM "SmsQueue" sq
+        LEFT JOIN "Entity" e ON e.id = sq."entityId"
+        WHERE sq."shareToken" = ${token}
+        LIMIT 1
+      `
+      if (smsRows.length > 0) {
+        const row = smsRows[0]
         isSms = true
-        smsMessage = sms.message || ""
+        entityName = row.entityName || row.phoneNumber || "Unknown Sender"
+        smsMessage = row.message || ""
+        party = row.party || ""
       }
     }
 
-    // Build the HTML to screenshot
-    const htmlToRender = isSms
-      ? `<!DOCTYPE html><html><head><style>
-          body { margin: 0; padding: 32px; font-family: Arial, sans-serif; background: #fff; font-size: 16px; line-height: 1.6; color: #111; }
-        </style></head><body>${smsMessage.replace(/\n/g, "<br>")}</body></html>`
-      : `<!DOCTYPE html><html><head></head><body>${prepareEmailHtml(emailHtml)}</body></html>`
+    const partyColor = party?.toLowerCase().includes("democrat") ? "#1D4ED8" : "#B91C1C"
+    const partyLabel = party?.toLowerCase().includes("democrat") ? "Democrat" : party?.toLowerCase().includes("republican") ? "Republican" : party || ""
 
-    // Launch Puppeteer with Sparticuz Chromium
-    let chromium: any
-    let puppeteer: any
+    const displayText = isSms ? smsMessage : subject
+    const truncated = displayText.length > 120 ? displayText.slice(0, 117) + "…" : displayText
 
-    try {
-      chromium = (await import("@sparticuz/chromium")).default
-      puppeteer = (await import("puppeteer-core")).default
-    } catch {
-      return NextResponse.json({ error: "Puppeteer unavailable" }, { status: 500 })
-    }
+    return new ImageResponse(
+      (
+        <div
+          style={{
+            width: 1200,
+            height: 630,
+            background: "#F7F8FA",
+            display: "flex",
+            flexDirection: "column",
+            fontFamily: "system-ui, -apple-system, sans-serif",
+          }}
+        >
+          {/* Top accent bar */}
+          <div style={{ width: "100%", height: 8, background: "#B91C1C", display: "flex" }} />
 
-    const browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: { width: 1200, height: 630 },
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-    })
+          {/* Main content */}
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              padding: "60px 80px",
+              gap: 32,
+            }}
+          >
+            {/* Sender row */}
+            <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+              <div
+                style={{
+                  fontSize: 42,
+                  fontWeight: 700,
+                  color: "#111827",
+                  lineHeight: 1.1,
+                  flex: 1,
+                }}
+              >
+                {entityName}
+              </div>
+              {partyLabel ? (
+                <div
+                  style={{
+                    background: partyColor,
+                    color: "#fff",
+                    fontSize: 20,
+                    fontWeight: 600,
+                    padding: "6px 18px",
+                    borderRadius: 999,
+                    flexShrink: 0,
+                  }}
+                >
+                  {partyLabel}
+                </div>
+              ) : null}
+            </div>
 
-    const page = await browser.newPage()
-    await page.setViewport({ width: 600, height: 630, deviceScaleFactor: 2 })
-    await page.setContent(htmlToRender, { waitUntil: "networkidle0", timeout: 20000 })
+            {/* Subject / message */}
+            <div
+              style={{
+                fontSize: 30,
+                color: "#374151",
+                lineHeight: 1.4,
+                background: "#fff",
+                border: "1px solid #E5E7EB",
+                borderRadius: 16,
+                padding: "28px 36px",
+              }}
+            >
+              {isSms ? (
+                <span style={{ color: "#6B7280", fontSize: 22, marginRight: 12 }}>SMS: </span>
+              ) : (
+                <span style={{ color: "#6B7280", fontSize: 22, marginRight: 12 }}>Subject: </span>
+              )}
+              {truncated}
+            </div>
 
-    // Wait a moment for images to load
-    await new Promise((r) => setTimeout(r, 1000))
+            {/* Inbox rate badge — email only */}
+            {!isSms && inboxRate !== null ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div
+                  style={{
+                    background: inboxRate >= 80 ? "#D1FAE5" : inboxRate >= 50 ? "#FEF3C7" : "#FEE2E2",
+                    color: inboxRate >= 80 ? "#065F46" : inboxRate >= 50 ? "#92400E" : "#991B1B",
+                    fontSize: 22,
+                    fontWeight: 600,
+                    padding: "6px 20px",
+                    borderRadius: 999,
+                  }}
+                >
+                  {inboxRate}% inbox rate
+                </div>
+              </div>
+            ) : null}
+          </div>
 
-    // Screenshot the page content, capped at 630px height
-    const screenshot = await page.screenshot({
-      type: "png",
-      clip: { x: 0, y: 0, width: 600, height: 630 },
-    })
-
-    await browser.close()
-
-    return new NextResponse(screenshot as Buffer, {
-      headers: {
-        "Content-Type": "image/png",
-        "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
-      },
-    })
+          {/* Footer */}
+          <div
+            style={{
+              height: 72,
+              background: "#1B3A6B",
+              display: "flex",
+              alignItems: "center",
+              padding: "0 80px",
+              justifyContent: "space-between",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              {/* Logo mark */}
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  background: "#fff",
+                  borderRadius: 8,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <div style={{ width: 20, height: 20, background: "#1B3A6B", borderRadius: 3, display: "flex" }} />
+              </div>
+              <span style={{ color: "#fff", fontSize: 24, fontWeight: 700 }}>Inbox.GOP</span>
+            </div>
+            <span style={{ color: "#93C5FD", fontSize: 20 }}>app.rip-tool.com</span>
+          </div>
+        </div>
+      ),
+      {
+        width: 1200,
+        height: 630,
+      }
+    )
   } catch (error) {
-    console.error("[OG] Screenshot failed:", error)
-    return NextResponse.json({ error: "Failed to generate image" }, { status: 500 })
+    console.error("[OG] Failed to generate image:", error)
+
+    // Fallback card
+    return new ImageResponse(
+      (
+        <div
+          style={{
+            width: 1200,
+            height: 630,
+            background: "#1B3A6B",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontFamily: "system-ui",
+          }}
+        >
+          <div style={{ color: "#fff", fontSize: 48, fontWeight: 700 }}>Inbox.GOP</div>
+        </div>
+      ),
+      { width: 1200, height: 630 }
+    )
   }
 }

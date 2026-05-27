@@ -314,17 +314,18 @@ export async function runTwitterPost(options: { dryRun?: boolean } = {}): Promis
     }
   }
 
-  // ── Pre-warm the OG image so Twitter's crawler gets it on first scrape ──
+  // ── Pre-generate the OG image and store in Blob so Twitter gets it instantly ──
   try {
-    const ogUrl = `${baseUrl}/api/og/share/${shareToken}`
-    console.log("[twitter-post] Pre-warming OG image:", ogUrl)
-    await fetch(ogUrl, { method: "GET" })
-    // Give Vercel's image cache a moment to settle before Twitter scrapes
-    await new Promise((resolve) => setTimeout(resolve, 3000))
-    console.log("[twitter-post] OG image pre-warm complete")
+    const generateUrl = `${baseUrl}/api/og/share/${shareToken}/generate`
+    console.log("[twitter-post] Generating OG image:", generateUrl)
+    await fetch(generateUrl, {
+      method: "POST",
+      headers: { "x-internal-secret": process.env.INTERNAL_API_SECRET || "" },
+    })
+    console.log("[twitter-post] OG image generation complete")
   } catch (err) {
     // Non-fatal — log and continue
-    console.warn("[twitter-post] OG pre-warm failed (non-fatal):", err)
+    console.warn("[twitter-post] OG generate failed (non-fatal):", err)
   }
 
   // ── Post to Twitter v2 ────────────────────────────────────────────────

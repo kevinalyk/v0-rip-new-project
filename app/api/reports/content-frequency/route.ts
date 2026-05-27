@@ -27,8 +27,8 @@ export async function GET(request: Request) {
       })
       if (!client) return NextResponse.json({ error: "Client not found" }, { status: 404 })
 
-      // Access gate: only $300 (pro) and enterprise plans allowed
-      if (!isSuperAdmin && client.subscriptionPlan !== "pro" && client.subscriptionPlan !== "enterprise") {
+      // Access gate: only Professional ("all") and enterprise plans allowed
+      if (!isSuperAdmin && client.subscriptionPlan !== "all" && client.subscriptionPlan !== "enterprise") {
         return NextResponse.json({ error: "Upgrade required" }, { status: 403 })
       }
       targetClientId = client.id

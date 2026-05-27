@@ -475,15 +475,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                     collapsed={false}
                     onClick={() => navigate(`/${getClientSlug()}/reports/content`)}
                   />
-                  {userRole === "super_admin" && (
-                    <NavItem
-                      icon={<Type size={18} />}
-                      label="Subject Patterns"
-                      active={pathname.includes("/reports/subject-patterns")}
-                      collapsed={false}
-                      onClick={() => navigate(`/${getClientSlug()}/reports/subject-patterns`)}
-                    />
-                  )}
+                  <NavItem
+                    icon={<Type size={18} />}
+                    label="Subject Patterns"
+                    active={pathname.includes("/reports/subject-patterns")}
+                    collapsed={false}
+                    onClick={() => navigate(`/${getClientSlug()}/reports/subject-patterns`)}
+                  />
                   {userRole === "super_admin" && (
                     <NavItem
                       icon={<ShieldCheck size={18} />}

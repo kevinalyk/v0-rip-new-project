@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     if (!isSuperAdmin) {
       const clientId = auth.user.clientId
       const client = await prisma.client.findUnique({ where: { id: clientId! }, select: { subscriptionPlan: true } })
-      if (client?.subscriptionPlan !== "pro" && client?.subscriptionPlan !== "enterprise") {
+      if (client?.subscriptionPlan !== "all" && client?.subscriptionPlan !== "enterprise") {
         return NextResponse.json({ error: "Upgrade required" }, { status: 403 })
       }
     }

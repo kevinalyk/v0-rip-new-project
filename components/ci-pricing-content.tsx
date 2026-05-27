@@ -197,25 +197,46 @@ export function CIPricingContent() {
   const [canceling, setCanceling] = useState(false)
   const [clientId, setClientId] = useState<string>("")
   const [subscriptionRenewDate, setSubscriptionRenewDate] = useState<string | null>(null)
+  // null = not checked yet, false = guest, true = logged in
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
 
   useEffect(() => {
     fetchBillingData()
-    const pathname = window.location.pathname
-    const slug = pathname.split("/")[1]
-    setClientSlug(slug)
+    // Derive clientSlug from the path if we're on a /[clientSlug]/billing route
+    const parts = window.location.pathname.split("/").filter(Boolean)
+    if (parts.length >= 2 && parts[1] === "billing") {
+      setClientSlug(parts[0])
+    }
   }, [])
+
+  // After auth is confirmed, auto-trigger checkout if ?plan= is present
+  useEffect(() => {
+    if (isAuthenticated && clientSlug) {
+      const pendingPlan = searchParams.get("plan") as SubscriptionPlan | null
+      if (pendingPlan && ["paid", "all", "enterprise"].includes(pendingPlan)) {
+        handleSelectPlan(pendingPlan)
+      }
+    }
+  }, [isAuthenticated, clientSlug])
 
   const fetchBillingData = async () => {
     try {
       const response = await fetch("/api/billing")
+      if (response.status === 401) {
+        // Unauthenticated guest — show the table without a current plan highlighted
+        setIsAuthenticated(false)
+        return
+      }
       if (!response.ok) throw new Error("Failed to fetch billing data")
       const data: BillingData = await response.json()
       setCurrentPlan(data.client.subscriptionPlan)
       setCurrentStatus(data.client.subscriptionStatus)
       setClientId(data.client.id)
       setSubscriptionRenewDate(data.client.subscriptionRenewDate || null)
+      setIsAuthenticated(true)
     } catch (error) {
       console.error("Error fetching billing data:", error)
+      setIsAuthenticated(false)
     } finally {
       setLoading(false)
     }
@@ -227,7 +248,8 @@ export function CIPricingContent() {
       setCanceling(true)
       await cancelSubscription(clientId, "plan")
       setShowCancelDialog(false)
-      router.push(`/${clientSlug}/account/billing?cancelled=true`)
+      const base = clientSlug ? `/${clientSlug}` : ""
+      router.push(`${base}/account/billing?cancelled=true`)
     } catch (error) {
       console.error("Error canceling subscription:", error)
       alert("Failed to cancel subscription. Please try again.")
@@ -237,6 +259,13 @@ export function CIPricingContent() {
   }
 
   const handleSelectPlan = async (plan: SubscriptionPlan) => {
+    // Guest users get redirected to login, which then returns them here with the plan pre-selected
+    if (!isAuthenticated) {
+      const returnUrl = `/billing?plan=${plan}`
+      router.push(`/login?redirect=${encodeURIComponent(returnUrl)}`)
+      return
+    }
+
     if (plan === currentPlan && currentStatus === "active") return
 
     if (plan === "free") {
@@ -244,7 +273,8 @@ export function CIPricingContent() {
         setShowCancelDialog(true)
         return
       }
-      router.push(`/${clientSlug}/account/billing`)
+      const base = clientSlug ? `/${clientSlug}` : ""
+      router.push(`${base}/account/billing`)
       return
     }
 

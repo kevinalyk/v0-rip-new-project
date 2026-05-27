@@ -442,7 +442,7 @@ function EntityCard({ entity }: { entity: Entity }) {
   )
 }
 
-// ─── Results section ──���────────────────────────────────�����────────────────────────
+// ─── Results section ──���────────────────────────────────������────────────────────────
 
 function SearchResults({
   query,
@@ -891,6 +891,22 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
 
   return (
     <div style={{ backgroundColor: "#F7F8FA", minHeight: "100vh" }}>
+      {/* Fixed gutter ads — only visible when viewport is wide enough to have gutters */}
+      <div
+        className="fixed top-1/2 -translate-y-1/2 z-30 hidden xl:block"
+        style={{ left: "calc(50% - 430px - 140px)" }}
+        aria-label="Advertisement"
+      >
+        <AdSidebar showAd={true} slot="5401962530" />
+      </div>
+      <div
+        className="fixed top-1/2 -translate-y-1/2 z-30 hidden xl:block"
+        style={{ right: "calc(50% - 430px - 140px)" }}
+        aria-label="Advertisement"
+      >
+        <AdSidebar showAd={true} slot="9922824720" />
+      </div>
+
       {showAuthGate && (
         <AuthGateModal
           defaultTab={authGateTab}

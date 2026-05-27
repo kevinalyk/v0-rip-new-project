@@ -156,8 +156,10 @@ export default function SubjectPatternsPage() {
   }
 
   const isFree = subscriptionPlan === "free"
+  const isBasic = subscriptionPlan === "paid"
+  const hasAccess = subscriptionPlan === "all" || subscriptionPlan === "enterprise"
 
-  if (isFree) {
+  if (isFree || isBasic) {
     return (
       <AppLayout clientSlug={clientSlug} isAdminView={clientSlug === "admin"}>
         <AdBanner showAd={true} />

@@ -16,6 +16,9 @@ import { runTwitterPost } from "@/app/api/admin/twitter-post/route"
  *   { "path": "/api/cron/twitter-post", "schedule": "0 1 * * *"  },
  */
 export async function GET(request: NextRequest) {
+  // PAUSED — re-enable by removing this block and re-adding the cron entry to vercel.json
+  return NextResponse.json({ message: "Twitter bot is currently paused" }, { status: 200 })
+
   // Validate Vercel cron secret
   const cronSecret = process.env.CRON_SECRET
   if (cronSecret) {

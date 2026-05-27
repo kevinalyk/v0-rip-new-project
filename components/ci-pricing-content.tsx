@@ -426,61 +426,65 @@ export function CIPricingContent() {
             {/* CTA row */}
             <tr className="border-t bg-muted/20">
               <td className="py-5 px-6" />
-              {PLANS.map((plan) => (
-                <td key={plan.key} className="py-5 px-4 text-center">
-                  {isCurrentPlan(plan.key) ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled
-                      className="w-full max-w-[140px]"
-                    >
-                      Current Plan
-                    </Button>
-                  ) : plan.key === "free" ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full max-w-[140px]"
-                      onClick={() => handleSelectPlan("free")}
-                      disabled={checkingOutPlan !== null}
-                    >
-                      Downgrade
-                    </Button>
-                  ) : plan.key === "enterprise" ? (
-                    <Button
-                      size="sm"
-                      className="w-full max-w-[140px]"
-                      style={{ backgroundColor: "#dc2a28", color: "white" }}
-                      onClick={() => handleSelectPlan("enterprise")}
-                      disabled={checkingOutPlan !== null}
-                    >
-                      Contact Sales
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      className="w-full max-w-[140px]"
-                      style={
-                        checkingOutPlan !== plan.key
-                          ? { backgroundColor: "#dc2a28", color: "white" }
-                          : undefined
-                      }
-                      onClick={() => handleSelectPlan(plan.key)}
-                      disabled={checkingOutPlan !== null}
-                    >
-                      {checkingOutPlan === plan.key ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        "Get Started"
-                      )}
-                    </Button>
-                  )}
-                </td>
-              ))}
+              {PLANS.map((plan, planIdx) => {
+                const currentPlanIdx = PLANS.findIndex((p) => p.key === currentPlan)
+                const isDowngrade = planIdx < currentPlanIdx
+                return (
+                  <td key={plan.key} className="py-5 px-4 text-center">
+                    {isCurrentPlan(plan.key) ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled
+                        className="w-full max-w-[140px]"
+                      >
+                        Current Plan
+                      </Button>
+                    ) : plan.key === "enterprise" ? (
+                      <Button
+                        size="sm"
+                        className="w-full max-w-[140px]"
+                        style={{ backgroundColor: "#dc2a28", color: "white" }}
+                        onClick={() => handleSelectPlan("enterprise")}
+                        disabled={checkingOutPlan !== null}
+                      >
+                        Contact Sales
+                      </Button>
+                    ) : isDowngrade ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full max-w-[140px]"
+                        onClick={() => handleSelectPlan(plan.key)}
+                        disabled={checkingOutPlan !== null}
+                      >
+                        Downgrade
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="w-full max-w-[140px]"
+                        style={
+                          checkingOutPlan !== plan.key
+                            ? { backgroundColor: "#dc2a28", color: "white" }
+                            : undefined
+                        }
+                        onClick={() => handleSelectPlan(plan.key)}
+                        disabled={checkingOutPlan !== null}
+                      >
+                        {checkingOutPlan === plan.key ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          "Get Started"
+                        )}
+                      </Button>
+                    )}
+                  </td>
+                )
+              })}
             </tr>
           </tbody>
         </table>

@@ -350,9 +350,9 @@ export async function runTwitterPost(options: { dryRun?: boolean } = {}): Promis
   // ── Mark as posted ────────────────────────────────────────────────────
   const now = new Date()
   if (winner.isSms) {
-    await prisma.smsQueue.update({ where: { id: winner.id }, data: { twitterPostedAt: now } })
+    await prisma.smsQueue.update({ where: { id: winner.id }, data: { twitterPosted: true, twitterPostedAt: now } })
   } else {
-    await prisma.competitiveInsightCampaign.update({ where: { id: winner.id }, data: { twitterPostedAt: now } })
+    await prisma.competitiveInsightCampaign.update({ where: { id: winner.id }, data: { twitterPosted: true, twitterPostedAt: now } })
   }
 
   const tweetId = twitterData.data?.id

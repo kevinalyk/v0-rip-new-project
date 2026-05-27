@@ -178,8 +178,12 @@ export async function createCICheckoutSession(data: {
 
     const isDevelopment = process.env.NODE_ENV === "development"
     const baseUrl = isDevelopment ? "http://localhost:3000" : "https://app.rip-tool.com"
-    const successUrl = `${baseUrl}/${data.clientSlug}/ci/campaigns?success=true`
-    const cancelUrl = `${baseUrl}/${data.clientSlug}/billing?canceled=true`
+    // When called from the public /billing page, clientSlug is empty — fall back to /billing
+    const slugPrefix = data.clientSlug ? `/${data.clientSlug}` : ""
+    const successUrl = slugPrefix
+      ? `${baseUrl}${slugPrefix}/ci/campaigns?success=true`
+      : `${baseUrl}/billing?success=true`
+    const cancelUrl = `${baseUrl}${slugPrefix || ""}/billing?canceled=true`
 
     const lineItems: any[] = [
       {

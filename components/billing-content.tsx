@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, CreditCard, Calendar, Check, X, AlertTriangle, Receipt, Download, ExternalLink } from "lucide-react"
+import { Loader2, CreditCard, Calendar, AlertTriangle, Receipt, Download, ExternalLink } from "lucide-react"
 import { format } from "date-fns"
 import { cancelSubscription } from "@/app/actions/stripe"
 import {
@@ -93,7 +93,7 @@ const getPlanFeatures = (plan: string) => {
     case "professional":
       return {
         name: "Professional",
-        price: "$250",
+        price: "$300",
         ciHistory: "Unlimited",
         followEntities: "Unlimited",
         analytics: true,
@@ -367,76 +367,6 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
                     {isCancelled && <Badge variant="destructive">Cancelled</Badge>}
                   </div>
                 </>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              {/* CI Features (included in all plans) */}
-              <div className="flex items-center gap-2 text-sm">
-                {!hasNoActivePaidPlan || isFreeTier ? (
-                  <Check className="h-4 w-4 text-green-500" />
-                ) : (
-                  <X className="h-4 w-4 text-muted-foreground" />
-                )}
-                <span>CI History: {planFeatures.ciHistory}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                {(!hasNoActivePaidPlan || isFreeTier) && planFeatures.followEntities !== "None" ? (
-                  <Check className="h-4 w-4 text-green-500" />
-                ) : (
-                  <X className="h-4 w-4 text-muted-foreground" />
-                )}
-                <span>Follow Entities: {planFeatures.followEntities}</span>
-              </div>
-
-              {planFeatures.tier !== "starter" && (
-                <div className="flex items-center gap-2 text-sm">
-                  {!hasNoActivePaidPlan && planFeatures.analytics ? (
-                    <Check className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <X className="h-4 w-4 text-muted-foreground" />
-                  )}
-                  <span>Analytics Dashboard</span>
-                </div>
-              )}
-
-              {planFeatures.nextTierFeatures.map((feature, index) => (
-                <div key={index} className="flex items-center gap-2 text-sm">
-                  <X className="h-4 w-4 text-muted-foreground" />
-                  <span>{feature.text}</span>
-                </div>
-              ))}
-
-              {planFeatures.inboxTools && (
-                <>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Inbox Tools Access</span>
-                  </div>
-                  {planFeatures.seedTests && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Check className="h-4 w-4 text-green-500" />
-                      <span>Seed Tests: {planFeatures.seedTests}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 text-sm">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Campaign monitoring</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Deliverability insights</span>
-                  </div>
-                </>
-              )}
-
-              {(planFeatures.tier === "professional" ||
-                planFeatures.tier === "advanced" ||
-                planFeatures.tier === "enterprise") && (
-                <div className="flex items-center gap-2 text-sm">
-                  <Check className="h-4 w-4 text-green-500" />
-                  <span>Personal Email Tracking (Coming Soon)</span>
-                </div>
               )}
             </div>
 

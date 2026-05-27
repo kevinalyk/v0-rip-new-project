@@ -197,25 +197,46 @@ export function CIPricingContent() {
   const [canceling, setCanceling] = useState(false)
   const [clientId, setClientId] = useState<string>("")
   const [subscriptionRenewDate, setSubscriptionRenewDate] = useState<string | null>(null)
+  // null = not checked yet, false = guest, true = logged in
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
 
   useEffect(() => {
     fetchBillingData()
-    const pathname = window.location.pathname
-    const slug = pathname.split("/")[1]
-    setClientSlug(slug)
+    // Derive clientSlug from the path if we're on a /[clientSlug]/billing route
+    const parts = window.location.pathname.split("/").filter(Boolean)
+    if (parts.length >= 2 && parts[1] === "billing") {
+      setClientSlug(parts[0])
+    }
   }, [])
+
+  // After auth is confirmed, auto-trigger checkout if ?plan= is present
+  useEffect(() => {
+    if (isAuthenticated && clientSlug) {
+      const pendingPlan = searchParams.get("plan") as SubscriptionPlan | null
+      if (pendingPlan && ["paid", "all", "enterprise"].includes(pendingPlan)) {
+        handleSelectPlan(pendingPlan)
+      }
+    }
+  }, [isAuthenticated, clientSlug])
 
   const fetchBillingData = async () => {
     try {
       const response = await fetch("/api/billing")
+      if (response.status === 401) {
+        // Unauthenticated guest — show the table without a current plan highlighted
+        setIsAuthenticated(false)
+        return
+      }
       if (!response.ok) throw new Error("Failed to fetch billing data")
       const data: BillingData = await response.json()
       setCurrentPlan(data.client.subscriptionPlan)
       setCurrentStatus(data.client.subscriptionStatus)
       setClientId(data.client.id)
       setSubscriptionRenewDate(data.client.subscriptionRenewDate || null)
+      setIsAuthenticated(true)
     } catch (error) {
       console.error("Error fetching billing data:", error)
+      setIsAuthenticated(false)
     } finally {
       setLoading(false)
     }
@@ -227,7 +248,8 @@ export function CIPricingContent() {
       setCanceling(true)
       await cancelSubscription(clientId, "plan")
       setShowCancelDialog(false)
-      router.push(`/${clientSlug}/account/billing?cancelled=true`)
+      const base = clientSlug ? `/${clientSlug}` : ""
+      router.push(`${base}/account/billing?cancelled=true`)
     } catch (error) {
       console.error("Error canceling subscription:", error)
       alert("Failed to cancel subscription. Please try again.")
@@ -237,6 +259,13 @@ export function CIPricingContent() {
   }
 
   const handleSelectPlan = async (plan: SubscriptionPlan) => {
+    // Guest users get redirected to login, which then returns them here with the plan pre-selected
+    if (!isAuthenticated) {
+      const returnUrl = `/billing?plan=${plan}`
+      router.push(`/login?redirect=${encodeURIComponent(returnUrl)}`)
+      return
+    }
+
     if (plan === currentPlan && currentStatus === "active") return
 
     if (plan === "free") {
@@ -244,12 +273,13 @@ export function CIPricingContent() {
         setShowCancelDialog(true)
         return
       }
-      router.push(`/${clientSlug}/account/billing`)
+      const base = clientSlug ? `/${clientSlug}` : ""
+      router.push(`${base}/account/billing`)
       return
     }
 
     if (plan === "enterprise") {
-      window.location.href = "mailto:support@rip-tool.com?subject=Enterprise Plan Inquiry"
+      window.location.href = "mailto:kevin@rip-tool.com,ryan@rip-tool.com?subject=Enterprise Plan Inquiry"
       return
     }
 
@@ -426,61 +456,65 @@ export function CIPricingContent() {
             {/* CTA row */}
             <tr className="border-t bg-muted/20">
               <td className="py-5 px-6" />
-              {PLANS.map((plan) => (
-                <td key={plan.key} className="py-5 px-4 text-center">
-                  {isCurrentPlan(plan.key) ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled
-                      className="w-full max-w-[140px]"
-                    >
-                      Current Plan
-                    </Button>
-                  ) : plan.key === "free" ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full max-w-[140px]"
-                      onClick={() => handleSelectPlan("free")}
-                      disabled={checkingOutPlan !== null}
-                    >
-                      Downgrade
-                    </Button>
-                  ) : plan.key === "enterprise" ? (
-                    <Button
-                      size="sm"
-                      className="w-full max-w-[140px]"
-                      style={{ backgroundColor: "#dc2a28", color: "white" }}
-                      onClick={() => handleSelectPlan("enterprise")}
-                      disabled={checkingOutPlan !== null}
-                    >
-                      Contact Sales
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      className="w-full max-w-[140px]"
-                      style={
-                        checkingOutPlan !== plan.key
-                          ? { backgroundColor: "#dc2a28", color: "white" }
-                          : undefined
-                      }
-                      onClick={() => handleSelectPlan(plan.key)}
-                      disabled={checkingOutPlan !== null}
-                    >
-                      {checkingOutPlan === plan.key ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        "Get Started"
-                      )}
-                    </Button>
-                  )}
-                </td>
-              ))}
+              {PLANS.map((plan, planIdx) => {
+                const currentPlanIdx = PLANS.findIndex((p) => p.key === currentPlan)
+                const isDowngrade = planIdx < currentPlanIdx
+                return (
+                  <td key={plan.key} className="py-5 px-4 text-center">
+                    {isCurrentPlan(plan.key) ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled
+                        className="w-full max-w-[140px]"
+                      >
+                        Current Plan
+                      </Button>
+                    ) : plan.key === "enterprise" ? (
+                      <Button
+                        size="sm"
+                        className="w-full max-w-[140px]"
+                        style={{ backgroundColor: "#dc2a28", color: "white" }}
+                        onClick={() => handleSelectPlan("enterprise")}
+                        disabled={checkingOutPlan !== null}
+                      >
+                        Contact Sales
+                      </Button>
+                    ) : isDowngrade ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full max-w-[140px]"
+                        onClick={() => handleSelectPlan(plan.key)}
+                        disabled={checkingOutPlan !== null}
+                      >
+                        Downgrade
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="w-full max-w-[140px]"
+                        style={
+                          checkingOutPlan !== plan.key
+                            ? { backgroundColor: "#dc2a28", color: "white" }
+                            : undefined
+                        }
+                        onClick={() => handleSelectPlan(plan.key)}
+                        disabled={checkingOutPlan !== null}
+                      >
+                        {checkingOutPlan === plan.key ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          "Get Started"
+                        )}
+                      </Button>
+                    )}
+                  </td>
+                )
+              })}
             </tr>
           </tbody>
         </table>
@@ -490,7 +524,7 @@ export function CIPricingContent() {
         <p>All plans include access to our comprehensive political campaign database.</p>
         <p className="mt-1">
           Questions?{" "}
-          <a href="mailto:support@rip-tool.com" className="text-[#dc2a28] hover:underline">
+          <a href="mailto:kevin@rip-tool.com,ryan@rip-tool.com" className="text-[#dc2a28] hover:underline">
             Contact support
           </a>
         </p>

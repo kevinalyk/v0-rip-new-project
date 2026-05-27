@@ -57,6 +57,7 @@ export async function generateMetadata({ params }: { params: { token: string } }
     let campaign = await prisma.competitiveInsightCampaign.findUnique({
       where: { shareToken: token },
       include: { entity: true },
+      // @ts-ignore — ogImageUrl added via migration
     })
 
     let isSms = false
@@ -85,8 +86,10 @@ export async function generateMetadata({ params }: { params: { token: string } }
       ? (campaign as any).message?.slice(0, 160)
       : (campaign as any).subject?.slice(0, 160) || "View this campaign on RIP Tool"
 
-    // Use absolute URL so social crawlers (iMessage, Twitter, Signal) can fetch the image
-    const ogImageUrl = `${APP_URL}/api/og/share/${token}`
+    // Use the pre-generated Blob URL directly when available so Twitter gets a plain image URL
+    // with no redirects. Fall back to the dynamic OG route if not yet generated.
+    const pregenUrl = (campaign as any)?.ogImageUrl ?? null
+    const ogImageUrl = pregenUrl || `${APP_URL}/api/og/share/${token}`
 
     return {
       title,

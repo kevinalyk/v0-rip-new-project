@@ -47,8 +47,13 @@ export async function GET(
     })
 
     if (campaign?.ogImageUrl) {
-      return NextResponse.redirect(campaign.ogImageUrl, {
-        headers: { "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800" },
+      const imgRes = await fetch(campaign.ogImageUrl)
+      const imgBuffer = await imgRes.arrayBuffer()
+      return new NextResponse(imgBuffer, {
+        headers: {
+          "Content-Type": imgRes.headers.get("Content-Type") || "image/png",
+          "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+        },
       })
     }
 
@@ -58,8 +63,13 @@ export async function GET(
     })
 
     if (smsCached?.ogImageUrl) {
-      return NextResponse.redirect(smsCached.ogImageUrl, {
-        headers: { "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800" },
+      const imgRes = await fetch(smsCached.ogImageUrl)
+      const imgBuffer = await imgRes.arrayBuffer()
+      return new NextResponse(imgBuffer, {
+        headers: {
+          "Content-Type": imgRes.headers.get("Content-Type") || "image/png",
+          "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+        },
       })
     }
 

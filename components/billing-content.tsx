@@ -93,7 +93,7 @@ const getPlanFeatures = (plan: string) => {
     case "professional":
       return {
         name: "Professional",
-        price: "$250",
+        price: "$300",
         ciHistory: "Unlimited",
         followEntities: "Unlimited",
         analytics: true,

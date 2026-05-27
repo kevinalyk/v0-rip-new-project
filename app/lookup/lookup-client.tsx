@@ -442,7 +442,7 @@ function EntityCard({ entity }: { entity: Entity }) {
   )
 }
 
-// ─── Results section ──���────────────────────────────────�������────────────────────────
+// ─── Results section ──���────────────────────────────────��������────────────────────────
 
 function SearchResults({
   query,
@@ -1084,7 +1084,12 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
             )}
           </section>
 
-          {/* History — collapsed by default, shown right below search card */}
+          {/* Results */}
+          {results !== null && (
+            <SearchResults query={lastQuery} queryType={lastQueryType} results={results} />
+          )}
+
+          {/* History — collapsed by default, shown below current results */}
           {currentUser && historyLoaded && history.length > 0 && (
             <HistoryPanel
               history={history}
@@ -1098,11 +1103,6 @@ export default function LookupClient({ userEmail }: { userEmail: string | null }
                 setHistory([])
               }}
             />
-          )}
-
-          {/* Results */}
-          {results !== null && (
-            <SearchResults query={lastQuery} queryType={lastQueryType} results={results} />
           )}
 
           {/* Divider */}

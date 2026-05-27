@@ -96,7 +96,7 @@ export default function ContentFrequencyPage() {
   }, [clientSlug])
 
   const isSuperAdmin = userRole === "super_admin"
-  const hasAccess = isSuperAdmin || subscriptionPlan === "pro" || subscriptionPlan === "enterprise"
+  const hasAccess = isSuperAdmin || subscriptionPlan === "all" || subscriptionPlan === "enterprise"
 
   if (loading) {
     return (

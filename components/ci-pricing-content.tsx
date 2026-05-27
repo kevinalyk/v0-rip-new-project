@@ -249,7 +249,7 @@ export function CIPricingContent() {
     }
 
     if (plan === "enterprise") {
-      window.location.href = "mailto:support@rip-tool.com?subject=Enterprise Plan Inquiry"
+      window.location.href = "mailto:kevin@rip-tool.com,ryan@rip-tool.com?subject=Enterprise Plan Inquiry"
       return
     }
 
@@ -490,7 +490,7 @@ export function CIPricingContent() {
         <p>All plans include access to our comprehensive political campaign database.</p>
         <p className="mt-1">
           Questions?{" "}
-          <a href="mailto:support@rip-tool.com" className="text-[#dc2a28] hover:underline">
+          <a href="mailto:kevin@rip-tool.com,ryan@rip-tool.com" className="text-[#dc2a28] hover:underline">
             Contact support
           </a>
         </p>

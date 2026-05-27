@@ -312,6 +312,7 @@ model CompetitiveInsightCampaign {
   shareCount          Int      @default(0) // How many times share button was clicked
   shareViewCount      Int      @default(0) // How many times shared link was viewed
   viewCount           Int      @default(0) // Total views (direct clicks + shared link views)
+  ogImageUrl          String?  // Pre-generated OG screenshot URL stored in Vercel Blob
   isHidden            Boolean  @default(false) // Super admin hide/unhide control
   hiddenAt            DateTime? // When it was hidden
   hiddenBy            String?  // Which admin hid it
@@ -479,6 +480,7 @@ model SmsQueue {
   shareCount          Int      @default(0) // How many times share button was clicked
   shareViewCount      Int      @default(0) // How many times shared link was viewed
   viewCount           Int      @default(0) // Total views (direct clicks + shared link views)
+  ogImageUrl          String?  // Pre-generated OG screenshot URL stored in Vercel Blob
   isHidden            Boolean  @default(false) // Super admin hide/unhide control
   hiddenAt            DateTime? // When it was hidden
   hiddenBy            String?  // Which admin hid it

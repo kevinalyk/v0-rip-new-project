@@ -1274,9 +1274,9 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                                     size="sm"
                                     onClick={() => handleAutoAssignSingle(campaign)}
                                     className="h-8"
-                                    title="Auto-assign using donation platform identifiers (WinRed, ActBlue, Anedot, etc.)"
+                                    title="Categorize using donation platform identifiers (WinRed, ActBlue, Anedot, etc.)"
                                   >
-                                    Auto-Assign
+                                    Categorize
                                   </Button>
                                 )
                               })()}
@@ -2866,10 +2866,19 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                     <ZoomIn className="h-4 w-4" />
                   </Button>
                 </div>
-                <Button onClick={handleAssignFromPreview}>
-                  <ArrowRight className="h-4 w-4 mr-2" />
-                  Assign
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => { handleAutoAssignSingle(selectedPreviewCampaign); setSelectedPreviewCampaign(null) }}
+                    title="Categorize using donation platform identifiers (WinRed, ActBlue, Anedot, etc.)"
+                  >
+                    Categorize
+                  </Button>
+                  <Button onClick={handleAssignFromPreview}>
+                    <ArrowRight className="h-4 w-4 mr-2" />
+                    Assign
+                  </Button>
+                </div>
               </div>
 
               <Tabs defaultValue="preview" className="mt-4">

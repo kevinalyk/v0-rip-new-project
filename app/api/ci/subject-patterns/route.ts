@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
       select: {
         id: true,
         subject: true,
+        rawSubject: true,
         senderName: true,
         senderEmail: true,
         dateReceived: true,
@@ -136,7 +137,9 @@ export async function GET(request: NextRequest) {
     const total = campaigns.length
 
     for (const c of campaigns) {
-      const patterns = classifySubjectLine(c.subject)
+      // Classify against rawSubject so merge tags ({{Name}}, [NAME], etc.) are intact,
+      // not the sanitized subject which replaces them with [Omitted]
+      const patterns = classifySubjectLine(c.rawSubject || c.subject)
       const party = (c.entity?.party ?? "").toLowerCase()
 
       for (const p of patterns) {

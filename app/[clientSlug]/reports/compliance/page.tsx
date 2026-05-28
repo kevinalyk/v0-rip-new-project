@@ -43,7 +43,8 @@ export default function ComplianceReportPage() {
   }, [clientSlug])
 
   const isSuperAdmin = userRole === "super_admin"
-  const hasAccess = isSuperAdmin || subscriptionPlan === "pro" || subscriptionPlan === "enterprise"
+  // "all" = Professional, "basic_inboxing" = legacy Advanced, "enterprise" = Enterprise
+  const hasAccess = isSuperAdmin || subscriptionPlan === "all" || subscriptionPlan === "basic_inboxing" || subscriptionPlan === "enterprise"
 
   if (loading) {
     return (

@@ -1426,7 +1426,7 @@ export async function sendProductUpdateEmail(params: {
 
   const itemsHtml = items
     .map((item, i) => {
-      const borderTop = i > 0 ? "margin-top:24px;padding-top:24px;border-top:1px solid #1f2937;" : ""
+      const borderTop = i > 0 ? "margin-top:24px;padding-top:24px;border-top:1px solid #e5e7eb;" : ""
       const imageBlock = item.imageUrl
         ? `<img src="${item.imageUrl}" alt="${item.title}" width="552" style="display:block;width:100%;max-width:552px;border-radius:6px;margin-bottom:16px;" />`
         : ""
@@ -1435,12 +1435,12 @@ export async function sendProductUpdateEmail(params: {
         <tr>
           <td style="${borderTop}">
             ${imageBlock}
-            <p style="margin:0 0 4px;font-size:11px;color:#4b5563;font-weight:500;">${formatDate(item.publishedAt)}</p>
+            <p style="margin:0 0 4px;font-size:11px;color:#6b7280;font-weight:500;">${formatDate(item.publishedAt)}</p>
             <h2 style="margin:0 0 10px;font-size:16px;font-weight:700;line-height:1.4;">
-              <a href="${articleUrl}" target="_blank" style="color:#f9fafb;text-decoration:none;">${item.title}</a>
+              <a href="${articleUrl}" target="_blank" style="color:#111827;text-decoration:none;">${item.title}</a>
             </h2>
-            <div style="font-size:13px;color:#9ca3af;line-height:1.7;">
-              <a href="${articleUrl}" target="_blank" style="color:#9ca3af;text-decoration:none;">${item.body.replace(/\n/g, "<br/>")}</a>
+            <div style="font-size:13px;color:#4b5563;line-height:1.7;">
+              <a href="${articleUrl}" target="_blank" style="color:#4b5563;text-decoration:none;">${item.body.replace(/\n/g, "<br/>")}</a>
             </div>
           </td>
         </tr>`
@@ -1454,8 +1454,8 @@ export async function sendProductUpdateEmail(params: {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>What&apos;s New on Inbox.GOP</title>
 </head>
-<body style="margin:0;padding:0;background:#030712;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#030712;padding:32px 16px;">
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:32px 16px;">
     <tr>
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
@@ -1470,7 +1470,7 @@ export async function sendProductUpdateEmail(params: {
                     <span style="font-size:13px;color:#6b7280;font-weight:500;vertical-align:middle;">What&apos;s New on Inbox.GOP</span>
                   </td>
                   <td style="text-align:right;vertical-align:middle;">
-                    <a href="${whatsNewUrl}" target="_blank" style="font-size:12px;color:#4b5563;text-decoration:none;">View all updates</a>
+                    <a href="${whatsNewUrl}" target="_blank" style="font-size:12px;color:#374151;text-decoration:none;">View all updates</a>
                   </td>
                 </tr>
               </table>
@@ -1479,9 +1479,9 @@ export async function sendProductUpdateEmail(params: {
 
           <!-- Intro card -->
           <tr>
-            <td style="background:#111827;border-radius:8px 8px 0 0;padding:20px 24px;border-bottom:1px solid #1f2937;">
-              <p style="margin:0 0 4px;font-size:15px;color:#f9fafb;font-weight:600;">${greeting}</p>
-              <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">
+            <td style="background:#ffffff;border-radius:8px 8px 0 0;padding:20px 24px;border-bottom:1px solid #e5e7eb;">
+              <p style="margin:0 0 4px;font-size:15px;color:#111827;font-weight:600;">${greeting}</p>
+              <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">
                 Here&apos;s what we&apos;ve shipped this week — ${items.length} new update${items.length === 1 ? "" : "s"} for you.
               </p>
             </td>
@@ -1489,7 +1489,7 @@ export async function sendProductUpdateEmail(params: {
 
           <!-- Updates -->
           <tr>
-            <td style="background:#111827;border-radius:0 0 8px 8px;padding:24px;">
+            <td style="background:#ffffff;border-radius:0 0 8px 8px;padding:24px;">
               <table width="100%" cellpadding="0" cellspacing="0">
                 ${itemsHtml}
               </table>
@@ -1499,11 +1499,11 @@ export async function sendProductUpdateEmail(params: {
           <!-- Footer -->
           <tr>
             <td style="padding:24px 0 0;">
-              <p style="margin:0;font-size:12px;color:#374151;text-align:center;line-height:1.8;">
+              <p style="margin:0;font-size:12px;color:#6b7280;text-align:center;line-height:1.8;">
                 You&apos;re receiving this because you have product updates enabled on
-                <a href="https://app.rip-tool.com" style="color:#6b7280;text-decoration:none;">app.rip-tool.com</a>.<br/>
+                <a href="https://app.rip-tool.com" style="color:#374151;text-decoration:none;">app.rip-tool.com</a>.<br/>
                 To unsubscribe, visit your
-                <a href="${settingsUrl}" style="color:#6b7280;text-decoration:none;">email settings</a>.
+                <a href="${settingsUrl}" style="color:#374151;text-decoration:none;">email settings</a>.
               </p>
             </td>
           </tr>

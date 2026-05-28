@@ -1625,19 +1625,27 @@ export async function processCompetitiveInsights(
           },
         })
 
-        // Classify message types fire-and-forget — don't block ingest
+        // Classify message types — awaited with a 10s timeout so serverless doesn't
+        // abandon the promise before it resolves, while still bounding ingest latency.
         const classifySubject = rawSubject || redactedSubject
         const classifyPreview = redactedEmailPreview || ""
-        classifyMessageTypes(classifySubject, classifyPreview)
-          .then((types) => {
-            if (types.length > 0) {
-              return prisma.competitiveInsightCampaign.update({
-                where: { id: newCampaign.id },
-                data: { messageTypes: types },
-              })
-            }
-          })
-          .catch((err) => console.error("[message-classifier] post-ingest classification failed:", err))
+        try {
+          const classifyWithTimeout = Promise.race([
+            classifyMessageTypes(classifySubject, classifyPreview),
+            new Promise<string[]>((_, reject) =>
+              setTimeout(() => reject(new Error("classification timeout")), 10000)
+            ),
+          ])
+          const types = await classifyWithTimeout
+          if (types.length > 0) {
+            await prisma.competitiveInsightCampaign.update({
+              where: { id: newCampaign.id },
+              data: { messageTypes: types },
+            })
+          }
+        } catch (err) {
+          console.error("[message-classifier] post-ingest classification failed:", err)
+        }
 
         // Genuinely new campaign created
         return true

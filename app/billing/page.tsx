@@ -1,18 +1,36 @@
-import { Suspense } from "react"
+"use client"
+
+import { Suspense, useEffect, useState } from "react"
 import { CIPricingContent } from "@/components/ci-pricing-content"
 import { Loader2 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 
-export const metadata = {
-  title: "Plans & Pricing — Inbox.GOP",
-  description: "Compare plans and get started with Inbox.GOP political intelligence.",
-}
-
 export default function PublicBillingPage() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
+  const [clientSlug, setClientSlug] = useState<string>("")
+
+  useEffect(() => {
+    fetch("/api/billing")
+      .then((res) => {
+        if (res.status === 401) {
+          setIsAuthenticated(false)
+          return null
+        }
+        return res.json()
+      })
+      .then((data) => {
+        if (data) {
+          setIsAuthenticated(true)
+          setClientSlug(data.client?.slug || "")
+        }
+      })
+      .catch(() => setIsAuthenticated(false))
+  }, [])
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Minimal header for public context */}
+      {/* Minimal header */}
       <header className="border-b">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
@@ -27,12 +45,31 @@ export default function PublicBillingPage() {
             </div>
             <span className="font-bold text-base">Inbox.GOP</span>
           </Link>
-          <Link
-            href="/login"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Sign in
-          </Link>
+
+          {/* Auth-aware nav — null while loading to avoid flash */}
+          {isAuthenticated === true ? (
+            <Link
+              href={clientSlug ? `/${clientSlug}/ci/campaigns` : "/"}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Back to Feed
+            </Link>
+          ) : isAuthenticated === false ? (
+            <div className="flex items-center gap-4">
+              <Link
+                href="/login"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Sign in
+              </Link>
+              <Link
+                href="/signup"
+                className="text-sm bg-[#dc2a28] hover:bg-[#dc2a28]/90 text-white px-3 py-1.5 rounded-md transition-colors"
+              >
+                Sign up
+              </Link>
+            </div>
+          ) : null}
         </div>
       </header>
 

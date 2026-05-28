@@ -538,8 +538,8 @@ export function ComplianceReportContent({ clientSlug }: ComplianceReportContentP
             </CardContent>
           </Card>
 
-          {/* Results table */}
-          <Card>
+          {/* Results table — hidden until per-domain filtering is available */}
+          {false && <Card>
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -684,10 +684,10 @@ export function ComplianceReportContent({ clientSlug }: ComplianceReportContentP
                 </div>
               )}
             </CardContent>
-          </Card>
+          </Card>}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
+          {/* Pagination — hidden with table above */}
+          {false && totalPages > 1 && (
             <div className="flex items-center justify-between text-sm text-muted-foreground">
               <p>Page {page} of {totalPages} — {total} total records</p>
               <div className="flex gap-2">

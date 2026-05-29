@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef, useCallback } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -43,6 +43,7 @@ interface NewsPageClientProps {
 
 export default function NewsPageClient({ initialAnnouncements }: NewsPageClientProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
 
   const [userRole, setUserRole] = useState<string | null>(null)
@@ -102,6 +103,24 @@ export default function NewsPageClient({ initialAnnouncements }: NewsPageClientP
       fetchAnnouncements(userRole)
     }
   }, [authLoading, userRole, fetchAnnouncements])
+
+  // Auto-open the edit dialog when ?edit={id} is in the URL (navigated from article page)
+  useEffect(() => {
+    const editId = searchParams.get("edit")
+    if (!editId || authLoading || !userRole) return
+    const target = announcements.find((a) => a.id === editId)
+    if (!target) return
+    setEditTarget(target)
+    setFormTitle(target.title)
+    setFormBody(target.body)
+    setFormImageUrl(target.imageUrl)
+    setSourceMode(false)
+    setSourceHtml(target.body)
+    setDialogOpen(true)
+    setTimeout(() => { if (editorRef.current) editorRef.current.innerHTML = target.body }, 0)
+    // Clear the param from the URL so a refresh doesn't re-trigger
+    router.replace("/news", { scroll: false })
+  }, [searchParams, authLoading, userRole, announcements, router])
 
   const openCreate = () => {
     setEditTarget(null)

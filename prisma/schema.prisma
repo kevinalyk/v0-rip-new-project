@@ -328,6 +328,8 @@ model CompetitiveInsightCampaign {
   unsubDomain         String?  // Extracted List-Unsubscribe domain (e.g. "nucleusemail.com")
   twitterPosted       Boolean  @default(false) // Whether this email has been posted to Twitter/X
   twitterPostedAt     DateTime? // When it was posted to Twitter/X
+  messageTypes        String[] // AI-classified message types e.g. ["fundraising_ask", "urgency"]
+  subjectPatterns     String[] // Detected subject line patterns e.g. ["question", "personalization"]
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

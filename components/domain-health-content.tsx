@@ -298,7 +298,7 @@ const CHECKS: DomainCheck[] = [
       "Add both List-Unsubscribe and List-Unsubscribe-Post headers to every outbound message.",
       "The List-Unsubscribe-Post value must be exactly: List-Unsubscribe=One-Click",
       "The List-Unsubscribe value must include a POST-capable URL (not just a mailto: link).",
-      "Most modern ESPs (Klaviyo, SendGrid, etc.) have a toggle for this — enable it in sending settings.",
+      "Most modern ESPs (Klaviyo, SendGrid, etc.) have a toggle for this ��� enable it in sending settings.",
     ],
   },
   {
@@ -468,7 +468,7 @@ function CheckRow({
   const stateLabel = status === "manual" ? "What we can see" : "Current state"
 
   return (
-    <div className={cn(!isFirst && "border-t border-border")}>
+    <div id={`check-${check.id}`} className={cn(!isFirst && "border-t border-border")}>
       <button
         onClick={() => setOpen((v) => !v)}
         className={cn(
@@ -623,6 +623,13 @@ export function DomainHealthContent() {
     setTimeout(() => setScanning(false), 1800)
   }
 
+  function scrollToFirstStatus(target: CheckStatus) {
+    const first = CHECKS.find((c) => statuses[c.id] === target)
+    if (!first) return
+    const el = document.getElementById(`check-${first.id}`)
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" })
+  }
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
       {/* Header */}
@@ -731,27 +738,36 @@ export function DomainHealthContent() {
 
         {/* Summary pills */}
         <div className="grid grid-cols-3 gap-2">
-          <div className="flex items-center gap-2.5 px-3 py-2.5 bg-background border border-border rounded-lg">
+          <button
+            onClick={() => scrollToFirstStatus("pass")}
+            className="flex items-center gap-2.5 px-3 py-2.5 bg-background border border-border rounded-lg text-left hover:bg-muted/30 transition-colors cursor-pointer"
+          >
             <StatusIcon status="pass" size={20} />
             <div>
               <div className="text-sm font-semibold text-foreground leading-tight">{pass} passing</div>
               <div className="text-[11px] text-muted-foreground mt-0.5">Auto-verified</div>
             </div>
-          </div>
-          <div className={cn("flex items-center gap-2.5 px-3 py-2.5 bg-background rounded-lg", fail > 0 ? "border border-red-500/30" : "border border-border")}>
+          </button>
+          <button
+            onClick={() => scrollToFirstStatus("fail")}
+            className={cn("flex items-center gap-2.5 px-3 py-2.5 bg-background rounded-lg text-left hover:bg-muted/30 transition-colors cursor-pointer", fail > 0 ? "border border-red-500/30" : "border border-border")}
+          >
             <StatusIcon status="fail" size={20} />
             <div>
               <div className="text-sm font-semibold text-foreground leading-tight">{fail} needs attention</div>
               <div className="text-[11px] text-muted-foreground mt-0.5">Auto-detected fails</div>
             </div>
-          </div>
-          <div className={cn("flex items-center gap-2.5 px-3 py-2.5 bg-background rounded-lg", manual > 0 ? "border border-amber-500/30" : "border border-border")}>
+          </button>
+          <button
+            onClick={() => scrollToFirstStatus("manual")}
+            className={cn("flex items-center gap-2.5 px-3 py-2.5 bg-background rounded-lg text-left hover:bg-muted/30 transition-colors cursor-pointer", manual > 0 ? "border border-amber-500/30" : "border border-border")}
+          >
             <StatusIcon status="manual" size={20} />
             <div>
               <div className="text-sm font-semibold text-foreground leading-tight">{manual} to review</div>
               <div className="text-[11px] text-muted-foreground mt-0.5">Self-verify</div>
             </div>
-          </div>
+          </button>
         </div>
       </div>
 

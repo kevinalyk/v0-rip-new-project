@@ -505,20 +505,12 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                 {expandedSections.inbox && !collapsed && (
                   <div className="ml-4 space-y-1">
                     <NavItem
-                      icon={<LayoutDashboard size={18} />}
-                      label="Campaigns"
-                      active={pathname.includes("/inbox/campaigns")}
+                      icon={<Globe size={18} />}
+                      label="Domain Health"
+                      active={pathname.includes("/inbox/domain-health")}
                       collapsed={false}
-                      onClick={() => navigate(`/${getClientSlug()}/inbox/campaigns`)}
+                      onClick={() => navigate(`/${getClientSlug()}/inbox/domain-health`)}
                     />
-                    <NavItem
-                      icon={<BarChart3 size={18} />}
-                      label="Reporting"
-                      active={pathname.includes("/inbox/reporting")}
-                      collapsed={false}
-                      onClick={() => navigate(`/${getClientSlug()}/inbox/reporting`)}
-                    />
-
                   </div>
                 )}
               </>

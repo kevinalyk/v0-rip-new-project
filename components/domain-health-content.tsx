@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
   ChevronDown,
   Check,
@@ -455,14 +455,19 @@ function CheckRow({
   value,
   isFirst,
   senders,
+  forceOpen,
+  onToggle,
 }: {
   check: DomainCheck
   status: CheckStatus
   value?: string
   isFirst: boolean
   senders: SenderRow[]
+  forceOpen?: boolean
+  onToggle?: (id: string, next: boolean) => void
 }) {
   const [open, setOpen] = useState(false)
+  const isOpen = forceOpen !== undefined ? forceOpen : open
   const showFix = status === "fail" && check.fix
   const showManual = status === "manual" && check.manualSteps
   const stateLabel = status === "manual" ? "What we can see" : "Current state"
@@ -470,10 +475,14 @@ function CheckRow({
   return (
     <div id={`check-${check.id}`} className={cn(!isFirst && "border-t border-border")}>
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          const next = !isOpen
+          setOpen(next)
+          onToggle?.(check.id, next)
+        }}
         className={cn(
           "w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-muted/30",
-          open && "bg-muted/20"
+          isOpen && "bg-muted/20"
         )}
       >
         <StatusIcon status={status} />
@@ -488,11 +497,11 @@ function CheckRow({
         </div>
         <ChevronDown
           size={14}
-          className={cn("text-muted-foreground transition-transform flex-shrink-0", open && "rotate-180")}
+          className={cn("text-muted-foreground transition-transform flex-shrink-0", isOpen && "rotate-180")}
         />
       </button>
 
-      {open && (
+      {isOpen && (
         <div className={cn("px-4 pb-5 pt-0", status === "manual" ? "bg-amber-500/5" : "bg-muted/10")} style={{ paddingLeft: "calc(1rem + 22px + 0.75rem)" }}>
           <div className="pt-4 space-y-4">
             {value && (
@@ -558,12 +567,16 @@ function CategorySection({
   statuses,
   values,
   senders,
+  openCheckId,
+  onCheckToggle,
 }: {
   category: Category
   checks: DomainCheck[]
   statuses: Record<string, CheckStatus>
   values: Record<string, string>
   senders: SenderRow[]
+  openCheckId: string | null
+  onCheckToggle: (id: string, next: boolean) => void
 }) {
   const fails = checks.filter((c) => statuses[c.id] === "fail").length
   const manuals = checks.filter((c) => statuses[c.id] === "manual").length
@@ -589,6 +602,8 @@ function CategorySection({
             value={values[check.id]}
             isFirst={i === 0}
             senders={senders}
+            forceOpen={openCheckId === check.id ? true : undefined}
+            onToggle={onCheckToggle}
           />
         ))}
       </div>
@@ -603,6 +618,10 @@ export function DomainHealthContent() {
   const [domainOpen, setDomainOpen] = useState(false)
   const [range, setRange] = useState<TimeRange>("30d")
   const [scanning, setScanning] = useState(false)
+  const [openCheckId, setOpenCheckId] = useState<string | null>(null)
+
+  // Per-status cursors for cycling through issues
+  const cursors = useRef<Record<CheckStatus, number>>({ pass: 0, fail: 0, manual: 0 })
 
   const data = DOMAIN_DATA[selectedDomain]
   const statuses = data.checkStatuses
@@ -618,16 +637,33 @@ export function DomainHealthContent() {
 
   const categories: Category[] = ["Authentication", "Google Bulk Sender Rules", "Sender Practices", "Sender Identity"]
 
+  // Reset cursors when domain changes
+  useEffect(() => {
+    cursors.current = { pass: 0, fail: 0, manual: 0 }
+    setOpenCheckId(null)
+  }, [selectedDomain])
+
   function handleRescan() {
     setScanning(true)
     setTimeout(() => setScanning(false), 1800)
   }
 
-  function scrollToFirstStatus(target: CheckStatus) {
-    const first = CHECKS.find((c) => statuses[c.id] === target)
-    if (!first) return
-    const el = document.getElementById(`check-${first.id}`)
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" })
+  function cycleToStatus(target: CheckStatus) {
+    const matches = CHECKS.filter((c) => statuses[c.id] === target)
+    if (matches.length === 0) return
+
+    const idx = cursors.current[target] % matches.length
+    const check = matches[idx]
+    cursors.current[target] = (idx + 1) % matches.length
+
+    // Open this check row and close any previously opened one
+    setOpenCheckId(check.id)
+
+    // Scroll after a tick so the DOM reflects the open state
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`check-${check.id}`)
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" })
+    })
   }
 
   return (
@@ -739,7 +775,7 @@ export function DomainHealthContent() {
         {/* Summary pills */}
         <div className="grid grid-cols-3 gap-2">
           <button
-            onClick={() => scrollToFirstStatus("pass")}
+            onClick={() => cycleToStatus("pass")}
             className="flex items-center gap-2.5 px-3 py-2.5 bg-background border border-border rounded-lg text-left hover:bg-muted/30 transition-colors cursor-pointer"
           >
             <StatusIcon status="pass" size={20} />
@@ -749,7 +785,7 @@ export function DomainHealthContent() {
             </div>
           </button>
           <button
-            onClick={() => scrollToFirstStatus("fail")}
+            onClick={() => cycleToStatus("fail")}
             className={cn("flex items-center gap-2.5 px-3 py-2.5 bg-background rounded-lg text-left hover:bg-muted/30 transition-colors cursor-pointer", fail > 0 ? "border border-red-500/30" : "border border-border")}
           >
             <StatusIcon status="fail" size={20} />
@@ -759,7 +795,7 @@ export function DomainHealthContent() {
             </div>
           </button>
           <button
-            onClick={() => scrollToFirstStatus("manual")}
+            onClick={() => cycleToStatus("manual")}
             className={cn("flex items-center gap-2.5 px-3 py-2.5 bg-background rounded-lg text-left hover:bg-muted/30 transition-colors cursor-pointer", manual > 0 ? "border border-amber-500/30" : "border border-border")}
           >
             <StatusIcon status="manual" size={20} />
@@ -780,6 +816,11 @@ export function DomainHealthContent() {
           statuses={statuses}
           values={values}
           senders={senders}
+          openCheckId={openCheckId}
+          onCheckToggle={(id, next) => {
+            // If the user manually closes a row, clear the forced-open state
+            if (!next && id === openCheckId) setOpenCheckId(null)
+          }}
         />
       ))}
 

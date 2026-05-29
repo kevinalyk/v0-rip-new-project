@@ -4,8 +4,9 @@ import { useEffect, useState, useMemo } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Loader2, RefreshCw, CheckCircle, XCircle, ChevronDown, ChevronRight, ShieldCheck, ShieldAlert, X } from "lucide-react"
-import { format } from "date-fns"
+import { Loader2, RefreshCw, CheckCircle, XCircle, ChevronDown, ChevronRight, ShieldCheck, ShieldAlert, X, Calendar } from "lucide-react"
+import { format, subDays, startOfDay, endOfDay } from "date-fns"
+import { Input } from "@/components/ui/input"
 
 type FilterType = 
   | { type: "party"; party: "republican" | "democrat" }
@@ -129,6 +130,8 @@ function getPartyColor(party: string | null) {
   return "bg-gray-100 text-gray-800 border-gray-200"
 }
 
+type DatePreset = "7d" | "30d" | "90d" | "all" | "custom"
+
 export function AdminComplianceSummary() {
   const [rows, setRows] = useState<ComplianceRow[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
@@ -140,10 +143,35 @@ export function AdminComplianceSummary() {
   const [activeFilter, setActiveFilter] = useState<FilterType>(null)
   const pageSize = 50
 
+  // Date range state
+  const [datePreset, setDatePreset] = useState<DatePreset>("30d")
+  const [customFrom, setCustomFrom] = useState("")
+  const [customTo, setCustomTo] = useState("")
+
+  const getDateRange = (): { dateFrom: string; dateTo: string } | null => {
+    if (datePreset === "all") return null
+    if (datePreset === "custom") {
+      if (!customFrom && !customTo) return null
+      return { dateFrom: customFrom, dateTo: customTo }
+    }
+    const days = datePreset === "7d" ? 7 : datePreset === "30d" ? 30 : 90
+    return {
+      dateFrom: startOfDay(subDays(new Date(), days)).toISOString(),
+      dateTo: endOfDay(new Date()).toISOString(),
+    }
+  }
+
   const fetchData = async (p = page) => {
     setLoading(true)
     try {
       let url = `/api/admin/compliance-summary?page=${p}&pageSize=${pageSize}`
+
+      // Add date range parameters
+      const dateRange = getDateRange()
+      if (dateRange) {
+        if (dateRange.dateFrom) url += `&dateFrom=${encodeURIComponent(dateRange.dateFrom)}`
+        if (dateRange.dateTo) url += `&dateTo=${encodeURIComponent(dateRange.dateTo)}`
+      }
       
       // Add filter parameters if active
       if (activeFilter) {
@@ -178,8 +206,13 @@ export function AdminComplianceSummary() {
   }
 
   useEffect(() => {
-    fetchData(page)
-  }, [page, activeFilter])
+    fetchData(1)
+    setPage(1)
+  }, [activeFilter, datePreset, customFrom, customTo])
+
+  useEffect(() => {
+    if (page > 1) fetchData(page)
+  }, [page])
 
   const totalPages = Math.ceil(total / pageSize)
 
@@ -223,17 +256,66 @@ export function AdminComplianceSummary() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Email Compliance Summary</h1>
           <p className="text-muted-foreground text-sm mt-1">
             Gmail bias analysis — based on raw header data captured at ingestion.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => fetchData(page)} disabled={loading} className="gap-2">
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Date preset buttons */}
+          <div className="flex items-center gap-1 border rounded-md p-1">
+            {(["7d", "30d", "90d", "all"] as DatePreset[]).map((preset) => (
+              <button
+                key={preset}
+                onClick={() => setDatePreset(preset)}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  datePreset === preset
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {preset === "all" ? "All time" : preset === "7d" ? "7 days" : preset === "30d" ? "30 days" : "90 days"}
+              </button>
+            ))}
+            <button
+              onClick={() => setDatePreset("custom")}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors flex items-center gap-1 ${
+                datePreset === "custom"
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Calendar className="h-3.5 w-3.5" />
+              Custom
+            </button>
+          </div>
+
+          {/* Custom date inputs — only visible when custom is selected */}
+          {datePreset === "custom" && (
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value ? new Date(e.target.value).toISOString() : "")}
+                className="h-8 w-36 text-sm"
+              />
+              <span className="text-muted-foreground text-sm">to</span>
+              <Input
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value ? endOfDay(new Date(e.target.value)).toISOString() : "")}
+                className="h-8 w-36 text-sm"
+              />
+            </div>
+          )}
+
+          <Button variant="outline" size="sm" onClick={() => fetchData(page)} disabled={loading} className="gap-2">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Republican vs Democrat Comparison */}

@@ -22,8 +22,20 @@ export async function GET(request: Request) {
     const filterPlacement = searchParams.get("filterPlacement")
     const filterSection = searchParams.get("filterSection")
 
+    // Parse date range parameters
+    const dateFrom = searchParams.get("dateFrom")
+    const dateTo = searchParams.get("dateTo")
+    const dateFilter = dateFrom || dateTo
+      ? {
+          checkedAt: {
+            ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
+            ...(dateTo ? { lte: new Date(dateTo) } : {}),
+          },
+        }
+      : {}
+
     // Build where clause based on filter
-    const where: any = {}
+    const where: any = { ...dateFilter }
 
     if (filterType === "party" && filterParty) {
       where.campaign = { entity: { party: filterParty } }
@@ -102,6 +114,7 @@ export async function GET(request: Request) {
 
     // Aggregate stats
     const allScores = await prisma.cIEmailCompliance.findMany({
+      where: dateFilter,
       select: {
         totalScore: true,
         section1Score: true,
@@ -160,6 +173,7 @@ export async function GET(request: Request) {
 
     // Party split — R vs D compliance scores and inbox/spam rates
     const partyRows = await prisma.cIEmailCompliance.findMany({
+      where: dateFilter,
       select: {
         totalScore: true,
         section1Score: true,

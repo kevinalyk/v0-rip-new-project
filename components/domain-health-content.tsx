@@ -827,7 +827,6 @@ export function DomainHealthContent() {
     fetch("/api/client-domains")
       .then(async (r) => {
         const data = await r.json()
-        console.log("[v0] client-domains response", r.status, data)
         const domains: ClientDomainRecord[] = data.domains ?? []
         setClientDomains(domains)
         if (domains.length > 0) setSelectedDomainId(domains[0].id)
@@ -840,7 +839,8 @@ export function DomainHealthContent() {
   // Fall back to fake data for demo when no real domain is selected
   const selectedDomain = selectedRecord?.domain ?? DOMAINS[0]
 
-  const data = DOMAIN_DATA[selectedDomain]
+  // Always fall back to the first fake domain's data — real DNS data will replace this once backend scanning is wired
+  const data = DOMAIN_DATA[selectedDomain] ?? DOMAIN_DATA[DOMAINS[0]]
   const statuses = data.checkStatuses
   const values = data.checkValues
   const senders = data.senders

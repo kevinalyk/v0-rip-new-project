@@ -226,6 +226,7 @@ export async function scanForNewCampaigns(options: {
     const seedEmails = await prisma.seedEmail.findMany({
       where: {
         active: true,
+        domainHealthMode: false,
         NOT: {
           AND: [{ locked: true }, { assignedToClient: ripClient?.id }],
         },
@@ -734,12 +735,13 @@ export async function scanForCompetitiveInsights(options: {
       }
     }
 
-    // Get ALL locked seed emails (both RIP and other clients)
+    // Get ALL locked seed emails (both RIP and other clients) — exclude domain health seeds
     const allLockedSeedEmails = await prisma.seedEmail.findMany({
       where: {
         active: true,
         locked: true,
         assignedToClient: { not: null },
+        domainHealthMode: false,
       },
     })
 

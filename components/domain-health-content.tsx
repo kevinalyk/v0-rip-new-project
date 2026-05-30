@@ -819,6 +819,10 @@ export function DomainHealthContent() {
   const [scanning, setScanning] = useState(false)
   const [openCheckId, setOpenCheckId] = useState<string | null>(null)
 
+  // Real scan results from API
+  const [scanMeta, setScanMeta] = useState<{ scannedAt: string; seedEmailCount: number; ciRowCount: number } | null>(null)
+  const [scanResults, setScanResults] = useState<Record<string, { status: string; value: string | null; note: string | null }>>({})
+
   // Per-status cursors for cycling through issues
   const cursors = useRef<Record<CheckStatus, number>>({ pass: 0, fail: 0, manual: 0 })
 
@@ -831,18 +835,46 @@ export function DomainHealthContent() {
         setClientDomains(domains)
         if (domains.length > 0) setSelectedDomainId(domains[0].id)
       })
-      .catch((err) => console.error("[v0] client-domains fetch error", err))
+      .catch((err) => console.error("[domain-health] client-domains fetch error", err))
       .finally(() => setDomainsLoading(false))
   }, [])
+
+  // Load latest scan results whenever the selected domain changes
+  useEffect(() => {
+    if (!selectedDomainId) return
+    setScanResults({})
+    setScanMeta(null)
+    fetch(`/api/domain-health/scan?clientDomainId=${selectedDomainId}`)
+      .then(async (r) => {
+        if (!r.ok) return
+        const data = await r.json()
+        if (data.scan) {
+          setScanMeta({
+            scannedAt: data.scan.scannedAt,
+            seedEmailCount: data.scan.seedEmailCount,
+            ciRowCount: data.scan.ciRowCount,
+          })
+        }
+        if (data.results) setScanResults(data.results)
+      })
+      .catch((err) => console.error("[domain-health] scan results fetch error", err))
+  }, [selectedDomainId])
 
   const selectedRecord = clientDomains.find((d) => d.id === selectedDomainId) ?? null
   // Fall back to fake data for demo when no real domain is selected
   const selectedDomain = selectedRecord?.domain ?? DOMAINS[0]
 
-  // Always fall back to the first fake domain's data — real DNS data will replace this once backend scanning is wired
+  // Base data from fake set, overlaid with real scan results where available
   const data = DOMAIN_DATA[selectedDomain] ?? DOMAIN_DATA[DOMAINS[0]]
-  const statuses = data.checkStatuses
-  const values = data.checkValues
+
+  // Merge real scan results over fake statuses/values
+  const statuses: Record<string, CheckStatus> = { ...data.checkStatuses }
+  const values: Record<string, string> = { ...data.checkValues }
+  for (const [checkId, r] of Object.entries(scanResults)) {
+    statuses[checkId] = r.status as CheckStatus
+    if (r.value || r.note) values[checkId] = r.value ?? r.note ?? ""
+  }
+
   const senders = data.senders
 
   const autoChecks = CHECKS.filter((c) => statuses[c.id] !== "manual")
@@ -860,9 +892,32 @@ export function DomainHealthContent() {
     setOpenCheckId(null)
   }, [selectedDomain])
 
-  function handleRescan() {
+  async function handleRescan() {
+    if (!selectedDomainId) return
     setScanning(true)
-    setTimeout(() => setScanning(false), 1800)
+    try {
+      const res = await fetch("/api/domain-health/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientDomainId: selectedDomainId }),
+        credentials: "include",
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.scan) {
+          setScanMeta({
+            scannedAt: data.scan.scannedAt,
+            seedEmailCount: data.scan.seedEmailCount,
+            ciRowCount: data.scan.ciRowCount,
+          })
+        }
+        if (data.results) setScanResults(data.results)
+      }
+    } catch (err) {
+      console.error("[domain-health] rescan error", err)
+    } finally {
+      setScanning(false)
+    }
   }
 
   function cycleToStatus(target: CheckStatus) {
@@ -1006,16 +1061,25 @@ export function DomainHealthContent() {
 
         {/* Meta row */}
         <div className="flex items-center gap-2 mt-2.5 text-xs text-muted-foreground flex-wrap">
-          <span>Last scanned {data.lastScan}</span>
+          {scanMeta ? (
+            <span>Last scanned {new Date(scanMeta.scannedAt).toLocaleString()}</span>
+          ) : (
+            <span>Last scanned {data.lastScan}</span>
+          )}
           <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
-          <span>{data.sendersObserved[range]} senders observed in window</span>
+          {scanMeta ? (
+            <span>{scanMeta.seedEmailCount} seed emails · {scanMeta.ciRowCount} CI rows used</span>
+          ) : (
+            <span>{data.sendersObserved[range]} senders observed in window</span>
+          )}
           <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
           <button
             onClick={handleRescan}
-            className="flex items-center gap-1 text-foreground font-medium hover:text-rip-red transition-colors"
+            disabled={scanning || !selectedDomainId || selectedRecord?.status !== "verified"}
+            className="flex items-center gap-1 text-foreground font-medium hover:text-rip-red transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <RefreshCw size={11} className={cn(scanning && "animate-spin")} />
-            Re-scan
+            {scanning ? "Scanning..." : "Re-scan"}
           </button>
         </div>
       </div>

@@ -78,6 +78,10 @@
     {
       "path": "/api/cron/product-update",
       "schedule": "0 17 * * 4"
+    },
+    {
+      "path": "/api/cron/domain-health-scan",
+      "schedule": "0 * * * *"
     }
   ]
 }

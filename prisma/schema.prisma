@@ -201,9 +201,41 @@ model ClientDomain {
 
   client          Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
   submittedBy     User?   @relation(fields: [submittedByUserId], references: [id], onDelete: SetNull)
+  scans           DomainHealthScan[]
+  seedEmails      SeedEmail[]
 
   @@unique([clientId, domain])
   @@index([clientId])
+}
+
+model DomainHealthScan {
+  id              String   @id @default(uuid())
+  clientDomainId  String
+  scannedAt       DateTime @default(now())
+  triggeredBy     String   @default("manual") // "manual" | "cron" | "seed"
+  seedEmailCount  Int      @default(0)
+  ciRowCount      Int      @default(0)
+
+  clientDomain    ClientDomain        @relation(fields: [clientDomainId], references: [id], onDelete: Cascade)
+  results         DomainHealthScanResult[]
+
+  @@index([clientDomainId])
+  @@index([scannedAt])
+}
+
+model DomainHealthScanResult {
+  id       String @id @default(uuid())
+  scanId   String
+  checkId  String  // matches CHECKS[n].id in domain-health-content.tsx
+  status   String  // "pass" | "fail" | "manual"
+  value    String? // raw DNS value or header value found
+  note     String? // human-readable detail
+  source   String  @default("dns") // "dns" | "ci_header" | "seed_header"
+
+  scan     DomainHealthScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([scanId])
+  @@index([checkId])
 }
 
 model BlockedDomain {
@@ -275,17 +307,23 @@ model SeedEmail {
   refreshToken    String?   @db.Text // Encrypted OAuth refresh token
   tokenExpiry     DateTime? // When the access token expires
   oauthConnected  Boolean   @default(false) // Whether OAuth is set up and working
+  // Domain health monitoring — when true, this seed is used for domain health only, not CI
+  domainHealthMode  Boolean   @default(false)
+  clientDomainId    String?   // FK → ClientDomain.id (set when domainHealthMode = true)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   engagementLogs  EngagementLog[]
   senderFamiliarity SenderFamiliarity[]
+  clientDomain    ClientDomain? @relation(fields: [clientDomainId], references: [id], onDelete: SetNull)
 
   @@index([oauthConnected])
   @@index([provider, oauthConnected])
   @@index([ownedByClient])
   @@index([assignedToClient])
   @@index([ownedByClient, assignedToClient])
+  @@index([domainHealthMode])
+  @@index([clientDomainId])
 }
 
 model EmailClickEvent {

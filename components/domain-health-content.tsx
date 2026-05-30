@@ -17,7 +17,6 @@ import {
   Copy,
   Loader2,
   CheckCircle2,
-  Trash2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -37,7 +36,6 @@ interface DomainCheck {
   currentState?: string
   fix?: string[]
   manualSteps?: string[]
-  isSenderCheck?: boolean
 }
 
 
@@ -210,7 +208,6 @@ const CHECKS: DomainCheck[] = [
     name: "Display Name Audit",
     summary: "Sender display names follow best practices.",
     why: "Gmail uses display names as a spam signal. Names using urgency language ('URGENT', 'ACTION REQUIRED'), all caps, or names that don't match the registered organization often trigger spam classification. Consistent, recognizable display names improve inbox placement.",
-    isSenderCheck: true,
   },
   {
     id: "display_name",

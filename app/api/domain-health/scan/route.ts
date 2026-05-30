@@ -45,14 +45,14 @@ export async function POST(request: NextRequest) {
     // Verify the domain exists
     const clientDomain = await prisma.clientDomain.findUnique({
       where: { id: clientDomainId },
-      select: { id: true, domain: true, clientId: true, verificationStatus: true },
+      select: { id: true, domain: true, clientId: true, status: true },
     })
 
     if (!clientDomain) {
       return NextResponse.json({ error: "Domain not found" }, { status: 404 })
     }
 
-    if (clientDomain.verificationStatus !== "verified") {
+    if (clientDomain.status !== "verified") {
       return NextResponse.json({ error: "Domain must be verified before scanning" }, { status: 400 })
     }
 

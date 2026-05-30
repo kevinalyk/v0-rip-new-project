@@ -29,7 +29,8 @@ model User {
   client        Client?   @relation(fields: [clientId], references: [id])
   
   // Domain relationships
-  domainAccess  UserDomainAccess[]
+  domainAccess      UserDomainAccess[]
+  submittedDomains  ClientDomain[]
   ciViews       CiView[]
   entityTags    EntityTag[] // Added relation to entity tags created by this user
   lookupSearches LookupSearch[] // Searches made via the public lookup tool
@@ -181,8 +182,28 @@ model Client {
   entityTags        EntityTag[] // Added relation to entity tags
   personalEmailDomains PersonalEmailDomain[] // Personal email domains for CI
   personalPhoneNumbers PersonalPhoneNumber[] // Personal phone numbers for CI
+  clientDomains        ClientDomain[]        // Sending domains for deliverability monitoring
   
   @@index([totalUsers])
+}
+
+model ClientDomain {
+  id                  String    @id @default(uuid())
+  clientId            String
+  domain              String
+  status              String    @default("pending") // "pending" | "verified" | "failed"
+  verificationToken   String
+  verifiedAt          DateTime?
+  lastCheckedAt       DateTime?
+  submittedByUserId   String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  client          Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  submittedBy     User?   @relation(fields: [submittedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([clientId, domain])
+  @@index([clientId])
 }
 
 model BlockedDomain {

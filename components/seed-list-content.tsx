@@ -46,6 +46,7 @@ import {
   Shuffle,
   Download,
   CheckCircle2,
+  ShieldCheck,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useDomain } from "@/lib/domain-context"
@@ -77,6 +78,12 @@ export default function SeedListContent({
 
   const [clients, setClients] = useState<any[]>([])
   const [updatingClientId, setUpdatingClientId] = useState<string | null>(null)
+
+  // Domain health toggle state
+  const [clientDomains, setClientDomains] = useState<{ id: string; domain: string; verificationStatus: string }[]>([])
+  const [togglingDomainHealthId, setTogglingDomainHealthId] = useState<string | null>(null)
+  const [domainHealthDialogSeedId, setDomainHealthDialogSeedId] = useState<string | null>(null)
+  const [selectedClientDomainId, setSelectedClientDomainId] = useState<string>("")
 
   const [togglingLockId, setTogglingLockId] = useState<string | null>(null)
   const [animatingLockId, setAnimatingLockId] = useState<string | null>(null)
@@ -140,8 +147,76 @@ export default function SeedListContent({
   useEffect(() => {
     if (isAdminView) {
       fetchClients()
+      fetchClientDomains()
     }
   }, [isAdminView])
+
+  const fetchClientDomains = async () => {
+    try {
+      const response = await fetch("/api/client-domains", { credentials: "include" })
+      if (!response.ok) return
+      const data = await response.json()
+      const verified = (data.domains ?? []).filter((d: any) => d.status === "verified")
+      setClientDomains(verified)
+    } catch (err) {
+      console.error("Error fetching client domains:", err)
+    }
+  }
+
+  const handleDomainHealthToggle = async (seedId: string, currentMode: boolean, domainId?: string) => {
+    if (currentMode) {
+      // Toggling OFF — disable immediately
+      setTogglingDomainHealthId(seedId)
+      try {
+        const res = await fetch(`/api/seedlist/${seedId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ domainHealthMode: false }),
+          credentials: "include",
+        })
+        if (!res.ok) throw new Error("Failed")
+        setSeedEmails((prev) =>
+          prev.map((e) => e.id === seedId ? { ...e, domainHealthMode: false, clientDomainId: null } : e)
+        )
+        toast.success("Seed removed from domain health monitoring")
+      } catch {
+        toast.error("Failed to update seed email")
+      } finally {
+        setTogglingDomainHealthId(null)
+      }
+    } else {
+      // Toggling ON — show domain selector dialog
+      setSelectedClientDomainId(clientDomains[0]?.id ?? "")
+      setDomainHealthDialogSeedId(seedId)
+    }
+  }
+
+  const confirmDomainHealthToggle = async () => {
+    if (!domainHealthDialogSeedId || !selectedClientDomainId) return
+    setTogglingDomainHealthId(domainHealthDialogSeedId)
+    try {
+      const res = await fetch(`/api/seedlist/${domainHealthDialogSeedId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domainHealthMode: true, clientDomainId: selectedClientDomainId }),
+        credentials: "include",
+      })
+      if (!res.ok) throw new Error("Failed")
+      setSeedEmails((prev) =>
+        prev.map((e) =>
+          e.id === domainHealthDialogSeedId
+            ? { ...e, domainHealthMode: true, clientDomainId: selectedClientDomainId }
+            : e
+        )
+      )
+      toast.success("Seed assigned to domain health monitoring")
+    } catch {
+      toast.error("Failed to update seed email")
+    } finally {
+      setTogglingDomainHealthId(null)
+      setDomainHealthDialogSeedId(null)
+    }
+  }
 
   // Fetch seed emails on mount AND whenever selectedDomain changes
   useEffect(() => {
@@ -935,6 +1010,7 @@ export default function SeedListContent({
               {!isAdminView && <TableHead>Provider</TableHead>}
               {isAdminView && <TableHead>Password</TableHead>}
               {!isAdminView && <TableHead>Added On</TableHead>}
+              {isAdminView && <TableHead className="w-[120px]">Domain Health</TableHead>}
               <TableHead className="w-[150px] text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -1067,6 +1143,32 @@ export default function SeedListContent({
                       </TableCell>
                     )}
                     {!isAdminView && <TableCell>{new Date(email.createdAt).toLocaleDateString()}</TableCell>}
+                    {isAdminView && (
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={togglingDomainHealthId === email.id || clientDomains.length === 0}
+                            onClick={() => handleDomainHealthToggle(email.id, email.domainHealthMode, email.clientDomainId)}
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none disabled:opacity-40 ${
+                              email.domainHealthMode ? "bg-blue-600" : "bg-muted-foreground/30"
+                            }`}
+                            title={email.domainHealthMode ? "Remove from domain health" : "Assign to domain health"}
+                          >
+                            <span
+                              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                                email.domainHealthMode ? "translate-x-4" : "translate-x-0.5"
+                              }`}
+                            />
+                          </button>
+                          {email.domainHealthMode && (
+                            <ShieldCheck size={14} className="text-blue-500 flex-shrink-0" title={
+                              clientDomains.find((d) => d.id === email.clientDomainId)?.domain ?? "Domain health"
+                            } />
+                          )}
+                        </div>
+                      </TableCell>
+                    )}
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         {currentUser?.role === "super_admin" && (
@@ -1389,6 +1491,45 @@ export default function SeedListContent({
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsBoxesDialogOpen(false)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Domain Health assignment dialog */}
+      <Dialog open={!!domainHealthDialogSeedId} onOpenChange={(open) => { if (!open) setDomainHealthDialogSeedId(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Assign to Domain Health</DialogTitle>
+            <DialogDescription>
+              Select a verified domain for this seed to monitor. The seed will no longer be used for personal inbox placement.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            {clientDomains.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No verified domains found. Verify a domain in the Domain Health section first.</p>
+            ) : (
+              <Select value={selectedClientDomainId} onValueChange={setSelectedClientDomainId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a domain..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {clientDomains.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.domain}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDomainHealthDialogSeedId(null)}>Cancel</Button>
+            <Button
+              onClick={confirmDomainHealthToggle}
+              disabled={!selectedClientDomainId || togglingDomainHealthId !== null}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {togglingDomainHealthId ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <ShieldCheck size={14} className="mr-1.5" />}
+              Assign
             </Button>
           </DialogFooter>
         </DialogContent>

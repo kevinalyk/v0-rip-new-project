@@ -29,11 +29,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 })
     }
 
-    // Get assigned seed emails for this client
+    // Get assigned seed emails for this client — exclude domain health seeds
     const assignedSeeds = await prisma.seedEmail.findMany({
       where: {
         locked: true,
         active: true,
+        domainHealthMode: false,
         OR: [
           { assignedToClient: client.id },
           { assignedToClient: client.name },

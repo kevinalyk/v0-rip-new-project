@@ -96,13 +96,37 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     }
 
     const body = await request.json()
-    const { assignedToClient } = body
+    const { assignedToClient, domainHealthMode, clientDomainId } = body
+
+    // Handle domain health mode toggle
+    if (typeof domainHealthMode === "boolean") {
+      if (domainHealthMode) {
+        // Toggling ON: require a clientDomainId
+        if (!clientDomainId) {
+          return NextResponse.json({ error: "clientDomainId is required when enabling domainHealthMode" }, { status: 400 })
+        }
+        const updatedSeed = await prisma.seedEmail.update({
+          where: { id: params.id },
+          data: { domainHealthMode: true, clientDomainId },
+        })
+        console.log(`Seed email ${params.id} set to domain health mode for domain ${clientDomainId}`)
+        return NextResponse.json(updatedSeed)
+      } else {
+        // Toggling OFF: clear both fields
+        const updatedSeed = await prisma.seedEmail.update({
+          where: { id: params.id },
+          data: { domainHealthMode: false, clientDomainId: null },
+        })
+        console.log(`Seed email ${params.id} removed from domain health mode`)
+        return NextResponse.json(updatedSeed)
+      }
+    }
 
     if (!assignedToClient) {
       return NextResponse.json({ error: "assignedToClient is required" }, { status: 400 })
     }
 
-    // Update the seed email's assigned client
+    // Update the seed email's assigned client (standard assignment)
     const updatedSeed = await prisma.seedEmail.update({
       where: { id: params.id },
       data: { assignedToClient },

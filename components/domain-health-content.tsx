@@ -17,7 +17,6 @@ import {
   Copy,
   Loader2,
   CheckCircle2,
-  Trash2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -26,7 +25,6 @@ import { Input } from "@/components/ui/input"
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type CheckStatus = "pass" | "fail" | "manual"
-type TimeRange = "7d" | "30d" | "90d"
 type Category = "Authentication" | "Google Bulk Sender Rules" | "Sender Practices" | "Sender Identity"
 
 interface DomainCheck {
@@ -38,174 +36,11 @@ interface DomainCheck {
   currentState?: string
   fix?: string[]
   manualSteps?: string[]
-  isSenderCheck?: boolean
 }
 
-interface SenderRow {
-  name: string
-  address: string
-  usage: string
-  ok: boolean
-  violation?: string
-  suggested?: string
-}
 
-interface DomainData {
-  lastScan: string
-  sendersObserved: Record<TimeRange, number>
-  checkStatuses: Record<string, CheckStatus>
-  checkValues: Record<string, string>
-  senders: SenderRow[]
-}
 
-// ─── Fake data ────────────────────────────────────────────────────────────────
 
-const DOMAINS = ["email.gop.com", "donate.gop.com", "rnchq.org"]
-
-const DOMAIN_DATA: Record<string, DomainData> = {
-  "email.gop.com": {
-    lastScan: "4 minutes ago",
-    sendersObserved: { "7d": 8, "30d": 11, "90d": 15 },
-    checkStatuses: {
-      spf: "pass",
-      dkim: "pass",
-      dmarc: "fail",
-      dmarc_align: "pass",
-      rdns: "pass",
-      one_click_unsub: "fail",
-      unsub_link: "pass",
-      unsub_7d: "pass",
-      spam_rate: "manual",
-      ip_rep: "manual",
-      from_domain: "pass",
-      sender_name: "fail",
-      display_name: "manual",
-      tls: "pass",
-      arc: "pass",
-    },
-    checkValues: {
-      spf: "v=spf1 include:_spf.google.com include:sendgrid.net ~all",
-      dkim: "DKIM signature verified on d=email.gop.com, selector=gop2024",
-      dmarc: "No DMARC record found at _dmarc.email.gop.com",
-      dmarc_align: "From: email.gop.com aligns with SPF domain email.gop.com",
-      rdns: "Sending IPs resolve to mail.email.gop.com — valid PTR record",
-      one_click_unsub: "List-Unsubscribe header found, but List-Unsubscribe-Post: List-Unsubscribe=One-Click is missing",
-      unsub_link: "Unsubscribe link found in body across 100% of observed emails",
-      unsub_7d: "Average removal time: 2.1 days across last 30 emails",
-      spam_rate: "Cannot be verified remotely — requires Google Postmaster Tools access",
-      ip_rep: "Cannot be verified remotely — requires Google Postmaster Tools access",
-      from_domain: "From: addresses use @email.gop.com consistently",
-      tls: "TLS 1.3 observed on all inbound connections",
-      arc: "ARC-Seal and ARC-Message-Signature headers present",
-    },
-    senders: [
-      { name: "GOP HQ", address: "noreply@email.gop.com", usage: "92% of sends", ok: true },
-      { name: "National Republican", address: "news@email.gop.com", usage: "5% of sends", ok: true },
-      {
-        name: "URGENT: Patriot",
-        address: "alerts@email.gop.com",
-        usage: "3% of sends",
-        ok: false,
-        violation: "Display name uses urgency language and does not match registered org identity.",
-        suggested: "Republican National Committee",
-      },
-    ],
-  },
-  "donate.gop.com": {
-    lastScan: "12 minutes ago",
-    sendersObserved: { "7d": 3, "30d": 5, "90d": 6 },
-    checkStatuses: {
-      spf: "pass",
-      dkim: "pass",
-      dmarc: "pass",
-      dmarc_align: "pass",
-      rdns: "pass",
-      one_click_unsub: "pass",
-      unsub_link: "pass",
-      unsub_7d: "pass",
-      spam_rate: "manual",
-      ip_rep: "manual",
-      from_domain: "pass",
-      sender_name: "pass",
-      display_name: "manual",
-      tls: "pass",
-      arc: "pass",
-    },
-    checkValues: {
-      spf: "v=spf1 include:_spf.google.com ~all",
-      dkim: "DKIM signature verified on d=donate.gop.com, selector=dk1",
-      dmarc: "v=DMARC1; p=quarantine; rua=mailto:dmarc@gop.com",
-      dmarc_align: "From: donate.gop.com aligns with SPF domain donate.gop.com",
-      rdns: "Sending IPs resolve to mail.donate.gop.com",
-      one_click_unsub: "List-Unsubscribe-Post: List-Unsubscribe=One-Click present",
-      unsub_link: "Unsubscribe link found in body across 100% of observed emails",
-      unsub_7d: "Average removal time: 1.3 days across last 30 emails",
-      spam_rate: "Cannot be verified remotely — requires Google Postmaster Tools access",
-      ip_rep: "Cannot be verified remotely — requires Google Postmaster Tools access",
-      from_domain: "From: addresses use @donate.gop.com consistently",
-      tls: "TLS 1.3 observed on all inbound connections",
-      arc: "ARC headers present",
-    },
-    senders: [
-      { name: "Donate GOP", address: "giving@donate.gop.com", usage: "80% of sends", ok: true },
-      { name: "RNC Fundraising", address: "fund@donate.gop.com", usage: "20% of sends", ok: true },
-    ],
-  },
-  "rnchq.org": {
-    lastScan: "2 hours ago",
-    sendersObserved: { "7d": 2, "30d": 4, "90d": 7 },
-    checkStatuses: {
-      spf: "fail",
-      dkim: "fail",
-      dmarc: "fail",
-      dmarc_align: "fail",
-      rdns: "pass",
-      one_click_unsub: "fail",
-      unsub_link: "fail",
-      unsub_7d: "manual",
-      spam_rate: "manual",
-      ip_rep: "manual",
-      from_domain: "pass",
-      sender_name: "fail",
-      display_name: "manual",
-      tls: "fail",
-      arc: "fail",
-    },
-    checkValues: {
-      spf: "No SPF record found at rnchq.org",
-      dkim: "No DKIM signature detected on observed emails from this domain",
-      dmarc: "No DMARC record found at _dmarc.rnchq.org",
-      dmarc_align: "Unable to verify — SPF and DKIM are both missing",
-      rdns: "Sending IPs resolve to mail.rnchq.org",
-      one_click_unsub: "List-Unsubscribe header missing on observed emails",
-      unsub_link: "No unsubscribe link detected in body on 60% of observed emails",
-      unsub_7d: "Cannot verify — requires access to list management platform",
-      spam_rate: "Cannot be verified remotely — requires Google Postmaster Tools access",
-      ip_rep: "Cannot be verified remotely — requires Google Postmaster Tools access",
-      from_domain: "From: addresses use @rnchq.org consistently",
-      tls: "TLS 1.0 detected on some connections — upgrade recommended",
-      arc: "ARC headers not present on observed emails",
-    },
-    senders: [
-      {
-        name: "RNCHQ Team",
-        address: "team@rnchq.org",
-        usage: "70% of sends",
-        ok: false,
-        violation: "Display name is generic and does not match registered org identity.",
-        suggested: "Republican National Committee HQ",
-      },
-      {
-        name: "ACTION REQUIRED",
-        address: "alerts@rnchq.org",
-        usage: "30% of sends",
-        ok: false,
-        violation: "Display name uses urgency language that may trigger spam filters.",
-        suggested: "RNC Alerts",
-      },
-    ],
-  },
-}
 
 const CHECKS: DomainCheck[] = [
   // Authentication
@@ -373,7 +208,6 @@ const CHECKS: DomainCheck[] = [
     name: "Display Name Audit",
     summary: "Sender display names follow best practices.",
     why: "Gmail uses display names as a spam signal. Names using urgency language ('URGENT', 'ACTION REQUIRED'), all caps, or names that don't match the registered organization often trigger spam classification. Consistent, recognizable display names improve inbox placement.",
-    isSenderCheck: true,
   },
   {
     id: "display_name",
@@ -423,45 +257,12 @@ function StatusIcon({ status, size = 22 }: { status: CheckStatus; size?: number 
   )
 }
 
-function SenderTable({ senders }: { senders: SenderRow[] }) {
-  const ok = senders.filter((s) => s.ok).length
-  return (
-    <div className="border border-border rounded-lg overflow-hidden mt-4">
-      <div className="px-3 py-2 bg-muted/40 border-b border-border">
-        <span className="text-xs uppercase tracking-widest text-muted-foreground font-medium">
-          Senders observed &middot; {ok} of {senders.length} compliant
-        </span>
-      </div>
-      {senders.map((s, i) => (
-        <div key={i} className={cn("grid gap-3 px-3 py-3 items-start", i > 0 && "border-t border-border")} style={{ gridTemplateColumns: "20px 1fr auto" }}>
-          <div className="mt-0.5">
-            <StatusIcon status={s.ok ? "pass" : "fail"} size={18} />
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-foreground mb-0.5">&ldquo;{s.name}&rdquo;</div>
-            <div className="text-xs text-muted-foreground font-mono">{s.address} &middot; {s.usage}</div>
-            {!s.ok && (
-              <>
-                <div className="text-xs text-red-500 mt-1.5 leading-relaxed">{s.violation}</div>
-                <div className="text-xs text-muted-foreground mt-1">Suggested: &ldquo;{s.suggested}&rdquo;</div>
-              </>
-            )}
-          </div>
-          <div className={cn("text-xs font-medium uppercase tracking-wider mt-0.5", s.ok ? "text-green-600" : "text-red-500")}>
-            {s.ok ? "Compliant" : "Non-compliant"}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
 
 function CheckRow({
   check,
   status,
   value,
   isFirst,
-  senders,
   forceOpen,
   onToggle,
 }: {
@@ -469,7 +270,6 @@ function CheckRow({
   status: CheckStatus
   value?: string
   isFirst: boolean
-  senders: SenderRow[]
   forceOpen?: boolean
   onToggle?: (id: string, next: boolean) => void
 }) {
@@ -525,8 +325,6 @@ function CheckRow({
               <p className="text-sm text-foreground/80 leading-relaxed">{check.why}</p>
             </div>
 
-            {check.isSenderCheck && <SenderTable senders={senders} />}
-
             {showFix && (
               <div>
                 <div className="text-[10px] uppercase tracking-widest text-red-500 font-medium mb-1.5">How to fix</div>
@@ -573,7 +371,6 @@ function CategorySection({
   checks,
   statuses,
   values,
-  senders,
   openCheckId,
   onCheckToggle,
 }: {
@@ -581,7 +378,6 @@ function CategorySection({
   checks: DomainCheck[]
   statuses: Record<string, CheckStatus>
   values: Record<string, string>
-  senders: SenderRow[]
   openCheckId: string | null
   onCheckToggle: (id: string, next: boolean) => void
 }) {
@@ -608,7 +404,6 @@ function CategorySection({
             status={statuses[check.id] ?? "manual"}
             value={values[check.id]}
             isFirst={i === 0}
-            senders={senders}
             forceOpen={openCheckId === check.id ? true : undefined}
             onToggle={onCheckToggle}
           />
@@ -815,9 +610,12 @@ export function DomainHealthContent() {
   const [domainOpen, setDomainOpen] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [pendingVerifyRecord, setPendingVerifyRecord] = useState<ClientDomainRecord | null>(null)
-  const [range, setRange] = useState<TimeRange>("30d")
   const [scanning, setScanning] = useState(false)
   const [openCheckId, setOpenCheckId] = useState<string | null>(null)
+
+  // Real scan results from API
+  const [scanMeta, setScanMeta] = useState<{ scannedAt: string; seedEmailCount: number; ciRowCount: number } | null>(null)
+  const [scanResults, setScanResults] = useState<Record<string, { status: string; value: string | null; note: string | null }>>({})
 
   // Per-status cursors for cycling through issues
   const cursors = useRef<Record<CheckStatus, number>>({ pass: 0, fail: 0, manual: 0 })
@@ -831,25 +629,51 @@ export function DomainHealthContent() {
         setClientDomains(domains)
         if (domains.length > 0) setSelectedDomainId(domains[0].id)
       })
-      .catch((err) => console.error("[v0] client-domains fetch error", err))
+      .catch((err) => console.error("[domain-health] client-domains fetch error", err))
       .finally(() => setDomainsLoading(false))
   }, [])
 
-  const selectedRecord = clientDomains.find((d) => d.id === selectedDomainId) ?? null
-  // Fall back to fake data for demo when no real domain is selected
-  const selectedDomain = selectedRecord?.domain ?? DOMAINS[0]
+  // Load latest scan results whenever the selected domain changes
+  useEffect(() => {
+    if (!selectedDomainId) return
+    setScanResults({})
+    setScanMeta(null)
+    fetch(`/api/domain-health/scan?clientDomainId=${selectedDomainId}`)
+      .then(async (r) => {
+        if (!r.ok) return
+        const data = await r.json()
+        if (data.scan) {
+          setScanMeta({
+            scannedAt: data.scan.scannedAt,
+            seedEmailCount: data.scan.seedEmailCount,
+            ciRowCount: data.scan.ciRowCount,
+          })
+        }
+        if (data.results) setScanResults(data.results)
+      })
+      .catch((err) => console.error("[domain-health] scan results fetch error", err))
+  }, [selectedDomainId])
 
-  // Always fall back to the first fake domain's data — real DNS data will replace this once backend scanning is wired
-  const data = DOMAIN_DATA[selectedDomain] ?? DOMAIN_DATA[DOMAINS[0]]
-  const statuses = data.checkStatuses
-  const values = data.checkValues
-  const senders = data.senders
+  const selectedRecord = clientDomains.find((d) => d.id === selectedDomainId) ?? null
+  const selectedDomain = selectedRecord?.domain ?? ""
+
+  // Build statuses and values entirely from real scan results
+  const statuses: Record<string, CheckStatus> = {}
+  const values: Record<string, string> = {}
+  for (const [checkId, r] of Object.entries(scanResults)) {
+    statuses[checkId] = r.status as CheckStatus
+    if (r.value || r.note) values[checkId] = r.value ?? r.note ?? ""
+  }
+  // Any check not yet in scan results defaults to "manual" (awaiting scan data)
+  for (const check of CHECKS) {
+    if (!(check.id in statuses)) statuses[check.id] = "manual"
+  }
 
   const autoChecks = CHECKS.filter((c) => statuses[c.id] !== "manual")
   const pass = autoChecks.filter((c) => statuses[c.id] === "pass").length
   const fail = autoChecks.filter((c) => statuses[c.id] === "fail").length
   const manual = CHECKS.filter((c) => statuses[c.id] === "manual").length
-  const pct = autoChecks.length > 0 ? Math.round((pass / autoChecks.length) * 100) : 100
+  const pct = autoChecks.length > 0 ? Math.round((pass / autoChecks.length) * 100) : 0
   const grade = gradeFor(pct)
 
   const categories: Category[] = ["Authentication", "Google Bulk Sender Rules", "Sender Practices", "Sender Identity"]
@@ -860,9 +684,32 @@ export function DomainHealthContent() {
     setOpenCheckId(null)
   }, [selectedDomain])
 
-  function handleRescan() {
+  async function handleRescan() {
+    if (!selectedDomainId) return
     setScanning(true)
-    setTimeout(() => setScanning(false), 1800)
+    try {
+      const res = await fetch("/api/domain-health/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientDomainId: selectedDomainId }),
+        credentials: "include",
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.scan) {
+          setScanMeta({
+            scannedAt: data.scan.scannedAt,
+            seedEmailCount: data.scan.seedEmailCount,
+            ciRowCount: data.scan.ciRowCount,
+          })
+        }
+        if (data.results) setScanResults(data.results)
+      }
+    } catch (err) {
+      console.error("[domain-health] rescan error", err)
+    } finally {
+      setScanning(false)
+    }
   }
 
   function cycleToStatus(target: CheckStatus) {
@@ -982,40 +829,29 @@ export function DomainHealthContent() {
             )}
           </div>
 
-          {/* Time range */}
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium mb-1.5 text-right">Window</div>
-            <div className="flex bg-card border border-border rounded-lg p-0.5 gap-0.5">
-              {(["7d", "30d", "90d"] as TimeRange[]).map((r) => (
-                <button
-                  key={r}
-                  onClick={() => setRange(r)}
-                  className={cn(
-                    "px-3 py-1 text-xs rounded-md transition-colors font-medium",
-                    range === r
-                      ? "bg-foreground text-background"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {r === "7d" ? "7 days" : r === "30d" ? "30 days" : "90 days"}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Meta row */}
         <div className="flex items-center gap-2 mt-2.5 text-xs text-muted-foreground flex-wrap">
-          <span>Last scanned {data.lastScan}</span>
-          <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
-          <span>{data.sendersObserved[range]} senders observed in window</span>
+          {scanMeta ? (
+            <span>Last scanned {new Date(scanMeta.scannedAt).toLocaleString()}</span>
+          ) : (
+            <span>Not yet scanned</span>
+          )}
+          {scanMeta && (
+            <>
+              <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
+              <span>{scanMeta.seedEmailCount} seed email{scanMeta.seedEmailCount !== 1 ? "s" : ""} · {scanMeta.ciRowCount} CI row{scanMeta.ciRowCount !== 1 ? "s" : ""} used</span>
+            </>
+          )}
           <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
           <button
             onClick={handleRescan}
-            className="flex items-center gap-1 text-foreground font-medium hover:text-rip-red transition-colors"
+            disabled={scanning || !selectedDomainId || selectedRecord?.status !== "verified"}
+            className="flex items-center gap-1 text-foreground font-medium hover:text-rip-red transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <RefreshCw size={11} className={cn(scanning && "animate-spin")} />
-            Re-scan
+            {scanning ? "Scanning..." : "Re-scan"}
           </button>
         </div>
       </div>
@@ -1106,7 +942,6 @@ export function DomainHealthContent() {
           checks={CHECKS.filter((c) => c.category === cat)}
           statuses={statuses}
           values={values}
-          senders={senders}
           openCheckId={openCheckId}
           onCheckToggle={(id, next) => {
             // If the user manually closes a row, clear the forced-open state

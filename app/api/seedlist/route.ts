@@ -57,6 +57,8 @@ export async function GET(request: Request) {
           assignedToClient: true,
           active: true,
           locked: true,
+          domainHealthMode: true,
+          clientDomainId: true,
         },
       })
 
@@ -72,6 +74,8 @@ export async function GET(request: Request) {
           assignedToClient: true,
           active: true,
           locked: true,
+          domainHealthMode: true,
+          clientDomainId: true,
         },
       })
     } else {
@@ -102,6 +106,8 @@ export async function GET(request: Request) {
           assignedToClient: true,
           active: true,
           locked: true,
+          domainHealthMode: true,
+          clientDomainId: true,
         },
       })
 

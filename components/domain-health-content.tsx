@@ -13,8 +13,15 @@ import {
   Globe,
   Info,
   ChevronRight,
+  Plus,
+  Copy,
+  Loader2,
+  CheckCircle2,
+  Trash2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -611,17 +618,223 @@ function CategorySection({
   )
 }
 
+// ─── ClientDomain type ────────────────────────────────────────────────────────
+
+interface ClientDomainRecord {
+  id: string
+  domain: string
+  status: "pending" | "verified" | "failed"
+  verificationToken: string
+  verifiedAt: string | null
+  lastCheckedAt: string | null
+  createdAt: string
+}
+
+// ─── Add Domain Modal ─────────────────────────────────────────────────────────
+
+function AddDomainModal({
+  onClose,
+  onAdded,
+}: {
+  onClose: () => void
+  onAdded: (record: ClientDomainRecord) => void
+}) {
+  const [step, setStep] = useState<1 | 2>(1)
+  const [domainInput, setDomainInput] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const [verifying, setVerifying] = useState(false)
+  const [error, setError] = useState("")
+  const [record, setRecord] = useState<ClientDomainRecord | null>(null)
+  const [verified, setVerified] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError("")
+    setSubmitting(true)
+    try {
+      const res = await fetch("/api/client-domains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain: domainInput.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        // If already added, let them proceed to verify
+        if (res.status === 409 && data.domain) {
+          setRecord(data.domain)
+          setStep(2)
+        } else {
+          setError(data.error ?? "Something went wrong")
+        }
+        return
+      }
+      setRecord(data.domain)
+      setStep(2)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleVerify() {
+    if (!record) return
+    setVerifying(true)
+    setError("")
+    try {
+      const res = await fetch(`/api/client-domains/${record.id}/verify`, { method: "POST" })
+      const data = await res.json()
+      if (data.verified) {
+        setVerified(true)
+        onAdded({ ...record, status: "verified" })
+      } else {
+        setError(data.message ?? "Token not found yet — DNS can take up to 48 hours to propagate.")
+      }
+    } finally {
+      setVerifying(false)
+    }
+  }
+
+  function copyToken() {
+    if (!record) return
+    navigator.clipboard.writeText(record.verificationToken)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-card border border-border rounded-xl w-full max-w-lg shadow-2xl">
+        {/* Modal header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div>
+            <div className="text-sm font-semibold text-foreground">
+              {step === 1 ? "Add a domain" : "Verify ownership"}
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {step === 1 ? "Enter your sending domain to monitor its health." : `Add a DNS TXT record to prove you own ${record?.domain}.`}
+            </div>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors p-1">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="p-5">
+          {step === 1 ? (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Domain</label>
+                <Input
+                  value={domainInput}
+                  onChange={(e) => setDomainInput(e.target.value)}
+                  placeholder="email.yourdomain.com"
+                  className="font-mono text-sm"
+                  autoFocus
+                />
+                <p className="text-[11px] text-muted-foreground mt-1.5">
+                  Enter the exact domain your campaigns send from — including subdomains (e.g. <span className="font-mono">email.gop.com</span>).
+                </p>
+              </div>
+              {error && <p className="text-xs text-red-500">{error}</p>}
+              <div className="flex justify-end gap-2 pt-1">
+                <Button type="button" variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+                <Button type="submit" size="sm" disabled={submitting || !domainInput.trim()}>
+                  {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+                  Continue
+                </Button>
+              </div>
+            </form>
+          ) : verified ? (
+            <div className="text-center py-4 space-y-3">
+              <CheckCircle2 className="h-10 w-10 text-green-500 mx-auto" />
+              <div>
+                <div className="font-semibold text-foreground">{record?.domain} is verified</div>
+                <div className="text-xs text-muted-foreground mt-1">You can now monitor its compliance health.</div>
+              </div>
+              <Button size="sm" onClick={onClose}>Go to dashboard</Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Step indicator */}
+              <div className="text-xs text-muted-foreground">
+                Add the following TXT record to your DNS provider for <span className="font-mono font-medium text-foreground">{record?.domain}</span>:
+              </div>
+
+              {/* DNS record table */}
+              <div className="bg-muted/30 border border-border rounded-lg overflow-hidden text-xs font-mono">
+                <div className="grid grid-cols-3 border-b border-border px-3 py-2 bg-muted/50 text-[10px] uppercase tracking-widest text-muted-foreground font-sans">
+                  <span>Type</span>
+                  <span>Host / Name</span>
+                  <span>Value</span>
+                </div>
+                <div className="grid grid-cols-3 px-3 py-3 gap-2 items-center">
+                  <span className="text-foreground">TXT</span>
+                  <span className="text-foreground">@</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="truncate text-foreground">{record?.verificationToken}</span>
+                    <button
+                      onClick={copyToken}
+                      className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                      title="Copy"
+                    >
+                      {copied ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-muted-foreground bg-amber-500/8 border border-amber-500/20 rounded-lg px-3 py-2.5 leading-relaxed">
+                DNS changes can take up to 48 hours to propagate. Click <strong>Verify Now</strong> once you&apos;ve added the record — you can also verify later from the domain picker.
+              </div>
+
+              {error && <p className="text-xs text-red-500">{error}</p>}
+
+              <div className="flex justify-between items-center pt-1">
+                <Button variant="ghost" size="sm" onClick={onClose}>Verify later</Button>
+                <Button size="sm" onClick={handleVerify} disabled={verifying}>
+                  {verifying ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+                  Verify Now
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function DomainHealthContent() {
-  const [selectedDomain, setSelectedDomain] = useState(DOMAINS[0])
+  const [clientDomains, setClientDomains] = useState<ClientDomainRecord[]>([])
+  const [domainsLoading, setDomainsLoading] = useState(true)
+  const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null)
   const [domainOpen, setDomainOpen] = useState(false)
+  const [showAddModal, setShowAddModal] = useState(false)
   const [range, setRange] = useState<TimeRange>("30d")
   const [scanning, setScanning] = useState(false)
   const [openCheckId, setOpenCheckId] = useState<string | null>(null)
 
   // Per-status cursors for cycling through issues
   const cursors = useRef<Record<CheckStatus, number>>({ pass: 0, fail: 0, manual: 0 })
+
+  // Fetch real domains from API
+  useEffect(() => {
+    fetch("/api/client-domains")
+      .then((r) => r.json())
+      .then((data) => {
+        const domains: ClientDomainRecord[] = data.domains ?? []
+        setClientDomains(domains)
+        if (domains.length > 0) setSelectedDomainId(domains[0].id)
+      })
+      .catch(() => {})
+      .finally(() => setDomainsLoading(false))
+  }, [])
+
+  const selectedRecord = clientDomains.find((d) => d.id === selectedDomainId) ?? null
+  // Fall back to fake data for demo when no real domain is selected
+  const selectedDomain = selectedRecord?.domain ?? DOMAINS[0]
 
   const data = DOMAIN_DATA[selectedDomain]
   const statuses = data.checkStatuses
@@ -666,7 +879,23 @@ export function DomainHealthContent() {
     })
   }
 
+  function handleDomainAdded(record: ClientDomainRecord) {
+    setClientDomains((prev) => {
+      const exists = prev.find((d) => d.id === record.id)
+      if (exists) return prev.map((d) => d.id === record.id ? record : d)
+      return [...prev, record]
+    })
+    setSelectedDomainId(record.id)
+  }
+
   return (
+    <>
+    {showAddModal && (
+      <AddDomainModal
+        onClose={() => setShowAddModal(false)}
+        onAdded={(record) => { handleDomainAdded(record); setShowAddModal(false) }}
+      />
+    )}
     <div className="p-6 max-w-4xl mx-auto">
       {/* Header */}
       <div className="mb-6">
@@ -681,28 +910,59 @@ export function DomainHealthContent() {
               onClick={() => setDomainOpen((v) => !v)}
               className="flex items-center gap-3 px-4 py-2 bg-card border border-border rounded-lg hover:bg-muted/30 transition-colors"
             >
-              <span className="text-2xl font-semibold text-foreground tracking-tight">{selectedDomain}</span>
+              <span className="text-2xl font-semibold text-foreground tracking-tight">
+                {domainsLoading ? (
+                  <span className="flex items-center gap-2 text-muted-foreground text-base">
+                    <Loader2 size={14} className="animate-spin" /> Loading…
+                  </span>
+                ) : selectedDomain}
+              </span>
               <ChevronDown size={14} className={cn("text-muted-foreground transition-transform", domainOpen && "rotate-180")} />
             </button>
 
             {domainOpen && (
-              <div className="absolute top-[calc(100%+4px)] left-0 min-w-56 bg-card border border-border rounded-lg overflow-hidden z-50 shadow-lg">
-                <div className="px-3 py-2 bg-muted/30 border-b border-border">
+              <div className="absolute top-[calc(100%+4px)] left-0 min-w-64 bg-card border border-border rounded-lg z-50 shadow-lg flex flex-col" style={{ maxHeight: "320px" }}>
+                <div className="px-3 py-2 bg-muted/30 border-b border-border flex-shrink-0">
                   <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">Switch domain</span>
                 </div>
-                {DOMAINS.map((d) => (
+
+                {/* Scrollable domain list */}
+                <div className="overflow-y-auto flex-1 min-h-0">
+                  {clientDomains.length === 0 ? (
+                    <div className="px-3 py-4 text-xs text-muted-foreground text-center">No domains added yet.</div>
+                  ) : clientDomains.map((d) => (
+                    <button
+                      key={d.id}
+                      onClick={() => { setSelectedDomainId(d.id); setDomainOpen(false) }}
+                      className={cn(
+                        "w-full flex items-center justify-between px-3 py-2.5 text-sm text-left hover:bg-muted/30 transition-colors gap-3",
+                        d.id === selectedDomainId && "bg-muted/20 font-medium"
+                      )}
+                    >
+                      <span className="truncate">{d.domain}</span>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {d.status === "pending" && (
+                          <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-500 rounded font-medium">Pending</span>
+                        )}
+                        {d.status === "failed" && (
+                          <span className="text-[10px] px-1.5 py-0.5 bg-red-500/15 text-red-500 rounded font-medium">Failed</span>
+                        )}
+                        {d.id === selectedDomainId && <Check size={13} className="text-rip-red" />}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Pinned add button */}
+                <div className="border-t border-border flex-shrink-0">
                   <button
-                    key={d}
-                    onClick={() => { setSelectedDomain(d); setDomainOpen(false) }}
-                    className={cn(
-                      "w-full flex items-center justify-between px-3 py-2.5 text-sm text-left hover:bg-muted/30 transition-colors",
-                      d === selectedDomain && "bg-muted/20 font-medium"
-                    )}
+                    onClick={() => { setDomainOpen(false); setShowAddModal(true) }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
                   >
-                    {d}
-                    {d === selectedDomain && <Check size={13} className="text-rip-red flex-shrink-0" />}
+                    <Plus size={14} />
+                    New Domain
                   </button>
-                ))}
+                </div>
               </div>
             )}
           </div>
@@ -744,6 +1004,22 @@ export function DomainHealthContent() {
           </button>
         </div>
       </div>
+
+      {/* Pending verification banner */}
+      {selectedRecord && selectedRecord.status === "pending" && (
+        <div className="mb-5 flex items-center justify-between gap-3 px-4 py-3 bg-amber-500/8 border border-amber-500/25 rounded-lg">
+          <div className="flex items-center gap-2 text-sm text-amber-500">
+            <HelpCircle size={15} className="flex-shrink-0" />
+            <span>This domain is <strong>pending verification</strong>. Compliance data will be unavailable until you verify ownership via DNS.</span>
+          </div>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="text-xs font-medium text-amber-500 hover:text-amber-400 transition-colors flex-shrink-0 underline underline-offset-2"
+          >
+            Verify now
+          </button>
+        </div>
+      )}
 
       {/* Grade card */}
       <div className="bg-card border border-border rounded-xl p-5 mb-7">
@@ -836,5 +1112,6 @@ export function DomainHealthContent() {
         </p>
       </div>
     </div>
+    </>
   )
 }

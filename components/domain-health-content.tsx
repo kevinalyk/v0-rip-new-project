@@ -635,16 +635,18 @@ interface ClientDomainRecord {
 function AddDomainModal({
   onClose,
   onAdded,
+  existingRecord,
 }: {
   onClose: () => void
   onAdded: (record: ClientDomainRecord) => void
+  existingRecord?: ClientDomainRecord
 }) {
-  const [step, setStep] = useState<1 | 2>(1)
+  const [step, setStep] = useState<1 | 2>(existingRecord ? 2 : 1)
   const [domainInput, setDomainInput] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [verifying, setVerifying] = useState(false)
   const [error, setError] = useState("")
-  const [record, setRecord] = useState<ClientDomainRecord | null>(null)
+  const [record, setRecord] = useState<ClientDomainRecord | null>(existingRecord ?? null)
   const [verified, setVerified] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -812,6 +814,7 @@ export function DomainHealthContent() {
   const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null)
   const [domainOpen, setDomainOpen] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [pendingVerifyRecord, setPendingVerifyRecord] = useState<ClientDomainRecord | null>(null)
   const [range, setRange] = useState<TimeRange>("30d")
   const [scanning, setScanning] = useState(false)
   const [openCheckId, setOpenCheckId] = useState<string | null>(null)
@@ -822,13 +825,14 @@ export function DomainHealthContent() {
   // Fetch real domains from API
   useEffect(() => {
     fetch("/api/client-domains")
-      .then((r) => r.json())
-      .then((data) => {
+      .then(async (r) => {
+        const data = await r.json()
+        console.log("[v0] client-domains response", r.status, data)
         const domains: ClientDomainRecord[] = data.domains ?? []
         setClientDomains(domains)
         if (domains.length > 0) setSelectedDomainId(domains[0].id)
       })
-      .catch(() => {})
+      .catch((err) => console.error("[v0] client-domains fetch error", err))
       .finally(() => setDomainsLoading(false))
   }, [])
 
@@ -890,10 +894,11 @@ export function DomainHealthContent() {
 
   return (
     <>
-    {showAddModal && (
+    {(showAddModal || pendingVerifyRecord) && (
       <AddDomainModal
-        onClose={() => setShowAddModal(false)}
-        onAdded={(record) => { handleDomainAdded(record); setShowAddModal(false) }}
+        onClose={() => { setShowAddModal(false); setPendingVerifyRecord(null) }}
+        onAdded={(record) => { handleDomainAdded(record); setShowAddModal(false); setPendingVerifyRecord(null) }}
+        existingRecord={pendingVerifyRecord ?? undefined}
       />
     )}
     <div className="p-6 max-w-4xl mx-auto">
@@ -931,25 +936,35 @@ export function DomainHealthContent() {
                   {clientDomains.length === 0 ? (
                     <div className="px-3 py-4 text-xs text-muted-foreground text-center">No domains added yet.</div>
                   ) : clientDomains.map((d) => (
-                    <button
+                    <div
                       key={d.id}
-                      onClick={() => { setSelectedDomainId(d.id); setDomainOpen(false) }}
                       className={cn(
-                        "w-full flex items-center justify-between px-3 py-2.5 text-sm text-left hover:bg-muted/30 transition-colors gap-3",
-                        d.id === selectedDomainId && "bg-muted/20 font-medium"
+                        "flex items-center justify-between px-3 py-2.5 gap-3 hover:bg-muted/30 transition-colors",
+                        d.id === selectedDomainId && "bg-muted/20"
                       )}
                     >
-                      <span className="truncate">{d.domain}</span>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {d.status === "pending" && (
-                          <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-500 rounded font-medium">Pending</span>
+                      <button
+                        onClick={() => { setSelectedDomainId(d.id); setDomainOpen(false) }}
+                        className="flex-1 flex items-center gap-2 text-sm text-left min-w-0"
+                      >
+                        <span className={cn("truncate", d.id === selectedDomainId && "font-medium")}>{d.domain}</span>
+                        {d.id === selectedDomainId && <Check size={13} className="text-rip-red flex-shrink-0" />}
+                      </button>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {(d.status === "pending" || d.status === "failed") && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setDomainOpen(false)
+                              setPendingVerifyRecord(d)
+                            }}
+                            className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-500 hover:bg-amber-500/25 rounded font-medium transition-colors"
+                          >
+                            {d.status === "failed" ? "Retry" : "Verify"}
+                          </button>
                         )}
-                        {d.status === "failed" && (
-                          <span className="text-[10px] px-1.5 py-0.5 bg-red-500/15 text-red-500 rounded font-medium">Failed</span>
-                        )}
-                        {d.id === selectedDomainId && <Check size={13} className="text-rip-red" />}
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
 
@@ -1013,7 +1028,7 @@ export function DomainHealthContent() {
             <span>This domain is <strong>pending verification</strong>. Compliance data will be unavailable until you verify ownership via DNS.</span>
           </div>
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => setPendingVerifyRecord(selectedRecord)}
             className="text-xs font-medium text-amber-500 hover:text-amber-400 transition-colors flex-shrink-0 underline underline-offset-2"
           >
             Verify now

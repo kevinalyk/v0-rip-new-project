@@ -300,6 +300,7 @@ function CheckRow({
   isFirst,
   forceOpen,
   onToggle,
+  emailSamples,
 }: {
   check: DomainCheck
   status: CheckStatus
@@ -307,12 +308,18 @@ function CheckRow({
   isFirst: boolean
   forceOpen?: boolean
   onToggle?: (id: string, next: boolean) => void
+  emailSamples?: EmailSample[]
 }) {
   const [open, setOpen] = useState(false)
   const isOpen = forceOpen !== undefined ? forceOpen : open
   const showFix = status === "fail" && check.fix
   const showManual = status === "manual" && check.manualSteps
   const stateLabel = status === "manual" ? "What we can see" : "Current state"
+
+  // Samples that have this check in their checks map
+  const relevantSamples = (emailSamples ?? []).filter(
+    (s) => check.id in (s.checks ?? {})
+  )
 
   return (
     <div id={`check-${check.id}`} className={cn(!isFirst && "border-t border-border")}>
@@ -351,6 +358,54 @@ function CheckRow({
                 <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium mb-1.5">{stateLabel}</div>
                 <div className="font-mono text-xs text-foreground bg-background border border-border rounded px-3 py-2 break-all leading-relaxed">
                   {value}
+                </div>
+              </div>
+            )}
+
+            {/* Per-email sample breakdown */}
+            {relevantSamples.length > 0 && (
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium mb-2">
+                  Email samples ({relevantSamples.length})
+                </div>
+                <div className="rounded-lg border border-border overflow-hidden">
+                  {relevantSamples.map((sample, i) => {
+                    const passed = (sample.checks as Record<string, boolean>)[check.id]
+                    const subject = decodeMimeSubject(sample.subject)
+                    const placementColor =
+                      sample.placement === "inbox" ? "text-green-500" :
+                      sample.placement === "spam"  ? "text-red-500" :
+                      "text-amber-500"
+                    return (
+                      <div
+                        key={sample.id}
+                        className={cn(
+                          "flex items-center gap-3 px-3 py-2 text-xs",
+                          i > 0 && "border-t border-border",
+                          passed ? "bg-green-500/5" : "bg-red-500/5"
+                        )}
+                      >
+                        {passed
+                          ? <Check size={12} className="text-green-500 flex-shrink-0" />
+                          : <X size={12} className="text-red-500 flex-shrink-0" />
+                        }
+                        <div className="flex-1 min-w-0">
+                          <div className="truncate text-foreground font-medium">{subject}</div>
+                          <div className="text-muted-foreground truncate">{sample.fromAddress ?? "unknown sender"}</div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={cn("font-medium uppercase text-[10px]", placementColor)}>
+                            {sample.placement}
+                          </span>
+                          {sample.receivedAt && (
+                            <span className="text-muted-foreground/60">
+                              {new Date(sample.receivedAt).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -408,6 +463,7 @@ function CategorySection({
   values,
   openCheckId,
   onCheckToggle,
+  emailSamples,
 }: {
   category: Category
   checks: DomainCheck[]
@@ -415,6 +471,7 @@ function CategorySection({
   values: Record<string, string>
   openCheckId: string | null
   onCheckToggle: (id: string, next: boolean) => void
+  emailSamples?: EmailSample[]
 }) {
   const fails = checks.filter((c) => statuses[c.id] === "fail").length
   const manuals = checks.filter((c) => statuses[c.id] === "manual").length
@@ -434,14 +491,15 @@ function CategorySection({
       <div className="border border-border rounded-lg overflow-hidden bg-card">
         {checks.map((check, i) => (
           <CheckRow
-            key={check.id}
-            check={check}
-            status={statuses[check.id] ?? "manual"}
-            value={values[check.id]}
-            isFirst={i === 0}
-            forceOpen={openCheckId === check.id ? true : undefined}
-            onToggle={onCheckToggle}
-          />
+                key={check.id}
+                check={check}
+                status={statuses[check.id] ?? "manual"}
+                value={values[check.id]}
+                isFirst={i === 0}
+                forceOpen={openCheckId === check.id ? true : undefined}
+                onToggle={onCheckToggle}
+                emailSamples={emailSamples}
+              />
         ))}
       </div>
     </div>
@@ -1064,6 +1122,7 @@ export function DomainHealthContent() {
           onCheckToggle={(id, next) => {
             if (!next && id === openCheckId) setOpenCheckId(null)
           }}
+          emailSamples={emailSamples}
         />
       ))}
 

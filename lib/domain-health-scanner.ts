@@ -459,22 +459,14 @@ export async function runDomainHealthScan(
   console.log(`[domain-health-scanner] Final results summary:`, Object.entries(finalResults).map(([k, v]) => `${k}=${v.status}(${v.source})`).join(", "))
   console.log(`[domain-health-scanner] Writing scan to DB — ${Object.keys(finalResults).length} checks, ${seedEmailResults.length} seed emails, ${ciEmails.length} CI rows`)
 
-  // 7. Write scan + results to DB
+  // 7. Write scan + results to DB — all checks in a single JSON column
   const scan = await prisma.domainHealthScan.create({
     data: {
       clientDomainId,
       triggeredBy,
       seedEmailCount: seedEmailResults.length,
       ciRowCount: ciEmails.length,
-      results: {
-        create: Object.entries(finalResults).map(([checkId, r]) => ({
-          checkId,
-          status: r.status,
-          value: r.value || null,
-          note: r.note || null,
-          source: r.source,
-        })),
-      },
+      results: finalResults,
     },
   })
 
@@ -497,15 +489,11 @@ export async function getLatestScanResults(
   const scan = await prisma.domainHealthScan.findFirst({
     where: { clientDomainId },
     orderBy: { scannedAt: "desc" },
-    include: { results: true },
   })
 
   if (!scan) return { scan: null, results: {} }
 
-  const results: Record<string, { status: string; value: string | null; note: string | null; source: string }> = {}
-  for (const r of scan.results) {
-    results[r.checkId] = { status: r.status, value: r.value, note: r.note, source: r.source }
-  }
+  const results = (scan.results ?? {}) as Record<string, { status: string; value: string | null; note: string | null; source: string }>
 
   return { scan, results }
 }

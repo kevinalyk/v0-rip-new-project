@@ -202,7 +202,6 @@ model ClientDomain {
   client          Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
   submittedBy     User?   @relation(fields: [submittedByUserId], references: [id], onDelete: SetNull)
   scans           DomainHealthScan[]
-  seedEmails      SeedEmail[]
 
   @@unique([clientId, domain])
   @@index([clientId])
@@ -307,15 +306,13 @@ model SeedEmail {
   refreshToken    String?   @db.Text // Encrypted OAuth refresh token
   tokenExpiry     DateTime? // When the access token expires
   oauthConnected  Boolean   @default(false) // Whether OAuth is set up and working
-  // Domain health monitoring — when true, this seed is used for domain health only, not CI
+  // Domain health monitoring — when true, this seed is used for domain health scans for its assigned client
   domainHealthMode  Boolean   @default(false)
-  clientDomainId    String?   // FK → ClientDomain.id (set when domainHealthMode = true)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   engagementLogs  EngagementLog[]
   senderFamiliarity SenderFamiliarity[]
-  clientDomain    ClientDomain? @relation(fields: [clientDomainId], references: [id], onDelete: SetNull)
 
   @@index([oauthConnected])
   @@index([provider, oauthConnected])
@@ -323,7 +320,6 @@ model SeedEmail {
   @@index([assignedToClient])
   @@index([ownedByClient, assignedToClient])
   @@index([domainHealthMode])
-  @@index([clientDomainId])
 }
 
 model EmailClickEvent {

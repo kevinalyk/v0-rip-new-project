@@ -15,14 +15,23 @@ export async function GET(request: NextRequest) {
 
   console.log("[cron/domain-health-scan] Starting hourly domain health scan...")
 
-  // Find all verified domains that have at least one domain-health seed assigned
-  const domains = await prisma.clientDomain.findMany({
-    where: {
-      verificationStatus: "verified",
-      seedEmails: { some: { domainHealthMode: true, active: true } },
-    },
-    select: { id: true, domain: true, clientId: true },
+  // Find all verified domains whose client has at least one domain-health seed
+  const domainsRaw = await prisma.clientDomain.findMany({
+    where: { status: "verified" },
+    select: { id: true, domain: true, clientId: true, client: { select: { id: true, name: true } } },
   })
+
+  // Filter to clients that actually have domain-health seeds
+  const clientsWithSeeds = await prisma.seedEmail.findMany({
+    where: { domainHealthMode: true, active: true },
+    select: { assignedToClient: true },
+    distinct: ["assignedToClient"],
+  })
+  const clientTokens = new Set(clientsWithSeeds.map((s) => s.assignedToClient).filter(Boolean))
+
+  const domains = domainsRaw.filter(
+    (d) => clientTokens.has(d.client.id) || clientTokens.has(d.client.name),
+  )
 
   console.log(`[cron/domain-health-scan] Found ${domains.length} verified domains with domain-health seeds`)
 

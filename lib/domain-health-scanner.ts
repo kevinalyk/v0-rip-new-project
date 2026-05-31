@@ -361,6 +361,9 @@ export async function runDomainHealthScan(
   const domain = clientDomain.domain
   const seedEmails = clientDomain.seedEmails
 
+  console.log(`[domain-health-scanner] Starting scan for domain: ${domain} (id: ${clientDomainId}), triggeredBy: ${triggeredBy}`)
+  console.log(`[domain-health-scanner] Found ${seedEmails.length} domain-health seed email(s):`, seedEmails.map((s) => s.email))
+
   // 2. Collect rawHeaders from CI table (historical)
   const ciCampaigns = await prisma.competitiveInsightCampaign.findMany({
     where: {
@@ -378,15 +381,21 @@ export async function runDomainHealthScan(
     .filter((c) => !!c.rawHeaders)
     .map((c) => ({ rawHeaders: c.rawHeaders!, placement: "inbox", source: "ci_header" as const }))
 
+  console.log(`[domain-health-scanner] CI historical emails found for @${domain}: ${ciEmails.length}`)
+
   // 3. Fetch from seed inboxes
   const seedEmailResults: RawEmail[] = []
   for (const seed of seedEmails) {
+    const method = shouldUseGraphAPI(seed.provider) ? "Graph API" : "IMAP"
+    console.log(`[domain-health-scanner] Fetching inbox for seed ${seed.email} via ${method}`)
     try {
       if (shouldUseGraphAPI(seed.provider)) {
         const emails = await fetchEmailsFromSeedGraph(seed, domain)
+        console.log(`[domain-health-scanner] ${seed.email} (Graph): found ${emails.length} email(s) from @${domain}`)
         seedEmailResults.push(...emails)
       } else {
         const emails = await fetchEmailsFromSeedIMAP(seed, domain)
+        console.log(`[domain-health-scanner] ${seed.email} (IMAP): found ${emails.length} email(s) from @${domain}`)
         seedEmailResults.push(...emails)
       }
     } catch (err) {
@@ -394,12 +403,19 @@ export async function runDomainHealthScan(
     }
   }
 
+  console.log(`[domain-health-scanner] Total email samples: ${seedEmailResults.length} seed + ${ciEmails.length} CI = ${seedEmailResults.length + ciEmails.length}`)
+
   // 4. Aggregate header-based checks from both sources (seed takes precedence)
   const allEmails = [...seedEmailResults, ...ciEmails]
   const headerResults = aggregateHeaderChecks(allEmails)
 
+  console.log(`[domain-health-scanner] Header check results:`, Object.entries(headerResults).map(([k, v]) => `${k}=${v.status}`).join(", "))
+
   // 5. Run DNS checks (always live)
+  console.log(`[domain-health-scanner] Running DNS checks for ${domain}...`)
   const dnsResults = await runDnsChecks(domain)
+
+  console.log(`[domain-health-scanner] DNS check results:`, Object.entries(dnsResults).map(([k, v]) => `${k}=${v.status}`).join(", "))
 
   // 6. Merge: DNS results override header results for DNS-checkable items
   const finalResults: Record<string, { status: "pass" | "fail" | "manual"; value: string; note: string; source: string }> = {}
@@ -432,6 +448,9 @@ export async function runDomainHealthScan(
     }
   }
 
+  console.log(`[domain-health-scanner] Final results summary:`, Object.entries(finalResults).map(([k, v]) => `${k}=${v.status}(${v.source})`).join(", "))
+  console.log(`[domain-health-scanner] Writing scan to DB — ${Object.keys(finalResults).length} checks, ${seedEmailResults.length} seed emails, ${ciEmails.length} CI rows`)
+
   // 7. Write scan + results to DB
   const scan = await prisma.domainHealthScan.create({
     data: {
@@ -450,6 +469,8 @@ export async function runDomainHealthScan(
       },
     },
   })
+
+  console.log(`[domain-health-scanner] Scan complete. scanId: ${scan.id}, ${Object.keys(finalResults).length} checks written to DB`)
 
   return {
     scanId: scan.id,

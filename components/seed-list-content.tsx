@@ -483,11 +483,6 @@ export default function SeedListContent({
   }
 
   const handleClientChange = async (seedId: string, clientId: string) => {
-    if (!selectedDomain) {
-      toast.error("Please select a domain first")
-      return
-    }
-
     try {
       setUpdatingClientId(seedId)
       const response = await fetch(`/api/seedlist/${seedId}`, {
@@ -495,7 +490,7 @@ export default function SeedListContent({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ assignedToClient: clientId, domainId: selectedDomain.id }),
+        body: JSON.stringify({ assignedToClient: clientId }),
         credentials: "include",
       })
 

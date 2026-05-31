@@ -753,7 +753,7 @@ export function DomainHealthContent() {
         existingRecord={pendingVerifyRecord ?? undefined}
       />
     )}
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 max-w-4xl mx-auto flex flex-col min-h-[calc(100vh-64px)]">
       {/* Header */}
       <div className="mb-6">
         <p className="text-xs uppercase tracking-widest text-muted-foreground font-medium mb-3">
@@ -881,12 +881,21 @@ export function DomainHealthContent() {
 
       {/* Nothing to show when no domain is selected */}
       {!selectedDomainId && !domainsLoading && (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-12 h-12 rounded-full bg-muted/40 flex items-center justify-center mb-4">
-            <Shield size={22} className="text-muted-foreground" />
+        <div className="flex-1 flex flex-col items-center justify-center text-center py-10">
+          <div className="w-14 h-14 rounded-full bg-muted/40 flex items-center justify-center mb-4">
+            <Shield size={24} className="text-muted-foreground" />
           </div>
-          <div className="text-sm font-medium text-foreground mb-1">No domain selected</div>
-          <div className="text-xs text-muted-foreground max-w-xs">Add a domain using the picker above to start monitoring its email health and compliance.</div>
+          <div className="text-base font-semibold text-foreground mb-1.5">No domain selected</div>
+          <div className="text-sm text-muted-foreground max-w-xs mb-6">
+            Add a domain to start monitoring its email health and compliance.
+          </div>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-rip-red text-white text-sm font-medium rounded-lg hover:bg-rip-red/90 transition-colors"
+          >
+            <Plus size={15} />
+            Add Domain
+          </button>
         </div>
       )}
 
@@ -984,16 +993,18 @@ export function DomainHealthContent() {
         />
       ))}
 
-      {/* Footer note */}
-      <div className="mt-2 p-4 bg-card border border-border rounded-lg flex items-start gap-3">
+      {/* Footer note — pinned to bottom, pushed down by content when report is present */}
+      <div className="mt-auto pt-6">
+      <div className="p-4 bg-card border border-border rounded-lg flex items-start gap-3">
         <Info size={14} className="text-muted-foreground flex-shrink-0 mt-0.5" />
         <p className="text-xs text-muted-foreground leading-relaxed">
           Inbox.GOP analyzes emails received from monitored domains and verifies them against{" "}
           <a href="https://support.google.com/a/answer/81126" target="_blank" rel="noopener noreferrer" className="text-foreground font-medium underline underline-offset-2">
             Google&apos;s Email Sender Guidelines
           </a>
-          . Auto-checks come from received headers, content scans, and DNS lookups. Review items require sender-side verification and cannot be confirmed remotely.
+          . Auto-checks come from received headers, content scans, and DNS lookups. Review items require sender-side verification and cannot be confirmed           remotely.
         </p>
+      </div>
       </div>
     </div>
     </>

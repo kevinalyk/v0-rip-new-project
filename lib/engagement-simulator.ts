@@ -183,6 +183,7 @@ export class EngagementSimulator {
       AND password IS NOT NULL
       AND locked = 'true'
       AND "assignedToClient" = 'RIP'
+      AND "domainHealthMode" = false
     `
 
     console.log(`Found ${accounts.length} RIP-locked accounts`)

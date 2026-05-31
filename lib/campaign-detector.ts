@@ -216,20 +216,10 @@ export async function scanForNewCampaigns(options: {
   try {
     console.log(`🔍 Starting campaign detection scan (${daysToScan} days, min count: ${minInboxCount})`)
 
-    const ripClient = await prisma.client.findFirst({
-      where: {
-        OR: [{ slug: "rip" }, { name: { contains: "RIP", mode: "insensitive" } }],
-      },
-      select: { id: true },
-    })
-
     const seedEmails = await prisma.seedEmail.findMany({
       where: {
         active: true,
         domainHealthMode: false,
-        NOT: {
-          AND: [{ locked: true }, { assignedToClient: ripClient?.id }],
-        },
       },
     })
 

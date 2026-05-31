@@ -22,6 +22,30 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Decode RFC 2047 encoded-word subjects like =?UTF-8?q?Hello_world?= */
+function decodeMimeSubject(subject: string | null): string {
+  if (!subject) return "(no subject)"
+  // Match all encoded words: =?charset?encoding?text?=
+  return subject.replace(/=\?([^?]+)\?([bqBQ])\?([^?]*)\?=/g, (_, charset, encoding, text) => {
+    try {
+      if (encoding.toUpperCase() === "Q") {
+        // Quoted-printable: replace _ with space, decode =XX sequences
+        const qp = text.replace(/_/g, " ").replace(/=([0-9A-Fa-f]{2})/g, (_m: string, hex: string) =>
+          String.fromCharCode(parseInt(hex, 16))
+        )
+        return decodeURIComponent(escape(qp))
+      } else {
+        // Base64
+        return decodeURIComponent(escape(atob(text)))
+      }
+    } catch {
+      return text
+    }
+  }).trim()
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type CheckStatus = "pass" | "fail" | "manual"
@@ -1060,61 +1084,62 @@ export function DomainHealthContent() {
             const checkEntries = Object.entries(sample.checks)
             const passCount = checkEntries.filter(([, v]) => v === true).length
             const failCount = checkEntries.filter(([, v]) => v === false).length
+            const decodedSubject = decodeMimeSubject(sample.subject)
             const placementColor =
               sample.placement === "inbox" ? "text-green-500 bg-green-500/10" :
-              sample.placement === "spam" ? "text-red-500 bg-red-500/10" :
+              sample.placement === "spam"  ? "text-red-500 bg-red-500/10" :
               "text-amber-500 bg-amber-500/10"
 
             return (
-              <div key={sample.id} className="bg-card border border-border rounded-xl p-4">
-                {/* Email header row */}
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-foreground truncate mb-0.5">
-                      {sample.subject ?? "(no subject)"}
+              <div key={sample.id} className="bg-card border border-border rounded-xl overflow-hidden">
+                {/* Top bar */}
+                <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-foreground truncate leading-snug">
+                      {decodedSubject}
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      From: <span className="text-foreground">{sample.fromAddress ?? "unknown"}</span>
+                    <div className="text-xs text-muted-foreground mt-0.5 truncate">
+                      {sample.fromAddress ?? "unknown sender"}
                       {sample.seedEmail && (
-                        <> &middot; To seed: <span className="text-foreground">{sample.seedEmail}</span></>
+                        <span className="text-muted-foreground/60"> &rarr; {sample.seedEmail}</span>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className={cn("text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full", placementColor)}>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <span className={cn("text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md", placementColor)}>
                       {sample.placement}
                     </span>
-                    <span className="text-[10px] text-muted-foreground px-2 py-0.5 rounded-full bg-muted/40 uppercase tracking-wide font-medium">
+                    <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-md bg-muted/50 text-muted-foreground">
                       {sample.source === "seed" ? "Seed" : "CI"}
                     </span>
                   </div>
                 </div>
 
-                {/* Received time + pass/fail summary */}
-                <div className="flex items-center gap-3 mb-3 text-xs text-muted-foreground">
+                {/* Meta row */}
+                <div className="flex items-center gap-2 px-4 pb-3 text-xs text-muted-foreground">
                   {sample.receivedAt && (
                     <span>{new Date(sample.receivedAt).toLocaleString()}</span>
                   )}
-                  <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
+                  <span className="text-muted-foreground/30">&bull;</span>
                   <span className="text-green-500 font-medium">{passCount} passed</span>
-                  <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
+                  <span className="text-muted-foreground/30">&bull;</span>
                   <span className="text-red-500 font-medium">{failCount} failed</span>
                 </div>
 
                 {/* Per-check chips */}
-                <div className="flex flex-wrap gap-1.5">
+                <div className="border-t border-border px-4 py-3 flex flex-wrap gap-1.5">
                   {checkEntries.map(([checkId, passed]) => (
                     <span
                       key={checkId}
                       className={cn(
-                        "inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-md uppercase tracking-wide",
+                        "inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md uppercase tracking-wide",
                         passed
                           ? "bg-green-500/10 text-green-500"
                           : "bg-red-500/10 text-red-500"
                       )}
                     >
                       {passed ? <Check size={9} /> : <X size={9} />}
-                      {checkId}
+                      {checkId.replace(/_/g, " ")}
                     </span>
                   ))}
                 </div>

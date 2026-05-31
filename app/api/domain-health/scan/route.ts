@@ -65,7 +65,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      scanId: result.scanId,
+      newSamples: result.newSamples,
+      skippedDuplicates: result.skippedDuplicates,
       seedEmailCount: result.seedEmailCount,
       ciRowCount: result.ciRowCount,
       checkCount: result.checkCount,

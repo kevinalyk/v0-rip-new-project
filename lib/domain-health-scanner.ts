@@ -1,11 +1,16 @@
 /**
  * Domain Health Scanner
  *
- * For each scan:
- * 1. Fetches individual emails from seed inboxes (IMAP / Graph) and CI historical data
- * 2. Runs compliance checks on EACH email individually → saves as DomainHealthEmailSample rows
- * 3. Runs live DNS checks (SPF, DMARC, MX, BIMI)
- * 4. Aggregates per-email results + DNS into a summary stored on DomainHealthScan
+ * Model: 1 row per unique email in DomainHealthEmailSample (deduped by messageId).
+ *        DNS results stored in DomainHealthDnsResult (upserted per domain).
+ *        The report is computed on-the-fly from samples + DNS.
+ *
+ * On every cron/manual run:
+ *  1. Fetch emails from seed inboxes + CI table
+ *  2. For each email: extract Message-ID, run compliance checks
+ *  3. Upsert into DomainHealthEmailSample — skip if messageId already exists
+ *  4. Run DNS checks → upsert DomainHealthDnsResult
+ *  5. Return counts (new/skipped)
  */
 
 import prisma from "@/lib/prisma"
@@ -14,48 +19,36 @@ import { fetchOutlookEmails, shouldUseGraphAPI } from "@/lib/microsoft-graph"
 import { decrypt } from "@/lib/encryption"
 import { getServerSettings } from "@/lib/email-connection"
 import * as Imap from "node-imap"
-import { simpleParser } from "mailparser"
 import dns from "dns/promises"
-
-const CHECK_IDS = [
-  "spf", "dkim", "dmarc", "dmarc_align", "tls",
-  "one_click_unsub", "unsub_link", "from_domain", "no_fake_reply",
-  "valid_from_to", "no_hidden_content", "display_name", "arc",
-  "valid_message_id", "mx_record", "rdns", "bimi_record",
-] as const
-
-type CheckId = typeof CHECK_IDS[number]
 
 // Header-derived checks (require email samples)
 const HEADER_CHECK_MAP: Record<string, (r: any) => boolean> = {
-  spf:             (r) => r.hasSpf,
-  dkim:            (r) => r.hasDkim,
-  dmarc:           (r) => r.hasDmarc,
-  dmarc_align:     (r) => r.hasDmarcAlignment,
-  tls:             (r) => r.hasTls,
-  one_click_unsub: (r) => r.hasOneClickUnsubscribeHeaders,
-  unsub_link:      (r) => r.hasUnsubscribeLinkInBody,
-  from_domain:     (r) => r.hasSingleFromAddress,
-  no_fake_reply:   (r) => r.noFakeReplyPrefix,
-  valid_from_to:   (r) => r.hasValidFromTo,
+  spf:               (r) => r.hasSpf,
+  dkim:              (r) => r.hasDkim,
+  dmarc:             (r) => r.hasDmarc,
+  dmarc_align:       (r) => r.hasDmarcAlignment,
+  tls:               (r) => r.hasTls,
+  one_click_unsub:   (r) => r.hasOneClickUnsubscribeHeaders,
+  unsub_link:        (r) => r.hasUnsubscribeLinkInBody,
+  from_domain:       (r) => r.hasSingleFromAddress,
+  no_fake_reply:     (r) => r.noFakeReplyPrefix,
+  valid_from_to:     (r) => r.hasValidFromTo,
   no_hidden_content: (r) => r.noHiddenContent,
-  display_name:    (r) => r.displayNameClean,
-  arc:             (r) => r.hasArcHeaders,
-  valid_message_id:(r) => r.hasValidMessageId,
+  display_name:      (r) => r.displayNameClean,
+  arc:               (r) => r.hasArcHeaders,
+  valid_message_id:  (r) => r.hasValidMessageId,
 }
 
-// DNS-only checks (no email samples needed)
-const DNS_ONLY_CHECKS: CheckId[] = ["spf", "dmarc", "mx_record", "bimi_record"]
-
-// Header-only checks (mark manual if no samples)
-const HEADER_ONLY_CHECKS: CheckId[] = [
+// Header-only checks — marked manual if no samples found
+const HEADER_ONLY_CHECKS = [
   "tls", "one_click_unsub", "unsub_link", "from_domain", "no_fake_reply",
   "valid_from_to", "no_hidden_content", "display_name", "arc",
   "valid_message_id", "dkim", "dmarc_align", "rdns",
-]
+] as const
 
 interface ParsedEmail {
   rawHeaders: string
+  messageId: string | null
   subject: string
   fromAddress: string
   receivedAt: Date | null
@@ -159,11 +152,11 @@ async function fetchEmailsFromSeedIMAP(
                   const senderDomain = fromMatch[1].trim().toLowerCase().split(">")[0].split(" ")[0]
                   if (!senderDomain.includes(domain.toLowerCase())) return
 
-                  // Extract from address and subject from headers
-                  const fromLine = rawHeaders.match(/^from:\s*(.+)/im)?.[1]?.trim() ?? ""
+                  const fromLine    = rawHeaders.match(/^from:\s*(.+)/im)?.[1]?.trim() ?? ""
                   const subjectLine = rawHeaders.match(/^subject:\s*(.+)/im)?.[1]?.trim() ?? ""
-                  const dateLine = rawHeaders.match(/^date:\s*(.+)/im)?.[1]?.trim()
-                  const receivedAt = dateLine ? new Date(dateLine) : null
+                  const dateLine    = rawHeaders.match(/^date:\s*(.+)/im)?.[1]?.trim()
+                  const msgIdLine   = rawHeaders.match(/^message-id:\s*(.+)/im)?.[1]?.trim() ?? null
+                  const receivedAt  = dateLine ? new Date(dateLine) : null
 
                   let placement: ParsedEmail["placement"] = "inbox"
                   if (isSpamFolder) placement = "spam"
@@ -171,6 +164,7 @@ async function fetchEmailsFromSeedIMAP(
 
                   results.push({
                     rawHeaders: rawHeaders + "\n" + rawBody,
+                    messageId: msgIdLine,
                     subject: subjectLine,
                     fromAddress: fromLine,
                     receivedAt: receivedAt && !isNaN(receivedAt.getTime()) ? receivedAt : null,
@@ -211,6 +205,7 @@ async function fetchEmailsFromSeedGraph(
     .filter((e) => e.from?.address?.toLowerCase().includes(domain.toLowerCase()) && !!e.rawHeaders)
     .map((e) => ({
       rawHeaders: e.rawHeaders!,
+      messageId: e.internetMessageId ?? null,
       subject: e.subject ?? "",
       fromAddress: e.from?.address ?? "",
       receivedAt: e.receivedDateTime ? new Date(e.receivedDateTime) : null,
@@ -222,8 +217,8 @@ async function fetchEmailsFromSeedGraph(
 
 // ─── DNS checks ───────────────────────────────────────────────────────────────
 
-async function runDnsChecks(domain: string): Promise<Partial<Record<CheckId, { status: "pass" | "fail" | "manual"; value: string; note: string }>>> {
-  const results: Partial<Record<CheckId, { status: "pass" | "fail" | "manual"; value: string; note: string }>> = {}
+async function runDnsChecks(domain: string): Promise<Record<string, { status: "pass" | "fail" | "manual"; value: string; note: string }>> {
+  const results: Record<string, { status: "pass" | "fail" | "manual"; value: string; note: string }> = {}
 
   // SPF
   try {
@@ -276,9 +271,8 @@ async function runDnsChecks(domain: string): Promise<Partial<Record<CheckId, { s
 export async function runDomainHealthScan(
   clientDomainId: string,
   triggeredBy: "manual" | "cron" = "manual",
-): Promise<{ scanId: string; checkCount: number; seedEmailCount: number; ciRowCount: number }> {
+): Promise<{ newSamples: number; skippedDuplicates: number; seedEmailCount: number; ciRowCount: number; checkCount: number; scanId: string }> {
 
-  // 1. Load the ClientDomain record
   const clientDomain = await prisma.clientDomain.findUnique({
     where: { id: clientDomainId },
     include: { client: { select: { id: true, name: true } } },
@@ -286,8 +280,8 @@ export async function runDomainHealthScan(
   if (!clientDomain) throw new Error(`ClientDomain ${clientDomainId} not found`)
 
   const domain = clientDomain.domain
+  const clientId = clientDomain.clientId
 
-  // Seeds scoped to the client — any seed with domainHealthMode=true serves all client domains
   const seedEmails = await prisma.seedEmail.findMany({
     where: {
       domainHealthMode: true,
@@ -304,10 +298,9 @@ export async function runDomainHealthScan(
     },
   })
 
-  console.log(`[domain-health-scanner] Starting scan for domain: ${domain} (id: ${clientDomainId}), triggeredBy: ${triggeredBy}`)
-  console.log(`[domain-health-scanner] Found ${seedEmails.length} domain-health seed(s):`, seedEmails.map((s) => s.email))
+  console.log(`[domain-health-scanner] Scanning ${domain} (${triggeredBy}), ${seedEmails.length} seed(s)`)
 
-  // 2. Collect from CI table (historical raw headers)
+  // Collect CI emails
   const ciCampaigns = await prisma.competitiveInsightCampaign.findMany({
     where: {
       clientId: clientDomain.clientId,
@@ -322,27 +315,27 @@ export async function runDomainHealthScan(
 
   const ciEmails: ParsedEmail[] = ciCampaigns
     .filter((c) => !!c.rawHeaders)
-    .map((c) => ({
-      rawHeaders: c.rawHeaders!,
-      subject: c.subject ?? "",
-      fromAddress: c.senderEmail ?? "",
-      receivedAt: c.createdAt,
-      placement: "inbox" as const,
-      source: "ci" as const,
-    }))
+    .map((c) => {
+      const msgIdMatch = c.rawHeaders!.match(/^message-id:\s*(.+)/im)
+      return {
+        rawHeaders: c.rawHeaders!,
+        messageId: msgIdMatch?.[1]?.trim() ?? null,
+        subject: c.subject ?? "",
+        fromAddress: c.senderEmail ?? "",
+        receivedAt: c.createdAt,
+        placement: "inbox" as const,
+        source: "ci" as const,
+      }
+    })
 
-  console.log(`[domain-health-scanner] CI historical emails for @${domain}: ${ciEmails.length}`)
-
-  // 3. Fetch live emails from seed inboxes
+  // Fetch live seed inbox emails
   const seedEmails_parsed: ParsedEmail[] = []
   for (const seed of seedEmails) {
-    const method = shouldUseGraphAPI(seed.provider) ? "Graph API" : "IMAP"
-    console.log(`[domain-health-scanner] Fetching seed ${seed.email} via ${method}`)
     try {
       const emails = shouldUseGraphAPI(seed.provider)
         ? await fetchEmailsFromSeedGraph(seed, domain)
         : await fetchEmailsFromSeedIMAP(seed, domain)
-      console.log(`[domain-health-scanner] ${seed.email}: found ${emails.length} email(s) from @${domain}`)
+      console.log(`[domain-health-scanner] ${seed.email}: ${emails.length} email(s)`)
       seedEmails_parsed.push(...emails)
     } catch (err) {
       console.error(`[domain-health-scanner] Error fetching ${seed.email}:`, err)
@@ -350,23 +343,27 @@ export async function runDomainHealthScan(
   }
 
   const allEmails: ParsedEmail[] = [...seedEmails_parsed, ...ciEmails]
-  console.log(`[domain-health-scanner] Total email samples: ${seedEmails_parsed.length} seed + ${ciEmails.length} CI = ${allEmails.length}`)
+  console.log(`[domain-health-scanner] Total: ${seedEmails_parsed.length} seed + ${ciEmails.length} CI = ${allEmails.length} emails`)
 
-  // 4. Create the scan record first (so we can attach email samples to it)
-  const scan = await prisma.domainHealthScan.create({
-    data: {
-      clientDomainId,
-      triggeredBy,
-      seedEmailCount: seedEmails_parsed.length,
-      ciRowCount: ciEmails.length,
-      summary: {}, // filled in after aggregation
-    },
-  })
+  // Upsert each email — skip if messageId already exists for this domain
+  let newSamples = 0
+  let skippedDuplicates = 0
 
-  // 5. Save each individual email as a DomainHealthEmailSample with its own check results
-  const perEmailResults: Array<Record<string, boolean>> = []
+  // Pre-load existing messageIds for this domain to avoid per-email DB round-trips
+  const existingMessageIds = new Set(
+    (await prisma.domainHealthEmailSample.findMany({
+      where: { clientDomainId, messageId: { not: null } },
+      select: { messageId: true },
+    })).map((r) => r.messageId!)
+  )
 
   for (const email of allEmails) {
+    // Skip duplicates — if we have a messageId and it's already stored, skip
+    if (email.messageId && existingMessageIds.has(email.messageId)) {
+      skippedDuplicates++
+      continue
+    }
+
     let checks: Record<string, boolean> = {}
     try {
       const compliance = checkEmailCompliance({
@@ -380,31 +377,87 @@ export async function runDomainHealthScan(
         checks[checkId] = getFn(compliance)
       }
     } catch (err) {
-      console.error(`[domain-health-scanner] checkEmailCompliance error:`, err)
+      console.error(`[domain-health-scanner] compliance check error:`, err)
     }
 
-    await prisma.domainHealthEmailSample.create({
-      data: {
-        scanId: scan.id,
-        source: email.source,
-        seedEmail: email.seedEmail ?? null,
-        fromAddress: email.fromAddress,
-        subject: email.subject,
-        receivedAt: email.receivedAt,
-        placement: email.placement,
-        checks,
-      },
-    })
-
-    perEmailResults.push(checks)
+    try {
+      await prisma.domainHealthEmailSample.create({
+        data: {
+          clientDomainId,
+          clientId,
+          messageId: email.messageId ?? null,
+          source: email.source,
+          seedEmail: email.seedEmail ?? null,
+          fromAddress: email.fromAddress,
+          subject: email.subject,
+          receivedAt: email.receivedAt,
+          placement: email.placement,
+          checks,
+        },
+      })
+      if (email.messageId) existingMessageIds.add(email.messageId)
+      newSamples++
+    } catch (err: any) {
+      // Unique constraint violation = another worker beat us to it
+      if (err?.code === "P2002") {
+        skippedDuplicates++
+      } else {
+        console.error(`[domain-health-scanner] insert error:`, err)
+      }
+    }
   }
 
-  // 6. Aggregate per-email results into summary
+  // Run DNS checks and upsert into DomainHealthDnsResult
+  const dnsResults = await runDnsChecks(domain)
+  await prisma.domainHealthDnsResult.upsert({
+    where: { clientDomainId },
+    create: { clientDomainId, results: dnsResults },
+    update: { results: dnsResults, checkedAt: new Date() },
+  })
+
+  const totalSamples = await prisma.domainHealthEmailSample.count({ where: { clientDomainId } })
+
+  console.log(`[domain-health-scanner] Done — ${newSamples} new, ${skippedDuplicates} skipped. Total samples: ${totalSamples}`)
+
+  return {
+    newSamples,
+    skippedDuplicates,
+    seedEmailCount: seedEmails_parsed.length,
+    ciRowCount: ciEmails.length,
+    checkCount: Object.keys(HEADER_CHECK_MAP).length + Object.keys(dnsResults).length,
+    scanId: clientDomainId, // no longer a separate scan row — use clientDomainId as the identifier
+  }
+}
+
+/**
+ * Get all email samples + DNS results for a ClientDomain, and compute the
+ * aggregated summary on-the-fly.
+ */
+export async function getLatestScanResults(
+  clientDomainId: string,
+): Promise<{
+  scan: { scannedAt: string; seedEmailCount: number; ciRowCount: number } | null
+  results: Record<string, { status: string; value: string | null; note: string | null; source: string; passCount?: number; failCount?: number; total?: number }>
+  emailSamples: Array<{ id: string; source: string; seedEmail: string | null; fromAddress: string | null; subject: string | null; receivedAt: Date | null; placement: string; checks: any }>
+}> {
+  const [emailSamples, dnsRecord] = await Promise.all([
+    prisma.domainHealthEmailSample.findMany({
+      where: { clientDomainId },
+      orderBy: { receivedAt: "desc" },
+    }),
+    prisma.domainHealthDnsResult.findUnique({
+      where: { clientDomainId },
+    }),
+  ])
+
+  if (emailSamples.length === 0 && !dnsRecord) {
+    return { scan: null, results: {}, emailSamples: [] }
+  }
+
+  // Aggregate per-email checks into summary
   const voteCounts: Record<string, { pass: number; fail: number }> = {}
-  for (const checkId of Object.keys(HEADER_CHECK_MAP)) {
-    voteCounts[checkId] = { pass: 0, fail: 0 }
-  }
-  for (const checks of perEmailResults) {
+  for (const sample of emailSamples) {
+    const checks = (sample.checks ?? {}) as Record<string, boolean>
     for (const [checkId, passed] of Object.entries(checks)) {
       if (!voteCounts[checkId]) voteCounts[checkId] = { pass: 0, fail: 0 }
       if (passed) voteCounts[checkId].pass++
@@ -412,14 +465,13 @@ export async function runDomainHealthScan(
     }
   }
 
-  const summary: Record<string, { status: "pass" | "fail" | "manual"; passCount: number; failCount: number; total: number; value: string; note: string; source: string }> = {}
+  const results: Record<string, any> = {}
 
   for (const [checkId, counts] of Object.entries(voteCounts)) {
     const total = counts.pass + counts.fail
     if (total === 0) continue
-    const passRate = counts.pass / total
-    summary[checkId] = {
-      status: passRate >= 0.6 ? "pass" : "fail",
+    results[checkId] = {
+      status: counts.pass / total >= 0.6 ? "pass" : "fail",
       passCount: counts.pass,
       failCount: counts.fail,
       total,
@@ -429,11 +481,10 @@ export async function runDomainHealthScan(
     }
   }
 
-  // 7. Run DNS checks and override/supplement summary
-  console.log(`[domain-health-scanner] Running DNS checks for ${domain}...`)
-  const dnsResults = await runDnsChecks(domain)
+  // Overlay DNS results
+  const dnsResults = (dnsRecord?.results ?? {}) as Record<string, { status: string; value: string; note: string }>
   for (const [checkId, r] of Object.entries(dnsResults)) {
-    summary[checkId] = {
+    results[checkId] = {
       status: r.status,
       passCount: r.status === "pass" ? 1 : 0,
       failCount: r.status === "fail" ? 1 : 0,
@@ -444,14 +495,14 @@ export async function runDomainHealthScan(
     }
   }
 
-  // 8. Mark header-only checks as manual if no samples
+  // Mark header-only checks as manual if missing
   for (const checkId of HEADER_ONLY_CHECKS) {
-    if (!summary[checkId]) {
-      summary[checkId] = {
+    if (!results[checkId]) {
+      results[checkId] = {
         status: "manual",
         passCount: 0, failCount: 0, total: 0,
         value: "",
-        note: allEmails.length === 0
+        note: emailSamples.length === 0
           ? "No email samples — assign seed inboxes or wait for CI data"
           : "Insufficient data",
         source: "email_sample",
@@ -459,49 +510,18 @@ export async function runDomainHealthScan(
     }
   }
 
-  // 9. Update the scan with the completed summary
-  await prisma.domainHealthScan.update({
-    where: { id: scan.id },
-    data: { summary },
-  })
-
-  console.log(`[domain-health-scanner] Scan complete. scanId: ${scan.id}, ${allEmails.length} email samples, ${Object.keys(summary).length} checks`)
+  // Build a synthetic "scan" meta object from the samples
+  const seedSamples = emailSamples.filter((s) => s.source === "seed")
+  const ciSamples   = emailSamples.filter((s) => s.source === "ci")
+  const latestAt    = dnsRecord?.checkedAt ?? emailSamples[0]?.receivedAt ?? new Date()
 
   return {
-    scanId: scan.id,
-    checkCount: Object.keys(summary).length,
-    seedEmailCount: seedEmails_parsed.length,
-    ciRowCount: ciEmails.length,
-  }
-}
-
-/**
- * Get the latest scan summary + per-email samples for a ClientDomain
- */
-export async function getLatestScanResults(
-  clientDomainId: string,
-): Promise<{
-  scan: any | null
-  results: Record<string, { status: string; value: string | null; note: string | null; source: string; passCount?: number; failCount?: number; total?: number }>
-  emailSamples: Array<{ id: string; source: string; seedEmail: string | null; fromAddress: string | null; subject: string | null; receivedAt: Date | null; placement: string; checks: any }>
-}> {
-  const scan = await prisma.domainHealthScan.findFirst({
-    where: { clientDomainId },
-    orderBy: { scannedAt: "desc" },
-    include: {
-      emailSamples: {
-        orderBy: { receivedAt: "desc" },
-      },
+    scan: {
+      scannedAt: latestAt.toISOString(),
+      seedEmailCount: seedSamples.length,
+      ciRowCount: ciSamples.length,
     },
-  })
-
-  if (!scan) return { scan: null, results: {}, emailSamples: [] }
-
-  const results = (scan.summary ?? {}) as Record<string, { status: string; value: string | null; note: string | null; source: string; passCount?: number; failCount?: number; total?: number }>
-
-  return {
-    scan,
     results,
-    emailSamples: scan.emailSamples ?? [],
+    emailSamples,
   }
 }

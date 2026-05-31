@@ -214,14 +214,36 @@ model DomainHealthScan {
   triggeredBy     String   @default("manual") // "manual" | "cron" | "seed"
   seedEmailCount  Int      @default(0)
   ciRowCount      Int      @default(0)
-  // All check results stored as a single JSON object:
-  // { [checkId]: { status: "pass"|"fail"|"manual", value: string, note: string, source: string } }
-  results         Json     @default("{}")
+  // Aggregated summary across all email samples + DNS checks:
+  // { [checkId]: { status: "pass"|"fail"|"manual", passCount: number, failCount: number, total: number, value: string, note: string, source: string } }
+  summary         Json     @default("{}")
 
-  clientDomain    ClientDomain @relation(fields: [clientDomainId], references: [id], onDelete: Cascade)
+  clientDomain    ClientDomain          @relation(fields: [clientDomainId], references: [id], onDelete: Cascade)
+  emailSamples    DomainHealthEmailSample[]
 
   @@index([clientDomainId])
   @@index([scannedAt])
+}
+
+// One row per individual email received in a seed or CI inbox during a scan
+model DomainHealthEmailSample {
+  id           String   @id @default(uuid())
+  scanId       String
+  source       String   // "seed" | "ci"
+  seedEmail    String?  // which seed inbox it came from (if source=seed)
+  fromAddress  String?  // the sender address
+  subject      String?  @db.Text
+  receivedAt   DateTime?
+  placement    String   @default("inbox") // "inbox" | "spam" | "promotions" | "social" | "other"
+  // Raw boolean check results for THIS individual email:
+  // { spf: true, dkim: false, tls: true, ... }
+  checks       Json     @default("{}")
+
+  scan         DomainHealthScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([scanId])
+  @@index([source])
+  @@index([seedEmail])
 }
 
 model BlockedDomain {

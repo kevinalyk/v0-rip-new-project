@@ -434,14 +434,14 @@ function CategorySection({
       <div className="border border-border rounded-lg overflow-hidden bg-card">
         {checks.map((check, i) => (
           <CheckRow
-            key={check.id}
-            check={check}
-            status={statuses[check.id] ?? "manual"}
-            value={values[check.id]}
-            isFirst={i === 0}
-            forceOpen={openCheckId === check.id ? true : undefined}
-            onToggle={onCheckToggle}
-          />
+                key={check.id}
+                check={check}
+                status={statuses[check.id] ?? "manual"}
+                value={values[check.id]}
+                isFirst={i === 0}
+                forceOpen={openCheckId === check.id ? true : undefined}
+                onToggle={onCheckToggle}
+              />
         ))}
       </div>
     </div>
@@ -1070,7 +1070,7 @@ export function DomainHealthContent() {
       {/* Email Samples tab */}
       {selectedDomainId && activeTab === "samples" && (
         <div className="space-y-3">
-          {!hasData || emailSamples.length === 0 ? (
+          {emailSamples.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="w-12 h-12 rounded-full bg-muted/40 flex items-center justify-center mb-4">
                 <Send size={20} className="text-muted-foreground" />

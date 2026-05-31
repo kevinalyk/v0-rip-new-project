@@ -338,28 +338,36 @@ export async function runDomainHealthScan(
   // 1. Load the ClientDomain record
   const clientDomain = await prisma.clientDomain.findUnique({
     where: { id: clientDomainId },
-    include: {
-      seedEmails: {
-        where: { domainHealthMode: true, active: true },
-        select: {
-          id: true,
-          email: true,
-          provider: true,
-          password: true,
-          appPassword: true,
-          twoFactorEnabled: true,
-          accessToken: true,
-          refreshToken: true,
-          oauthConnected: true,
-        },
-      },
-    },
+    include: { client: { select: { id: true, name: true } } },
   })
 
   if (!clientDomain) throw new Error(`ClientDomain ${clientDomainId} not found`)
 
   const domain = clientDomain.domain
-  const seedEmails = clientDomain.seedEmails
+
+  // Seeds are scoped to the client, not to a specific domain — any seed with
+  // domainHealthMode=true assigned to this client is used for all its domains
+  const seedEmails = await prisma.seedEmail.findMany({
+    where: {
+      domainHealthMode: true,
+      active: true,
+      OR: [
+        { assignedToClient: clientDomain.client.id },
+        { assignedToClient: clientDomain.client.name },
+      ],
+    },
+    select: {
+      id: true,
+      email: true,
+      provider: true,
+      password: true,
+      appPassword: true,
+      twoFactorEnabled: true,
+      accessToken: true,
+      refreshToken: true,
+      oauthConnected: true,
+    },
+  })
 
   console.log(`[domain-health-scanner] Starting scan for domain: ${domain} (id: ${clientDomainId}), triggeredBy: ${triggeredBy}`)
   console.log(`[domain-health-scanner] Found ${seedEmails.length} domain-health seed email(s):`, seedEmails.map((s) => s.email))

@@ -657,22 +657,27 @@ export function DomainHealthContent() {
   const selectedRecord = clientDomains.find((d) => d.id === selectedDomainId) ?? null
   const selectedDomain = selectedRecord?.domain ?? ""
 
-  // Build statuses and values entirely from real scan results
+  // True only when a domain is selected AND real scan results exist
+  const hasData = !!selectedDomainId && Object.keys(scanResults).length > 0
+
+  // Build statuses/values only from real scan results — no default fallbacks
   const statuses: Record<string, CheckStatus> = {}
   const values: Record<string, string> = {}
-  for (const [checkId, r] of Object.entries(scanResults)) {
-    statuses[checkId] = r.status as CheckStatus
-    if (r.value || r.note) values[checkId] = r.value ?? r.note ?? ""
-  }
-  // Any check not yet in scan results defaults to "manual" (awaiting scan data)
-  for (const check of CHECKS) {
-    if (!(check.id in statuses)) statuses[check.id] = "manual"
+  if (hasData) {
+    for (const [checkId, r] of Object.entries(scanResults)) {
+      statuses[checkId] = r.status as CheckStatus
+      if (r.value || r.note) values[checkId] = r.value ?? r.note ?? ""
+    }
+    // Checks not yet in scan results default to "manual"
+    for (const check of CHECKS) {
+      if (!(check.id in statuses)) statuses[check.id] = "manual"
+    }
   }
 
-  const autoChecks = CHECKS.filter((c) => statuses[c.id] !== "manual")
+  const autoChecks = hasData ? CHECKS.filter((c) => statuses[c.id] !== "manual") : []
   const pass = autoChecks.filter((c) => statuses[c.id] === "pass").length
   const fail = autoChecks.filter((c) => statuses[c.id] === "fail").length
-  const manual = CHECKS.filter((c) => statuses[c.id] === "manual").length
+  const manual = hasData ? CHECKS.filter((c) => statuses[c.id] === "manual").length : 0
   const pct = autoChecks.length > 0 ? Math.round((pass / autoChecks.length) * 100) : 0
   const grade = gradeFor(pct)
 
@@ -831,29 +836,31 @@ export function DomainHealthContent() {
 
         </div>
 
-        {/* Meta row */}
-        <div className="flex items-center gap-2 mt-2.5 text-xs text-muted-foreground flex-wrap">
-          {scanMeta ? (
-            <span>Last scanned {new Date(scanMeta.scannedAt).toLocaleString()}</span>
-          ) : (
-            <span>Not yet scanned</span>
-          )}
-          {scanMeta && (
-            <>
-              <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
-              <span>{scanMeta.seedEmailCount} seed email{scanMeta.seedEmailCount !== 1 ? "s" : ""} · {scanMeta.ciRowCount} CI row{scanMeta.ciRowCount !== 1 ? "s" : ""} used</span>
-            </>
-          )}
-          <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
-          <button
-            onClick={handleRescan}
-            disabled={scanning || !selectedDomainId || selectedRecord?.status !== "verified"}
-            className="flex items-center gap-1 text-foreground font-medium hover:text-rip-red transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <RefreshCw size={11} className={cn(scanning && "animate-spin")} />
-            {scanning ? "Scanning..." : "Re-scan"}
-          </button>
-        </div>
+        {/* Meta row — only when a domain is selected */}
+        {selectedDomainId && (
+          <div className="flex items-center gap-2 mt-2.5 text-xs text-muted-foreground flex-wrap">
+            {scanMeta ? (
+              <span>Last scanned {new Date(scanMeta.scannedAt).toLocaleString()}</span>
+            ) : (
+              <span>Not yet scanned</span>
+            )}
+            {scanMeta && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
+                <span>{scanMeta.seedEmailCount} seed email{scanMeta.seedEmailCount !== 1 ? "s" : ""} · {scanMeta.ciRowCount} CI row{scanMeta.ciRowCount !== 1 ? "s" : ""} used</span>
+              </>
+            )}
+            <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
+            <button
+              onClick={handleRescan}
+              disabled={scanning || selectedRecord?.status !== "verified"}
+              className="flex items-center gap-1 text-foreground font-medium hover:text-rip-red transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <RefreshCw size={11} className={cn(scanning && "animate-spin")} />
+              {scanning ? "Scanning..." : "Re-scan"}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Pending verification banner */}
@@ -872,70 +879,97 @@ export function DomainHealthContent() {
         </div>
       )}
 
-      {/* Grade card */}
-      <div className="bg-card border border-border rounded-xl p-5 mb-7">
-        <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center justify-center w-16 h-16 rounded-xl flex-shrink-0" style={{ background: `${grade.color}18` }}>
-              <span className="text-4xl font-bold leading-none" style={{ color: grade.color }}>{grade.letter}</span>
+      {/* Nothing to show when no domain is selected */}
+      {!selectedDomainId && !domainsLoading && (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-12 h-12 rounded-full bg-muted/40 flex items-center justify-center mb-4">
+            <Shield size={22} className="text-muted-foreground" />
+          </div>
+          <div className="text-sm font-medium text-foreground mb-1">No domain selected</div>
+          <div className="text-xs text-muted-foreground max-w-xs">Add a domain using the picker above to start monitoring its email health and compliance.</div>
+        </div>
+      )}
+
+      {/* Grade card — only when a domain is selected */}
+      {selectedDomainId && (
+        <div className="bg-card border border-border rounded-xl p-5 mb-7">
+          {!hasData && (
+            <div className="flex items-center gap-2 mb-4 px-3 py-2.5 bg-muted/20 border border-border rounded-lg text-xs text-muted-foreground">
+              <RefreshCw size={13} className="flex-shrink-0" />
+              <span>No scan data yet. Run a scan using the Re-scan button once your domain is verified and seed emails are assigned.</span>
             </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium mb-0.5">Compliance Grade</div>
-              <div className="text-base font-semibold text-foreground">{grade.label}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">{grade.tag}</div>
+          )}
+          <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
+            <div className="flex items-center gap-4">
+              <div className={cn("flex items-center justify-center w-16 h-16 rounded-xl flex-shrink-0", !hasData && "bg-muted/30")}>
+                {hasData ? (
+                  <div className="flex items-center justify-center w-full h-full rounded-xl" style={{ background: `${grade.color}18` }}>
+                    <span className="text-4xl font-bold leading-none" style={{ color: grade.color }}>{grade.letter}</span>
+                  </div>
+                ) : (
+                  <span className="text-4xl font-bold leading-none text-muted-foreground/30">—</span>
+                )}
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium mb-0.5">Compliance Grade</div>
+                <div className="text-base font-semibold text-foreground">{hasData ? grade.label : "Awaiting scan"}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{hasData ? grade.tag : "Run a scan to see your compliance score"}</div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className={cn("text-4xl font-bold tracking-tight", hasData ? "text-foreground" : "text-muted-foreground/30")}>{hasData ? `${pct}%` : "—"}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">{hasData ? `${pass} of ${autoChecks.length} auto-checks` : "No data"}</div>
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-4xl font-bold text-foreground tracking-tight">{pct}%</div>
-            <div className="text-xs text-muted-foreground mt-0.5">{pass} of {autoChecks.length} auto-checks</div>
+
+          {/* Progress bar */}
+          <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-4">
+            {hasData && (
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${pct}%`, background: grade.color }}
+              />
+            )}
+          </div>
+
+          {/* Summary pills */}
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => hasData && cycleToStatus("pass")}
+              className={cn("flex items-center gap-2.5 px-3 py-2.5 bg-background border border-border rounded-lg text-left transition-colors", hasData ? "hover:bg-muted/30 cursor-pointer" : "opacity-40 cursor-default")}
+            >
+              <StatusIcon status="pass" size={20} />
+              <div>
+                <div className="text-sm font-semibold text-foreground leading-tight">{hasData ? `${pass} passing` : "—"}</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5">Auto-verified</div>
+              </div>
+            </button>
+            <button
+              onClick={() => hasData && cycleToStatus("fail")}
+              className={cn("flex items-center gap-2.5 px-3 py-2.5 bg-background rounded-lg text-left transition-colors border border-border", hasData ? "hover:bg-muted/30 cursor-pointer" : "opacity-40 cursor-default")}
+            >
+              <StatusIcon status="fail" size={20} />
+              <div>
+                <div className="text-sm font-semibold text-foreground leading-tight">{hasData ? `${fail} needs attention` : "—"}</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5">Auto-detected fails</div>
+              </div>
+            </button>
+            <button
+              onClick={() => hasData && cycleToStatus("manual")}
+              className={cn("flex items-center gap-2.5 px-3 py-2.5 bg-background rounded-lg text-left transition-colors border border-border", hasData ? "hover:bg-muted/30 cursor-pointer" : "opacity-40 cursor-default")}
+            >
+              <StatusIcon status="manual" size={20} />
+              <div>
+                <div className="text-sm font-semibold text-foreground leading-tight">{hasData ? `${manual} to review` : "—"}</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5">Self-verify</div>
+              </div>
+            </button>
           </div>
         </div>
+      )}
 
-        {/* Progress bar */}
-        <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-4">
-          <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${pct}%`, background: grade.color }}
-          />
-        </div>
-
-        {/* Summary pills */}
-        <div className="grid grid-cols-3 gap-2">
-          <button
-            onClick={() => cycleToStatus("pass")}
-            className="flex items-center gap-2.5 px-3 py-2.5 bg-background border border-border rounded-lg text-left hover:bg-muted/30 transition-colors cursor-pointer"
-          >
-            <StatusIcon status="pass" size={20} />
-            <div>
-              <div className="text-sm font-semibold text-foreground leading-tight">{pass} passing</div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">Auto-verified</div>
-            </div>
-          </button>
-          <button
-            onClick={() => cycleToStatus("fail")}
-            className={cn("flex items-center gap-2.5 px-3 py-2.5 bg-background rounded-lg text-left hover:bg-muted/30 transition-colors cursor-pointer", fail > 0 ? "border border-red-500/30" : "border border-border")}
-          >
-            <StatusIcon status="fail" size={20} />
-            <div>
-              <div className="text-sm font-semibold text-foreground leading-tight">{fail} needs attention</div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">Auto-detected fails</div>
-            </div>
-          </button>
-          <button
-            onClick={() => cycleToStatus("manual")}
-            className={cn("flex items-center gap-2.5 px-3 py-2.5 bg-background rounded-lg text-left hover:bg-muted/30 transition-colors cursor-pointer", manual > 0 ? "border border-amber-500/30" : "border border-border")}
-          >
-            <StatusIcon status="manual" size={20} />
-            <div>
-              <div className="text-sm font-semibold text-foreground leading-tight">{manual} to review</div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">Self-verify</div>
-            </div>
-          </button>
-        </div>
-      </div>
-
-      {/* Check sections */}
-      {categories.map((cat) => (
+      {/* Check sections — only when a domain is selected */}
+      {selectedDomainId && categories.map((cat) => (
         <CategorySection
           key={cat}
           category={cat}

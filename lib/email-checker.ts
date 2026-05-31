@@ -63,8 +63,9 @@ export async function checkCampaignEmails(campaign: Campaign): Promise<CampaignR
     select: { assignedToClientId: true, domainId: true },
   })
 
-  // Build where clause to filter seed emails by client assignment
-  const whereClause: any = { active: true }
+  // Build where clause to filter seed emails by client assignment.
+  // Exclude domain-health seeds — those inboxes are reserved for domain health scanning only.
+  const whereClause: any = { active: true, domainHealthMode: false }
 
   if (campaignDetails?.assignedToClientId) {
     // Get the client to find their slug/name
@@ -172,8 +173,9 @@ export async function checkAllSeedEmails(campaign: Campaign): Promise<EmailCheck
     select: { assignedToClientId: true },
   })
 
-  // Build where clause to filter seed emails by client assignment
-  const whereClause: any = { active: true }
+  // Build where clause to filter seed emails by client assignment.
+  // Exclude domain-health seeds — those inboxes are reserved for domain health scanning only.
+  const whereClause: any = { active: true, domainHealthMode: false }
 
   if (campaignDetails?.assignedToClientId) {
     const client = await prisma.client.findUnique({

@@ -47,6 +47,7 @@ import {
   Download,
   CheckCircle2,
   ShieldCheck,
+  Send,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useDomain } from "@/lib/domain-context"
@@ -81,6 +82,7 @@ export default function SeedListContent({
 
   // Domain health toggle state
   const [togglingDomainHealthId, setTogglingDomainHealthId] = useState<string | null>(null)
+  const [sendingTestEmailId, setSendingTestEmailId] = useState<string | null>(null)
 
   const [togglingLockId, setTogglingLockId] = useState<string | null>(null)
   const [animatingLockId, setAnimatingLockId] = useState<string | null>(null)
@@ -146,6 +148,28 @@ export default function SeedListContent({
       fetchClients()
     }
   }, [isAdminView])
+
+  const handleSendTestEmail = async (seedId: string, seedEmail: string) => {
+    setSendingTestEmailId(seedId)
+    try {
+      const res = await fetch("/api/admin/send-test-seed-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seedEmailId: seedId }),
+        credentials: "include",
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Failed to send")
+      toast.success(
+        `Test sent to ${seedEmail} — sampled from ${data.originalSender}`,
+        { description: `Subject: ${data.subject}` }
+      )
+    } catch (err: any) {
+      toast.error(`Failed to send test email: ${err.message}`)
+    } finally {
+      setSendingTestEmailId(null)
+    }
+  }
 
   const handleDomainHealthToggle = async (seedId: string, currentMode: boolean) => {
     setTogglingDomainHealthId(seedId)
@@ -1114,6 +1138,22 @@ export default function SeedListContent({
                     )}
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        {currentUser?.role === "super_admin" && email.domainHealthMode && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleSendTestEmail(email.id, email.email)}
+                            disabled={sendingTestEmailId === email.id}
+                            className="h-8 w-8"
+                            title="Send test email (sampled from CI data)"
+                          >
+                            {sendingTestEmailId === email.id ? (
+                              <Loader2 size={16} className="animate-spin" />
+                            ) : (
+                              <Send size={16} className="text-amber-500" />
+                            )}
+                          </Button>
+                        )}
                         {currentUser?.role === "super_admin" && (
                           <Button
                             variant="ghost"

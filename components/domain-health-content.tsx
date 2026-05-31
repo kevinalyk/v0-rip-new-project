@@ -27,6 +27,17 @@ import { Input } from "@/components/ui/input"
 type CheckStatus = "pass" | "fail" | "manual"
 type Category = "Authentication" | "Google Bulk Sender Rules" | "Sender Practices" | "Sender Identity"
 
+interface EmailSample {
+  id: string
+  source: "seed" | "ci"
+  seedEmail: string | null
+  fromAddress: string | null
+  subject: string | null
+  receivedAt: string | null
+  placement: string
+  checks: Record<string, boolean>
+}
+
 interface DomainCheck {
   id: string
   category: Category
@@ -616,6 +627,10 @@ export function DomainHealthContent() {
   // Real scan results from API
   const [scanMeta, setScanMeta] = useState<{ scannedAt: string; seedEmailCount: number; ciRowCount: number } | null>(null)
   const [scanResults, setScanResults] = useState<Record<string, { status: string; value: string | null; note: string | null }>>({})
+  const [emailSamples, setEmailSamples] = useState<EmailSample[]>([])
+
+  // Active tab — "report" or "samples"
+  const [activeTab, setActiveTab] = useState<"report" | "samples">("report")
 
   // Per-status cursors for cycling through issues
   const cursors = useRef<Record<CheckStatus, number>>({ pass: 0, fail: 0, manual: 0 })
@@ -638,6 +653,7 @@ export function DomainHealthContent() {
     if (!selectedDomainId) return
     setScanResults({})
     setScanMeta(null)
+    setEmailSamples([])
     fetch(`/api/domain-health/scan?clientDomainId=${selectedDomainId}`)
       .then(async (r) => {
         if (!r.ok) return
@@ -650,6 +666,7 @@ export function DomainHealthContent() {
           })
         }
         if (data.results) setScanResults(data.results)
+        if (data.emailSamples) setEmailSamples(data.emailSamples)
       })
       .catch((err) => console.error("[domain-health] scan results fetch error", err))
   }, [selectedDomainId])
@@ -709,6 +726,7 @@ export function DomainHealthContent() {
           })
         }
         if (data.results) setScanResults(data.results)
+        if (data.emailSamples) setEmailSamples(data.emailSamples)
       }
     } catch (err) {
       console.error("[domain-health] rescan error", err)
@@ -977,8 +995,41 @@ export function DomainHealthContent() {
         </div>
       )}
 
-      {/* Check sections — only when a domain is selected */}
-      {selectedDomainId && categories.map((cat) => (
+      {/* Tab bar — only when a domain is selected */}
+      {selectedDomainId && (
+        <div className="flex items-center gap-1 mb-5 border-b border-border">
+          <button
+            onClick={() => setActiveTab("report")}
+            className={cn(
+              "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+              activeTab === "report"
+                ? "border-rip-red text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Report
+          </button>
+          <button
+            onClick={() => setActiveTab("samples")}
+            className={cn(
+              "flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+              activeTab === "samples"
+                ? "border-rip-red text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Email Samples
+            {emailSamples.length > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                {emailSamples.length}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Report tab — check sections */}
+      {selectedDomainId && activeTab === "report" && categories.map((cat) => (
         <CategorySection
           key={cat}
           category={cat}
@@ -987,11 +1038,91 @@ export function DomainHealthContent() {
           values={values}
           openCheckId={openCheckId}
           onCheckToggle={(id, next) => {
-            // If the user manually closes a row, clear the forced-open state
             if (!next && id === openCheckId) setOpenCheckId(null)
           }}
         />
       ))}
+
+      {/* Email Samples tab */}
+      {selectedDomainId && activeTab === "samples" && (
+        <div className="space-y-3">
+          {!hasData || emailSamples.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-12 h-12 rounded-full bg-muted/40 flex items-center justify-center mb-4">
+                <Send size={20} className="text-muted-foreground" />
+              </div>
+              <div className="text-sm font-medium text-foreground mb-1">No email samples yet</div>
+              <div className="text-xs text-muted-foreground max-w-xs">
+                Send a test email from a rip-tool.com address to a domain health seed, then run a scan.
+              </div>
+            </div>
+          ) : emailSamples.map((sample) => {
+            const checkEntries = Object.entries(sample.checks)
+            const passCount = checkEntries.filter(([, v]) => v === true).length
+            const failCount = checkEntries.filter(([, v]) => v === false).length
+            const placementColor =
+              sample.placement === "inbox" ? "text-green-500 bg-green-500/10" :
+              sample.placement === "spam" ? "text-red-500 bg-red-500/10" :
+              "text-amber-500 bg-amber-500/10"
+
+            return (
+              <div key={sample.id} className="bg-card border border-border rounded-xl p-4">
+                {/* Email header row */}
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-foreground truncate mb-0.5">
+                      {sample.subject ?? "(no subject)"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      From: <span className="text-foreground">{sample.fromAddress ?? "unknown"}</span>
+                      {sample.seedEmail && (
+                        <> &middot; To seed: <span className="text-foreground">{sample.seedEmail}</span></>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className={cn("text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full", placementColor)}>
+                      {sample.placement}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground px-2 py-0.5 rounded-full bg-muted/40 uppercase tracking-wide font-medium">
+                      {sample.source === "seed" ? "Seed" : "CI"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Received time + pass/fail summary */}
+                <div className="flex items-center gap-3 mb-3 text-xs text-muted-foreground">
+                  {sample.receivedAt && (
+                    <span>{new Date(sample.receivedAt).toLocaleString()}</span>
+                  )}
+                  <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
+                  <span className="text-green-500 font-medium">{passCount} passed</span>
+                  <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
+                  <span className="text-red-500 font-medium">{failCount} failed</span>
+                </div>
+
+                {/* Per-check chips */}
+                <div className="flex flex-wrap gap-1.5">
+                  {checkEntries.map(([checkId, passed]) => (
+                    <span
+                      key={checkId}
+                      className={cn(
+                        "inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-md uppercase tracking-wide",
+                        passed
+                          ? "bg-green-500/10 text-green-500"
+                          : "bg-red-500/10 text-red-500"
+                      )}
+                    >
+                      {passed ? <Check size={9} /> : <X size={9} />}
+                      {checkId}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Footer note — pinned to bottom, pushed down by content when report is present */}
       <div className="mt-auto pt-6">

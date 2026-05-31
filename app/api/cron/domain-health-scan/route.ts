@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       console.log(`[cron/domain-health-scan] Scanning ${d.domain}...`)
       const result = await runDomainHealthScan(d.id, "cron")
       console.log(
-        `[cron/domain-health-scan] Done ${d.domain} — ${result.checkCount} checks, ${result.seedEmailCount} seed emails, ${result.ciRowCount} CI rows`,
+        `[cron/domain-health-scan] Done ${d.domain} — ${result.newSamples} new, ${result.skippedDuplicates} skipped, ${result.seedEmailCount} seed emails, ${result.ciRowCount} CI rows`,
       )
       stats.success++
     } catch (err) {

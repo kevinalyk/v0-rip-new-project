@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "clientDomainId is required" }, { status: 400 })
     }
 
-    const { scan, results } = await getLatestScanResults(clientDomainId)
-    return NextResponse.json({ scan, results })
+    const { scan, results, emailSamples } = await getLatestScanResults(clientDomainId)
+    return NextResponse.json({ scan, results, emailSamples })
   } catch (err) {
     console.error("[domain-health/scan GET] Error:", err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     const result = await runDomainHealthScan(clientDomainId, "manual")
 
     // Return the fresh results
-    const { scan, results } = await getLatestScanResults(clientDomainId)
+    const { scan, results, emailSamples } = await getLatestScanResults(clientDomainId)
 
     return NextResponse.json({
       success: true,
@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
       checkCount: result.checkCount,
       scan,
       results,
+      emailSamples,
     })
   } catch (err) {
     console.error("[domain-health/scan POST] Error:", err)

@@ -22,20 +22,35 @@ export async function GET(request: Request) {
     const filterPlacement = searchParams.get("filterPlacement")
     const filterSection = searchParams.get("filterSection")
 
-    // Parse date range parameters
+    // Parse date range parameters — filter on campaign.dateReceived so "7 days"
+    // means emails *received* in that window, not when compliance was checked.
     const dateFrom = searchParams.get("dateFrom")
     const dateTo = searchParams.get("dateTo")
-    const dateFilter = dateFrom || dateTo
-      ? {
-          checkedAt: {
-            ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
-            ...(dateTo ? { lte: new Date(dateTo) } : {}),
-          },
-        }
-      : {}
+    const campaignDateFilter =
+      dateFrom || dateTo
+        ? {
+            campaign: {
+              dateReceived: {
+                ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
+                ...(dateTo ? { lte: new Date(dateTo) } : {}),
+              },
+            },
+          }
+        : {}
+
+    // Flat version for queries that already nest under campaign
+    const dateFilter =
+      dateFrom || dateTo
+        ? {
+            dateReceived: {
+              ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
+              ...(dateTo ? { lte: new Date(dateTo) } : {}),
+            },
+          }
+        : {}
 
     // Build where clause based on filter
-    const where: any = { ...dateFilter }
+    const where: any = { ...campaignDateFilter }
 
     if (filterType === "party" && filterParty) {
       where.campaign = { entity: { party: filterParty } }
@@ -114,7 +129,7 @@ export async function GET(request: Request) {
 
     // Aggregate stats
     const allScores = await prisma.cIEmailCompliance.findMany({
-      where: dateFilter,
+      where: campaignDateFilter,
       select: {
         totalScore: true,
         section1Score: true,
@@ -173,7 +188,7 @@ export async function GET(request: Request) {
 
     // Party split — R vs D compliance scores and inbox/spam rates
     const partyRows = await prisma.cIEmailCompliance.findMany({
-      where: dateFilter,
+      where: campaignDateFilter,
       select: {
         totalScore: true,
         section1Score: true,

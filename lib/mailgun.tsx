@@ -1220,26 +1220,24 @@ export async function sendWeeklyDigest(params: {
         ? `<a href="${trackedDirectoryUrl}" target="_blank" style="font-size:11px;font-weight:600;color:#9ca3af;text-decoration:none;">${item.entityName}</a>`
         : `<span style="font-size:11px;font-weight:600;color:#9ca3af;">${item.entityName}</span>`
 
-      const rankLabel = `<span style="font-size:11px;font-weight:700;color:#4b5563;margin-right:10px;min-width:18px;display:inline-block;">#${i + 1}</span>`
-
       return `
         <tr>
           <td style="padding:10px 24px;background:${bg};${borderTop}border-bottom:1px solid #1f2937;">
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <td style="vertical-align:middle;width:100%;">
-                  ${rankLabel}${icon}
+                  ${icon}
                   <a href="${trackedShareUrl}" target="_blank" style="font-size:12px;color:#e5e7eb;text-decoration:none;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-block;max-width:calc(100% - 140px);">${displaySubject}</a>
                 </td>
               </tr>
               <tr>
-                <td colspan="2" style="padding-top:4px;padding-left:36px;">
+                <td colspan="2" style="padding-top:4px;padding-left:26px;">
                   ${entityLink}&nbsp;${partyBadge}${stateBadge}
                   <span style="font-size:11px;color:#4b5563;margin-left:6px;">${item.senderIdentifier}</span>
                 </td>
               </tr>
               <tr>
-                <td colspan="2" style="padding-top:2px;padding-left:36px;">
+                <td colspan="2" style="padding-top:2px;padding-left:26px;">
                   <span style="font-size:10px;color:#374151;">${formatDate(item.receivedAt)} ET</span>
                 </td>
               </tr>
@@ -1287,7 +1285,7 @@ export async function sendWeeklyDigest(params: {
                   <td style="vertical-align:top;">
                     <p style="margin:0 0 4px;font-size:15px;color:#f9fafb;font-weight:600;">${greeting}</p>
                     <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">
-                      Here are the <strong style="color:#e5e7eb;">top ${items.length} most-viewed</strong> emails and SMS from across Inbox.GOP over the past week.
+                      Here are ${items.length} of the <strong style="color:#e5e7eb;">top viewed</strong> emails and SMS sends from across <a href="${feedUrl}" target="_blank" style="color:#e5e7eb;">Inbox.GOP</a> over the past week.
                     </p>
                   </td>
                   <td style="text-align:right;vertical-align:top;padding-left:16px;white-space:nowrap;">

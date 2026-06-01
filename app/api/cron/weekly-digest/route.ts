@@ -161,12 +161,26 @@ export async function GET(request: Request) {
       }),
     ]
 
+    // Sort by viewCount descending to keep the best item per entity
     allItems.sort((a, b) => {
       if (b.viewCount !== a.viewCount) return b.viewCount - a.viewCount
       return a.subject.localeCompare(b.subject)
     })
 
-    const top10 = allItems.slice(0, 10)
+    // Dedupe: one item per entity (first occurrence = highest viewCount)
+    const seenEntities = new Set<string>()
+    const deduped = allItems.filter((item) => {
+      if (seenEntities.has(item.entityName)) return false
+      seenEntities.add(item.entityName)
+      return true
+    })
+
+    // Take top 10, then randomize order so there's no implied ranking
+    const top10Sorted = deduped.slice(0, 10)
+    const top10 = top10Sorted
+      .map((item) => ({ item, sort: Math.random() }))
+      .sort((a, b) => a.sort - b.sort)
+      .map(({ item }) => item)
 
     if (top10.length === 0) {
       console.log("[weekly-digest] No content in window — skipping")

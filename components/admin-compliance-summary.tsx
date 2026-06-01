@@ -72,8 +72,14 @@ interface PartyStat {
   spamRate: number
   spfRate: number
   dkimRate: number
+  tlsRate: number
   dmarcRate: number
   oneClickRate: number
+  unsubBodyRate: number
+  avgSection1: number
+  avgSection2: number
+  avgSection3: number
+  avgSection4: number
 }
 
 interface PartySplit {
@@ -325,7 +331,6 @@ export function AdminComplianceSummary() {
             <CardTitle className="text-base">Republican vs. Democrat — Compliance &amp; Inbox Analysis</CardTitle>
             <CardDescription>
               Compares email compliance scores against actual inbox placement to surface potential Gmail bias. High compliance + high spam rate = potential bias signal.
-              <span className="block mt-1 text-xs opacity-70">Click on any metric to filter the table below.</span>
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -466,149 +471,109 @@ export function AdminComplianceSummary() {
         </Card>
       )}
 
-      {/* Aggregate Stats */}
-      {stats && (
-        <>
-          <p className="text-xs text-muted-foreground">Click any metric below to filter campaigns by failures</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Campaigns Checked</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{stats.total}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Avg Total Score</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={`text-3xl font-bold ${scoreColor(stats.avgTotalScore)}`}>
-                {pct(stats.avgTotalScore)}
-              </div>
-            </CardContent>
-          </Card>
-          <Card 
-            className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
-              activeFilter?.type === "auth" && activeFilter.check === "spf" && !activeFilter.party ? "ring-2 ring-offset-2 ring-primary" : ""
-            }`}
-            onClick={() => handleFilterClick({ type: "auth", check: "spf", failed: true })}
-          >
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">SPF Pass Rate</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={`text-3xl font-bold ${scoreColor(stats.spfRate)}`}>{pct(stats.spfRate)}</div>
-            </CardContent>
-          </Card>
-          <Card 
-            className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
-              activeFilter?.type === "auth" && activeFilter.check === "dkim" && !activeFilter.party ? "ring-2 ring-offset-2 ring-primary" : ""
-            }`}
-            onClick={() => handleFilterClick({ type: "auth", check: "dkim", failed: true })}
-          >
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">DKIM Pass Rate</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={`text-3xl font-bold ${scoreColor(stats.dkimRate)}`}>{pct(stats.dkimRate)}</div>
-            </CardContent>
-          </Card>
-          <Card 
-            className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
-              activeFilter?.type === "auth" && activeFilter.check === "tls" && !activeFilter.party ? "ring-2 ring-offset-2 ring-primary" : ""
-            }`}
-            onClick={() => handleFilterClick({ type: "auth", check: "tls", failed: true })}
-          >
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">TLS Rate</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={`text-3xl font-bold ${scoreColor(stats.tlsRate)}`}>{pct(stats.tlsRate)}</div>
-            </CardContent>
-          </Card>
-          <Card 
-            className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
-              activeFilter?.type === "auth" && activeFilter.check === "dmarc" && !activeFilter.party ? "ring-2 ring-offset-2 ring-primary" : ""
-            }`}
-            onClick={() => handleFilterClick({ type: "auth", check: "dmarc", failed: true })}
-          >
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">DMARC Pass Rate</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={`text-3xl font-bold ${scoreColor(stats.dmarcRate)}`}>{pct(stats.dmarcRate)}</div>
-            </CardContent>
-          </Card>
-          <Card 
-            className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
-              activeFilter?.type === "auth" && activeFilter.check === "oneClick" && !activeFilter.party ? "ring-2 ring-offset-2 ring-primary" : ""
-            }`}
-            onClick={() => handleFilterClick({ type: "auth", check: "oneClick", failed: true })}
-          >
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">1-Click Unsub Rate</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={`text-3xl font-bold ${scoreColor(stats.oneClickUnsubRate)}`}>{pct(stats.oneClickUnsubRate)}</div>
-            </CardContent>
-          </Card>
-          <Card 
-            className={`cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
-              activeFilter?.type === "auth" && activeFilter.check === "unsubBody" && !activeFilter.party ? "ring-2 ring-offset-2 ring-primary" : ""
-            }`}
-            onClick={() => handleFilterClick({ type: "auth", check: "unsubBody", failed: true })}
-          >
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Unsub in Body Rate</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={`text-3xl font-bold ${scoreColor(stats.unsubBodyRate)}`}>{pct(stats.unsubBodyRate)}</div>
-            </CardContent>
-          </Card>
-        </div>
-        </>
-      )}
-
-      {/* Section Score Breakdown */}
-      {stats && (
+      {/* Authentication Metrics — R vs D split */}
+      {partySplit && (partySplit.republican.count > 0 || partySplit.democrat.count > 0) && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Section Score Breakdown</CardTitle>
-            <CardDescription>
-              Average pass rate per compliance section across all checked emails
-              <span className="block mt-1 text-xs opacity-70">Click any section to filter campaigns by failures</span>
-            </CardDescription>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Authentication Metrics</CardTitle>
+            <CardDescription>SPF, DKIM, TLS, DMARC, and unsubscribe compliance by party</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              {[
-                { label: "All Senders", score: stats.avgSection1, desc: "SPF, DKIM, TLS, Message-ID, ARC", section: 1 as const },
-                { label: "Bulk Senders", score: stats.avgSection2, desc: "Both SPF+DKIM, DMARC, 1-Click Unsub", section: 2 as const },
-                { label: "Content", score: stats.avgSection3, desc: "From address, subject, hidden content", section: 3 as const },
-                { label: "Display Name", score: stats.avgSection4, desc: "No impersonation, no deceptive patterns", section: 4 as const },
-              ].map((s) => {
-                const isActive = activeFilter?.type === "section" && activeFilter.section === s.section
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {(["republican", "democrat"] as const).map((party) => {
+                const s = partySplit[party]
+                const isRep = party === "republican"
+                const color = isRep ? "red" : "blue"
+                const metrics = [
+                  { label: "SPF", val: s.spfRate, check: "spf" as const },
+                  { label: "DKIM", val: s.dkimRate, check: "dkim" as const },
+                  { label: "TLS", val: s.tlsRate, check: "tls" as const },
+                  { label: "DMARC", val: s.dmarcRate, check: "dmarc" as const },
+                  { label: "1-Click Unsub", val: s.oneClickRate, check: "oneClick" as const },
+                  { label: "Unsub in Body", val: s.unsubBodyRate, check: "unsubBody" as const },
+                ]
                 return (
-                  <div 
-                    key={s.label} 
-                    className={`space-y-1 p-2 rounded cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary transition-all ${
-                      isActive ? "ring-2 ring-offset-2 ring-primary" : ""
-                    }`}
-                    onClick={() => handleFilterClick({ type: "section", section: s.section, failed: true })}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{s.label}</span>
-                      {scoreBadge(s.score)}
+                  <div key={party} className={`rounded-lg border-2 p-4 ${isRep ? "border-red-200 bg-red-50/30" : "border-blue-200 bg-blue-50/30"}`}>
+                    <h3 className={`font-bold capitalize mb-3 ${isRep ? "text-red-700" : "text-blue-700"}`}>{party}</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {metrics.map((m) => {
+                        const isActive = activeFilter?.type === "auth" && activeFilter.check === m.check && activeFilter.party === party
+                        return (
+                          <div
+                            key={m.label}
+                            className={`bg-background rounded-md p-3 border cursor-pointer hover:ring-2 hover:ring-offset-1 transition-all ${
+                              isActive ? `ring-2 ring-offset-1 ${isRep ? "ring-red-500" : "ring-blue-500"}` : ""
+                            }`}
+                            onClick={() => handleFilterClick({ type: "auth", check: m.check, failed: true, party })}
+                          >
+                            <p className="text-xs text-muted-foreground mb-1">{m.label}</p>
+                            <p className={`text-2xl font-bold ${scoreColor(m.val)}`}>{pct(m.val)}</p>
+                            <div className="h-1 rounded-full bg-muted overflow-hidden mt-2">
+                              <div
+                                className={`h-full rounded-full ${m.val >= 0.85 ? `bg-${color}-500` : m.val >= 0.65 ? "bg-yellow-500" : "bg-red-400"}`}
+                                style={{ width: `${Math.round(m.val * 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${s.score >= 0.85 ? "bg-green-500" : s.score >= 0.65 ? "bg-yellow-500" : "bg-red-500"}`}
-                        style={{ width: `${Math.round(s.score * 100)}%` }}
-                      />
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Section Score Breakdown — R vs D split */}
+      {partySplit && (partySplit.republican.count > 0 || partySplit.democrat.count > 0) && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Section Score Breakdown</CardTitle>
+            <CardDescription>Average pass rate per compliance section by party</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {(["republican", "democrat"] as const).map((party) => {
+                const s = partySplit[party]
+                const isRep = party === "republican"
+                const color = isRep ? "red" : "blue"
+                const sections = [
+                  { label: "All Senders", score: s.avgSection1, desc: "SPF, DKIM, TLS, Message-ID, ARC", section: 1 as const },
+                  { label: "Bulk Senders", score: s.avgSection2, desc: "Both SPF+DKIM, DMARC, 1-Click Unsub", section: 2 as const },
+                  { label: "Content", score: s.avgSection3, desc: "From address, subject, hidden content", section: 3 as const },
+                  { label: "Display Name", score: s.avgSection4, desc: "No impersonation, no deceptive patterns", section: 4 as const },
+                ]
+                return (
+                  <div key={party} className={`rounded-lg border-2 p-4 ${isRep ? "border-red-200 bg-red-50/30" : "border-blue-200 bg-blue-50/30"}`}>
+                    <h3 className={`font-bold capitalize mb-3 ${isRep ? "text-red-700" : "text-blue-700"}`}>{party}</h3>
+                    <div className="space-y-3">
+                      {sections.map((sec) => {
+                        const isActive = activeFilter?.type === "section" && activeFilter.section === sec.section
+                        return (
+                          <div
+                            key={sec.label}
+                            className={`p-2 rounded cursor-pointer hover:ring-2 hover:ring-offset-1 transition-all ${
+                              isActive ? `ring-2 ring-offset-1 ${isRep ? "ring-red-500" : "ring-blue-500"}` : ""
+                            }`}
+                            onClick={() => handleFilterClick({ type: "section", section: sec.section, failed: true })}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-medium">{sec.label}</span>
+                              {scoreBadge(sec.score)}
+                            </div>
+                            <div className="h-2 rounded-full bg-muted overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${sec.score >= 0.85 ? `bg-${color}-500` : sec.score >= 0.65 ? "bg-yellow-500" : "bg-red-500"}`}
+                                style={{ width: `${Math.round(sec.score * 100)}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">{sec.desc}</p>
+                          </div>
+                        )
+                      })}
                     </div>
-                    <p className="text-xs text-muted-foreground">{s.desc}</p>
                   </div>
                 )
               })}

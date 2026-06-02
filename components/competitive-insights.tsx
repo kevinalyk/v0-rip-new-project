@@ -289,6 +289,7 @@ export function CompetitiveInsights({
   const [selectedSender, setSelectedSender] = useState<string[]>([])
   const [selectedPartyFilter, setSelectedPartyFilter] = useState<string>("all") // Renamed to avoid conflict
   const [selectedStateFilter, setSelectedStateFilter] = useState<string>("all")
+  const [selectedEntityTypeFilter, setSelectedEntityTypeFilter] = useState<string>("all")
   const [selectedMessageType, setSelectedMessageType] = useState<string>("all")
   const [selectedDonationPlatform, setSelectedDonationPlatform] = useState<string>("all")
   const [showThirdParty, setShowThirdParty] = useState<boolean>(false)
@@ -319,6 +320,7 @@ export function CompetitiveInsights({
   const [draftSender, setDraftSender] = useState<string[]>([])
   const [draftPartyFilter, setDraftPartyFilter] = useState<string>("all")
   const [draftStateFilter, setDraftStateFilter] = useState<string>("all")
+  const [draftEntityTypeFilter, setDraftEntityTypeFilter] = useState<string>("all")
   const [draftMessageFilters, setDraftMessageFilters] = useState<string[]>([])
   const [draftDonationPlatform, setDraftDonationPlatform] = useState<string>("all")
   const [draftDateRange, setDraftDateRange] = useState<DateRange>({ from: undefined, to: undefined })
@@ -439,6 +441,7 @@ export function CompetitiveInsights({
       activeSearchQuery !== "" ||
       selectedSender.length > 0 ||
       selectedPartyFilter !== "all" ||
+      selectedEntityTypeFilter !== "all" ||
       selectedMessageFilters.length > 0 ||
       selectedDonationPlatform !== "all" ||
       dateRange.from !== undefined ||
@@ -448,6 +451,7 @@ export function CompetitiveInsights({
     activeSearchQuery,
     selectedSender,
     selectedPartyFilter,
+    selectedEntityTypeFilter,
     selectedMessageFilters,
     selectedDonationPlatform,
     dateRange.from,
@@ -487,6 +491,14 @@ export function CompetitiveInsights({
       })
     }
 
+    // Cascade entity type filter: only show PACs, politicians, or organizations
+    if (selectedEntityTypeFilter !== "all") {
+      filtered = filtered.filter((sender) => {
+        const entity = allEntities.find((e) => e.name === sender)
+        return entity?.type?.toLowerCase() === selectedEntityTypeFilter.toLowerCase()
+      })
+    }
+
     // On the Following page (/ci/subscriptions), only show entities the client is subscribed to
     if (pathname?.includes("/ci/subscriptions")) {
       return filtered.filter((sender) => isEntityFollowed(sender)).sort((a, b) => a.localeCompare(b))
@@ -502,7 +514,7 @@ export function CompetitiveInsights({
 
     // Return followed first, then the rest
     return [...followed, ...notFollowed]
-  }, [allSenders, senderSearchTerm, allEntities, subscribedEntityIds, pathname, selectedPartyFilter, selectedStateFilter])
+  }, [allSenders, senderSearchTerm, allEntities, subscribedEntityIds, pathname, selectedPartyFilter, selectedStateFilter, selectedEntityTypeFilter])
 
   // Modify useEffect to fetch user and then campaigns
   useEffect(() => {
@@ -581,6 +593,7 @@ export function CompetitiveInsights({
     selectedSender,
     selectedPartyFilter,
     selectedStateFilter,
+    selectedEntityTypeFilter,
     selectedMessageFilters,
     selectedDonationPlatform,
     dateRange.from,
@@ -763,6 +776,7 @@ export function CompetitiveInsights({
       }
       if (selectedPartyFilter && selectedPartyFilter !== "all") params.append("party", selectedPartyFilter)
       if (selectedStateFilter && selectedStateFilter !== "all") params.append("state", selectedStateFilter)
+      if (selectedEntityTypeFilter && selectedEntityTypeFilter !== "all") params.append("entityType", selectedEntityTypeFilter)
       // Multi-select message filters
       if (selectedMessageFilters.length > 0) {
         const hasEmail = selectedMessageFilters.includes("email")
@@ -824,6 +838,7 @@ export function CompetitiveInsights({
     selectedSender,
     selectedPartyFilter,
     selectedStateFilter,
+    selectedEntityTypeFilter,
     selectedMessageFilters,
     selectedDonationPlatform,
     dateRange.from,
@@ -970,6 +985,7 @@ export function CompetitiveInsights({
     setDraftSender([])
     setDraftPartyFilter("all")
     setDraftStateFilter("all")
+    setDraftEntityTypeFilter("all")
     setDraftMessageFilters([])
     setDraftDonationPlatform("all")
     setDraftDateRange({ from: undefined, to: undefined })
@@ -984,11 +1000,13 @@ export function CompetitiveInsights({
 
   const resetFilters = () => {
     setSearchTerm("")
-    setActiveSearchQuery("") // Reset active search query as well
+    setActiveSearchQuery("")
     setDateRange({ from: undefined, to: undefined })
     setSelectedSender([])
     setSelectedPartyFilter("all")
-    setSenderSearchTerm("") // Corrected variable name
+    setSelectedStateFilter("all")
+    setSelectedEntityTypeFilter("all")
+    setSenderSearchTerm("")
     setSelectedMessageType("all")
     setSelectedDonationPlatform("all")
     setShowThirdParty(false)
@@ -1695,7 +1713,7 @@ export function CompetitiveInsights({
               <div
                 className={cn(
                   // Desktop layout (md+)
-                  "md:relative md:z-auto md:inset-auto md:transform-none md:rounded-none md:border-0 md:bg-transparent md:p-0 md:max-h-none md:overflow-visible md:flex md:flex-row md:flex-wrap md:gap-2 md:items-center md:transition-none md:translate-y-0",
+                  "md:relative md:z-auto md:inset-auto md:transform-none md:rounded-none md:border-0 md:bg-transparent md:p-0 md:max-h-none md:overflow-visible md:flex md:flex-col md:gap-2 md:transition-none md:translate-y-0",
                   // Mobile bottom sheet
                   "fixed inset-x-0 bottom-0 z-50 bg-background border-t border-border rounded-t-2xl p-4 pb-8 max-h-[85vh] overflow-y-auto flex flex-col gap-3 transition-transform duration-300 ease-in-out shadow-2xl",
                   mobileFiltersOpen ? "translate-y-0" : "translate-y-full",
@@ -1714,6 +1732,8 @@ export function CompetitiveInsights({
                     Cancel
                   </Button>
                 </div>
+                {/* Row 1: dropdowns */}
+                <div className="flex flex-wrap items-center gap-2">
                 {/* Entity filter — temporarily hidden on reporting view, re-enable by removing the !isReportingView condition */}
                 {!isReportingView && (() => {
                   // Inside the mobile filter sheet, bind to draft state. Otherwise applied state.
@@ -1805,6 +1825,22 @@ export function CompetitiveInsights({
                     <SelectItem value="republican">Republican</SelectItem>
                     <SelectItem value="democrat">Democrat</SelectItem>
                     <SelectItem value="third party">Independent</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={mobileFiltersOpen ? draftEntityTypeFilter : selectedEntityTypeFilter}
+                  onValueChange={mobileFiltersOpen ? setDraftEntityTypeFilter : setSelectedEntityTypeFilter}
+                  disabled={shouldShowPaywall || shouldShowPreview}
+                >
+                  <SelectTrigger className="w-full md:w-[160px]">
+                    <SelectValue placeholder="Entity type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="politician">Politicians</SelectItem>
+                    <SelectItem value="pac">PACs</SelectItem>
+                    <SelectItem value="organization">Organizations</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -1948,6 +1984,9 @@ export function CompetitiveInsights({
                   </Select>
                 )}
 
+                </div>{/* end row 1 */}
+                {/* Row 2: date range + actions */}
+                <div className="flex flex-wrap items-center gap-2">
                 {/* Date Range Filter (hidden on reporting view) */}
                 {(() => {
                   // Inside the mobile filter sheet: read/write draftDateRange. Otherwise: applied dateRange.
@@ -2052,6 +2091,7 @@ export function CompetitiveInsights({
                         draftSender.length === 0 &&
                         draftPartyFilter === "all" &&
                         draftStateFilter === "all" &&
+                        draftEntityTypeFilter === "all" &&
                         draftMessageFilters.length === 0 &&
                         draftDonationPlatform === "all"
                       : !searchTerm &&
@@ -2059,6 +2099,8 @@ export function CompetitiveInsights({
                         !dateRange.to &&
                         selectedSender.length === 0 &&
                         selectedPartyFilter === "all" &&
+                        selectedStateFilter === "all" &&
+                        selectedEntityTypeFilter === "all" &&
                         selectedMessageFilters.length === 0 &&
                         selectedDonationPlatform === "all")
                   }
@@ -2067,6 +2109,7 @@ export function CompetitiveInsights({
                   Reset Filters
                 </Button>
 
+                </div>{/* end row 2 */}
                 {/* Mobile sheet — sticky Apply Filters footer */}
                 <div className="md:hidden sticky bottom-0 -mx-4 -mb-8 px-4 pt-3 pb-6 bg-background border-t border-border mt-2">
                   <Button

@@ -985,6 +985,7 @@ export function CompetitiveInsights({
     setDraftSender([])
     setDraftPartyFilter("all")
     setDraftStateFilter("all")
+    setDraftEntityTypeFilter("all")
     setDraftMessageFilters([])
     setDraftDonationPlatform("all")
     setDraftDateRange({ from: undefined, to: undefined })
@@ -999,11 +1000,13 @@ export function CompetitiveInsights({
 
   const resetFilters = () => {
     setSearchTerm("")
-    setActiveSearchQuery("") // Reset active search query as well
+    setActiveSearchQuery("")
     setDateRange({ from: undefined, to: undefined })
     setSelectedSender([])
     setSelectedPartyFilter("all")
-    setSenderSearchTerm("") // Corrected variable name
+    setSelectedStateFilter("all")
+    setSelectedEntityTypeFilter("all")
+    setSenderSearchTerm("")
     setSelectedMessageType("all")
     setSelectedDonationPlatform("all")
     setShowThirdParty(false)
@@ -1710,7 +1713,7 @@ export function CompetitiveInsights({
               <div
                 className={cn(
                   // Desktop layout (md+)
-                  "md:relative md:z-auto md:inset-auto md:transform-none md:rounded-none md:border-0 md:bg-transparent md:p-0 md:max-h-none md:overflow-visible md:flex md:flex-row md:flex-wrap md:gap-2 md:items-center md:transition-none md:translate-y-0",
+                  "md:relative md:z-auto md:inset-auto md:transform-none md:rounded-none md:border-0 md:bg-transparent md:p-0 md:max-h-none md:overflow-visible md:flex md:flex-col md:gap-2 md:transition-none md:translate-y-0",
                   // Mobile bottom sheet
                   "fixed inset-x-0 bottom-0 z-50 bg-background border-t border-border rounded-t-2xl p-4 pb-8 max-h-[85vh] overflow-y-auto flex flex-col gap-3 transition-transform duration-300 ease-in-out shadow-2xl",
                   mobileFiltersOpen ? "translate-y-0" : "translate-y-full",
@@ -1729,6 +1732,8 @@ export function CompetitiveInsights({
                     Cancel
                   </Button>
                 </div>
+                {/* Row 1: dropdowns */}
+                <div className="flex flex-wrap items-center gap-2">
                 {/* Entity filter — temporarily hidden on reporting view, re-enable by removing the !isReportingView condition */}
                 {!isReportingView && (() => {
                   // Inside the mobile filter sheet, bind to draft state. Otherwise applied state.
@@ -1979,6 +1984,9 @@ export function CompetitiveInsights({
                   </Select>
                 )}
 
+                </div>{/* end row 1 */}
+                {/* Row 2: date range + actions */}
+                <div className="flex flex-wrap items-center gap-2">
                 {/* Date Range Filter (hidden on reporting view) */}
                 {(() => {
                   // Inside the mobile filter sheet: read/write draftDateRange. Otherwise: applied dateRange.
@@ -2083,6 +2091,7 @@ export function CompetitiveInsights({
                         draftSender.length === 0 &&
                         draftPartyFilter === "all" &&
                         draftStateFilter === "all" &&
+                        draftEntityTypeFilter === "all" &&
                         draftMessageFilters.length === 0 &&
                         draftDonationPlatform === "all"
                       : !searchTerm &&
@@ -2090,6 +2099,8 @@ export function CompetitiveInsights({
                         !dateRange.to &&
                         selectedSender.length === 0 &&
                         selectedPartyFilter === "all" &&
+                        selectedStateFilter === "all" &&
+                        selectedEntityTypeFilter === "all" &&
                         selectedMessageFilters.length === 0 &&
                         selectedDonationPlatform === "all")
                   }
@@ -2098,6 +2109,7 @@ export function CompetitiveInsights({
                   Reset Filters
                 </Button>
 
+                </div>{/* end row 2 */}
                 {/* Mobile sheet — sticky Apply Filters footer */}
                 <div className="md:hidden sticky bottom-0 -mx-4 -mb-8 px-4 pt-3 pb-6 bg-background border-t border-border mt-2">
                   <Button

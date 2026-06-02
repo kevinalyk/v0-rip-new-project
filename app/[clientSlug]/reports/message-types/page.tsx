@@ -65,7 +65,7 @@ export default function MessageTypesPage() {
   useEffect(() => {
     const fetchSession = async () => {
       try {
-        const res = await fetch("/api/auth/session", { credentials: "include" })
+        const res = await fetch("/api/auth/me", { credentials: "include" })
         if (res.ok) {
           const data = await res.json()
           setUserRole(data.user?.role ?? null)

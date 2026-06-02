@@ -289,6 +289,7 @@ export function CompetitiveInsights({
   const [selectedSender, setSelectedSender] = useState<string[]>([])
   const [selectedPartyFilter, setSelectedPartyFilter] = useState<string>("all") // Renamed to avoid conflict
   const [selectedStateFilter, setSelectedStateFilter] = useState<string>("all")
+  const [selectedEntityTypeFilter, setSelectedEntityTypeFilter] = useState<string>("all")
   const [selectedMessageType, setSelectedMessageType] = useState<string>("all")
   const [selectedDonationPlatform, setSelectedDonationPlatform] = useState<string>("all")
   const [showThirdParty, setShowThirdParty] = useState<boolean>(false)
@@ -319,6 +320,7 @@ export function CompetitiveInsights({
   const [draftSender, setDraftSender] = useState<string[]>([])
   const [draftPartyFilter, setDraftPartyFilter] = useState<string>("all")
   const [draftStateFilter, setDraftStateFilter] = useState<string>("all")
+  const [draftEntityTypeFilter, setDraftEntityTypeFilter] = useState<string>("all")
   const [draftMessageFilters, setDraftMessageFilters] = useState<string[]>([])
   const [draftDonationPlatform, setDraftDonationPlatform] = useState<string>("all")
   const [draftDateRange, setDraftDateRange] = useState<DateRange>({ from: undefined, to: undefined })
@@ -439,6 +441,7 @@ export function CompetitiveInsights({
       activeSearchQuery !== "" ||
       selectedSender.length > 0 ||
       selectedPartyFilter !== "all" ||
+      selectedEntityTypeFilter !== "all" ||
       selectedMessageFilters.length > 0 ||
       selectedDonationPlatform !== "all" ||
       dateRange.from !== undefined ||
@@ -448,6 +451,7 @@ export function CompetitiveInsights({
     activeSearchQuery,
     selectedSender,
     selectedPartyFilter,
+    selectedEntityTypeFilter,
     selectedMessageFilters,
     selectedDonationPlatform,
     dateRange.from,
@@ -487,6 +491,14 @@ export function CompetitiveInsights({
       })
     }
 
+    // Cascade entity type filter: only show PACs, politicians, or organizations
+    if (selectedEntityTypeFilter !== "all") {
+      filtered = filtered.filter((sender) => {
+        const entity = allEntities.find((e) => e.name === sender)
+        return entity?.type?.toLowerCase() === selectedEntityTypeFilter.toLowerCase()
+      })
+    }
+
     // On the Following page (/ci/subscriptions), only show entities the client is subscribed to
     if (pathname?.includes("/ci/subscriptions")) {
       return filtered.filter((sender) => isEntityFollowed(sender)).sort((a, b) => a.localeCompare(b))
@@ -502,7 +514,7 @@ export function CompetitiveInsights({
 
     // Return followed first, then the rest
     return [...followed, ...notFollowed]
-  }, [allSenders, senderSearchTerm, allEntities, subscribedEntityIds, pathname, selectedPartyFilter, selectedStateFilter])
+  }, [allSenders, senderSearchTerm, allEntities, subscribedEntityIds, pathname, selectedPartyFilter, selectedStateFilter, selectedEntityTypeFilter])
 
   // Modify useEffect to fetch user and then campaigns
   useEffect(() => {
@@ -581,6 +593,7 @@ export function CompetitiveInsights({
     selectedSender,
     selectedPartyFilter,
     selectedStateFilter,
+    selectedEntityTypeFilter,
     selectedMessageFilters,
     selectedDonationPlatform,
     dateRange.from,
@@ -763,6 +776,7 @@ export function CompetitiveInsights({
       }
       if (selectedPartyFilter && selectedPartyFilter !== "all") params.append("party", selectedPartyFilter)
       if (selectedStateFilter && selectedStateFilter !== "all") params.append("state", selectedStateFilter)
+      if (selectedEntityTypeFilter && selectedEntityTypeFilter !== "all") params.append("entityType", selectedEntityTypeFilter)
       // Multi-select message filters
       if (selectedMessageFilters.length > 0) {
         const hasEmail = selectedMessageFilters.includes("email")
@@ -824,6 +838,7 @@ export function CompetitiveInsights({
     selectedSender,
     selectedPartyFilter,
     selectedStateFilter,
+    selectedEntityTypeFilter,
     selectedMessageFilters,
     selectedDonationPlatform,
     dateRange.from,
@@ -1805,6 +1820,22 @@ export function CompetitiveInsights({
                     <SelectItem value="republican">Republican</SelectItem>
                     <SelectItem value="democrat">Democrat</SelectItem>
                     <SelectItem value="third party">Independent</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={mobileFiltersOpen ? draftEntityTypeFilter : selectedEntityTypeFilter}
+                  onValueChange={mobileFiltersOpen ? setDraftEntityTypeFilter : setSelectedEntityTypeFilter}
+                  disabled={shouldShowPaywall || shouldShowPreview}
+                >
+                  <SelectTrigger className="w-full md:w-[160px]">
+                    <SelectValue placeholder="Entity type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="politician">Politicians</SelectItem>
+                    <SelectItem value="pac">PACs</SelectItem>
+                    <SelectItem value="organization">Organizations</SelectItem>
                   </SelectContent>
                 </Select>
 

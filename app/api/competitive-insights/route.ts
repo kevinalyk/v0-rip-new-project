@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
     const senders = searchParams.getAll("sender").filter(s => s) || []
     const party = searchParams.get("party") || undefined
     const state = searchParams.get("state") || undefined
+    const entityType = searchParams.get("entityType") || undefined
     const messageType = searchParams.get("messageType") || undefined
     const donationPlatform = searchParams.get("donationPlatform") || undefined
     const fromDate = searchParams.get("fromDate") || undefined
@@ -295,6 +296,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    if (entityType && entityType !== "all") {
+      emailWhere.entity = {
+        ...emailWhere.entity,
+        type: { equals: entityType, mode: "insensitive" },
+      }
+    }
+
     const smsWhere: any = {
       processed: true,
       isHidden: authResult.user.role === "super_admin" ? undefined : false,
@@ -346,6 +354,13 @@ export async function GET(request: NextRequest) {
       smsWhere.entity = {
         ...smsWhere.entity,
         state: { equals: state, mode: "insensitive" },
+      }
+    }
+
+    if (entityType && entityType !== "all") {
+      smsWhere.entity = {
+        ...smsWhere.entity,
+        type: { equals: entityType, mode: "insensitive" },
       }
     }
 

@@ -68,7 +68,7 @@ export default function MessageTypesPage() {
         const res = await fetch("/api/auth/me", { credentials: "include" })
         if (res.ok) {
           const data = await res.json()
-          setUserRole(data.user?.role ?? null)
+          setUserRole(data.role ?? null)
         }
       } catch {
         setUserRole(null)

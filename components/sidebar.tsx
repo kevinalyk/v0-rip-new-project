@@ -492,6 +492,15 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                       onClick={() => navigate(`/${getClientSlug()}/reports/message-types`)}
                     />
                   )}
+                  {userRole === "super_admin" && (
+                    <NavItem
+                      icon={<BarChart3 size={18} />}
+                      label="Comparisons"
+                      active={pathname.includes("/reports/comparisons")}
+                      collapsed={false}
+                      onClick={() => navigate(`/${getClientSlug()}/reports/comparisons`)}
+                    />
+                  )}
                   <NavItem
                     icon={<ShieldCheck size={18} />}
                     label="Deliverability"

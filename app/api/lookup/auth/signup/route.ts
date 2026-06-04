@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
         firstLogin: false,
         digestEnabled: false,
         weeklyDigestEnabled: false,
+        productUpdateEnabled: false,
       },
     })
 

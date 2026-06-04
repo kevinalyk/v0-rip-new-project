@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     }))
 
     const users = await prisma.user.findMany({
-      where: { productUpdateEnabled: true },
+      where: { productUpdateEnabled: true, role: { not: "lookup" } },
       select: {
         id: true,
         email: true,

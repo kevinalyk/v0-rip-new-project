@@ -188,37 +188,6 @@ export function CiMessageTypesView({
 
   return (
     <div className="space-y-6">
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-5 pb-4">
-            <p className="text-xs text-muted-foreground mb-1">Total Corpus</p>
-            <p className="text-2xl font-bold">{data.total.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5 pb-4">
-            <p className="text-xs text-muted-foreground mb-1">Classified</p>
-            <p className="text-2xl font-bold">{data.classifiedTotal.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{classifiedPct}% of corpus</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5 pb-4">
-            <p className="text-xs text-muted-foreground mb-1">Unique Types Found</p>
-            <p className="text-2xl font-bold">{data.types.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5 pb-4">
-            <p className="text-xs text-muted-foreground mb-1">Overall Inbox Rate</p>
-            <p className="text-2xl font-bold">
-              {data.overallInboxRate !== null ? `${data.overallInboxRate}%` : "—"}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Frequency bar chart */}
       <Card>
         <CardHeader>

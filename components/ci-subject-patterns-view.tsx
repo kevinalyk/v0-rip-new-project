@@ -340,7 +340,7 @@ export function CiSubjectPatternsView({
                                     )}
                                     {ex.shareToken && (
                                       <a
-                                        href={`/rip/${ex.shareToken}`}
+                                        href={`/share/${ex.shareToken}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-xs text-primary hover:underline"

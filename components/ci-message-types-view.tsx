@@ -320,7 +320,6 @@ export function CiMessageTypesView({
                   <th className="text-right font-medium text-muted-foreground px-4 py-2.5">Count</th>
                   <th className="text-right font-medium text-muted-foreground px-4 py-2.5 hidden sm:table-cell">% of Classified</th>
                   <th className="text-left font-medium text-muted-foreground px-4 py-2.5 hidden md:table-cell">Party Split</th>
-                  <th className="text-right font-medium text-muted-foreground px-4 py-2.5">Inbox Rate</th>
                   <th className="px-2 py-2.5 hidden sm:table-cell" />
                 </tr>
               </thead>
@@ -350,9 +349,6 @@ export function CiMessageTypesView({
                         </td>
                         <td className="px-4 py-3 hidden md:table-cell">
                           <PartyBar repCount={t.repCount} demCount={t.demCount} total={t.count} />
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <InboxRateDelta patternRate={t.avgInboxRate} overallRate={data.overallInboxRate} />
                         </td>
                         <td className="px-2 py-3 hidden sm:table-cell">
                           <ChevronRight
@@ -420,7 +416,7 @@ export function CiMessageTypesView({
                                     )}
                                     {ex.shareToken && (
                                       <a
-                                        href={`/rip/${ex.shareToken}`}
+                                        href={`/share/${ex.shareToken}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-xs text-primary hover:underline"

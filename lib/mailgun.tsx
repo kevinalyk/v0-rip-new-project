@@ -1426,9 +1426,12 @@ export async function sendProductUpdateEmail(params: {
     .map((item, i) => {
       const borderTop = i > 0 ? "margin-top:24px;padding-top:24px;border-top:1px solid #e5e7eb;" : ""
       const imageBlock = item.imageUrl
-        ? `<img src="${item.imageUrl}" alt="${item.title}" width="552" style="display:block;width:100%;max-width:552px;border-radius:6px;margin-bottom:16px;" />`
+        ? `<img src="${item.imageUrl}" alt="${item.title}" style="display:block;width:100%;max-width:100%;height:auto;border-radius:6px;margin-bottom:16px;" />`
         : ""
       const articleUrl = generateTrackedLink(userId, "product_update", `article_${item.slug}`, `/news/${item.slug}`, APP_URL)
+      // Strip markdown/HTML and truncate to a short teaser (~200 chars)
+      const plainBody = item.body.replace(/<[^>]+>/g, "").replace(/[#*_`>\[\]]/g, "").trim()
+      const excerpt = plainBody.length > 200 ? plainBody.slice(0, 200).replace(/\s+\S*$/, "") + "…" : plainBody
       return `
         <tr>
           <td style="${borderTop}">
@@ -1438,8 +1441,11 @@ export async function sendProductUpdateEmail(params: {
               <a href="${articleUrl}" target="_blank" style="color:#111827;text-decoration:none;">${item.title}</a>
             </h2>
             <div style="font-size:13px;color:#4b5563;line-height:1.7;">
-              <a href="${articleUrl}" target="_blank" style="color:#4b5563;text-decoration:none;">${item.body.replace(/\n/g, "<br/>")}</a>
+              ${excerpt}
             </div>
+            <p style="margin:12px 0 0;">
+              <a href="${articleUrl}" target="_blank" style="font-size:13px;color:#111827;font-weight:600;text-decoration:underline;">Read more &rarr;</a>
+            </p>
           </td>
         </tr>`
     })

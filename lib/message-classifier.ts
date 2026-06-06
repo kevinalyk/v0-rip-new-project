@@ -6,7 +6,6 @@ import { z } from "zod"
  * Exported so future per-client custom tag lists can extend or replace this set.
  */
 export const DEFAULT_MESSAGE_TYPES = [
-  "fundraising_ask",
   "urgency_deadline",
   "match_offer",
   "survey_poll",
@@ -24,7 +23,6 @@ export type MessageType = (typeof DEFAULT_MESSAGE_TYPES)[number]
 
 // Human-readable labels for display
 export const MESSAGE_TYPE_LABELS: Record<string, string> = {
-  fundraising_ask: "Fundraising Ask",
   urgency_deadline: "Urgency / Deadline",
   match_offer: "Match Offer",
   survey_poll: "Survey / Poll",
@@ -99,7 +97,6 @@ EMAIL PREVIEW:
 ${preview.slice(0, 600)}
 
 Rules:
-- Always include "fundraising_ask" if the email solicits a donation.
 - "urgency_deadline" = hard deadline language (expires, hours left, midnight, final notice).
 - "match_offer" = matching gift mentioned.
 - "attack_opposition" = primary focus is criticizing opponent or opposing party.
@@ -111,7 +108,7 @@ Return JSON with "types" (array of tag strings from the allowed list) and "confi
     })
 
     const types = result.object.types.filter((t) => (allowedTypes as readonly string[]).includes(t))
-    return types.length > 0 ? types : ["fundraising_ask"] // safe fallback
+    return types // empty array if nothing matched — unclassified is fine
   } catch (error) {
     console.error("[message-classifier] AI classification failed:", error)
     return []

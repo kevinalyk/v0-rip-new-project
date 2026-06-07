@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, TrendingUp, TrendingDown, Minus, ChevronRight } from "lucide-react"
+import { Loader2, TrendingUp, TrendingDown, Minus, ChevronRight, ExternalLink } from "lucide-react"
 import { SUBJECT_PATTERNS, type SubjectPattern } from "@/lib/subject-line-classifier"
 import { nameToSlug } from "@/lib/directory-utils"
 import { format } from "date-fns"
@@ -139,6 +139,26 @@ export function CiSubjectPatternsView({
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<SubjectPatternsData | null>(null)
   const [expandedPattern, setExpandedPattern] = useState<SubjectPattern | null>(null)
+  const [viewingId, setViewingId] = useState<string | null>(null)
+
+  const handleView = async (e: React.MouseEvent, id: string, shareToken: string | null) => {
+    e.stopPropagation()
+    if (shareToken) {
+      window.open(`/share/${shareToken}`, "_blank")
+      return
+    }
+    setViewingId(id)
+    try {
+      const res = await fetch(`/api/ci-campaigns/${id}/share`, { method: "POST", credentials: "include" })
+      if (!res.ok) throw new Error()
+      const json = await res.json()
+      window.open(`/share/${json.shareToken}`, "_blank")
+    } catch {
+      // silently fail
+    } finally {
+      setViewingId(null)
+    }
+  }
 
   useEffect(() => {
     fetchData()
@@ -338,17 +358,18 @@ export function CiSubjectPatternsView({
                                         {Math.round(ex.inboxRate * 10) / 10}% inbox
                                       </span>
                                     )}
-                                    {ex.shareToken && (
-                                      <a
-                                        href={`/share/${ex.shareToken}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-xs text-primary hover:underline"
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        View
-                                      </a>
-                                    )}
+                                    <button
+                                      onClick={(e) => handleView(e, ex.id, ex.shareToken)}
+                                      disabled={viewingId === ex.id}
+                                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50 disabled:cursor-wait"
+                                    >
+                                      {viewingId === ex.id ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <ExternalLink className="w-3 h-3" />
+                                      )}
+                                      View
+                                    </button>
                                   </div>
                                 </div>
                               ))}

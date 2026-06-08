@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     const senders = searchParams.getAll("sender").filter(Boolean)
     const party = searchParams.get("party") || undefined
     const state = searchParams.get("state") || undefined
+    const entityType = searchParams.get("entityType") || undefined
     const fromDate = searchParams.get("fromDate") || undefined
     const toDate = searchParams.get("toDate") || undefined
 
@@ -35,12 +36,14 @@ export async function GET(request: NextRequest) {
     const hasEntityFilter = senders.length > 0
     const hasPartyFilter = party && party !== "all"
     const hasStateFilter = state && state !== "all"
+    const hasEntityTypeFilter = entityType && entityType !== "all"
 
-    if (hasEntityFilter || hasPartyFilter || hasStateFilter) {
+    if (hasEntityFilter || hasPartyFilter || hasStateFilter || hasEntityTypeFilter) {
       const entityWhere: any = {}
       if (hasEntityFilter) entityWhere.name = { in: senders, mode: "insensitive" }
       if (hasPartyFilter) entityWhere.party = { equals: party, mode: "insensitive" }
       if (hasStateFilter) entityWhere.state = { equals: state, mode: "insensitive" }
+      if (hasEntityTypeFilter) entityWhere.type = { equals: entityType, mode: "insensitive" }
 
       const matchedEntities = await prisma.ciEntity.findMany({
         where: entityWhere,

@@ -972,12 +972,12 @@ export async function sendFollowingDigest(params: {
                       <a href="${trackedShareUrl}" target="_blank" style="font-size:13px;color:#e5e7eb;text-decoration:none;font-weight:500;">${displaySubject}</a>
                     </td>
                     <td style="text-align:right;white-space:nowrap;padding-left:16px;vertical-align:middle;">
-                      <span style="font-size:12px;color:#6b7280;">${formatTime(msg.receivedAt)}</span>
+                      <span style="font-size:12px;color:#9ca3af;font-weight:500;">${formatTime(msg.receivedAt)}</span>
                     </td>
                   </tr>
                   <tr>
                     <td colspan="2" style="padding-top:2px;padding-left:26px;">
-                      <span style="font-size:11px;color:#4b5563;">${msg.senderIdentifier}</span>
+                      <span style="font-size:11px;color:#d1d5db;font-weight:600;">${msg.senderIdentifier}</span>
                     </td>
                   </tr>
                 </table>
@@ -1017,10 +1017,10 @@ export async function sendFollowingDigest(params: {
                 <tr>
                   <td style="vertical-align:middle;">
                     <img src="${logoUrl}" alt="Inbox.GOP" width="28" height="28" style="display:inline-block;vertical-align:middle;margin-right:8px;" />
-                    <span style="font-size:13px;color:#6b7280;font-weight:500;vertical-align:middle;">Following Digest</span>
+                    <span style="font-size:13px;color:#d1d5db;font-weight:700;vertical-align:middle;">Following Digest</span>
                   </td>
                   <td style="text-align:right;vertical-align:middle;">
-                    <span style="font-size:12px;color:#4b5563;">${digestDate}</span>
+                    <span style="font-size:12px;color:#9ca3af;font-weight:500;">${digestDate}</span>
                   </td>
                 </tr>
               </table>
@@ -1233,12 +1233,12 @@ export async function sendWeeklyDigest(params: {
               <tr>
                 <td colspan="2" style="padding-top:4px;padding-left:26px;">
                   ${entityLink}&nbsp;${partyBadge}${stateBadge}
-                  <span style="font-size:11px;color:#4b5563;margin-left:6px;">${item.senderIdentifier}</span>
+                  <span style="font-size:11px;color:#d1d5db;font-weight:600;margin-left:6px;">${item.senderIdentifier}</span>
                 </td>
               </tr>
               <tr>
                 <td colspan="2" style="padding-top:2px;padding-left:26px;">
-                  <span style="font-size:10px;color:#374151;">${formatDate(item.receivedAt)} ET</span>
+                  <span style="font-size:10px;color:#9ca3af;">${formatDate(item.receivedAt)} ET</span>
                 </td>
               </tr>
             </table>
@@ -1267,10 +1267,10 @@ export async function sendWeeklyDigest(params: {
                 <tr>
                   <td style="vertical-align:middle;">
                     <img src="${logoUrl}" alt="Inbox.GOP" width="28" height="28" style="display:inline-block;vertical-align:middle;margin-right:8px;" />
-                    <span style="font-size:13px;color:#6b7280;font-weight:500;vertical-align:middle;">Weekly Top ${items.length}</span>
+                    <span style="font-size:13px;color:#d1d5db;font-weight:700;vertical-align:middle;">Weekly Top ${items.length}</span>
                   </td>
                   <td style="text-align:right;vertical-align:middle;">
-                    <span style="font-size:12px;color:#4b5563;">${weekStart} – ${weekEnd}</span>
+                    <span style="font-size:12px;color:#9ca3af;font-weight:500;">${weekStart} – ${weekEnd}</span>
                   </td>
                 </tr>
               </table>

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, TrendingUp, TrendingDown, Minus, ChevronRight } from "lucide-react"
+import { Loader2, TrendingUp, TrendingDown, Minus, ChevronRight, ExternalLink } from "lucide-react"
 import { format } from "date-fns"
 
 interface TypeExample {
@@ -134,6 +134,26 @@ export function CiMessageTypesView({
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<MessageTypesData | null>(null)
   const [expandedType, setExpandedType] = useState<string | null>(null)
+  const [viewingId, setViewingId] = useState<string | null>(null)
+
+  const handleView = async (e: React.MouseEvent, id: string, shareToken: string | null) => {
+    e.stopPropagation()
+    if (shareToken) {
+      window.open(`/share/${shareToken}`, "_blank")
+      return
+    }
+    setViewingId(id)
+    try {
+      const res = await fetch(`/api/ci-campaigns/${id}/share`, { method: "POST", credentials: "include" })
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      window.open(`/share/${data.shareToken}`, "_blank")
+    } catch {
+      // silently fail
+    } finally {
+      setViewingId(null)
+    }
+  }
 
   useEffect(() => {
     fetchData()
@@ -382,17 +402,18 @@ export function CiMessageTypesView({
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-2 flex-shrink-0">
-                                    {ex.shareToken && (
-                                      <a
-                                        href={`/share/${ex.shareToken}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-xs text-primary hover:underline"
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        View
-                                      </a>
-                                    )}
+                                    <button
+                                      onClick={(e) => handleView(e, ex.id, ex.shareToken)}
+                                      disabled={viewingId === ex.id}
+                                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50 disabled:cursor-wait"
+                                    >
+                                      {viewingId === ex.id ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <ExternalLink className="w-3 h-3" />
+                                      )}
+                                      View
+                                    </button>
                                   </div>
                                 </div>
                               ))}

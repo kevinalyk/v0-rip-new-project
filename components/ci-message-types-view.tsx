@@ -48,6 +48,7 @@ interface CiMessageTypesViewProps {
   clientSlug: string
   selectedSenders: string[]
   selectedParty: string
+  selectedEntityType: string
   dateRange: DateRange
 }
 
@@ -129,6 +130,7 @@ export function CiMessageTypesView({
   clientSlug,
   selectedSenders,
   selectedParty,
+  selectedEntityType,
   dateRange,
 }: CiMessageTypesViewProps) {
   const [loading, setLoading] = useState(true)
@@ -157,7 +159,7 @@ export function CiMessageTypesView({
 
   useEffect(() => {
     fetchData()
-  }, [clientSlug, selectedSenders, selectedParty, dateRange])
+  }, [clientSlug, selectedSenders, selectedParty, selectedEntityType, dateRange])
 
   const fetchData = async () => {
     setLoading(true)
@@ -166,6 +168,7 @@ export function CiMessageTypesView({
       if (clientSlug) params.append("clientSlug", clientSlug)
       selectedSenders.forEach((s) => params.append("sender", s))
       if (selectedParty && selectedParty !== "all") params.append("party", selectedParty)
+      if (selectedEntityType && selectedEntityType !== "all") params.append("entityType", selectedEntityType)
       if (dateRange.from) params.append("fromDate", dateRange.from.toISOString())
       if (dateRange.to) params.append("toDate", dateRange.to.toISOString())
 

@@ -29,6 +29,7 @@ export default function MessageTypesPage() {
 
   // Filters
   const [selectedParty, setSelectedParty] = useState("all")
+  const [selectedEntityType, setSelectedEntityType] = useState("all")
   const [selectedSenders, setSelectedSenders] = useState<string[]>([])
   const [senderSearch, setSenderSearch] = useState("")
   const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined })
@@ -53,10 +54,11 @@ export default function MessageTypesPage() {
     })
 
   const isFiltersActive =
-    selectedParty !== "all" || selectedSenders.length > 0 || !!dateRange.from || !!dateRange.to
+    selectedParty !== "all" || selectedEntityType !== "all" || selectedSenders.length > 0 || !!dateRange.from || !!dateRange.to
 
   const resetFilters = () => {
     setSelectedParty("all")
+    setSelectedEntityType("all")
     setSelectedSenders([])
     setSenderSearch("")
     setDateRange({ from: undefined, to: undefined })
@@ -145,6 +147,19 @@ export default function MessageTypesPage() {
                 <SelectItem value="all">All Parties</SelectItem>
                 <SelectItem value="Republican">Republican</SelectItem>
                 <SelectItem value="Democrat">Democrat</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Entity type filter */}
+            <Select value={selectedEntityType} onValueChange={setSelectedEntityType}>
+              <SelectTrigger className="w-full md:w-[160px]">
+                <SelectValue placeholder="Entity type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="politician">Politicians</SelectItem>
+                <SelectItem value="pac">PACs</SelectItem>
+                <SelectItem value="organization">Organizations</SelectItem>
               </SelectContent>
             </Select>
 
@@ -284,6 +299,7 @@ export default function MessageTypesPage() {
           clientSlug={clientSlug}
           selectedSenders={selectedSenders}
           selectedParty={selectedParty}
+          selectedEntityType={selectedEntityType}
           dateRange={dateRange}
         />
       </div>

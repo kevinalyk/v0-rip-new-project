@@ -51,8 +51,11 @@ function quickClassify(subject: string, preview: string): string[] | null {
   if (/\bthank\s*(you|s)\b/i.test(text)) tags.push("thank_you")
   if (/\b(merch|t-shirt|hat|mug|store|shop)\b/i.test(text)) tags.push("merchandise")
 
-  // Only return early for very high-confidence single-tag matches
-  if (tags.length === 1 && tags[0] !== "thank_you") return tags
+  // Only return early for very high-confidence, unambiguous single-tag matches.
+  // Never short-circuit on thank_you, event_invite, or personal_story — these commonly
+  // co-occur with urgency/deadline and need the full AI pass to catch multi-tag combos.
+  const singleTagSafe = ["match_offer", "survey_poll", "petition", "merchandise"]
+  if (tags.length === 1 && singleTagSafe.includes(tags[0])) return tags
 
   return null // Fall through to AI
 }
@@ -94,15 +97,23 @@ ${allowedTypes.map((t) => `- ${t}`).join("\n")}
 SUBJECT: ${subject}
 
 EMAIL PREVIEW:
-${preview.slice(0, 600)}
+${preview.slice(0, 800)}
 
 Rules:
-- "urgency_deadline" = hard deadline language (expires, hours left, midnight, final notice).
-- "match_offer" = matching gift mentioned.
-- "attack_opposition" = primary focus is criticizing opponent or opposing party.
-- "personal_story" = first-person narrative from the sender about personal experience.
-- "news_update" = primarily informational, no strong ask.
-- Pick the most specific tags. Maximum 3.
+- "urgency_deadline" = explicit hard deadline language is a MAJOR focus (e.g. "expires tonight", "hours left", "midnight deadline", "final notice", "FEC deadline"). A passing mention of a future deadline does NOT qualify alone.
+- "match_offer" = a matching gift offer is explicitly mentioned (e.g. "your gift will be matched").
+- "attack_opposition" = the PRIMARY and DOMINANT purpose of the email is attacking, criticizing, or going negative on an opponent or opposing party. Merely mentioning an opponent by name, referencing their win, or using them as motivation context does NOT qualify. The email must be fundamentally negative in tone and focus.
+- "personal_story" = first-person narrative from the sender sharing a personal experience, journey, or emotional account. Rally updates and movement milestones count.
+- "news_update" = primarily informational with no strong donation ask — sharing news, results, or updates.
+- "thank_you" = a genuine expression of gratitude to supporters is a PRIMARY theme of the email, even if a soft donation ask appears.
+- "event_invite" = inviting supporters to attend a rally, town hall, or event.
+- "survey_poll" = asking supporters to answer questions or take a poll.
+- "membership_offer" = promoting a membership, recurring giving program, or club.
+- "merchandise" = promoting campaign merchandise.
+- "petition" = asking supporters to sign a petition or pledge.
+- An email can have multiple tags. A thank-you email that also mentions an FEC deadline should get BOTH "thank_you" AND "urgency_deadline".
+- Never apply "attack_opposition" to an email whose overall tone is positive, grateful, or motivational — even if it mentions an opponent.
+- Pick the most accurate tags. Maximum 3.
 
 Return JSON with "types" (array of tag strings from the allowed list) and "confidence" (0–1).`,
     })

@@ -341,9 +341,11 @@ export default function SharePageClient({ isAuthenticated, isTwitterShare, token
                   <div
                     style={{
                       transform: `scale(${emailZoom / 100})`,
-                      transformOrigin: "top left",
+                      transformOrigin: "top center",
                       width: `${10000 / emailZoom}%`,
                       height: `${iframeContentHeight}px`,
+                      marginLeft: "auto",
+                      marginRight: "auto",
                     }}
                   >
                     <iframe

@@ -17,6 +17,8 @@ import {
   Copy,
   Loader2,
   CheckCircle2,
+  Inbox,
+  Download,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -636,6 +638,123 @@ function AddDomainModal({
   )
 }
 
+// ─── Seeds Modal ─────────────────────────────────────────────────────────────
+
+interface SeedRecord {
+  id: string
+  email: string
+  provider: string
+  createdAt: string
+}
+
+function SeedsModal({ onClose }: { onClose: () => void }) {
+  const [seeds, setSeeds] = useState<SeedRecord[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch("/api/domain-health/seeds", { credentials: "include" })
+      .then(async (r) => {
+        if (!r.ok) return
+        const data = await r.json()
+        setSeeds(data.seeds ?? [])
+        setTotal(data.total ?? 0)
+      })
+      .catch((err) => console.error("[seeds-modal] fetch error", err))
+      .finally(() => setLoading(false))
+  }, [])
+
+  function downloadCsv() {
+    const header = "Email,Provider,Added\n"
+    const rows = seeds
+      .map((s) => `${s.email},${s.provider},${new Date(s.createdAt).toLocaleDateString()}`)
+      .join("\n")
+    const blob = new Blob([header + rows], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "domain-health-seeds.csv"
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const preview = seeds.slice(0, 10)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-card border border-border rounded-xl w-full max-w-md shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div>
+            <div className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Inbox size={15} className="text-muted-foreground" />
+              Domain Health Seeds
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Seed inboxes assigned to this client with Domain Health enabled.
+            </div>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors p-1">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-5">
+          {loading ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground gap-2 text-sm">
+              <Loader2 size={14} className="animate-spin" />
+              Loading seeds…
+            </div>
+          ) : seeds.length === 0 ? (
+            <div className="text-center py-8 text-sm text-muted-foreground">
+              No domain health seeds found for this client.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {total > 10 && (
+                <div className="text-xs text-muted-foreground bg-muted/30 border border-border rounded-lg px-3 py-2">
+                  Showing 10 of <strong className="text-foreground">{total}</strong> seeds. Download the CSV to see all.
+                </div>
+              )}
+              <div className="border border-border rounded-lg overflow-hidden">
+                {preview.map((seed, i) => (
+                  <div
+                    key={seed.id}
+                    className={cn(
+                      "flex items-center justify-between px-3 py-2.5 gap-3",
+                      i !== 0 && "border-t border-border"
+                    )}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm text-foreground font-mono truncate">{seed.email}</div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5 capitalize">{seed.provider}</div>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground flex-shrink-0">
+                      {new Date(seed.createdAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        {!loading && seeds.length > 0 && (
+          <div className="flex items-center justify-between px-5 pb-5 pt-0 gap-3">
+            <span className="text-xs text-muted-foreground">{total} seed{total !== 1 ? "s" : ""} total</span>
+            <Button size="sm" onClick={downloadCsv} className="flex items-center gap-1.5">
+              <Download size={13} />
+              Download CSV
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function DomainHealthContent() {
@@ -647,6 +766,7 @@ export function DomainHealthContent() {
   const [pendingVerifyRecord, setPendingVerifyRecord] = useState<ClientDomainRecord | null>(null)
   const [scanning, setScanning] = useState(false)
   const [openCheckId, setOpenCheckId] = useState<string | null>(null)
+  const [showSeedsModal, setShowSeedsModal] = useState(false)
 
   // Real scan results from API
   const [scanMeta, setScanMeta] = useState<{ scannedAt: string; seedEmailCount: number; ciRowCount: number } | null>(null)
@@ -795,6 +915,9 @@ export function DomainHealthContent() {
         existingRecord={pendingVerifyRecord ?? undefined}
       />
     )}
+    {showSeedsModal && (
+      <SeedsModal onClose={() => setShowSeedsModal(false)} />
+    )}
     <div className="p-6 max-w-4xl mx-auto flex flex-col min-h-[calc(100vh-64px)]">
       {/* Header */}
       <div className="mb-6">
@@ -900,6 +1023,14 @@ export function DomainHealthContent() {
             >
               <RefreshCw size={11} className={cn(scanning && "animate-spin")} />
               {scanning ? "Scanning..." : "Re-scan"}
+            </button>
+            <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
+            <button
+              onClick={() => setShowSeedsModal(true)}
+              className="flex items-center gap-1 text-foreground font-medium hover:text-rip-red transition-colors"
+            >
+              <Inbox size={11} />
+              View Seeds
             </button>
           </div>
         )}

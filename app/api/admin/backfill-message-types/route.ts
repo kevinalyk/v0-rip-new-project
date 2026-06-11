@@ -54,11 +54,15 @@ export async function POST(request: Request) {
       try {
         const types = await classifyMessageTypes(subject, preview)
 
+        // Always write the result (even empty array) so the row is no longer
+        // considered "unclassified pending" and won't be retried on every backfill run.
+        // Rows that genuinely couldn't be classified stay at [] and can be force-reclassified later.
+        await prisma.competitiveInsightCampaign.update({
+          where: { id: campaign.id },
+          data: { messageTypes: types },
+        })
+
         if (types.length > 0) {
-          await prisma.competitiveInsightCampaign.update({
-            where: { id: campaign.id },
-            data: { messageTypes: types },
-          })
           classified++
           if (samples.length < 10) {
             samples.push({ id: campaign.id, subject: campaign.subject, types })

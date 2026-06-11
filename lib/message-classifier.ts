@@ -67,7 +67,13 @@ const classificationSchema = z.object({
     .array(z.string())
     .describe("1–3 message type tags from the allowed list that best describe this email"),
   confidence: z.number().min(0).max(1),
+  reasoning: z.string().describe("1–2 sentence explanation of why these tags were chosen"),
 })
+
+export interface ClassificationResult {
+  types: string[]
+  reasoning: string
+}
 
 /**
  * Classify a political email into 1–3 message type tags.
@@ -80,10 +86,10 @@ export async function classifyMessageTypes(
   subject: string,
   preview: string,
   allowedTypes: readonly string[] = DEFAULT_MESSAGE_TYPES,
-): Promise<string[]> {
+): Promise<ClassificationResult> {
   // 1. Try quick regex path first
   const quick = quickClassify(subject, preview)
-  if (quick) return quick
+  if (quick) return { types: quick, reasoning: "Matched via regex pattern (no AI call needed)." }
 
   // 2. AI classification
   try {
@@ -117,13 +123,14 @@ Rules:
 - An email can have multiple tags (up to 3). A fundraising email with a midnight deadline and a personal story gets "urgency_deadline" + "personal_story".
 - Never apply "attack_opposition" to an email whose overall tone is positive, motivated, or personal — even if it mentions an opponent.
 
-Return JSON with "types" (array of 1–3 tag strings from the allowed list) and "confidence" (0–1).`,
+Return JSON with "types" (array of 1–3 tag strings from the allowed list), "confidence" (0–1), and "reasoning" (1–2 sentences explaining why these tags were chosen).`,
     })
 
     const types = result.object.types.filter((t) => (allowedTypes as readonly string[]).includes(t))
-    return types // empty array if nothing matched — unclassified is fine
+    const reasoning = result.object.reasoning ?? ""
+    return { types, reasoning }
   } catch (error) {
     console.error("[message-classifier] AI classification failed:", error)
-    return []
+    return { types: [], reasoning: "" }
   }
 }

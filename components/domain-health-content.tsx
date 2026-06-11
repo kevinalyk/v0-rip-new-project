@@ -665,9 +665,9 @@ function SeedsModal({ onClose }: { onClose: () => void }) {
   }, [])
 
   function downloadCsv() {
-    const header = "Email,Provider,Added\n"
+    const header = "Email,Provider\n"
     const rows = seeds
-      .map((s) => `${s.email},${s.provider},${new Date(s.createdAt).toLocaleDateString()}`)
+      .map((s) => `${s.email},${s.provider}`)
       .join("\n")
     const blob = new Blob([header + rows], { type: "text/csv" })
     const url = URL.createObjectURL(blob)
@@ -729,9 +729,6 @@ function SeedsModal({ onClose }: { onClose: () => void }) {
                     <div className="min-w-0">
                       <div className="text-sm text-foreground font-mono truncate">{seed.email}</div>
                       <div className="text-[11px] text-muted-foreground mt-0.5 capitalize">{seed.provider}</div>
-                    </div>
-                    <div className="text-[11px] text-muted-foreground flex-shrink-0">
-                      {new Date(seed.createdAt).toLocaleDateString()}
                     </div>
                   </div>
                 ))}

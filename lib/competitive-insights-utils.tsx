@@ -1589,13 +1589,13 @@ export async function processCompetitiveInsights(
           if (existingForClassify && (!existingForClassify.messageTypes || (existingForClassify.messageTypes as string[]).length === 0)) {
             const classifySubject = existingForClassify.rawSubject || existingForClassify.subject
             const classifyPreview = existingForClassify.emailPreview || ""
-            const types = await Promise.race([
+            const result = await Promise.race([
               classifyMessageTypes(classifySubject, classifyPreview),
-              new Promise<string[]>((_, reject) => setTimeout(() => reject(new Error("classification timeout")), 25000)),
+              new Promise<import("@/lib/message-classifier").ClassificationResult>((_, reject) => setTimeout(() => reject(new Error("classification timeout")), 25000)),
             ])
             await prisma.competitiveInsightCampaign.update({
               where: { id: existingForClassify.id },
-              data: { messageTypes: types },
+              data: { messageTypes: result.types, messageTypeReasoning: result.reasoning || null },
             })
           }
         } catch (classifyErr) {
@@ -1653,15 +1653,15 @@ export async function processCompetitiveInsights(
         try {
           const classifyWithTimeout = Promise.race([
             classifyMessageTypes(classifySubject, classifyPreview),
-            new Promise<string[]>((_, reject) =>
+            new Promise<import("@/lib/message-classifier").ClassificationResult>((_, reject) =>
               setTimeout(() => reject(new Error("classification timeout")), 25000)
             ),
           ])
-          const types = await classifyWithTimeout
-          if (types.length > 0) {
+          const classifyResult = await classifyWithTimeout
+          if (classifyResult.types.length > 0) {
             await prisma.competitiveInsightCampaign.update({
               where: { id: newCampaign.id },
-              data: { messageTypes: types },
+              data: { messageTypes: classifyResult.types, messageTypeReasoning: classifyResult.reasoning || null },
             })
           }
         } catch (err) {
@@ -1720,13 +1720,13 @@ export async function processCompetitiveInsights(
             if (raceExisting && (!raceExisting.messageTypes || (raceExisting.messageTypes as string[]).length === 0)) {
               const classifySubject = (raceExisting as any).rawSubject || (raceExisting as any).subject || redactedSubject
               const classifyPreview = (raceExisting as any).emailPreview || redactedEmailPreview || ""
-              const types = await Promise.race([
+              const raceResult = await Promise.race([
                 classifyMessageTypes(classifySubject, classifyPreview),
-                new Promise<string[]>((_, reject) => setTimeout(() => reject(new Error("classification timeout")), 25000)),
+                new Promise<import("@/lib/message-classifier").ClassificationResult>((_, reject) => setTimeout(() => reject(new Error("classification timeout")), 25000)),
               ])
               await prisma.competitiveInsightCampaign.update({
                 where: { id: raceExisting.id },
-                data: { messageTypes: types },
+                data: { messageTypes: raceResult.types, messageTypeReasoning: raceResult.reasoning || null },
               })
             }
           } catch (classifyErr) {

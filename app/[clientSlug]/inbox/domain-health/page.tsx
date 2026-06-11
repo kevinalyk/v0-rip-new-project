@@ -23,7 +23,10 @@ export default function DomainHealthPage() {
           return
         }
         const me = await res.json()
-        setUserRole(me.role ?? me.user?.role ?? null)
+        const role = me.role ?? null
+        // Red Spark users get full access to domain health — treat as admin view
+        const clientSlug = me.client?.slug ?? ""
+        setUserRole(role === "super_admin" || clientSlug === "red_spark_strategy" ? "super_admin" : role)
       } catch {
         router.push("/login")
       } finally {

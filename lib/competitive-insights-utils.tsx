@@ -686,7 +686,7 @@ ${links.map((link, i) => `${i + 1}. URL: ${link.url}${link.text ? `\n   Link tex
   Example response: "1, 3, 5" or "none"`
   
   const { text } = await generateText({
-    model: "google/gemini-2.0-flash-lite",
+    model: "google/gemini-3-flash",
     prompt,
     temperature: 0.1,
   })
@@ -1580,6 +1580,27 @@ export async function processCompetitiveInsights(
       })
       if (secondaryCheck) {
         console.log(`⏭️ Skipped (created by parallel seed before CTA extraction): "${redactedSubject}"`)
+        // Still classify if the existing row has no message types yet
+        try {
+          const existingForClassify = await prisma.competitiveInsightCampaign.findUnique({
+            where: { id: secondaryCheck.id },
+            select: { id: true, messageTypes: true, rawSubject: true, emailPreview: true, subject: true },
+          })
+          if (existingForClassify && (!existingForClassify.messageTypes || (existingForClassify.messageTypes as string[]).length === 0)) {
+            const classifySubject = existingForClassify.rawSubject || existingForClassify.subject
+            const classifyPreview = existingForClassify.emailPreview || ""
+            const types = await Promise.race([
+              classifyMessageTypes(classifySubject, classifyPreview),
+              new Promise<string[]>((_, reject) => setTimeout(() => reject(new Error("classification timeout")), 25000)),
+            ])
+            await prisma.competitiveInsightCampaign.update({
+              where: { id: existingForClassify.id },
+              data: { messageTypes: types },
+            })
+          }
+        } catch (classifyErr) {
+          console.error("[message-classifier] secondary-check classification failed:", classifyErr)
+        }
         return false
       }
 
@@ -1633,7 +1654,7 @@ export async function processCompetitiveInsights(
           const classifyWithTimeout = Promise.race([
             classifyMessageTypes(classifySubject, classifyPreview),
             new Promise<string[]>((_, reject) =>
-              setTimeout(() => reject(new Error("classification timeout")), 10000)
+              setTimeout(() => reject(new Error("classification timeout")), 25000)
             ),
           ])
           const types = await classifyWithTimeout
@@ -1656,6 +1677,11 @@ export async function processCompetitiveInsights(
         if (createError?.code === "P2002") {
           const raceExisting = await prisma.competitiveInsightCampaign.findFirst({
             where: { senderEmail, subject: redactedSubject },
+            select: {
+              id: true, inboxCount: true, spamCount: true, notDeliveredCount: true,
+              inboxRate: true, seenBySeedEmails: true, ctaLinks: true, rawHeaders: true,
+              messageTypes: true, rawSubject: true, emailPreview: true, subject: true,
+            },
           })
           if (raceExisting) {
             const raceAlreadySeen = new Set<string>(Array.isArray(raceExisting.seenBySeedEmails) ? raceExisting.seenBySeedEmails as string[] : [])
@@ -1688,7 +1714,24 @@ export async function processCompetitiveInsights(
               },
             })
           }
-          // Race condition — not a new campaign from this run's perspective
+          // Race condition — not a new campaign from this run's perspective.
+          // Still classify if the row has no message types yet.
+          try {
+            if (raceExisting && (!raceExisting.messageTypes || (raceExisting.messageTypes as string[]).length === 0)) {
+              const classifySubject = (raceExisting as any).rawSubject || (raceExisting as any).subject || redactedSubject
+              const classifyPreview = (raceExisting as any).emailPreview || redactedEmailPreview || ""
+              const types = await Promise.race([
+                classifyMessageTypes(classifySubject, classifyPreview),
+                new Promise<string[]>((_, reject) => setTimeout(() => reject(new Error("classification timeout")), 25000)),
+              ])
+              await prisma.competitiveInsightCampaign.update({
+                where: { id: raceExisting.id },
+                data: { messageTypes: types },
+              })
+            }
+          } catch (classifyErr) {
+            console.error("[message-classifier] race-condition classification failed:", classifyErr)
+          }
           return false
         } else {
           throw createError

@@ -4,12 +4,25 @@ import prisma from "@/lib/prisma"
 import crypto from "crypto"
 
 // GET /api/client-domains — list all domains for the current user's client
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const user = await getCurrentUser() as any
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const clientId = user.clientId
+    const { searchParams } = new URL(request.url)
+    const clientSlugParam = searchParams.get("clientSlug")
+
+    let clientId = user.clientId
+
+    // Super admins can pass a clientSlug to view another client's domains
+    if (clientSlugParam && user.role === "super_admin") {
+      const targetClient = await prisma.client.findUnique({
+        where: { slug: clientSlugParam },
+        select: { id: true },
+      })
+      if (targetClient) clientId = targetClient.id
+    }
+
     if (!clientId) return NextResponse.json({ error: "No client associated with account" }, { status: 400 })
 
     const domains = await prisma.clientDomain.findMany({
@@ -40,10 +53,21 @@ export async function POST(request: Request) {
     const user = await getCurrentUser() as any
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const clientId = user.clientId
-    if (!clientId) return NextResponse.json({ error: "No client associated with account" }, { status: 400 })
-
     const body = await request.json()
+    const clientSlugParam = (body.clientSlug ?? "").trim()
+
+    let clientId = user.clientId
+
+    // Super admins can submit domains on behalf of another client
+    if (clientSlugParam && user.role === "super_admin") {
+      const targetClient = await prisma.client.findUnique({
+        where: { slug: clientSlugParam },
+        select: { id: true },
+      })
+      if (targetClient) clientId = targetClient.id
+    }
+
+    if (!clientId) return NextResponse.json({ error: "No client associated with account" }, { status: 400 })
     const domain = (body.domain ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, "")
 
     if (!domain) return NextResponse.json({ error: "Domain is required" }, { status: 400 })

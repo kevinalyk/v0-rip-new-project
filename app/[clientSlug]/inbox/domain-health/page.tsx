@@ -48,7 +48,7 @@ export default function DomainHealthPage() {
 
   return (
     <AppLayout clientSlug={clientSlug} isAdminView={userRole === "super_admin"}>
-      <DomainHealthContent />
+      <DomainHealthContent clientSlug={clientSlug} />
     </AppLayout>
   )
 }

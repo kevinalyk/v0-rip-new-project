@@ -468,10 +468,12 @@ function AddDomainModal({
   onClose,
   onAdded,
   existingRecord,
+  clientSlug,
 }: {
   onClose: () => void
   onAdded: (record: ClientDomainRecord) => void
   existingRecord?: ClientDomainRecord
+  clientSlug?: string
 }) {
   const [step, setStep] = useState<1 | 2>(existingRecord ? 2 : 1)
   const [domainInput, setDomainInput] = useState("")
@@ -490,7 +492,7 @@ function AddDomainModal({
       const res = await fetch("/api/client-domains", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: domainInput.trim() }),
+        body: JSON.stringify({ domain: domainInput.trim(), ...(clientSlug ? { clientSlug } : {}) }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -754,7 +756,7 @@ function SeedsModal({ onClose }: { onClose: () => void }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function DomainHealthContent() {
+export function DomainHealthContent({ clientSlug }: { clientSlug?: string }) {
   const [clientDomains, setClientDomains] = useState<ClientDomainRecord[]>([])
   const [domainsLoading, setDomainsLoading] = useState(true)
   const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null)
@@ -776,9 +778,13 @@ export function DomainHealthContent() {
   // Per-status cursors for cycling through issues
   const cursors = useRef<Record<CheckStatus, number>>({ pass: 0, fail: 0, manual: 0 })
 
-  // Fetch real domains from API
+  // Fetch real domains from API — re-run when clientSlug changes (super_admin impersonation)
   useEffect(() => {
-    fetch("/api/client-domains")
+    setDomainsLoading(true)
+    setClientDomains([])
+    setSelectedDomainId(null)
+    const url = clientSlug ? `/api/client-domains?clientSlug=${encodeURIComponent(clientSlug)}` : "/api/client-domains"
+    fetch(url)
       .then(async (r) => {
         const data = await r.json()
         const domains: ClientDomainRecord[] = data.domains ?? []
@@ -787,7 +793,7 @@ export function DomainHealthContent() {
       })
       .catch((err) => console.error("[domain-health] client-domains fetch error", err))
       .finally(() => setDomainsLoading(false))
-  }, [])
+  }, [clientSlug])
 
   // Load latest scan results whenever the selected domain changes
   useEffect(() => {
@@ -910,6 +916,7 @@ export function DomainHealthContent() {
         onClose={() => { setShowAddModal(false); setPendingVerifyRecord(null) }}
         onAdded={(record) => { handleDomainAdded(record); setShowAddModal(false); setPendingVerifyRecord(null) }}
         existingRecord={pendingVerifyRecord ?? undefined}
+        clientSlug={clientSlug}
       />
     )}
     {showSeedsModal && (

@@ -1518,6 +1518,7 @@ export async function processCompetitiveInsights(
         inboxCount: true, spamCount: true, notDeliveredCount: true,
         ctaLinks: true, emailPreview: true, emailContent: true,
         seenBySeedEmails: true, clientId: true, inboxRate: true,
+        messageTypes: true, bodyFingerprint: true, createdAt: true,
       },
     })
     const existing = sameDayCandidates.find((c) => {
@@ -1531,9 +1532,14 @@ export async function processCompetitiveInsights(
     }) || null
 
     if (existing) {
-      // Only run CTA extraction if the existing record has no CTAs yet — avoids AI cost on repeat seeds
+      // Only run CTA extraction if the existing record has no CTAs AND was created
+      // within the last 48 hours. Older campaigns without CTAs are skipped permanently
+      // to avoid re-running AI on every cron pass.
+      const isRecent = existing.createdAt
+        ? (Date.now() - new Date(existing.createdAt).getTime()) < 48 * 60 * 60 * 1000
+        : false
       const ctaLinks =
-        (!existing.ctaLinks || existing.ctaLinks === "[]") && emailContent
+        (!existing.ctaLinks || existing.ctaLinks === "[]") && emailContent && isRecent
           ? await extractCTALinks(emailContent, seedEmailsList, sanitizedSubject)
           : []
 
@@ -1569,6 +1575,27 @@ export async function processCompetitiveInsights(
             : existing.bodyFingerprint,
         },
       })
+
+      // Classify message types if not yet done — runs at most once per campaign
+      if (!existing.messageTypes || (existing.messageTypes as string[]).length === 0) {
+        try {
+          const classifySubject = (existing as any).rawSubject || existing.subject || redactedSubject
+          const classifyPreview = existing.emailPreview || redactedEmailPreview || ""
+          const existingResult = await Promise.race([
+            classifyMessageTypes(classifySubject, classifyPreview),
+            new Promise<import("@/lib/message-classifier").ClassificationResult>((_, reject) =>
+              setTimeout(() => reject(new Error("classification timeout")), 25000)
+            ),
+          ])
+          await prisma.competitiveInsightCampaign.update({
+            where: { id: existing.id },
+            data: { messageTypes: existingResult.types, messageTypeReasoning: existingResult.reasoning || null },
+          })
+        } catch (classifyErr) {
+          console.error("[message-classifier] existing-campaign classification failed:", classifyErr)
+        }
+      }
+
       // Already existed in DB — not a new campaign
       return false
     } else {

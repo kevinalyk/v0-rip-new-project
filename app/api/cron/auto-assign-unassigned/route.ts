@@ -31,13 +31,16 @@ export async function GET(request: Request) {
       },
     }
 
-    // Process Email Campaigns (limit to 100 per run)
+    // Process Email Campaigns (limit to 100 per run, only last 7 days to avoid
+    // endlessly re-analyzing old campaigns that AI can't confidently classify)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
     let unassignedEmails = []
     try {
       console.log("[v0] Auto-Assign Cron: Fetching unassigned email campaigns...")
       unassignedEmails = await prisma.competitiveInsightCampaign.findMany({
         where: {
           entityId: null,
+          createdAt: { gte: sevenDaysAgo },
           // Don't re-process manually reviewed campaigns
           OR: [
             { assignmentMethod: null },

@@ -659,6 +659,27 @@ async function detectUnsubscribeLinksWithAI(links: Array<{ url: string; text?: s
     return new Set()
   }
 
+  // Check cache first — reuse ctaCategory table with "unsubscribe" / "not_unsubscribe" categories
+  const unsubscribeUrls = new Set<string>()
+  const uncachedLinks: Array<{ url: string; text?: string; normalizedUrl: string }> = []
+
+  for (const link of links) {
+    const normalizedUrl = normalizeUrlForCache(link.url)
+    const cached = await prisma.ctaCategory.findUnique({ where: { url: normalizedUrl } })
+    if (cached) {
+      if (cached.category === "unsubscribe") {
+        unsubscribeUrls.add(link.url)
+      }
+      // "not_unsubscribe" → skip (already known clean)
+    } else {
+      uncachedLinks.push({ ...link, normalizedUrl })
+    }
+  }
+
+  if (uncachedLinks.length === 0) {
+    return unsubscribeUrls
+  }
+
   try {
     const prompt = `You are analyzing links from political campaign emails. Identify which links are unsubscribe, opt-out, or email preference management links.
 
@@ -679,7 +700,7 @@ async function detectUnsubscribeLinksWithAI(links: Array<{ url: string; text?: s
 - Campaign website homepages
 
 **Links to analyze:**
-${links.map((link, i) => `${i + 1}. URL: ${link.url}${link.text ? `\n   Link text: "${link.text}"` : ""}`).join("\n\n")}
+${uncachedLinks.map((link, i) => `${i + 1}. URL: ${link.url}${link.text ? `\n   Link text: "${link.text}"` : ""}`).join("\n\n")}
 
 **Instructions:** Respond with ONLY the numbers of links that are unsubscribe/opt-out links (comma-separated). If none are unsubscribe links, respond with "none".
   
@@ -693,28 +714,33 @@ ${links.map((link, i) => `${i + 1}. URL: ${link.url}${link.text ? `\n   Link tex
 
     // Parse AI response
     const response = text.trim().toLowerCase()
-    if (response === "none") {
-      return new Set()
+    const unsubscribeIndexes = new Set<number>()
+
+    if (response !== "none") {
+      response
+        .split(",")
+        .map((n) => Number.parseInt(n.trim()))
+        .filter((n) => !isNaN(n) && n > 0 && n <= uncachedLinks.length)
+        .forEach((n) => unsubscribeIndexes.add(n))
     }
 
-    // Extract numbers from response
-    const numbers = response
-      .split(",")
-      .map((n) => Number.parseInt(n.trim()))
-      .filter((n) => !isNaN(n) && n > 0 && n <= links.length)
-
-    // Convert numbers to URLs
-    const unsubscribeUrls = new Set<string>()
-    numbers.forEach((num) => {
-      const link = links[num - 1]
-      if (link) {
+    // Cache all results and collect unsubscribe URLs
+    for (let i = 0; i < uncachedLinks.length; i++) {
+      const link = uncachedLinks[i]
+      const category = unsubscribeIndexes.has(i + 1) ? "unsubscribe" : "not_unsubscribe"
+      await prisma.ctaCategory.upsert({
+        where: { url: link.normalizedUrl },
+        update: { category, confidence: 0.85 },
+        create: { url: link.normalizedUrl, category, confidence: 0.85 },
+      })
+      if (category === "unsubscribe") {
         unsubscribeUrls.add(link.url)
       }
-    })
+    }
 
     return unsubscribeUrls
   } catch (error) {
-    return new Set()
+    return unsubscribeUrls
   }
 }
 

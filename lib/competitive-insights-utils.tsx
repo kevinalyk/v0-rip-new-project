@@ -707,7 +707,7 @@ ${uncachedLinks.map((link, i) => `${i + 1}. URL: ${link.url}${link.text ? `\n   
   Example response: "1, 3, 5" or "none"`
   
   const { text } = await generateText({
-    model: "google/gemini-3-flash",
+    model: "openai/gpt-4o-mini",
     prompt,
     temperature: 0.1,
   })

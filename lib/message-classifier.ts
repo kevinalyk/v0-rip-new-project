@@ -41,25 +41,57 @@ export const MESSAGE_TYPE_LABELS: Record<string, string> = {
  * skip the AI call entirely to save cost on obvious cases.
  */
 function quickClassify(subject: string, preview: string): string[] | null {
-  const text = `${subject} ${preview}`.toLowerCase()
+  const sub = subject.toLowerCase()
+  const text = `${sub} ${preview.toLowerCase()}`
   const tags: string[] = []
 
-  // match_offer: must mention matching explicitly
-  if (/\b(match(ed|ing)?|triple match|double match)\b.{0,40}\b(gift|donat|dollar|\$)/i.test(text)) tags.push("match_offer")
-  // survey_poll: must be clearly a survey/poll subject — NOT just "polling" or "poll numbers"
-  if (/\b(take (our|this|the) (survey|poll)|complete (our|this|the) (survey|poll)|answer (our|this|the) (survey|poll)|official survey|official poll)\b/i.test(text)) tags.push("survey_poll")
-  // petition: "sign (our/this/the) petition" or petition is in the subject line alone
-  if (/\bsign (our |this |the )?(petition|pledge)\b/i.test(text) || /\bpetition\b/i.test(subject)) tags.push("petition")
-  // merchandise: must reference actual merch items
-  if (/\b(t-shirt|hat|mug|merch|store|shop now|gear)\b/i.test(text)) tags.push("merchandise")
+  // urgency_deadline: deadline/time language anywhere
+  if (/\b(midnight|deadline|hours? left|minutes? left|expires?|expiring|running out|last chance|final (hours?|day|chance)|end.of.month|end.of.quarter|fec deadline|before it.s too late|tonight|by \d+[ap]m|cutoff|time is running|clock is ticking|don.t (wait|miss)|act now|act (fast|today)|respond (now|today|immediately))\b/i.test(text)) {
+    tags.push("urgency_deadline")
+  }
 
-  // Only return early for very high-confidence, unambiguous single-tag matches.
-  // Everything else — including thank_you, event_invite, urgency — needs the AI pass
-  // since they almost always co-occur with other tags.
-  const singleTagSafe = ["match_offer", "survey_poll", "petition", "merchandise"]
-  if (tags.length === 1 && singleTagSafe.includes(tags[0])) return tags
+  // match_offer: matching gift language
+  if (/\b(match(ed|ing)?|triple match|double match|2x|3x)\b.{0,50}\b(gift|donat|dollar|\$)/i.test(text) ||
+      /\b(your (gift|donation) will be match)\b/i.test(text)) {
+    tags.push("match_offer")
+  }
 
-  return null // Fall through to AI
+  // survey_poll: explicit survey/poll ask
+  if (/\b(take (our|this|the) (survey|poll)|complete (our|this|the) (survey|poll)|answer (our|this|the) (survey|poll)|official survey|official poll|submit your (survey|poll))\b/i.test(text) ||
+      /\b(survey|poll)\b/i.test(sub)) {
+    tags.push("survey_poll")
+  }
+
+  // petition: sign a petition or pledge
+  if (/\bsign (our |this |the )?(petition|pledge)\b/i.test(text) || /\bpetition\b/i.test(sub)) {
+    tags.push("petition")
+  }
+
+  // event_invite: rally, town hall, event invitation
+  if (/\b(join (us|me) (at|for)|you.re invited|rsvp|register (now|today|here)|rally|town hall|watch party|meet.and.greet|fundraiser (dinner|event)|come (join|meet)|event (tonight|tomorrow|this week))\b/i.test(text)) {
+    tags.push("event_invite")
+  }
+
+  // thank_you: gratitude as primary theme
+  if (/\b(thank you|thanks? so much|we.re grateful|grateful for your|incredible support|you did it|we hit our goal|we reached|you helped us)\b/i.test(text) &&
+      !tags.includes("urgency_deadline")) {
+    tags.push("thank_you")
+  }
+
+  // merchandise: actual merch items
+  if (/\b(t-shirt|tee shirt|hat|mug|merch|store|shop now|gear|hoodie|bumper sticker)\b/i.test(text)) {
+    tags.push("merchandise")
+  }
+
+  // membership_offer: recurring giving club
+  if (/\b(recurring (gift|donor|giving)|monthly (donor|giving|gift)|sustaining (donor|member)|join (our )?(club|team|inner circle)|become a (monthly|sustaining)|membership)\b/i.test(text)) {
+    tags.push("membership_offer")
+  }
+
+  // If we matched at least one tag with high confidence, return without AI
+  if (tags.length >= 1) return tags
+
+  return null // Fall through to AI only if nothing matched
 }
 
 const classificationSchema = z.object({
@@ -94,7 +126,7 @@ export async function classifyMessageTypes(
   // 2. AI classification
   try {
     const result = await generateObject({
-      model: "google/gemini-3-flash",
+      model: "openai/gpt-4o-mini",
       mode: "json",
       schema: classificationSchema,
       prompt: `You are classifying a political fundraising email into message type tags.

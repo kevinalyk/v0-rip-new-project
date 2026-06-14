@@ -686,7 +686,7 @@ ${links.map((link, i) => `${i + 1}. URL: ${link.url}${link.text ? `\n   Link tex
   Example response: "1, 3, 5" or "none"`
   
   const { text } = await generateText({
-    model: "google/gemini-3-flash",
+    model: "openai/gpt-4o-mini",
     prompt,
     temperature: 0.1,
   })
@@ -1353,6 +1353,7 @@ export async function processCompetitiveInsights(
   entityAssignment?: { entityId: string; assignmentMethod: string } | string | null,
   clientId?: string | null,
   rawHeaders?: string,
+  preExtractedCtaLinks?: any[],
 ): Promise<boolean> {
   try {
     // Preserve the original subject (before any sanitization/redaction) for dedup use
@@ -1518,6 +1519,7 @@ export async function processCompetitiveInsights(
         inboxCount: true, spamCount: true, notDeliveredCount: true,
         ctaLinks: true, emailPreview: true, emailContent: true,
         seenBySeedEmails: true, clientId: true, inboxRate: true,
+        createdAt: true,
       },
     })
     const existing = sameDayCandidates.find((c) => {
@@ -1531,9 +1533,13 @@ export async function processCompetitiveInsights(
     }) || null
 
     if (existing) {
-      // Only run CTA extraction if the existing record has no CTAs yet — avoids AI cost on repeat seeds
+      // Only run CTA extraction if the existing record has no CTAs yet AND was created
+      // within the last 48 hours — prevents re-running AI on every cron pass for old campaigns
+      const isRecent = existing.createdAt
+        ? Date.now() - new Date(existing.createdAt).getTime() < 48 * 60 * 60 * 1000
+        : false
       const ctaLinks =
-        (!existing.ctaLinks || existing.ctaLinks === "[]") && emailContent
+        (!existing.ctaLinks || existing.ctaLinks === "[]") && emailContent && isRecent
           ? await extractCTALinks(emailContent, seedEmailsList, sanitizedSubject)
           : []
 
@@ -1607,8 +1613,9 @@ export async function processCompetitiveInsights(
       // Declare ctaLinks outside try so it's accessible in the race condition catch block
       let ctaLinks: any[] = []
       try {
-        // Only extract CTAs for genuinely new campaigns
-        ctaLinks = emailContent ? await extractCTALinks(emailContent, seedEmailsList, sanitizedSubject) : []
+        // Use pre-extracted CTAs from campaign-detector if available — avoids calling
+        // extractCTALinks (and its AI calls) twice for every new campaign
+        ctaLinks = preExtractedCtaLinks ?? (emailContent ? await extractCTALinks(emailContent, seedEmailsList, sanitizedSubject) : [])
 
         // Guard: verify clientId is a real Client row before inserting to avoid FK violation
         if (clientId) {

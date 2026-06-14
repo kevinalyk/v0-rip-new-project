@@ -67,7 +67,7 @@ async function analyzeEmailWithAI(
     console.log("[Data Broker AI] Analyzing email (clean text length):", cleanBody.length)
 
   const result = await generateObject({
-    model: "google/gemini-3-flash",
+    model: "openai/gpt-4o-mini",
     mode: "json",
     schema: z.object({
         type: z.enum(["newsletter", "sponsored_campaign"]),

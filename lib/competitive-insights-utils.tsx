@@ -1379,6 +1379,7 @@ export async function processCompetitiveInsights(
   entityAssignment?: { entityId: string; assignmentMethod: string } | string | null,
   clientId?: string | null,
   rawHeaders?: string,
+  preExtractedCtaLinks?: Array<{ url: string; finalUrl?: string; originalUrl?: string; type: string }>,
 ): Promise<boolean> {
   try {
     // Preserve the original subject (before any sanitization/redaction) for dedup use
@@ -1660,8 +1661,9 @@ export async function processCompetitiveInsights(
       // Declare ctaLinks outside try so it's accessible in the race condition catch block
       let ctaLinks: any[] = []
       try {
-        // Only extract CTAs for genuinely new campaigns
-        ctaLinks = emailContent ? await extractCTALinks(emailContent, seedEmailsList, sanitizedSubject) : []
+        // Use pre-extracted CTAs from the caller if available — avoids calling extractCTALinks twice
+        // (once in campaign-detector for findEntityForSender, once here for storage)
+        ctaLinks = preExtractedCtaLinks ?? (emailContent ? await extractCTALinks(emailContent, seedEmailsList, sanitizedSubject) : [])
 
         // Guard: verify clientId is a real Client row before inserting to avoid FK violation
         if (clientId) {

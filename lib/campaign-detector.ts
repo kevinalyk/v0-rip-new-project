@@ -995,6 +995,7 @@ export async function scanForCompetitiveInsights(options: {
           entityAssignment,
           personalClientId,
           firstEmail.rawHeaders,
+          ctaLinksForLookup,
         )
         if (isNew) {
           newInsightsCount++

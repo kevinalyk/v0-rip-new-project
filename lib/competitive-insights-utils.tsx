@@ -659,27 +659,6 @@ async function detectUnsubscribeLinksWithAI(links: Array<{ url: string; text?: s
     return new Set()
   }
 
-  // Check cache first — reuse ctaCategory table with "unsubscribe" / "not_unsubscribe" categories
-  const unsubscribeUrls = new Set<string>()
-  const uncachedLinks: Array<{ url: string; text?: string; normalizedUrl: string }> = []
-
-  for (const link of links) {
-    const normalizedUrl = normalizeUrlForCache(link.url)
-    const cached = await prisma.ctaCategory.findUnique({ where: { url: normalizedUrl } })
-    if (cached) {
-      if (cached.category === "unsubscribe") {
-        unsubscribeUrls.add(link.url)
-      }
-      // "not_unsubscribe" → skip (already known clean)
-    } else {
-      uncachedLinks.push({ ...link, normalizedUrl })
-    }
-  }
-
-  if (uncachedLinks.length === 0) {
-    return unsubscribeUrls
-  }
-
   try {
     const prompt = `You are analyzing links from political campaign emails. Identify which links are unsubscribe, opt-out, or email preference management links.
 
@@ -700,47 +679,42 @@ async function detectUnsubscribeLinksWithAI(links: Array<{ url: string; text?: s
 - Campaign website homepages
 
 **Links to analyze:**
-${uncachedLinks.map((link, i) => `${i + 1}. URL: ${link.url}${link.text ? `\n   Link text: "${link.text}"` : ""}`).join("\n\n")}
+${links.map((link, i) => `${i + 1}. URL: ${link.url}${link.text ? `\n   Link text: "${link.text}"` : ""}`).join("\n\n")}
 
 **Instructions:** Respond with ONLY the numbers of links that are unsubscribe/opt-out links (comma-separated). If none are unsubscribe links, respond with "none".
   
   Example response: "1, 3, 5" or "none"`
   
   const { text } = await generateText({
-    model: "openai/gpt-4o-mini",
+    model: "google/gemini-3-flash",
     prompt,
     temperature: 0.1,
   })
 
     // Parse AI response
     const response = text.trim().toLowerCase()
-    const unsubscribeIndexes = new Set<number>()
-
-    if (response !== "none") {
-      response
-        .split(",")
-        .map((n) => Number.parseInt(n.trim()))
-        .filter((n) => !isNaN(n) && n > 0 && n <= uncachedLinks.length)
-        .forEach((n) => unsubscribeIndexes.add(n))
+    if (response === "none") {
+      return new Set()
     }
 
-    // Cache all results and collect unsubscribe URLs
-    for (let i = 0; i < uncachedLinks.length; i++) {
-      const link = uncachedLinks[i]
-      const category = unsubscribeIndexes.has(i + 1) ? "unsubscribe" : "not_unsubscribe"
-      await prisma.ctaCategory.upsert({
-        where: { url: link.normalizedUrl },
-        update: { category, confidence: 0.85 },
-        create: { url: link.normalizedUrl, category, confidence: 0.85 },
-      })
-      if (category === "unsubscribe") {
+    // Extract numbers from response
+    const numbers = response
+      .split(",")
+      .map((n) => Number.parseInt(n.trim()))
+      .filter((n) => !isNaN(n) && n > 0 && n <= links.length)
+
+    // Convert numbers to URLs
+    const unsubscribeUrls = new Set<string>()
+    numbers.forEach((num) => {
+      const link = links[num - 1]
+      if (link) {
         unsubscribeUrls.add(link.url)
       }
-    }
+    })
 
     return unsubscribeUrls
   } catch (error) {
-    return unsubscribeUrls
+    return new Set()
   }
 }
 
@@ -1379,7 +1353,6 @@ export async function processCompetitiveInsights(
   entityAssignment?: { entityId: string; assignmentMethod: string } | string | null,
   clientId?: string | null,
   rawHeaders?: string,
-  preExtractedCtaLinks?: Array<{ url: string; finalUrl?: string; originalUrl?: string; type: string }>,
 ): Promise<boolean> {
   try {
     // Preserve the original subject (before any sanitization/redaction) for dedup use
@@ -1545,7 +1518,6 @@ export async function processCompetitiveInsights(
         inboxCount: true, spamCount: true, notDeliveredCount: true,
         ctaLinks: true, emailPreview: true, emailContent: true,
         seenBySeedEmails: true, clientId: true, inboxRate: true,
-        messageTypes: true, bodyFingerprint: true, createdAt: true,
       },
     })
     const existing = sameDayCandidates.find((c) => {
@@ -1559,14 +1531,9 @@ export async function processCompetitiveInsights(
     }) || null
 
     if (existing) {
-      // Only run CTA extraction if the existing record has no CTAs AND was created
-      // within the last 48 hours. Older campaigns without CTAs are skipped permanently
-      // to avoid re-running AI on every cron pass.
-      const isRecent = existing.createdAt
-        ? (Date.now() - new Date(existing.createdAt).getTime()) < 48 * 60 * 60 * 1000
-        : false
+      // Only run CTA extraction if the existing record has no CTAs yet — avoids AI cost on repeat seeds
       const ctaLinks =
-        (!existing.ctaLinks || existing.ctaLinks === "[]") && emailContent && isRecent
+        (!existing.ctaLinks || existing.ctaLinks === "[]") && emailContent
           ? await extractCTALinks(emailContent, seedEmailsList, sanitizedSubject)
           : []
 
@@ -1602,27 +1569,6 @@ export async function processCompetitiveInsights(
             : existing.bodyFingerprint,
         },
       })
-
-      // Classify message types if not yet done — runs at most once per campaign
-      if (!existing.messageTypes || (existing.messageTypes as string[]).length === 0) {
-        try {
-          const classifySubject = (existing as any).rawSubject || existing.subject || redactedSubject
-          const classifyPreview = existing.emailPreview || redactedEmailPreview || ""
-          const existingResult = await Promise.race([
-            classifyMessageTypes(classifySubject, classifyPreview),
-            new Promise<import("@/lib/message-classifier").ClassificationResult>((_, reject) =>
-              setTimeout(() => reject(new Error("classification timeout")), 25000)
-            ),
-          ])
-          await prisma.competitiveInsightCampaign.update({
-            where: { id: existing.id },
-            data: { messageTypes: existingResult.types, messageTypeReasoning: existingResult.reasoning || null },
-          })
-        } catch (classifyErr) {
-          console.error("[message-classifier] existing-campaign classification failed:", classifyErr)
-        }
-      }
-
       // Already existed in DB — not a new campaign
       return false
     } else {
@@ -1661,9 +1607,8 @@ export async function processCompetitiveInsights(
       // Declare ctaLinks outside try so it's accessible in the race condition catch block
       let ctaLinks: any[] = []
       try {
-        // Use pre-extracted CTAs from the caller if available — avoids calling extractCTALinks twice
-        // (once in campaign-detector for findEntityForSender, once here for storage)
-        ctaLinks = preExtractedCtaLinks ?? (emailContent ? await extractCTALinks(emailContent, seedEmailsList, sanitizedSubject) : [])
+        // Only extract CTAs for genuinely new campaigns
+        ctaLinks = emailContent ? await extractCTALinks(emailContent, seedEmailsList, sanitizedSubject) : []
 
         // Guard: verify clientId is a real Client row before inserting to avoid FK violation
         if (clientId) {

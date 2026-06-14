@@ -94,7 +94,7 @@ export async function classifyMessageTypes(
   // 2. AI classification
   try {
     const result = await generateObject({
-      model: "openai/gpt-4o-mini",
+      model: "google/gemini-3-flash",
       mode: "json",
       schema: classificationSchema,
       prompt: `You are classifying a political fundraising email into message type tags.

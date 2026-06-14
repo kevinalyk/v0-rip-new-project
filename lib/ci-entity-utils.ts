@@ -49,10 +49,6 @@ function stripHtmlAndExtract(html: string): string {
   return cleaned.trim()
 }
 
-// In-memory cache for data broker AI analysis results (keyed by subject+sender fingerprint)
-// This prevents re-analyzing the same email body on repeated cron runs within a process lifetime
-const dataBrokerAnalysisCache = new Map<string, { type: "newsletter" | "sponsored_campaign"; confidence: number; reasoning: string } | null>()
-
 /**
  * Analyze email content with AI to determine if it's a newsletter or focused campaign
  */
@@ -64,12 +60,6 @@ async function analyzeEmailWithAI(
   confidence: number
   reasoning: string
 } | null> {
-  // Cache key: subject + first 200 chars of body (enough to fingerprint without hashing)
-  const cacheKey = `${subject}::${body.slice(0, 200)}`
-  if (dataBrokerAnalysisCache.has(cacheKey)) {
-    return dataBrokerAnalysisCache.get(cacheKey) ?? null
-  }
-
   try {
     const cleanBody = stripHtmlAndExtract(body)
     const bodyPreview = cleanBody.slice(0, 12000)
@@ -77,7 +67,7 @@ async function analyzeEmailWithAI(
     console.log("[Data Broker AI] Analyzing email (clean text length):", cleanBody.length)
 
   const result = await generateObject({
-    model: "openai/gpt-4o-mini",
+    model: "google/gemini-3-flash",
     mode: "json",
     schema: z.object({
         type: z.enum(["newsletter", "sponsored_campaign"]),
@@ -122,11 +112,9 @@ Respond ONLY with the JSON object, no other text.`,
     console.log("[Data Broker AI] Confidence:", result.object.confidence)
     console.log("[Data Broker AI] Reasoning:", result.object.reasoning)
     console.log("=====================================================")
-    dataBrokerAnalysisCache.set(cacheKey, result.object)
     return result.object
   } catch (error) {
     console.error("[Data Broker AI] Analysis failed:", error)
-    dataBrokerAnalysisCache.set(cacheKey, null)
     return null
   }
 }

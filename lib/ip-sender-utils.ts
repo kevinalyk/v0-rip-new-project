@@ -335,7 +335,9 @@ export async function ensureIpMapping(ip: string) {
 
 /**
  * Resolve the display name for an IP mapping.
- * Prefers friendlyName → orgName → reverseDns → raw IP.
+ * Prefers orgName (RDAP IP Owner) → friendlyName (manual override) → reverseDns → raw IP.
+ * orgName is authoritative and auto-populated from ARIN, making it the default "IP Owner" label.
+ * Set friendlyName manually only if you need to override the ARIN name.
  */
 export function resolveProviderName(mapping: {
   friendlyName: string | null
@@ -343,5 +345,5 @@ export function resolveProviderName(mapping: {
   reverseDns: string | null
   ip: string
 }): string {
-  return mapping.friendlyName ?? mapping.orgName ?? mapping.reverseDns ?? mapping.ip
+  return mapping.orgName ?? mapping.friendlyName ?? mapping.reverseDns ?? mapping.ip
 }

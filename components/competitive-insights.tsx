@@ -34,6 +34,7 @@ import {
   Info,
   UserPlus,
   Loader2,
+  Server,
 } from "lucide-react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -2801,6 +2802,14 @@ export function CompetitiveInsights({
                               <Calendar className="h-4 w-4 flex-shrink-0" />
                               {new Date(selectedCampaign.dateReceived).toLocaleDateString()}
                             </div>
+                            {selectedCampaign.type !== "sms" &&
+                              selectedCampaign.sendingProvider &&
+                              resolvedPlan !== "free" && (
+                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <Server className="h-3.5 w-3.5 flex-shrink-0" />
+                                <span>IP Owner: <span className="font-medium text-foreground">{selectedCampaign.sendingProvider}</span></span>
+                              </div>
+                            )}
                             {selectedCampaign.type !== "sms" && (selectedCampaign.sendCount ?? 1) >= 2 && (resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin") && (
                               <button
                                 className="flex items-center gap-2 text-sm group w-fit"

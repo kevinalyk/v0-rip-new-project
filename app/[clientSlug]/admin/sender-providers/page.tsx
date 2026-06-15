@@ -427,7 +427,7 @@ export default function SenderProvidersPage() {
           <div>
             <h2 className="text-2xl font-bold">Sender Providers</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Map sending IPs and DKIM selectors to friendly provider names shown on emails.
+              Sending IPs are resolved via ARIN RDAP to their registered IP Owner, displayed on campaigns. DKIM and unsub domain tabs are for reference only.
             </p>
           </div>
 
@@ -442,8 +442,7 @@ export default function SenderProvidersPage() {
             <TabsContent value="ip" className="space-y-4 mt-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
-                  Map sending IPs (auto-resolved by the hourly cron via ARIN RDAP) to friendly provider names.
-                  IPs already discovered automatically appear here — manually add any you need to override or pre-populate.
+                  Sending IPs are auto-resolved via ARIN RDAP. The IP Owner (org name) is used directly as the sender provider. Set an Override Name only if you want to replace the ARIN name with something cleaner.
                 </p>
                 <div className="flex items-center gap-2 shrink-0 ml-4">
                   <Button variant="outline" onClick={handleReResolve} disabled={reResolving}>
@@ -462,8 +461,8 @@ export default function SenderProvidersPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>IP Address</TableHead>
-                      <TableHead>Friendly Name</TableHead>
-                      <TableHead>Org Name (RDAP)</TableHead>
+                      <TableHead>IP Owner</TableHead>
+                      <TableHead>Override Name</TableHead>
                       <TableHead>CIDR</TableHead>
                       <TableHead>Reverse DNS</TableHead>
                       <TableHead>Notes</TableHead>
@@ -484,8 +483,8 @@ export default function SenderProvidersPage() {
                       ipMappings.map((m) => (
                         <TableRow key={m.id}>
                           <TableCell className="font-mono text-sm">{m.ip}</TableCell>
-                          <TableCell className="font-medium">{m.friendlyName || <span className="text-muted-foreground">—</span>}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{m.orgName || "—"}</TableCell>
+                          <TableCell className="font-medium">{m.orgName || <span className="text-muted-foreground">—</span>}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{m.friendlyName || "—"}</TableCell>
                           <TableCell className="font-mono text-xs text-muted-foreground">{m.cidr || "—"}</TableCell>
                           <TableCell className="text-xs text-muted-foreground">{m.reverseDns || "—"}</TableCell>
                           <TableCell className="text-muted-foreground text-sm">{m.notes || "—"}</TableCell>

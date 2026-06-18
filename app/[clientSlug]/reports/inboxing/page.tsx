@@ -1,14 +1,16 @@
 "use client"
 
-import { useParams } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useParams, useRouter } from "next/navigation"
+import { useEffect, useRef, useState } from "react"
 import { AppLayout } from "@/components/app-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
-import { CalendarIcon, Loader2, Lock, RefreshCw, RotateCcw, TrendingUp, X } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
+import { CalendarIcon, ChevronDown, Loader2, Lock, RefreshCw, RotateCcw, TrendingUp, X } from "lucide-react"
 import AdBanner from "@/components/ad-banner"
 import { format } from "date-fns"
 import {
@@ -92,11 +94,13 @@ interface InboxingByFileTypeDataPoint {
 
 export default function InboxingPage() {
   const params = useParams()
+  const router = useRouter()
   const clientSlug = params.clientSlug as string
 
   // Platform Report is only visible for RIP client
   const isRipClient = clientSlug === "rip"
 
+  const [userRole, setUserRole] = useState<string | null>(null)
   const [subscriptionPlan, setSubscriptionPlan] = useState<string | undefined>()
   const [inboxingData, setInboxingData] = useState<InboxingData[]>([])
   const [inboxingTimeData, setInboxingTimeData] = useState<InboxingTimeDataPoint[]>([])
@@ -105,6 +109,29 @@ export default function InboxingPage() {
   const [inboxingByFileTypeData, setInboxingByFileTypeData] = useState<InboxingByFileTypeDataPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+
+  // Entity filter state
+  const [allEntities, setAllEntities] = useState<{ id: string; name: string }[]>([])
+  const [subscribedEntityIds, setSubscribedEntityIds] = useState<string[]>([])
+  const [selectedEntities, setSelectedEntities] = useState<string[]>([])
+  const [entitySearch, setEntitySearch] = useState("")
+  const entitySearchRef = useRef<HTMLInputElement>(null)
+
+  // Fetch user role (super_admin or red_spark_strategy get access)
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const res = await fetch("/api/auth/me", { credentials: "include" })
+        if (!res.ok) { router.push("/login"); return }
+        const me = await res.json()
+        const slug = me.client?.slug ?? ""
+        setUserRole(me.role === "super_admin" || slug === "red_spark_strategy" ? "super_admin" : me.role)
+      } catch {
+        router.push("/login")
+      }
+    }
+    checkAuth()
+  }, [router])
 
   // Fetch subscription plan
   useEffect(() => {
@@ -124,6 +151,29 @@ export default function InboxingPage() {
     fetchPlan()
   }, [clientSlug])
 
+  // Fetch entities for filter dropdown (followed-first, then alphabetical)
+  useEffect(() => {
+    const fetchEntities = async () => {
+      try {
+        const [entitiesRes, subsRes] = await Promise.all([
+          fetch("/api/competitive-insights/senders"),
+          fetch(`/api/ci/subscriptions/check-all?clientSlug=${clientSlug}`, { credentials: "include" }),
+        ])
+        if (entitiesRes.ok) {
+          const data = await entitiesRes.json()
+          setAllEntities(data.entities ?? [])
+        }
+        if (subsRes.ok) {
+          const data = await subsRes.json()
+          setSubscribedEntityIds(data.entityIds ?? [])
+        }
+      } catch {
+        // silently fail
+      }
+    }
+    fetchEntities()
+  }, [clientSlug])
+
   // Filters
   const [chartDays, setChartDays] = useState<7 | 30 | 90 | 365>(30)
   const [selectedState, setSelectedState] = useState("all")
@@ -132,13 +182,26 @@ export default function InboxingPage() {
   const [isToCalendarOpen, setIsToCalendarOpen] = useState(false)
 
   const isFiltersActive =
-    selectedState !== "all" || !!dateRange.from || !!dateRange.to
+    selectedState !== "all" || !!dateRange.from || !!dateRange.to || selectedEntities.length > 0
 
   const handleChartDaysChange = (d: 7 | 30 | 90 | 365) => {
     setChartDays(d)
     // Clear custom date range when a preset period is selected
     setDateRange({ from: undefined, to: undefined })
   }
+
+  // Sorted entity list: followed first, then alphabetical
+  const sortedEntities = [...allEntities].sort((a, b) => {
+    const aFollowed = subscribedEntityIds.includes(a.id)
+    const bFollowed = subscribedEntityIds.includes(b.id)
+    if (aFollowed && !bFollowed) return -1
+    if (!aFollowed && bFollowed) return 1
+    return a.name.localeCompare(b.name)
+  })
+
+  const filteredEntities = sortedEntities.filter((e) =>
+    e.name.toLowerCase().includes(entitySearch.toLowerCase())
+  )
 
   const fetchData = async (isRefresh = false) => {
     if (isRefresh) {
@@ -157,6 +220,7 @@ export default function InboxingPage() {
         qp.append("chartDays", String(chartDays))
       }
       if (selectedState !== "all") qp.append("state", selectedState)
+      selectedEntities.forEach((name) => qp.append("sender", name))
 
       const res = await fetch(`/api/ci/analytics?${qp}`, { credentials: "include" })
       if (res.ok) {
@@ -178,16 +242,31 @@ export default function InboxingPage() {
   useEffect(() => {
     fetchData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientSlug, chartDays, selectedState, dateRange])
+  }, [clientSlug, chartDays, selectedState, selectedEntities, dateRange])
 
   const resetFilters = () => {
     setSelectedState("all")
+    setSelectedEntities([])
     setDateRange({ from: undefined, to: undefined })
     setChartDays(30)
   }
 
   const isFree = subscriptionPlan === "free"
   const isBasic = subscriptionPlan === "paid"
+
+  // Only super_admins and red_spark_strategy users can access this report
+  if (userRole !== null && userRole !== "super_admin") {
+    return (
+      <AppLayout clientSlug={clientSlug} isAdminView={false}>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center space-y-2">
+            <Lock className="h-8 w-8 text-muted-foreground mx-auto" />
+            <p className="text-muted-foreground text-sm">You do not have access to this report.</p>
+          </div>
+        </div>
+      </AppLayout>
+    )
+  }
 
   if (isFree || isBasic) {
     return (
@@ -278,6 +357,61 @@ export default function InboxingPage() {
         {/* Filter bar */}
         <div className="rounded-lg border bg-card p-4">
           <div className="flex flex-wrap items-center gap-2">
+            {/* Entity multi-select filter */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-full md:w-[200px] justify-between bg-transparent">
+                  {selectedEntities.length === 0 ? "Filter by entity" : `${selectedEntities.length} selected`}
+                  <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0" align="start">
+                <div className="sticky top-0 z-50 bg-background p-2 border-b">
+                  <Input
+                    ref={entitySearchRef}
+                    placeholder="Search entities..."
+                    value={entitySearch}
+                    onChange={(e) => setEntitySearch(e.target.value)}
+                    className="h-8"
+                  />
+                </div>
+                <div className="max-h-[240px] overflow-y-auto p-2">
+                  {selectedEntities.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full mb-2 text-xs"
+                      onClick={() => setSelectedEntities([])}
+                    >
+                      Clear all ({selectedEntities.length})
+                    </Button>
+                  )}
+                  {filteredEntities.map((entity) => (
+                    <div
+                      key={entity.id}
+                      className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer"
+                      onClick={() =>
+                        setSelectedEntities((prev) =>
+                          prev.includes(entity.name)
+                            ? prev.filter((n) => n !== entity.name)
+                            : [...prev, entity.name]
+                        )
+                      }
+                    >
+                      <Checkbox
+                        checked={selectedEntities.includes(entity.name)}
+                        onCheckedChange={() => {}}
+                      />
+                      <span className="flex-1 truncate text-sm">{entity.name}</span>
+                    </div>
+                  ))}
+                  {filteredEntities.length === 0 && (
+                    <div className="p-4 text-center text-sm text-muted-foreground">No entities found</div>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
+
             {/* State filter */}
             <Select value={selectedState} onValueChange={setSelectedState}>
               <SelectTrigger className="w-full md:w-[180px]">

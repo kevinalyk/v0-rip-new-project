@@ -124,8 +124,7 @@ export default function InboxingPage() {
         const res = await fetch("/api/auth/me", { credentials: "include" })
         if (!res.ok) { router.push("/login"); return }
         const me = await res.json()
-        const meClientSlug = me.client?.slug ?? ""
-        setUserRole(me.role === "super_admin" || meClientSlug === "red_spark_strategy" ? "super_admin" : me.role)
+        setUserRole(me.role === "super_admin" || me.client?.id === "red_spark_strategy" ? "super_admin" : me.role)
       } catch {
         router.push("/login")
       }

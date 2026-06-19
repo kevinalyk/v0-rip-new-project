@@ -254,20 +254,6 @@ export default function InboxingPage() {
   const isFree = subscriptionPlan === "free"
   const isBasic = subscriptionPlan === "paid"
 
-  // Only super_admins and red_spark_strategy users can access this report
-  if (userRole !== null && userRole !== "super_admin") {
-    return (
-      <AppLayout clientSlug={clientSlug} isAdminView={false}>
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center space-y-2">
-            <Lock className="h-8 w-8 text-muted-foreground mx-auto" />
-            <p className="text-muted-foreground text-sm">You do not have access to this report.</p>
-          </div>
-        </div>
-      </AppLayout>
-    )
-  }
-
   if (isFree || isBasic) {
     return (
       <AppLayout clientSlug={clientSlug} isAdminView={clientSlug === "admin"}>
@@ -357,8 +343,8 @@ export default function InboxingPage() {
         {/* Filter bar */}
         <div className="rounded-lg border bg-card p-4">
           <div className="flex flex-wrap items-center gap-2">
-            {/* Entity multi-select filter */}
-            <Popover>
+            {/* Entity multi-select filter — super_admin and red_spark only */}
+            {userRole === "super_admin" && <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="w-full md:w-[200px] justify-between bg-transparent">
                   {selectedEntities.length === 0 ? "Filter by entity" : `${selectedEntities.length} selected`}
@@ -410,7 +396,7 @@ export default function InboxingPage() {
                   )}
                 </div>
               </PopoverContent>
-            </Popover>
+            </Popover>}
 
             {/* State filter */}
             <Select value={selectedState} onValueChange={setSelectedState}>

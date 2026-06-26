@@ -31,7 +31,7 @@ export default function ComplianceReportPage() {
         }
         if (meRes.ok) {
           const me = await meRes.json()
-          setUserRole(me.user?.role ?? null)
+          setUserRole(me.role ?? null)
         }
       } catch {
         setSubscriptionPlan("free")
@@ -43,8 +43,8 @@ export default function ComplianceReportPage() {
   }, [clientSlug])
 
   const isSuperAdmin = userRole === "super_admin"
-  // "all" = Professional, "basic_inboxing" = legacy Advanced, "enterprise" = Enterprise
-  const hasAccess = isSuperAdmin || subscriptionPlan === "all" || subscriptionPlan === "basic_inboxing" || subscriptionPlan === "enterprise"
+  // "all" = Professional ($300), "enterprise" = Enterprise
+  const hasAccess = isSuperAdmin || subscriptionPlan === "all" || subscriptionPlan === "enterprise"
 
   if (loading) {
     return (

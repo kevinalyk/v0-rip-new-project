@@ -6,7 +6,22 @@ export async function GET(request: Request) {
   try {
     const session = await getServerSession()
 
-    if (!session || session.user.role !== "super_admin") {
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Allow super_admins and any user on the "all" or "enterprise" plan
+    const client = await prisma.client.findUnique({
+      where: { id: session.user.clientId },
+      select: { subscriptionPlan: true },
+    })
+    const plan = client?.subscriptionPlan ?? "free"
+    const hasAccess =
+      session.user.role === "super_admin" ||
+      plan === "all" ||
+      plan === "enterprise"
+
+    if (!hasAccess) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 

@@ -124,7 +124,44 @@ async function resolveToFinal(startUrl: string): Promise<string> {
       // t.ly uses a client-side API call — hit their API directly
       if (landed.includes("t.ly/")) {
         try {
-          const slug = new URL(landed).pathname.replace(/^\//, "")
+          const landedUrl = new URL(landed)
+          const slug = landedUrl.pathname.replace(/^\//, "")
+
+          // t.ly bot-protection challenge: landed on /redirect?r_url=...
+          // Extract the original source URL from r_url and try resolving it directly
+          if (slug === "redirect") {
+            const rUrl = landedUrl.searchParams.get("r_url")
+            if (rUrl && rUrl.startsWith("http")) {
+              // Try to follow the original URL directly with a plain HEAD request,
+              // bypassing t.ly's challenge interception entirely
+              try {
+                const directRes = await fetch(rUrl, {
+                  method: "GET",
+                  redirect: "follow",
+                  headers: {
+                    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+                    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                  },
+                })
+                if (directRes.url && directRes.url !== rUrl && !isIntermediateRedirect(directRes.url)) {
+                  return directRes.url
+                }
+                // If that still redirects to an intermediate, try HTML extraction
+                const html = await directRes.text()
+                const next = extractRedirectFromHtml(html, directRes.url || rUrl)
+                if (next && next.startsWith("http") && !isIntermediateRedirect(next)) {
+                  return next
+                }
+                // Fall back to the r_url itself as best known destination
+                currentUrl = directRes.url || rUrl
+                continue
+              } catch {
+                currentUrl = rUrl
+                continue
+              }
+            }
+          }
+
           if (slug && slug !== "redirect") {
             const apiRes = await fetch(`https://t.ly/api/link?alias=${slug}`, {
               method: "GET",

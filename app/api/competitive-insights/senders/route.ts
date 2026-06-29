@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
       orderBy: {
         name: "asc",
       },
+      take: 10000,
     })
 
     // Return all entities with their IDs and party/state for cascading filters

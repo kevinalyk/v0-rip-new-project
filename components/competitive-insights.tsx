@@ -607,7 +607,8 @@ export function CompetitiveInsights({
     const fetchAllSenders = async () => {
       try {
         // Fetch all entities for the dropdown
-        const response = await fetch(`/api/competitive-insights/senders`)
+        const response = await fetch(`/api/competitive-insights/senders`, { credentials: "include" })
+        if (!response.ok) return
         const data = await response.json()
 
         // Store entities with IDs, party, and state for cascading filters

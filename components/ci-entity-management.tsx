@@ -290,7 +290,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
   const fetchAllEntitiesForAssignment = async () => {
     setLoadingAllEntities(true)
     try {
-      const response = await fetch("/api/ci-entities?pageSize=1000")
+      const response = await fetch("/api/ci-entities?pageSize=10000")
 
       if (response.ok) {
         const data = await response.json()

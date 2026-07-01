@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
         },
         select: { entityId: true },
       })
-      taggedEntityIds = taggedEntityIds.map((t) => t.entityId)
+      taggedEntityIds = taggedEntities.map((t) => t.entityId)
 
       if (taggedEntityIds.length === 0) {
         return NextResponse.json({
@@ -153,13 +153,17 @@ export async function GET(request: NextRequest) {
 
       const entitiesWithMappings = new Set(Object.keys(mappingsByEntity))
 
-      // Fetch all email campaigns
+      // Fetch email campaigns scoped to current filters to keep the ID list small
       const candidates = await prisma.competitiveInsightCampaign.findMany({
         where: {
           isDeleted: false,
           isHidden: authResult.user.role === "super_admin" ? undefined : false,
           entityId: { not: null },
-          entity: { type: { not: "data_broker" } },
+          entity: {
+            type: { not: "data_broker" },
+            ...(senders.length > 0 && { name: { in: senders } }),
+          },
+          ...(dateFilter && { dateReceived: dateFilter }),
         },
         select: { id: true, entityId: true, senderEmail: true },
       })
@@ -248,10 +252,23 @@ export async function GET(request: NextRequest) {
         type: { not: "data_broker" },
       },
       ...(dateFilter && { dateReceived: dateFilter }),
-      ...(subscriptionsOnly && subscribedEntityIds.length > 0 && { entityId: { in: subscribedEntityIds } }),
-      ...(taggedEntityIds.length > 0 && { entityId: { in: taggedEntityIds } }),
       ...(thirdPartyCampaignIds !== null && { id: { in: thirdPartyCampaignIds } }),
       ...(houseFileCampaignIds !== null && { id: { in: houseFileCampaignIds } }),
+    }
+
+    // entityId filters: AND together subscriptionsOnly and tag filters if both active
+    const entityIdSets: string[][] = []
+    if (subscriptionsOnly && subscribedEntityIds.length > 0) entityIdSets.push(subscribedEntityIds)
+    if (taggedEntityIds.length > 0) entityIdSets.push(taggedEntityIds)
+    if (entityIdSets.length === 1) {
+      emailWhere.entityId = { in: entityIdSets[0] }
+    } else if (entityIdSets.length > 1) {
+      // Intersect all sets so both constraints must be satisfied
+      const intersection = entityIdSets[0].filter((id) => entityIdSets.every((set) => set.includes(id)))
+      if (intersection.length === 0) {
+        return NextResponse.json({ insights: [], pagination: { page, limit, total: 0, totalPages: 0 } })
+      }
+      emailWhere.entityId = { in: intersection }
     }
 
     if (search) {
@@ -312,8 +329,14 @@ export async function GET(request: NextRequest) {
         type: { not: "data_broker" },
       },
       ...(dateFilter && { createdAt: dateFilter }),
-      ...(subscriptionsOnly && subscribedEntityIds.length > 0 && { entityId: { in: subscribedEntityIds } }),
-      ...(taggedEntityIds.length > 0 && { entityId: { in: taggedEntityIds } }),
+    }
+
+    // Apply same entityId intersection logic to smsWhere
+    if (entityIdSets.length === 1) {
+      smsWhere.entityId = { in: entityIdSets[0] }
+    } else if (entityIdSets.length > 1) {
+      const intersection = entityIdSets[0].filter((id) => entityIdSets.every((set) => set.includes(id)))
+      smsWhere.entityId = intersection.length > 0 ? { in: intersection } : { in: [] }
     }
 
     if (search) {

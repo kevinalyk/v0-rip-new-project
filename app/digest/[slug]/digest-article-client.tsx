@@ -421,6 +421,15 @@ export default function DigestArticleClient({
             </>
           )}
         </div>
+
+        {/* AI disclaimer */}
+        <p className="text-xs text-muted-foreground mt-4">
+          The Inbox.GOP Digest is curated by AI. AI can make mistakes. Please{" "}
+          <a href="mailto:support@rip-tool.com" className="underline hover:text-foreground transition-colors">
+            let us know
+          </a>{" "}
+          if you see any issues.
+        </p>
       </div>
 
       {/* Delete confirm */}

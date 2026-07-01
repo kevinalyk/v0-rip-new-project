@@ -153,13 +153,17 @@ export async function GET(request: NextRequest) {
 
       const entitiesWithMappings = new Set(Object.keys(mappingsByEntity))
 
-      // Fetch all email campaigns
+      // Fetch email campaigns scoped to current filters to keep the ID list small
       const candidates = await prisma.competitiveInsightCampaign.findMany({
         where: {
           isDeleted: false,
           isHidden: authResult.user.role === "super_admin" ? undefined : false,
           entityId: { not: null },
-          entity: { type: { not: "data_broker" } },
+          entity: {
+            type: { not: "data_broker" },
+            ...(senders.length > 0 && { name: { in: senders } }),
+          },
+          ...(dateFilter && { dateReceived: dateFilter }),
         },
         select: { id: true, entityId: true, senderEmail: true },
       })

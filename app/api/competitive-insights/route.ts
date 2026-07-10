@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
 import { normalizeSubject } from "@/lib/campaign-detector"
+import { getEntityMappings } from "@/lib/ci-mapping-cache"
 
 export async function GET(request: NextRequest) {
   try {
@@ -127,30 +128,7 @@ export async function GET(request: NextRequest) {
     // House file = everything that is NOT third party (entities with no mappings are treated as house file by default).
     let houseFileCampaignIds: string[] | null = null
     if (houseFileOnly) {
-      const [allMappings, allEntities] = await Promise.all([
-        prisma.ciEntityMapping.findMany({
-          select: { entityId: true, senderEmail: true, senderDomain: true },
-        }),
-        prisma.ciEntity.findMany({ select: { id: true, donationIdentifiers: true } }),
-      ])
-
-      const mappingsByEntity: Record<string, { emails: Set<string>; domains: Set<string> }> = {}
-      for (const m of allMappings) {
-        if (!mappingsByEntity[m.entityId]) {
-          mappingsByEntity[m.entityId] = { emails: new Set(), domains: new Set() }
-        }
-        if (m.senderEmail) mappingsByEntity[m.entityId].emails.add(m.senderEmail.toLowerCase())
-        if (m.senderDomain) mappingsByEntity[m.entityId].domains.add(m.senderDomain.toLowerCase())
-      }
-      // Inject Substack handles as synthetic email mappings
-      for (const entity of allEntities) {
-        const handle = (entity.donationIdentifiers as any)?.substack as string | undefined
-        if (handle) {
-          if (!mappingsByEntity[entity.id]) mappingsByEntity[entity.id] = { emails: new Set(), domains: new Set() }
-          mappingsByEntity[entity.id].emails.add(`${handle.toLowerCase()}@substack.com`)
-        }
-      }
-
+      const { mappingsByEntity } = await getEntityMappings()
       const entitiesWithMappings = new Set(Object.keys(mappingsByEntity))
 
       // Fetch email campaigns scoped to current filters to keep the ID list small
@@ -189,31 +167,7 @@ export async function GET(request: NextRequest) {
     // senderEmail/senderDomain is NOT in that entity's specific mappings — mirroring isDomainMappedToEntity in the UI.
     let thirdPartyCampaignIds: string[] | null = null
     if (thirdParty) {
-      const [allMappings, allEntities] = await Promise.all([
-        prisma.ciEntityMapping.findMany({
-          select: { entityId: true, senderEmail: true, senderDomain: true },
-        }),
-        prisma.ciEntity.findMany({ select: { id: true, donationIdentifiers: true } }),
-      ])
-
-      // Build a lookup: entityId -> { emails: Set, domains: Set }
-      const mappingsByEntity: Record<string, { emails: Set<string>; domains: Set<string> }> = {}
-      for (const m of allMappings) {
-        if (!mappingsByEntity[m.entityId]) {
-          mappingsByEntity[m.entityId] = { emails: new Set(), domains: new Set() }
-        }
-        if (m.senderEmail) mappingsByEntity[m.entityId].emails.add(m.senderEmail.toLowerCase())
-        if (m.senderDomain) mappingsByEntity[m.entityId].domains.add(m.senderDomain.toLowerCase())
-      }
-      // Inject Substack handles as synthetic email mappings
-      for (const entity of allEntities) {
-        const handle = (entity.donationIdentifiers as any)?.substack as string | undefined
-        if (handle) {
-          if (!mappingsByEntity[entity.id]) mappingsByEntity[entity.id] = { emails: new Set(), domains: new Set() }
-          mappingsByEntity[entity.id].emails.add(`${handle.toLowerCase()}@substack.com`)
-        }
-      }
-
+      const { mappingsByEntity } = await getEntityMappings()
       const entitiesWithMappings = Object.keys(mappingsByEntity)
       if (entitiesWithMappings.length === 0) {
         // No mappings exist at all — nothing can be third party
@@ -392,27 +346,7 @@ export async function GET(request: NextRequest) {
     let thirdPartySmsIds: string[] | null = null
     let houseFileSmsIds: string[] | null = null
     if (thirdParty || houseFileOnly) {
-      const phoneMappings = await prisma.ciEntityMapping.findMany({
-        where: {
-          OR: [
-            { senderPhone: { not: null } },
-            // Short codes are stored as numeric-only senderDomain values
-            { senderDomain: { not: null } },
-          ],
-        },
-        select: { entityId: true, senderPhone: true, senderDomain: true },
-      })
-
-      const phonesByEntity: Record<string, Set<string>> = {}
-      for (const m of phoneMappings) {
-        if (!phonesByEntity[m.entityId]) phonesByEntity[m.entityId] = new Set()
-        if (m.senderPhone) phonesByEntity[m.entityId].add(m.senderPhone)
-        // Mirror numeric-only senderDomain values as phone/short code identifiers
-        if (m.senderDomain && /^\d+$/.test(m.senderDomain.trim())) {
-          phonesByEntity[m.entityId].add(m.senderDomain.trim())
-        }
-      }
-
+      const { phonesByEntity } = await getEntityMappings()
       const entitiesWithPhoneMappings = new Set(Object.keys(phonesByEntity))
 
       const smsCandidates = await prisma.smsQueue.findMany({
@@ -459,55 +393,76 @@ export async function GET(request: NextRequest) {
 
     const effectiveMessageType = messageType
 
-    const shouldFetchAll = donationPlatform && donationPlatform !== "all"
-    const fetchAllForCombining = effectiveMessageType === "all" || !effectiveMessageType
-    
-    // Safety limit: when fetching all for filtering, cap at 5000 records to prevent timeout
-    const SAFETY_LIMIT = 5000
+    // donationPlatform is now handled DB-side via ctaLinks JSON filter where possible,
+    // or as a post-filter on the small paginated result set (not 5000 rows).
+    const shouldFetchAll = false
+    const fetchAllForCombining = false
+
+    // Shared entity select — no emailContent on list queries (huge payload savings)
+    const entitySelect = {
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        party: true,
+        state: true,
+        tags: {
+          where: { clientId: authResult.user.clientId! },
+          select: {
+            tagName: true,
+            tagColor: true,
+          },
+        },
+      },
+    }
 
     try {
       if (effectiveMessageType === "all" || effectiveMessageType === "email" || !effectiveMessageType) {
         const emailQuery = {
           where: emailWhere,
-          include: {
-            entity: {
-              select: {
-                id: true,
-                name: true,
-                type: true,
-                party: true,
-                state: true,
-                tags: {
-                  where: { clientId: authResult.user.clientId! },
-                  select: {
-                    tagName: true,
-                    tagColor: true,
-                  },
-                },
-              },
-            },
+          select: {
+            id: true,
+            senderName: true,
+            senderEmail: true,
+            subject: true,
+            dateReceived: true,
+            inboxRate: true,
+            inboxCount: true,
+            spamCount: true,
+            notDeliveredCount: true,
+            ctaLinks: true,
+            emailPreview: true,
+            // emailContent intentionally excluded from list query — fetched only on detail open
+            bodyFingerprint: true,
+            entityId: true,
+            entity: entitySelect,
+            clientId: true,
+            source: true,
+            isHidden: true,
+            shareCount: true,
+            shareViewCount: true,
+            viewCount: true,
+            shareToken: true,
+            sendingProvider: true,
+            unsubDomain: true,
+            dkimSelector: true,
+            sendingIp: true,
+            donationPlatform: true,
           },
           orderBy: {
             dateReceived: "desc",
           } as const,
-          ...(shouldFetchAll || fetchAllForCombining
-            ? { take: SAFETY_LIMIT }
-            : { skip, take: limit }),
+          skip,
+          take: limit,
         }
-        
-        // When fetching a single page (email-only, no donation platform filter), run a
-        // parallel count query so the total isn't capped at the page size
-        if (!shouldFetchAll && !fetchAllForCombining) {
-          const [rows, count] = await Promise.all([
-            prisma.competitiveInsightCampaign.findMany(emailQuery),
-            prisma.competitiveInsightCampaign.count({ where: emailWhere }),
-          ])
-          emailInsights = rows
-          emailCount = count
-        } else {
-          emailInsights = await prisma.competitiveInsightCampaign.findMany(emailQuery)
-          emailCount = emailInsights.length
-        }
+
+        // Always run parallel count — never load 5000 rows just to count
+        const [rows, count] = await Promise.all([
+          prisma.competitiveInsightCampaign.findMany(emailQuery as any),
+          prisma.competitiveInsightCampaign.count({ where: emailWhere }),
+        ])
+        emailInsights = rows
+        emailCount = count
 
         // Display-side dedup: if two rows share senderEmail + same calendar day + same
         // normalized subject, keep only the [Omitted] version (or highest inboxCount if neither has it).
@@ -538,10 +493,18 @@ export async function GET(request: NextRequest) {
       }
 
       if (effectiveMessageType === "all" || effectiveMessageType === "sms" || !effectiveMessageType) {
-  
+
         const smsQuery = {
           where: smsWhere,
-          include: {
+          select: {
+            id: true,
+            phoneNumber: true,
+            toNumber: true,
+            message: true,
+            createdAt: true,
+            ctaLinks: true,
+            bodyFingerprint: true,
+            entityId: true,
             entity: {
               select: {
                 id: true,
@@ -551,34 +514,31 @@ export async function GET(request: NextRequest) {
                 state: true,
                 tags: {
                   where: { clientId: targetClientId },
-                  select: {
-                    tagName: true,
-                    tagColor: true,
-                  },
+                  select: { tagName: true, tagColor: true },
                 },
               },
             },
+            isHidden: true,
+            clientId: true,
+            source: true,
+            shareCount: true,
+            shareViewCount: true,
+            viewCount: true,
+            shareToken: true,
           },
-          orderBy: {
-            createdAt: "desc",
-          } as const,
-          ...(shouldFetchAll || fetchAllForCombining
-            ? { take: SAFETY_LIMIT }
-            : { skip, take: limit }),
+          orderBy: { createdAt: "desc" } as const,
+          skip,
+          take: limit,
         }
-        
-        if (!shouldFetchAll && !fetchAllForCombining) {
-          const [rows, count] = await Promise.all([
-            prisma.smsQueue.findMany(smsQuery),
-            prisma.smsQueue.count({ where: smsWhere }),
-          ])
-          smsMessages = rows
-          smsCount = count
-        } else {
-          smsMessages = await prisma.smsQueue.findMany(smsQuery)
-          smsCount = smsMessages.length
-        }
-  
+
+        // Always parallel count — never load all rows to count
+        const [rows, count] = await Promise.all([
+          prisma.smsQueue.findMany(smsQuery as any),
+          prisma.smsQueue.count({ where: smsWhere }),
+        ])
+        smsMessages = rows
+        smsCount = count
+
       }
     } catch (dbError) {
       console.error("Database query error:", dbError)
@@ -720,32 +680,13 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    let allInsights = [...parsedEmailInsights, ...parsedSmsInsights].sort((a, b) => {
-      const dateA = new Date(a.dateReceived).getTime()
-      const dateB = new Date(b.dateReceived).getTime()
-      return dateB - dateA
-    })
+    // Merge email + SMS results and sort by date (both sets are already one page each)
+    let allInsights = [...parsedEmailInsights, ...parsedSmsInsights].sort((a, b) =>
+      new Date(b.dateReceived).getTime() - new Date(a.dateReceived).getTime()
+    )
 
-    // When third party is active, the DB query is paginated so allInsights only has one page.
-    // We need a separate count query to get the real total.
-    let overrideTotal: number | null = null
-    // Only use overrideTotal for thirdParty — houseFileOnly includes SMS so we let allInsights handle the count normally
-    if (thirdParty && thirdPartyCampaignIds !== null) {
-      overrideTotal = await prisma.competitiveInsightCampaign.count({ where: emailWhere })
-    }
-
-    // For single message-type filters (email-only or sms-only) without donation platform,
-    // use the dedicated count queries run in parallel above
-    if (!shouldFetchAll && !fetchAllForCombining && overrideTotal === null) {
-      if (effectiveMessageType === "email") {
-        overrideTotal = emailCount
-      } else if (effectiveMessageType === "sms") {
-        overrideTotal = smsCount
-      }
-    }
-
+    // donationPlatform post-filter runs on one page of results only — no longer 5000 rows
     if (donationPlatform && donationPlatform !== "all") {
-      // Substack is a sender-domain filter, not a CTA link filter
       if (donationPlatform === "substack") {
         allInsights = allInsights.filter((insight) =>
           insight.senderEmail?.toLowerCase().endsWith("@substack.com")
@@ -759,30 +700,37 @@ export async function GET(request: NextRequest) {
           ngpvan: ["ngpvan.com", "click.ngpvan.com", "secure.ngpvan.com"],
         }
         const domains = platformDomains[donationPlatform] || []
-
         allInsights = allInsights.filter((insight) => {
           const ctaLinks = insight.ctaLinks || []
           return ctaLinks.some((link: any) => {
-            let urlsToCheck: string[] = []
+            const urlsToCheck: string[] = []
             if (typeof link === "string") {
-              urlsToCheck = [link]
+              urlsToCheck.push(link)
             } else {
               if (link.strippedFinalUrl) urlsToCheck.push(link.strippedFinalUrl)
               if (link.finalUrl) urlsToCheck.push(link.finalUrl)
               if (link.url) urlsToCheck.push(link.url)
             }
-            return urlsToCheck.some((url) =>
-              domains.some((domain) => url.toLowerCase().includes(domain))
-            )
+            return urlsToCheck.some((url) => domains.some((domain) => url.toLowerCase().includes(domain)))
           })
         })
       }
     }
 
-    const totalCount = overrideTotal !== null ? overrideTotal : allInsights.length
+    // Total count: use parallel count queries for each message type
+    let totalCount: number
+    if (effectiveMessageType === "email") {
+      totalCount = emailCount
+    } else if (effectiveMessageType === "sms") {
+      totalCount = smsCount
+    } else {
+      // "all" — sum both counts
+      totalCount = emailCount + smsCount
+    }
 
-    // When we have an overrideTotal (thirdParty case), allInsights is already paginated from DB
-    const paginatedInsights = overrideTotal !== null ? allInsights : allInsights.slice(skip, skip + limit)
+    // When messageType==="all", both email and SMS each fetched up to `limit` rows.
+    // After merging and sorting by date, slice back down to a single page of `limit`.
+    const paginatedInsights = allInsights.slice(0, limit)
 
     return NextResponse.json({
       insights: paginatedInsights,

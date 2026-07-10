@@ -25,10 +25,12 @@ export async function GET(request: NextRequest) {
       take: 10000,
     })
 
-    // Return all entities with their IDs and party/state for cascading filters
-    return NextResponse.json({
-      entities: entities.map((e) => ({ id: e.id, name: e.name, party: e.party, state: e.state })),
-    })
+    // Return all entities with their IDs and party/state for cascading filters.
+    // Cache for 5 minutes — entity list changes infrequently.
+    return NextResponse.json(
+      { entities: entities.map((e) => ({ id: e.id, name: e.name, party: e.party, state: e.state })) },
+      { headers: { "Cache-Control": "private, max-age=300, stale-while-revalidate=60" } },
+    )
   } catch (error) {
     console.error("Error fetching entities:", error)
     return NextResponse.json({ error: "Failed to fetch entities" }, { status: 500 })

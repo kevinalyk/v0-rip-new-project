@@ -329,6 +329,8 @@ export function CompetitiveInsights({
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [showAutocomplete, setShowAutocomplete] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const fetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>("active")
   const [hasCompetitiveInsights, setHasCompetitiveInsights] = useState(false)
   const [loadingSubscription, setLoadingSubscription] = useState(true)
@@ -586,9 +588,17 @@ export function CompetitiveInsights({
     fetchUserClient()
   }, [])
 
-  // Combined and simplified fetchCampaigns trigger
+  // Combined and simplified fetchCampaigns trigger with debounce on filter changes
   useEffect(() => {
-    fetchCampaigns()
+    // Page/perPage changes are immediate; filter changes are debounced 300ms
+    const isPageChange = true // always debounce slightly to batch rapid state changes
+    if (fetchDebounceRef.current) clearTimeout(fetchDebounceRef.current)
+    fetchDebounceRef.current = setTimeout(() => {
+      fetchCampaigns()
+    }, 300)
+    return () => {
+      if (fetchDebounceRef.current) clearTimeout(fetchDebounceRef.current)
+    }
   }, [
     activeSearchQuery,
     selectedSender,
@@ -762,6 +772,13 @@ export function CompetitiveInsights({
   })
 
   const fetchCampaigns = async (isRefresh = false) => {
+    // Cancel any in-flight request before starting a new one
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    abortControllerRef.current = new AbortController()
+    const signal = abortControllerRef.current.signal
+
     if (isRefresh) {
       setRefreshing(true)
     } else {
@@ -807,7 +824,8 @@ export function CompetitiveInsights({
       const endpoint = apiEndpoint
         ? `${apiEndpoint}?${params.toString()}`
         : `/api/competitive-insights?${params.toString()}`
-      const response = await fetch(endpoint)
+      const response = await fetch(endpoint, { signal })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data = await response.json()
 
       // Filter out hidden campaigns unless the user is a super admin
@@ -821,7 +839,9 @@ export function CompetitiveInsights({
         setTotalCampaigns(data.pagination.total)
         setTotalPages(data.pagination.totalPages)
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Ignore aborted requests — a newer fetch is already in flight
+      if (error?.name === "AbortError") return
       console.error("Error fetching competitive insights:", error)
     } finally {
       if (isRefresh) {
@@ -1388,10 +1408,12 @@ export function CompetitiveInsights({
     setShowThirdParty(filterSettings.showThirdParty || false)
     setShowHouseFileOnly(filterSettings.showHouseFileOnly || false)
     setSelectedMessageFilters(filterSettings.selectedMessageFilters || [])
-    setDateRange({
+    const restoredDate = {
       from: filterSettings.dateRange?.from ? new Date(filterSettings.dateRange.from) : undefined,
       to: filterSettings.dateRange?.to ? new Date(filterSettings.dateRange.to) : undefined,
-    })
+    }
+    setDateRange(restoredDate)
+    setDraftDateRange(restoredDate)
     setCurrentPage(1)
   }
 
@@ -1991,10 +2013,27 @@ export function CompetitiveInsights({
                 <div className="flex flex-wrap items-center gap-2">
                 {/* Date Range Filter (hidden on reporting view) */}
                 {(() => {
-                  // Inside the mobile filter sheet: read/write draftDateRange. Otherwise: applied dateRange.
-                  const dateRangeValue = mobileFiltersOpen ? draftDateRange : dateRange
-                  const setDateRangeValue = mobileFiltersOpen ? setDraftDateRange : setDateRange
-                  const clearDateRangeValue = mobileFiltersOpen ? clearDraftDateRange : clearDateRange
+                  // On desktop: read from draftDateRange for display, but only commit to dateRange
+                  // (which triggers a fetch) once BOTH from and to are selected.
+                  // On mobile sheet: same draft pattern, committed on "Apply".
+                  const dateRangeValue = mobileFiltersOpen ? draftDateRange : draftDateRange
+                  const clearDateRangeValue = mobileFiltersOpen ? clearDraftDateRange : () => {
+                    setDraftDateRange({ from: undefined, to: undefined })
+                    setDateRange({ from: undefined, to: undefined })
+                  }
+                  // Desktop setter: writes to draft, then commits to live when both ends are filled
+                  const setDateRangeValue = mobileFiltersOpen
+                    ? setDraftDateRange
+                    : (updater: (prev: DateRange) => DateRange) => {
+                        setDraftDateRange((prev) => {
+                          const next = updater(prev)
+                          // Commit to live dateRange (triggers fetch) only when both ends are set
+                          if (next.from && next.to) {
+                            setDateRange(next)
+                          }
+                          return next
+                        })
+                      }
                   return (
                 <div className={`flex items-center gap-2 ${isReportingView ? "hidden" : ""}`}>
                   <Popover open={isFromCalendarOpen} onOpenChange={setIsFromCalendarOpen}>
@@ -2019,6 +2058,8 @@ export function CompetitiveInsights({
                         onSelect={(date) => {
                           setDateRangeValue((prev) => ({ ...prev, from: date }))
                           setIsFromCalendarOpen(false)
+                          // Auto-open the TO picker so the user can complete the range in one flow
+                          setIsToCalendarOpen(true)
                         }}
                         numberOfMonths={1}
                         initialFocus

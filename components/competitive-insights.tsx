@@ -329,6 +329,8 @@ export function CompetitiveInsights({
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [showAutocomplete, setShowAutocomplete] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const fetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>("active")
   const [hasCompetitiveInsights, setHasCompetitiveInsights] = useState(false)
   const [loadingSubscription, setLoadingSubscription] = useState(true)
@@ -586,9 +588,17 @@ export function CompetitiveInsights({
     fetchUserClient()
   }, [])
 
-  // Combined and simplified fetchCampaigns trigger
+  // Combined and simplified fetchCampaigns trigger with debounce on filter changes
   useEffect(() => {
-    fetchCampaigns()
+    // Page/perPage changes are immediate; filter changes are debounced 300ms
+    const isPageChange = true // always debounce slightly to batch rapid state changes
+    if (fetchDebounceRef.current) clearTimeout(fetchDebounceRef.current)
+    fetchDebounceRef.current = setTimeout(() => {
+      fetchCampaigns()
+    }, 300)
+    return () => {
+      if (fetchDebounceRef.current) clearTimeout(fetchDebounceRef.current)
+    }
   }, [
     activeSearchQuery,
     selectedSender,
@@ -762,6 +772,13 @@ export function CompetitiveInsights({
   })
 
   const fetchCampaigns = async (isRefresh = false) => {
+    // Cancel any in-flight request before starting a new one
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    abortControllerRef.current = new AbortController()
+    const signal = abortControllerRef.current.signal
+
     if (isRefresh) {
       setRefreshing(true)
     } else {
@@ -807,7 +824,8 @@ export function CompetitiveInsights({
       const endpoint = apiEndpoint
         ? `${apiEndpoint}?${params.toString()}`
         : `/api/competitive-insights?${params.toString()}`
-      const response = await fetch(endpoint)
+      const response = await fetch(endpoint, { signal })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data = await response.json()
 
       // Filter out hidden campaigns unless the user is a super admin
@@ -821,7 +839,9 @@ export function CompetitiveInsights({
         setTotalCampaigns(data.pagination.total)
         setTotalPages(data.pagination.totalPages)
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Ignore aborted requests — a newer fetch is already in flight
+      if (error?.name === "AbortError") return
       console.error("Error fetching competitive insights:", error)
     } finally {
       if (isRefresh) {

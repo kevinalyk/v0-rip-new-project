@@ -416,6 +416,10 @@ model CompetitiveInsightCampaign {
   @@index([dkimSelector])
   @@index([sendingIp])
   @@index([sendingProvider])
+  // Composite indexes for common CI query patterns
+  @@index([isDeleted, isHidden, dateReceived])
+  @@index([entityId, dateReceived])
+  @@index([isDeleted, entityId, dateReceived])
 }
 
 model CIEmailCompliance {
@@ -572,6 +576,9 @@ model SmsQueue {
   @@index([isDeleted])
   @@index([clientId])
   @@index([source])
+  // Composite indexes for CI SMS query patterns
+  @@index([isDeleted, entityId, createdAt])
+  @@index([isDeleted, isHidden, createdAt])
 }
 
 model PersonalPhoneNumber {

@@ -2058,6 +2058,8 @@ export function CompetitiveInsights({
                         onSelect={(date) => {
                           setDateRangeValue((prev) => ({ ...prev, from: date }))
                           setIsFromCalendarOpen(false)
+                          // Auto-open the TO picker so the user can complete the range in one flow
+                          setIsToCalendarOpen(true)
                         }}
                         numberOfMonths={1}
                         initialFocus

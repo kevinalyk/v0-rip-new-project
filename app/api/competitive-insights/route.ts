@@ -728,7 +728,9 @@ export async function GET(request: NextRequest) {
       totalCount = emailCount + smsCount
     }
 
-    const paginatedInsights = allInsights
+    // When messageType==="all", both email and SMS each fetched up to `limit` rows.
+    // After merging and sorting by date, slice back down to a single page of `limit`.
+    const paginatedInsights = allInsights.slice(0, limit)
 
     return NextResponse.json({
       insights: paginatedInsights,

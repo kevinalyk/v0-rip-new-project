@@ -1408,10 +1408,12 @@ export function CompetitiveInsights({
     setShowThirdParty(filterSettings.showThirdParty || false)
     setShowHouseFileOnly(filterSettings.showHouseFileOnly || false)
     setSelectedMessageFilters(filterSettings.selectedMessageFilters || [])
-    setDateRange({
+    const restoredDate = {
       from: filterSettings.dateRange?.from ? new Date(filterSettings.dateRange.from) : undefined,
       to: filterSettings.dateRange?.to ? new Date(filterSettings.dateRange.to) : undefined,
-    })
+    }
+    setDateRange(restoredDate)
+    setDraftDateRange(restoredDate)
     setCurrentPage(1)
   }
 
@@ -2011,10 +2013,27 @@ export function CompetitiveInsights({
                 <div className="flex flex-wrap items-center gap-2">
                 {/* Date Range Filter (hidden on reporting view) */}
                 {(() => {
-                  // Inside the mobile filter sheet: read/write draftDateRange. Otherwise: applied dateRange.
-                  const dateRangeValue = mobileFiltersOpen ? draftDateRange : dateRange
-                  const setDateRangeValue = mobileFiltersOpen ? setDraftDateRange : setDateRange
-                  const clearDateRangeValue = mobileFiltersOpen ? clearDraftDateRange : clearDateRange
+                  // On desktop: read from draftDateRange for display, but only commit to dateRange
+                  // (which triggers a fetch) once BOTH from and to are selected.
+                  // On mobile sheet: same draft pattern, committed on "Apply".
+                  const dateRangeValue = mobileFiltersOpen ? draftDateRange : draftDateRange
+                  const clearDateRangeValue = mobileFiltersOpen ? clearDraftDateRange : () => {
+                    setDraftDateRange({ from: undefined, to: undefined })
+                    setDateRange({ from: undefined, to: undefined })
+                  }
+                  // Desktop setter: writes to draft, then commits to live when both ends are filled
+                  const setDateRangeValue = mobileFiltersOpen
+                    ? setDraftDateRange
+                    : (updater: (prev: DateRange) => DateRange) => {
+                        setDraftDateRange((prev) => {
+                          const next = updater(prev)
+                          // Commit to live dateRange (triggers fetch) only when both ends are set
+                          if (next.from && next.to) {
+                            setDateRange(next)
+                          }
+                          return next
+                        })
+                      }
                   return (
                 <div className={`flex items-center gap-2 ${isReportingView ? "hidden" : ""}`}>
                   <Popover open={isFromCalendarOpen} onOpenChange={setIsFromCalendarOpen}>

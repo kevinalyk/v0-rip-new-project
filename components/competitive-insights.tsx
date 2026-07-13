@@ -1060,6 +1060,23 @@ export function CompetitiveInsights({
     }
   }, [selectedCampaign])
 
+  // Fetch emailContent on demand when opening an email campaign — excluded from list query for performance
+  useEffect(() => {
+    if (!selectedCampaign || selectedCampaign.type === "sms") return
+    if (selectedCampaign.emailContent != null) return // already loaded
+    fetch(`/api/competitive-insights/preview?id=${selectedCampaign.id}&type=email`, { credentials: "include" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!data) return
+        setSelectedCampaign((prev) =>
+          prev && prev.id === selectedCampaign.id
+            ? { ...prev, emailContent: data.emailContent ?? null, emailPreview: data.emailPreview ?? prev.emailPreview }
+            : prev
+        )
+      })
+      .catch(() => {})
+  }, [selectedCampaign?.id, selectedCampaign?.type])
+
   // Fetch raw headers when a non-SMS campaign is selected (API enforces plan gating)
   useEffect(() => {
     if (!selectedCampaign || selectedCampaign.type === "sms") {

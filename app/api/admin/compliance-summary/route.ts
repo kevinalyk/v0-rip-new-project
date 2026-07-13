@@ -1,23 +1,23 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { getServerSession } from "@/lib/auth"
+import { verifyAuth } from "@/lib/auth"
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession()
+    const authResult = await verifyAuth(request)
 
-    if (!session) {
+    if (!authResult.success || !authResult.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     // Allow super_admins and any user on the "all" or "enterprise" plan
     const client = await prisma.client.findUnique({
-      where: { id: session.user.clientId },
+      where: { id: authResult.user.clientId },
       select: { subscriptionPlan: true },
     })
     const plan = client?.subscriptionPlan ?? "free"
     const hasAccess =
-      session.user.role === "super_admin" ||
+      authResult.user.role === "super_admin" ||
       plan === "all" ||
       plan === "enterprise"
 

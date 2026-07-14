@@ -420,6 +420,8 @@ model CompetitiveInsightCampaign {
   @@index([isDeleted, isHidden, dateReceived])
   @@index([entityId, dateReceived])
   @@index([isDeleted, entityId, dateReceived])
+  @@index([bodyFingerprint])
+  @@index([bodyFingerprint, dateReceived])
 }
 
 model CIEmailCompliance {
@@ -579,6 +581,8 @@ model SmsQueue {
   // Composite indexes for CI SMS query patterns
   @@index([isDeleted, entityId, createdAt])
   @@index([isDeleted, isHidden, createdAt])
+  @@index([bodyFingerprint])
+  @@index([bodyFingerprint, createdAt])
 }
 
 model PersonalPhoneNumber {

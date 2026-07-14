@@ -3,16 +3,37 @@ import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
 import { nanoid } from "nanoid"
 
-/** Ensure a row has a shareToken, generating and persisting one if missing. */
-async function ensureShareToken(id: string, existing: string | null, table: "email" | "sms" = "email"): Promise<string> {
-  if (existing) return existing
-  const token = nanoid(16)
-  if (table === "sms") {
-    await prisma.smsQueue.update({ where: { id }, data: { shareToken: token, shareTokenCreatedAt: new Date(), shareTokenSource: "Content Frequency" } })
-  } else {
-    await prisma.competitiveInsightCampaign.update({ where: { id }, data: { shareToken: token, shareTokenCreatedAt: new Date(), shareTokenSource: "Content Frequency" } })
+/** Assign share tokens to any rows that are missing one, in a single batched transaction. */
+async function batchEnsureShareTokens(
+  rows: Array<{ id: string; shareToken: string | null }>,
+  table: "email" | "sms" = "email"
+): Promise<Map<string, string>> {
+  const tokenMap = new Map<string, string>()
+  const missing: Array<{ id: string; token: string }> = []
+
+  for (const row of rows) {
+    if (row.shareToken) {
+      tokenMap.set(row.id, row.shareToken)
+    } else {
+      const token = nanoid(16)
+      tokenMap.set(row.id, token)
+      missing.push({ id: row.id, token })
+    }
   }
-  return token
+
+  if (missing.length > 0) {
+    const now = new Date()
+    // Fire all updates in parallel — each is a simple PK lookup, very fast
+    await Promise.all(
+      missing.map(({ id, token }) =>
+        table === "sms"
+          ? prisma.smsQueue.update({ where: { id }, data: { shareToken: token, shareTokenCreatedAt: now, shareTokenSource: "Content Frequency" } })
+          : prisma.competitiveInsightCampaign.update({ where: { id }, data: { shareToken: token, shareTokenCreatedAt: now, shareTokenSource: "Content Frequency" } })
+      )
+    )
+  }
+
+  return tokenMap
 }
 
 export interface SendRow {
@@ -54,105 +75,68 @@ export async function GET(request: NextRequest) {
 
     if (type === "subject") {
       const rows = await prisma.competitiveInsightCampaign.findMany({
-        where: {
-          subject: key,
-          isHidden: false,
-          isDeleted: false,
-          ...(entityId ? { entityId } : {}),
-        },
+        where: { subject: key, isHidden: false, isDeleted: false, ...(entityId ? { entityId } : {}) },
         select: {
-          id: true,
-          shareToken: true,
-          dateReceived: true,
-          subject: true,
-          emailPreview: true,
+          id: true, shareToken: true, dateReceived: true, subject: true,
           entity: { select: { name: true, party: true } },
         },
         orderBy: { dateReceived: "desc" },
         take: 100,
       })
-
-      const sends: SendRow[] = await Promise.all(
-        rows.map(async (r) => ({
-          id: r.id,
-          shareToken: await ensureShareToken(r.id, r.shareToken),
-          date: r.dateReceived?.toISOString() ?? "",
-          // For subject drilldown just show the subject — no body preview
-          preview: r.subject || "",
-          entityName: r.entity?.name ?? null,
-          entityParty: r.entity?.party ?? null,
-        }))
-      )
-
+      const tokenMap = await batchEnsureShareTokens(rows)
+      const sends: SendRow[] = rows.map((r) => ({
+        id: r.id,
+        shareToken: tokenMap.get(r.id)!,
+        date: r.dateReceived?.toISOString() ?? "",
+        preview: r.subject || "",
+        entityName: r.entity?.name ?? null,
+        entityParty: r.entity?.party ?? null,
+      }))
       return NextResponse.json({ sends })
     }
 
     if (type === "email-body") {
       const rows = await prisma.competitiveInsightCampaign.findMany({
-        where: {
-          bodyFingerprint: key,
-          isHidden: false,
-          isDeleted: false,
-          ...(entityId ? { entityId } : {}),
-        },
+        where: { bodyFingerprint: key, isHidden: false, isDeleted: false, ...(entityId ? { entityId } : {}) },
         select: {
-          id: true,
-          shareToken: true,
-          dateReceived: true,
-          subject: true,
+          id: true, shareToken: true, dateReceived: true, subject: true,
           entity: { select: { name: true, party: true } },
         },
         orderBy: { dateReceived: "desc" },
         take: 100,
       })
-
-      const sends: SendRow[] = await Promise.all(
-        rows.map(async (r) => ({
-          id: r.id,
-          shareToken: await ensureShareToken(r.id, r.shareToken),
-          date: r.dateReceived?.toISOString() ?? "",
-          // Show subject as the label for each body send
-          preview: r.subject || "",
-          entityName: r.entity?.name ?? null,
-          entityParty: r.entity?.party ?? null,
-        }))
-      )
-
+      const tokenMap = await batchEnsureShareTokens(rows)
+      const sends: SendRow[] = rows.map((r) => ({
+        id: r.id,
+        shareToken: tokenMap.get(r.id)!,
+        date: r.dateReceived?.toISOString() ?? "",
+        preview: r.subject || "",
+        entityName: r.entity?.name ?? null,
+        entityParty: r.entity?.party ?? null,
+      }))
       return NextResponse.json({ sends })
     }
 
     if (type === "sms-body") {
       const rows = await prisma.smsQueue.findMany({
-        where: {
-          bodyFingerprint: key,
-          isHidden: false,
-          isDeleted: false,
-          ...(entityId ? { entityId } : {}),
-        },
+        where: { bodyFingerprint: key, isHidden: false, isDeleted: false, ...(entityId ? { entityId } : {}) },
         select: {
-          id: true,
-          shareToken: true,
-          createdAt: true,
-          message: true,
-          phoneNumber: true,
+          id: true, shareToken: true, createdAt: true, message: true, phoneNumber: true,
           entity: { select: { name: true, party: true } },
         },
         orderBy: { createdAt: "desc" },
         take: 100,
       })
-
-      const sends: SendRow[] = await Promise.all(
-        rows.map(async (r) => ({
-          id: r.id,
-          shareToken: await ensureShareToken(r.id, r.shareToken, "sms"),
-          date: r.createdAt?.toISOString() ?? "",
-          preview: r.message || "",
-          entityName: r.entity?.name ?? null,
-          entityParty: r.entity?.party ?? null,
-          sendingNumber: r.phoneNumber,
-        }))
-      )
-
+      const tokenMap = await batchEnsureShareTokens(rows, "sms")
+      const sends: SendRow[] = rows.map((r) => ({
+        id: r.id,
+        shareToken: tokenMap.get(r.id)!,
+        date: r.createdAt?.toISOString() ?? "",
+        preview: r.message || "",
+        entityName: r.entity?.name ?? null,
+        entityParty: r.entity?.party ?? null,
+        sendingNumber: r.phoneNumber,
+      }))
       return NextResponse.json({ sends })
     }
 

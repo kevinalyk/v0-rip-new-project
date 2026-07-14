@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
+import { getCached, setCached, buildCacheKey } from "@/lib/content-frequency-cache"
 
 export async function GET(request: Request) {
   try {
@@ -41,6 +42,15 @@ export async function GET(request: Request) {
     const fromDate = searchParams.get("fromDate") || null
     const toDate = searchParams.get("toDate") || null
     const limit = Math.min(Number(searchParams.get("limit") || "50"), 100)
+
+    // Check cache — same filter combination returns instantly for 5 minutes
+    const cacheKey = buildCacheKey({ clientSlug, party, source, entityId, fromDate, toDate, limit: String(limit) })
+    const cached = getCached(cacheKey)
+    if (cached) {
+      return NextResponse.json(cached, {
+        headers: { "X-Cache": "HIT" },
+      })
+    }
 
     // Build shared WHERE clauses
     const partyClause = party ? `AND e.party = ${party === "republican" ? "'republican'" : party === "democrat" ? "'democrat'" : "'independent'"}` : ""
@@ -136,6 +146,7 @@ export async function GET(request: Request) {
           WHERE c."bodyFingerprint" IS NOT NULL
             AND c."isHidden" = false
             AND c."isDeleted" = false
+            AND c."bodyFingerprint" IN (SELECT "bodyFingerprint" FROM agg)
           ORDER BY c."bodyFingerprint", c."dateReceived" DESC
         )
         SELECT
@@ -195,6 +206,7 @@ export async function GET(request: Request) {
           WHERE s."bodyFingerprint" IS NOT NULL
             AND s."isHidden" = false
             AND s."isDeleted" = false
+            AND s."bodyFingerprint" IN (SELECT "bodyFingerprint" FROM agg)
           ORDER BY s."bodyFingerprint", s."createdAt" DESC
         )
         SELECT
@@ -221,10 +233,16 @@ export async function GET(request: Request) {
         send_days: Number(r.send_days),
       }))
 
-    return NextResponse.json({
+    const result = {
       emailSubjects: serializeRows(subjectRows),
       emailBodies: serializeRows(emailBodyRows),
       smsBodies: serializeRows(smsBodyRows),
+    }
+
+    setCached(cacheKey, result)
+
+    return NextResponse.json(result, {
+      headers: { "X-Cache": "MISS" },
     })
   } catch (err) {
     console.error("[content-frequency]", err)

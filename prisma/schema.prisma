@@ -420,8 +420,8 @@ model CompetitiveInsightCampaign {
   @@index([isDeleted, isHidden, dateReceived])
   @@index([entityId, dateReceived])
   @@index([isDeleted, entityId, dateReceived])
-  @@index([bodyFingerprint])
-  @@index([bodyFingerprint, dateReceived])
+  // Note: bodyFingerprint uses md5() functional indexes applied manually (raw values exceed 8191-byte B-tree limit)
+  // See scripts/add-body-fingerprint-indexes.sql
 }
 
 model CIEmailCompliance {
@@ -581,8 +581,8 @@ model SmsQueue {
   // Composite indexes for CI SMS query patterns
   @@index([isDeleted, entityId, createdAt])
   @@index([isDeleted, isHidden, createdAt])
-  @@index([bodyFingerprint])
-  @@index([bodyFingerprint, createdAt])
+  // Note: bodyFingerprint uses md5() functional indexes applied manually (raw values exceed 8191-byte B-tree limit)
+  // See scripts/add-body-fingerprint-indexes.sql
 }
 
 model PersonalPhoneNumber {

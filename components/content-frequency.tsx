@@ -233,7 +233,7 @@ function ExpandedSends({
   )
 }
 
-// ─���─ Table ─────────────────��──────────────────────────────────────────────────
+// ─�����─ Table ─────────────────��──────────────────────────────────────────────────
 
 function FrequencyTable({
   rows,
@@ -423,19 +423,6 @@ export function ContentFrequency({ clientSlug }: { clientSlug: string }) {
       : tab === "email-body"
       ? data?.emailBodies ?? []
       : data?.smsBodies ?? []
-
-  // Debug: log the top email subject row so we can see what the API returns
-  if (data?.emailSubjects?.length) {
-    const top = data.emailSubjects[0]
-    console.log("[v0] Top email subject row (full):", JSON.stringify(top, null, 2))
-    console.log("[v0] Top row donation_url:", top.donation_url)
-    console.log("[v0] Top row example_share_token:", top.example_share_token)
-    const withDonation = data.emailSubjects.filter(r => r.donation_url)
-    console.log(`[v0] ${withDonation.length} / ${data.emailSubjects.length} subjects have a donation_url`)
-    if (withDonation.length > 0) {
-      console.log("[v0] Example with donation_url:", withDonation[0].subject, "->", withDonation[0].donation_url)
-    }
-  }
 
   return (
     <div className="space-y-6">

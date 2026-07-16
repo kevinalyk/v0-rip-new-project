@@ -43,28 +43,6 @@ export async function GET(request: Request) {
     const toDate = searchParams.get("toDate") || null
     const limit = Math.min(Number(searchParams.get("limit") || "50"), 100)
 
-    // DEBUG ONLY — inspect ctaLinks for the known NRCC example campaign
-    try {
-      const diagRows = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT
-          id,
-          pg_typeof("ctaLinks")::text AS col_type,
-          "ctaLinks"::text AS raw_value
-        FROM "CompetitiveInsightCampaign"
-        WHERE id = 'cmpwy400u00241rrsubo9nygk'
-        LIMIT 1
-      `)
-      if (diagRows.length > 0) {
-        const d = diagRows[0]
-        console.log("[v0:diag] col_type:", d.col_type)
-        console.log("[v0:diag] raw_value (first 800):", String(d.raw_value ?? "NULL").slice(0, 800))
-      } else {
-        console.log("[v0:diag] Row not found — check campaign ID")
-      }
-    } catch (e: any) {
-      console.log("[v0:diag] diagnostic query error:", e.message)
-    }
-
     // Check cache — same filter combination returns instantly for 5 minutes
     const cacheKey = buildCacheKey({ clientSlug, party, source, entityId, fromDate, toDate, limit: String(limit) })
     const cached = getCached(cacheKey)
@@ -150,7 +128,11 @@ export async function GET(request: Request) {
           LEFT JOIN LATERAL (
             SELECT link->>'finalUrl' AS donation_url
             FROM jsonb_array_elements(
-              CASE WHEN jsonb_typeof(r.cta_links) = 'array' THEN r.cta_links ELSE '[]'::jsonb END
+              CASE
+                WHEN jsonb_typeof(r.cta_links) = 'array'  THEN r.cta_links
+                WHEN jsonb_typeof(r.cta_links) = 'string' THEN (r.cta_links #>> '{}')::jsonb
+                ELSE '[]'::jsonb
+              END
             ) AS link
             WHERE (link->>'finalUrl') ILIKE '%winred.com%'
                OR (link->>'finalUrl') ILIKE '%actblue.com%'
@@ -295,40 +277,6 @@ export async function GET(request: Request) {
       `),
 
     ])
-
-    // DEBUG: inspect ctaLinks storage type for the top subject row
-    if (subjectRows.length > 0) {
-      const topRow = subjectRows[0] as any
-      console.log("[v0] Top subject row:", topRow.subject, "| send_days:", topRow.send_days, "| donation_url:", topRow.donation_url)
-
-      // Directly query the example row's ctaLinks to see raw storage format
-      const debugRow = await prisma.$queryRawUnsafe<Array<{
-        id: string
-        ctaLinksType: string
-        ctaLinksRaw: string | null
-        ctaLinksLength: number | null
-      }>>(`
-        SELECT
-          id,
-          pg_typeof("ctaLinks")::text AS "ctaLinksType",
-          "ctaLinks"::text AS "ctaLinksRaw",
-          CASE
-            WHEN jsonb_typeof("ctaLinks"::jsonb) = 'array'
-            THEN jsonb_array_length("ctaLinks"::jsonb)
-            ELSE 0
-          END AS "ctaLinksLength"
-        FROM "CompetitiveInsightCampaign"
-        WHERE id = '${topRow.example_id}'
-        LIMIT 1
-      `)
-      if (debugRow.length > 0) {
-        const dr = debugRow[0] as any
-        console.log("[v0] example_id:", dr.id)
-        console.log("[v0] ctaLinks pg_typeof:", dr.ctaLinksType)
-        console.log("[v0] ctaLinks array length:", dr.ctaLinksLength)
-        console.log("[v0] ctaLinks raw (first 600 chars):", String(dr.ctaLinksRaw ?? "null").slice(0, 600))
-      }
-    }
 
     // Serialize bigints — all other fields pass through as-is
     const serializeRows = (rows: any[]) =>

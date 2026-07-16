@@ -274,15 +274,17 @@ export async function GET(request: Request) {
         id: string
         ctaLinksType: string
         ctaLinksRaw: string | null
-        ctaLinksJson: any
+        ctaLinksLength: number | null
       }>>(`
         SELECT
           id,
-          pg_typeof("ctaLinks") AS "ctaLinksType",
+          pg_typeof("ctaLinks")::text AS "ctaLinksType",
           "ctaLinks"::text AS "ctaLinksRaw",
-          jsonb_array_length(
-            CASE WHEN jsonb_typeof("ctaLinks"::jsonb) = 'array' THEN "ctaLinks"::jsonb ELSE '[]'::jsonb END
-          ) AS "ctaLinksLength"
+          CASE
+            WHEN jsonb_typeof("ctaLinks"::jsonb) = 'array'
+            THEN jsonb_array_length("ctaLinks"::jsonb)
+            ELSE 0
+          END AS "ctaLinksLength"
         FROM "CompetitiveInsightCampaign"
         WHERE id = '${topRow.example_id}'
         LIMIT 1
@@ -291,8 +293,8 @@ export async function GET(request: Request) {
         const dr = debugRow[0] as any
         console.log("[v0] example_id:", dr.id)
         console.log("[v0] ctaLinks pg_typeof:", dr.ctaLinksType)
-        console.log("[v0] ctaLinks length:", dr.ctaLinksLength)
-        console.log("[v0] ctaLinks raw (first 500 chars):", String(dr.ctaLinksRaw ?? "").slice(0, 500))
+        console.log("[v0] ctaLinks array length:", dr.ctaLinksLength)
+        console.log("[v0] ctaLinks raw (first 600 chars):", String(dr.ctaLinksRaw ?? "null").slice(0, 600))
       }
     }
 

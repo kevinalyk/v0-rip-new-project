@@ -264,6 +264,38 @@ export async function GET(request: Request) {
 
     ])
 
+    // DEBUG: inspect ctaLinks storage type for the top subject row
+    if (subjectRows.length > 0) {
+      const topRow = subjectRows[0] as any
+      console.log("[v0] Top subject row:", topRow.subject, "| send_days:", topRow.send_days, "| donation_url:", topRow.donation_url)
+
+      // Directly query the example row's ctaLinks to see raw storage format
+      const debugRow = await prisma.$queryRawUnsafe<Array<{
+        id: string
+        ctaLinksType: string
+        ctaLinksRaw: string | null
+        ctaLinksJson: any
+      }>>(`
+        SELECT
+          id,
+          pg_typeof("ctaLinks") AS "ctaLinksType",
+          "ctaLinks"::text AS "ctaLinksRaw",
+          jsonb_array_length(
+            CASE WHEN jsonb_typeof("ctaLinks"::jsonb) = 'array' THEN "ctaLinks"::jsonb ELSE '[]'::jsonb END
+          ) AS "ctaLinksLength"
+        FROM "CompetitiveInsightCampaign"
+        WHERE id = '${topRow.example_id}'
+        LIMIT 1
+      `)
+      if (debugRow.length > 0) {
+        const dr = debugRow[0] as any
+        console.log("[v0] example_id:", dr.id)
+        console.log("[v0] ctaLinks pg_typeof:", dr.ctaLinksType)
+        console.log("[v0] ctaLinks length:", dr.ctaLinksLength)
+        console.log("[v0] ctaLinks raw (first 500 chars):", String(dr.ctaLinksRaw ?? "").slice(0, 500))
+      }
+    }
+
     // Serialize bigints — all other fields pass through as-is
     const serializeRows = (rows: any[]) =>
       rows.map((r) => ({

@@ -104,24 +104,36 @@ export async function GET(request: Request) {
           HAVING COUNT(DISTINCT DATE_TRUNC('hour', c."dateReceived")) > 1
         ),
         examples AS (
+          -- Most recent send per subject — for shareToken only
           SELECT DISTINCT ON (c.subject)
             c.subject,
             c.id AS example_id,
-            c."shareToken" AS example_share_token,
-            (
-              SELECT link->>'finalUrl'
-              FROM jsonb_array_elements(
-                CASE WHEN jsonb_typeof(c."ctaLinks") = 'array' THEN c."ctaLinks" ELSE '[]'::jsonb END
-              ) AS link
-              WHERE (link->>'finalUrl') ILIKE '%winred.com%'
-                 OR (link->>'finalUrl') ILIKE '%actblue.com%'
-              LIMIT 1
-            ) AS donation_url
+            c."shareToken" AS example_share_token
           FROM "CompetitiveInsightCampaign" c
           WHERE c."isHidden" = false
             AND c."isDeleted" = false
             AND c.subject IS NOT NULL
             AND c.subject IN (SELECT subject FROM agg WHERE subject IS NOT NULL)
+          ORDER BY c.subject, c."dateReceived" DESC
+        ),
+        donation_urls AS (
+          -- Search across ALL sends for that subject to find any WinRed/ActBlue link
+          -- Uses DISTINCT ON so we get one URL per subject (the most recent send that has one)
+          SELECT DISTINCT ON (c.subject)
+            c.subject,
+            link->>'finalUrl' AS donation_url
+          FROM "CompetitiveInsightCampaign" c,
+            jsonb_array_elements(
+              CASE WHEN jsonb_typeof(c."ctaLinks") = 'array' THEN c."ctaLinks" ELSE '[]'::jsonb END
+            ) AS link
+          WHERE c."isHidden" = false
+            AND c."isDeleted" = false
+            AND c.subject IS NOT NULL
+            AND c.subject IN (SELECT subject FROM agg WHERE subject IS NOT NULL)
+            AND (
+              (link->>'finalUrl') ILIKE '%winred.com%'
+              OR (link->>'finalUrl') ILIKE '%actblue.com%'
+            )
           ORDER BY c.subject, c."dateReceived" DESC
         )
         SELECT
@@ -133,9 +145,10 @@ export async function GET(request: Request) {
           agg.last_sent,
           ex.example_id,
           ex.example_share_token,
-          ex.donation_url
+          du.donation_url
         FROM agg
         JOIN examples ex ON ex.subject = agg.subject
+        LEFT JOIN donation_urls du ON du.subject = agg.subject
         ORDER BY agg.send_days DESC, agg.last_sent DESC
         LIMIT ${limit}
       `),

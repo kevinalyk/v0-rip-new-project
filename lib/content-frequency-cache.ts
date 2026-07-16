@@ -34,7 +34,7 @@ export function setCached(key: string, data: any): void {
 }
 
 // Bump this version whenever the shape of cached results changes
-const CACHE_VERSION = "v2"
+const CACHE_VERSION = "v3"
 
 export function buildCacheKey(params: Record<string, string | null>): string {
   return CACHE_VERSION + ":" + Object.entries(params)

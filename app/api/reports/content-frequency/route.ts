@@ -43,6 +43,28 @@ export async function GET(request: Request) {
     const toDate = searchParams.get("toDate") || null
     const limit = Math.min(Number(searchParams.get("limit") || "50"), 100)
 
+    // DEBUG ONLY — inspect ctaLinks for the known NRCC example campaign
+    try {
+      const diagRows = await prisma.$queryRawUnsafe<any[]>(`
+        SELECT
+          id,
+          pg_typeof("ctaLinks")::text AS col_type,
+          "ctaLinks"::text AS raw_value
+        FROM "CompetitiveInsightCampaign"
+        WHERE id = 'cmpwy400u00241rrsubo9nygk'
+        LIMIT 1
+      `)
+      if (diagRows.length > 0) {
+        const d = diagRows[0]
+        console.log("[v0:diag] col_type:", d.col_type)
+        console.log("[v0:diag] raw_value (first 800):", String(d.raw_value ?? "NULL").slice(0, 800))
+      } else {
+        console.log("[v0:diag] Row not found — check campaign ID")
+      }
+    } catch (e: any) {
+      console.log("[v0:diag] diagnostic query error:", e.message)
+    }
+
     // Check cache — same filter combination returns instantly for 5 minutes
     const cacheKey = buildCacheKey({ clientSlug, party, source, entityId, fromDate, toDate, limit: String(limit) })
     const cached = getCached(cacheKey)

@@ -503,7 +503,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                   )}
                   <NavItem
                     icon={<ShieldCheck size={18} />}
-                    label="Deliverability"
+                    label="Email Compliance Summary"
                     active={pathname.includes("/reports/compliance")}
                     collapsed={false}
                     onClick={() => navigate(`/${getClientSlug()}/reports/compliance`)}
@@ -512,7 +512,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
               )}
             </>
 
-            {((userRole === "super_admin" || isAdminView) && (selectedClientSlug === "rip" || !selectedClientSlug || selectedClientSlug === "red_spark_strategy")) && (
+            {((userRole === "super_admin" || isAdminView) && (selectedClientSlug === "rip" || !selectedClientSlug || selectedClientSlug === "redsparkstrategy")) && (
               <>
                 <NavSection
                   icon={<Inbox size={20} />}

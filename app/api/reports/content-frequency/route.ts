@@ -71,6 +71,7 @@ export async function GET(request: Request) {
     const [subjectRows, emailBodyRows, smsBodyRows] = await Promise.all([
 
       // 1. Email Subject Frequency
+      // Uses DISTINCT ON to pick the most-recent example row (for shareToken + donation link)
       prisma.$queryRawUnsafe<Array<{
         subject: string
         send_days: bigint
@@ -79,27 +80,85 @@ export async function GET(request: Request) {
         entity_id: string | null
         last_sent: Date | null
         example_id: string
+        example_share_token: string | null
+        donation_url: string | null
       }>>(`
+        WITH agg AS (
+          SELECT
+            c.subject,
+            COUNT(DISTINCT DATE_TRUNC('hour', c."dateReceived")) AS send_days,
+            e.name AS entity_name,
+            e.party AS entity_party,
+            e.id AS entity_id,
+            MAX(c."dateReceived") AS last_sent
+          FROM "CompetitiveInsightCampaign" c
+          LEFT JOIN "CiEntity" e ON e.id = c."entityId"
+          WHERE c."isHidden" = false
+            AND c."isDeleted" = false
+            ${partyClause}
+            ${entityClause}
+            ${fromClause}
+            ${toClause}
+            ${sourceEmailClause}
+          GROUP BY c.subject, e.name, e.party, e.id
+          HAVING COUNT(DISTINCT DATE_TRUNC('hour', c."dateReceived")) > 1
+        ),
+        examples AS (
+          -- Most recent send per subject — for shareToken only
+          SELECT DISTINCT ON (c.subject)
+            c.subject,
+            c.id AS example_id,
+            c."shareToken" AS example_share_token
+          FROM "CompetitiveInsightCampaign" c
+          WHERE c."isHidden" = false
+            AND c."isDeleted" = false
+            AND c.subject IS NOT NULL
+            AND c.subject IN (SELECT subject FROM agg WHERE subject IS NOT NULL)
+          ORDER BY c.subject, c."dateReceived" DESC
+        ),
+        donation_urls AS (
+          -- For each subject, find the first WinRed/ActBlue finalUrl (or url as fallback)
+          -- across ALL sends, regardless of date filter
+          SELECT DISTINCT ON (subject)
+            subject,
+            donation_url
+          FROM (
+            SELECT
+              c.subject,
+              COALESCE(
+                NULLIF(link->>'finalUrl', ''),
+                NULLIF(link->>'url', '')
+              ) AS donation_url,
+              c."dateReceived"
+            FROM "CompetitiveInsightCampaign" c
+            CROSS JOIN LATERAL jsonb_array_elements(
+              CASE WHEN jsonb_typeof(c."ctaLinks") = 'array' THEN c."ctaLinks" ELSE '[]'::jsonb END
+            ) AS link
+            WHERE c."isHidden" = false
+              AND c."isDeleted" = false
+              AND c.subject IS NOT NULL
+              AND c.subject IN (SELECT subject FROM agg WHERE subject IS NOT NULL)
+              AND (
+                COALESCE(NULLIF(link->>'finalUrl', ''), link->>'url') ILIKE '%winred.com%'
+                OR COALESCE(NULLIF(link->>'finalUrl', ''), link->>'url') ILIKE '%actblue.com%'
+              )
+          ) ranked
+          ORDER BY subject, "dateReceived" DESC
+        )
         SELECT
-          c.subject,
-          COUNT(DISTINCT DATE_TRUNC('hour', c."dateReceived")) AS send_days,
-          e.name AS entity_name,
-          e.party AS entity_party,
-          e.id AS entity_id,
-          MAX(c."dateReceived") AS last_sent,
-          MIN(c.id) AS example_id
-        FROM "CompetitiveInsightCampaign" c
-        LEFT JOIN "CiEntity" e ON e.id = c."entityId"
-        WHERE c."isHidden" = false
-          AND c."isDeleted" = false
-          ${partyClause}
-          ${entityClause}
-          ${fromClause}
-          ${toClause}
-          ${sourceEmailClause}
-        GROUP BY c.subject, e.name, e.party, e.id
-        HAVING COUNT(DISTINCT DATE_TRUNC('hour', c."dateReceived")) > 1
-        ORDER BY send_days DESC, last_sent DESC
+          agg.subject,
+          agg.send_days,
+          agg.entity_name,
+          agg.entity_party,
+          agg.entity_id,
+          agg.last_sent,
+          ex.example_id,
+          ex.example_share_token,
+          du.donation_url
+        FROM agg
+        JOIN examples ex ON ex.subject = agg.subject
+        LEFT JOIN donation_urls du ON du.subject = agg.subject
+        ORDER BY agg.send_days DESC, agg.last_sent DESC
         LIMIT ${limit}
       `),
 
@@ -226,7 +285,7 @@ export async function GET(request: Request) {
 
     ])
 
-    // Serialize bigints
+    // Serialize bigints — all other fields pass through as-is
     const serializeRows = (rows: any[]) =>
       rows.map((r) => ({
         ...r,

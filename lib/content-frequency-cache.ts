@@ -33,8 +33,11 @@ export function setCached(key: string, data: any): void {
   cache.set(key, { data, expiresAt: Date.now() + TTL_MS })
 }
 
+// Bump this version whenever the shape of cached results changes
+const CACHE_VERSION = "v4"
+
 export function buildCacheKey(params: Record<string, string | null>): string {
-  return Object.entries(params)
+  return CACHE_VERSION + ":" + Object.entries(params)
     .filter(([, v]) => v !== null && v !== "")
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([k, v]) => `${k}=${v}`)

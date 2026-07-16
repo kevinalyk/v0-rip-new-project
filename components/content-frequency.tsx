@@ -233,7 +233,7 @@ function ExpandedSends({
   )
 }
 
-// ─�����─ Table ─────────────────��──────────────────────────────────────────────────
+// ─�������─ Table ─────────────────��──────────────────────────────────────────────────
 
 function FrequencyTable({
   rows,
@@ -255,7 +255,10 @@ function FrequencyTable({
     )
   }
 
-  const isSubject = type === "subject"
+  // Subject and SMS rows: click opens the most recent message directly
+  // Email-body rows: still expand/collapse
+  const isDirectLink = type === "subject" || type === "sms-body"
+  const isEmailBody = type === "email-body"
 
   return (
     <div className="overflow-x-auto">
@@ -263,14 +266,14 @@ function FrequencyTable({
         <thead>
           <tr className="border-b text-muted-foreground text-xs uppercase tracking-wide">
             <th className="text-left py-3 px-4 font-medium">
-              {isSubject ? "Subject Line" : type === "email-body" ? "Example Subject" : "SMS Preview"}
+              {type === "subject" ? "Subject Line" : type === "email-body" ? "Example Subject" : "SMS Preview"}
             </th>
             <th className="text-left py-3 px-4 font-medium">Entity</th>
             <th className="text-right py-3 px-4 font-medium">Total Sends</th>
-            {isSubject && (
+            {isDirectLink && (
               <th className="text-right py-3 px-4 font-medium">Donation Page</th>
             )}
-            {!isSubject && (
+            {isEmailBody && (
               <th className="text-right py-3 px-4 font-medium">Sent Date</th>
             )}
             <th className="py-3 px-4 w-10" />
@@ -279,19 +282,18 @@ function FrequencyTable({
         <tbody>
           {rows.map((row, i) => {
             const rowKey =
-              isSubject
+              type === "subject"
                 ? (row.subject ?? "")
                 : (row.body_fingerprint ?? "")
             const isExpanded = expandedKey === rowKey + i
             const preview =
-              isSubject
+              type === "subject"
                 ? row.subject
                 : type === "email-body"
                 ? row.example_subject
                 : row.example_message
 
-            // Subject rows: clicking the row opens the most recent email directly
-            const handleSubjectClick = () => {
+            const handleDirectClick = () => {
               if (row.example_share_token) {
                 window.open(`/share/${row.example_share_token}`, "_blank")
               }
@@ -301,10 +303,10 @@ function FrequencyTable({
               <>
                 <tr
                   key={row.example_id + i}
-                  onClick={isSubject ? handleSubjectClick : () => setExpandedKey(isExpanded ? null : rowKey + i)}
+                  onClick={isDirectLink ? handleDirectClick : () => setExpandedKey(isExpanded ? null : rowKey + i)}
                   className="border-b hover:bg-muted/40 transition-colors cursor-pointer select-none group"
                 >
-                  {/* Subject / preview */}
+                  {/* Content preview */}
                   <td className="py-3 px-4 max-w-md">
                     <p className="leading-relaxed text-foreground">{truncate(preview)}</p>
                   </td>
@@ -332,8 +334,8 @@ function FrequencyTable({
                     </span>
                   </td>
 
-                  {/* Donation page column — subject tab only */}
-                  {isSubject && (
+                  {/* Donation page — subject + sms-body tabs */}
+                  {isDirectLink && (
                     <td className="py-3 px-4 text-right">
                       {row.donation_url ? (
                         <a
@@ -352,16 +354,16 @@ function FrequencyTable({
                     </td>
                   )}
 
-                  {/* Sent date — non-subject tabs only */}
-                  {!isSubject && (
+                  {/* Sent date — email-body tab only */}
+                  {isEmailBody && (
                     <td className="py-3 px-4 text-right text-muted-foreground text-xs whitespace-nowrap">
                       {formatDate(row.last_sent)}
                     </td>
                   )}
 
-                  {/* Action column: link icon for subject, chevron for others */}
+                  {/* Action column */}
                   <td className="py-3 px-4 text-right">
-                    {isSubject ? (
+                    {isDirectLink ? (
                       <ExternalLink className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors ml-auto" />
                     ) : isExpanded ? (
                       <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />
@@ -371,8 +373,8 @@ function FrequencyTable({
                   </td>
                 </tr>
 
-                {/* Expanded sends — non-subject tabs only */}
-                {!isSubject && isExpanded && (
+                {/* Expanded sends — email-body tab only */}
+                {isEmailBody && isExpanded && (
                   <ExpandedSends
                     key={"exp-" + rowKey + i}
                     rowKey={rowKey}

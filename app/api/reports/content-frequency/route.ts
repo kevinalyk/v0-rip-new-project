@@ -217,7 +217,7 @@ export async function GET(request: Request) {
         LIMIT ${limit}
       `),
 
-      // 3. SMS Body Frequency — same DISTINCT ON pattern
+      // 3. SMS Body Frequency
       prisma.$queryRawUnsafe<Array<{
         body_fingerprint: string
         send_days: bigint
@@ -226,7 +226,9 @@ export async function GET(request: Request) {
         entity_id: string | null
         last_sent: Date | null
         example_id: string
+        example_share_token: string | null
         example_message: string | null
+        donation_url: string | null
       }>>(`
         WITH agg AS (
           SELECT
@@ -253,7 +255,21 @@ export async function GET(request: Request) {
           SELECT DISTINCT ON (s."bodyFingerprint")
             s."bodyFingerprint",
             s.id AS example_id,
-            s.message AS example_message
+            s."shareToken" AS example_share_token,
+            s.message AS example_message,
+            (
+              SELECT NULLIF(link->>'finalUrl', '')
+              FROM jsonb_array_elements(
+                CASE
+                  WHEN jsonb_typeof(s."ctaLinks") = 'array'  THEN s."ctaLinks"
+                  WHEN jsonb_typeof(s."ctaLinks") = 'string' THEN (s."ctaLinks" #>> '{}')::jsonb
+                  ELSE '[]'::jsonb
+                END
+              ) AS link
+              WHERE NULLIF(link->>'finalUrl', '') ILIKE '%winred.com%'
+                 OR NULLIF(link->>'finalUrl', '') ILIKE '%actblue.com%'
+              LIMIT 1
+            ) AS donation_url
           FROM "SmsQueue" s
           WHERE s."bodyFingerprint" IS NOT NULL
             AND s."isHidden" = false
@@ -269,7 +285,9 @@ export async function GET(request: Request) {
           agg.entity_id,
           agg.last_sent,
           ex.example_id,
-          ex.example_message
+          ex.example_share_token,
+          ex.example_message,
+          ex.donation_url
         FROM agg
         JOIN examples ex ON ex."bodyFingerprint" = agg."bodyFingerprint"
         ORDER BY agg.send_days DESC, agg.last_sent DESC

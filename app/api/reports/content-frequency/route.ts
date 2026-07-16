@@ -117,24 +117,33 @@ export async function GET(request: Request) {
           ORDER BY c.subject, c."dateReceived" DESC
         ),
         donation_urls AS (
-          -- Search across ALL sends for that subject to find any WinRed/ActBlue link
-          -- Uses DISTINCT ON so we get one URL per subject (the most recent send that has one)
-          SELECT DISTINCT ON (c.subject)
-            c.subject,
-            link->>'finalUrl' AS donation_url
-          FROM "CompetitiveInsightCampaign" c,
-            jsonb_array_elements(
+          -- For each subject, find the first WinRed/ActBlue finalUrl (or url as fallback)
+          -- across ALL sends, regardless of date filter
+          SELECT DISTINCT ON (subject)
+            subject,
+            donation_url
+          FROM (
+            SELECT
+              c.subject,
+              COALESCE(
+                NULLIF(link->>'finalUrl', ''),
+                NULLIF(link->>'url', '')
+              ) AS donation_url,
+              c."dateReceived"
+            FROM "CompetitiveInsightCampaign" c
+            CROSS JOIN LATERAL jsonb_array_elements(
               CASE WHEN jsonb_typeof(c."ctaLinks") = 'array' THEN c."ctaLinks" ELSE '[]'::jsonb END
             ) AS link
-          WHERE c."isHidden" = false
-            AND c."isDeleted" = false
-            AND c.subject IS NOT NULL
-            AND c.subject IN (SELECT subject FROM agg WHERE subject IS NOT NULL)
-            AND (
-              (link->>'finalUrl') ILIKE '%winred.com%'
-              OR (link->>'finalUrl') ILIKE '%actblue.com%'
-            )
-          ORDER BY c.subject, c."dateReceived" DESC
+            WHERE c."isHidden" = false
+              AND c."isDeleted" = false
+              AND c.subject IS NOT NULL
+              AND c.subject IN (SELECT subject FROM agg WHERE subject IS NOT NULL)
+              AND (
+                COALESCE(NULLIF(link->>'finalUrl', ''), link->>'url') ILIKE '%winred.com%'
+                OR COALESCE(NULLIF(link->>'finalUrl', ''), link->>'url') ILIKE '%actblue.com%'
+              )
+          ) ranked
+          ORDER BY subject, "dateReceived" DESC
         )
         SELECT
           agg.subject,

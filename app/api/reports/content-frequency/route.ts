@@ -71,6 +71,7 @@ export async function GET(request: Request) {
     const [subjectRows, emailBodyRows, smsBodyRows] = await Promise.all([
 
       // 1. Email Subject Frequency
+      // Uses DISTINCT ON to pick the most-recent example row (for shareToken + donation link)
       prisma.$queryRawUnsafe<Array<{
         subject: string
         send_days: bigint
@@ -79,27 +80,60 @@ export async function GET(request: Request) {
         entity_id: string | null
         last_sent: Date | null
         example_id: string
+        example_share_token: string | null
+        donation_url: string | null
       }>>(`
+        WITH agg AS (
+          SELECT
+            c.subject,
+            COUNT(DISTINCT DATE_TRUNC('hour', c."dateReceived")) AS send_days,
+            e.name AS entity_name,
+            e.party AS entity_party,
+            e.id AS entity_id,
+            MAX(c."dateReceived") AS last_sent
+          FROM "CompetitiveInsightCampaign" c
+          LEFT JOIN "CiEntity" e ON e.id = c."entityId"
+          WHERE c."isHidden" = false
+            AND c."isDeleted" = false
+            ${partyClause}
+            ${entityClause}
+            ${fromClause}
+            ${toClause}
+            ${sourceEmailClause}
+          GROUP BY c.subject, e.name, e.party, e.id
+          HAVING COUNT(DISTINCT DATE_TRUNC('hour', c."dateReceived")) > 1
+        ),
+        examples AS (
+          SELECT DISTINCT ON (c.subject)
+            c.subject,
+            c.id AS example_id,
+            c."shareToken" AS example_share_token,
+            (
+              SELECT link->>'finalUrl'
+              FROM jsonb_array_elements(c."ctaLinks") AS link
+              WHERE (link->>'finalUrl') ILIKE '%winred.com%'
+                 OR (link->>'finalUrl') ILIKE '%actblue.com%'
+              LIMIT 1
+            ) AS donation_url
+          FROM "CompetitiveInsightCampaign" c
+          WHERE c."isHidden" = false
+            AND c."isDeleted" = false
+            AND c.subject IN (SELECT subject FROM agg)
+          ORDER BY c.subject, c."dateReceived" DESC
+        )
         SELECT
-          c.subject,
-          COUNT(DISTINCT DATE_TRUNC('hour', c."dateReceived")) AS send_days,
-          e.name AS entity_name,
-          e.party AS entity_party,
-          e.id AS entity_id,
-          MAX(c."dateReceived") AS last_sent,
-          MIN(c.id) AS example_id
-        FROM "CompetitiveInsightCampaign" c
-        LEFT JOIN "CiEntity" e ON e.id = c."entityId"
-        WHERE c."isHidden" = false
-          AND c."isDeleted" = false
-          ${partyClause}
-          ${entityClause}
-          ${fromClause}
-          ${toClause}
-          ${sourceEmailClause}
-        GROUP BY c.subject, e.name, e.party, e.id
-        HAVING COUNT(DISTINCT DATE_TRUNC('hour', c."dateReceived")) > 1
-        ORDER BY send_days DESC, last_sent DESC
+          agg.subject,
+          agg.send_days,
+          agg.entity_name,
+          agg.entity_party,
+          agg.entity_id,
+          agg.last_sent,
+          ex.example_id,
+          ex.example_share_token,
+          ex.donation_url
+        FROM agg
+        JOIN examples ex ON ex.subject = agg.subject
+        ORDER BY agg.send_days DESC, agg.last_sent DESC
         LIMIT ${limit}
       `),
 
@@ -226,7 +260,7 @@ export async function GET(request: Request) {
 
     ])
 
-    // Serialize bigints
+    // Serialize bigints — all other fields pass through as-is
     const serializeRows = (rows: any[]) =>
       rows.map((r) => ({
         ...r,

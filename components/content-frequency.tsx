@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, CalendarIcon, RotateCcw, ChevronDown, ChevronRight, ExternalLink } from "lucide-react"
+import { Loader2, CalendarIcon, RotateCcw, ChevronDown, ChevronRight, ExternalLink, Link2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -30,9 +30,11 @@ interface FrequencyRow {
   entity_id: string | null
   last_sent: string | null
   example_id: string
+  example_share_token?: string | null
   example_subject?: string
   example_preview?: string | null
   example_message?: string | null
+  donation_url?: string | null
 }
 
 interface ContentFrequencyData {
@@ -253,46 +255,61 @@ function FrequencyTable({
     )
   }
 
+  const isSubject = type === "subject"
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b text-muted-foreground text-xs uppercase tracking-wide">
             <th className="text-left py-3 px-4 font-medium">
-              {type === "subject" ? "Subject Line" : type === "email-body" ? "Example Subject" : "SMS Preview"}
+              {isSubject ? "Subject Line" : type === "email-body" ? "Example Subject" : "SMS Preview"}
             </th>
             <th className="text-left py-3 px-4 font-medium">Entity</th>
             <th className="text-right py-3 px-4 font-medium">Total Sends</th>
-            <th className="text-right py-3 px-4 font-medium">Sent Date</th>
-            <th className="py-3 px-4 w-8" />
+            {isSubject && (
+              <th className="text-right py-3 px-4 font-medium">Donation Page</th>
+            )}
+            {!isSubject && (
+              <th className="text-right py-3 px-4 font-medium">Sent Date</th>
+            )}
+            <th className="py-3 px-4 w-10" />
           </tr>
         </thead>
         <tbody>
           {rows.map((row, i) => {
             const rowKey =
-              type === "subject"
+              isSubject
                 ? (row.subject ?? "")
                 : (row.body_fingerprint ?? "")
             const isExpanded = expandedKey === rowKey + i
             const preview =
-              type === "subject"
+              isSubject
                 ? row.subject
                 : type === "email-body"
-                ? row.example_subject  // use subject as the readable label — body preview contains raw HTML
+                ? row.example_subject
                 : row.example_message
+
+            // Subject rows: clicking the row opens the most recent email directly
+            const handleSubjectClick = () => {
+              if (row.example_share_token) {
+                window.open(`/share/${row.example_share_token}`, "_blank")
+              }
+            }
 
             return (
               <>
                 <tr
                   key={row.example_id + i}
-                  onClick={() => setExpandedKey(isExpanded ? null : rowKey + i)}
-                  className="border-b hover:bg-muted/40 transition-colors cursor-pointer select-none"
+                  onClick={isSubject ? handleSubjectClick : () => setExpandedKey(isExpanded ? null : rowKey + i)}
+                  className="border-b hover:bg-muted/40 transition-colors cursor-pointer select-none group"
                 >
-                  {/* col 1: content */}
+                  {/* Subject / preview */}
                   <td className="py-3 px-4 max-w-md">
                     <p className="leading-relaxed text-foreground">{truncate(preview)}</p>
                   </td>
-                  {/* col 3: entity — shown on parent */}
+
+                  {/* Entity */}
                   <td className="py-3 px-4">
                     {row.entity_name ? (
                       <div className="flex flex-col gap-1">
@@ -307,25 +324,55 @@ function FrequencyTable({
                       <span className="text-muted-foreground text-xs">—</span>
                     )}
                   </td>
-                  {/* col 4: total sends */}
+
+                  {/* Total sends */}
                   <td className="py-3 px-4 text-right">
                     <span className="inline-flex items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-xs px-2.5 py-1 min-w-[2rem]">
                       {row.send_days}
                     </span>
                   </td>
-                  {/* col 5: sent date */}
-                  <td className="py-3 px-4 text-right text-muted-foreground text-xs whitespace-nowrap">
-                    {formatDate(row.last_sent)}
-                  </td>
-                  {/* col 6: chevron */}
+
+                  {/* Donation page column — subject tab only */}
+                  {isSubject && (
+                    <td className="py-3 px-4 text-right">
+                      {row.donation_url ? (
+                        <a
+                          href={row.donation_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline whitespace-nowrap"
+                        >
+                          {row.donation_url.includes("winred.com") ? "WinRed" : "ActBlue"}
+                          <Link2 className="h-3 w-3 flex-shrink-0" />
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </td>
+                  )}
+
+                  {/* Sent date — non-subject tabs only */}
+                  {!isSubject && (
+                    <td className="py-3 px-4 text-right text-muted-foreground text-xs whitespace-nowrap">
+                      {formatDate(row.last_sent)}
+                    </td>
+                  )}
+
+                  {/* Action column: link icon for subject, chevron for others */}
                   <td className="py-3 px-4 text-right">
-                    {isExpanded
-                      ? <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />
-                      : <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto" />
-                    }
+                    {isSubject ? (
+                      <ExternalLink className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors ml-auto" />
+                    ) : isExpanded ? (
+                      <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto" />
+                    )}
                   </td>
                 </tr>
-                {isExpanded && (
+
+                {/* Expanded sends — non-subject tabs only */}
+                {!isSubject && isExpanded && (
                   <ExpandedSends
                     key={"exp-" + rowKey + i}
                     rowKey={rowKey}

@@ -125,27 +125,37 @@ export async function GET(request: Request) {
           GROUP BY c.subject, e.name, e.party, e.id
           HAVING COUNT(DISTINCT DATE_TRUNC('hour', c."dateReceived")) > 1
         ),
-        examples AS (
-          -- Most recent send per subject: grab shareToken + first WinRed/ActBlue link from that send
+        recent AS (
+          -- Step 1: pick the most recent campaign row per subject (id + shareToken + ctaLinks)
           SELECT DISTINCT ON (c.subject)
             c.subject,
             c.id AS example_id,
             c."shareToken" AS example_share_token,
-            (
-              SELECT NULLIF(link->>'finalUrl', '')
-              FROM jsonb_array_elements(
-                CASE WHEN jsonb_typeof(c."ctaLinks") = 'array' THEN c."ctaLinks" ELSE '[]'::jsonb END
-              ) AS link
-              WHERE NULLIF(link->>'finalUrl', '') ILIKE '%winred.com%'
-                 OR NULLIF(link->>'finalUrl', '') ILIKE '%actblue.com%'
-              LIMIT 1
-            ) AS donation_url
+            c."ctaLinks" AS cta_links
           FROM "CompetitiveInsightCampaign" c
           WHERE c."isHidden" = false
             AND c."isDeleted" = false
             AND c.subject IS NOT NULL
             AND c.subject IN (SELECT subject FROM agg WHERE subject IS NOT NULL)
           ORDER BY c.subject, c."dateReceived" DESC
+        ),
+        examples AS (
+          -- Step 2: lateral join on the already-chosen row to extract donation URL cleanly
+          SELECT
+            r.subject,
+            r.example_id,
+            r.example_share_token,
+            d.donation_url
+          FROM recent r
+          LEFT JOIN LATERAL (
+            SELECT link->>'finalUrl' AS donation_url
+            FROM jsonb_array_elements(
+              CASE WHEN jsonb_typeof(r.cta_links) = 'array' THEN r.cta_links ELSE '[]'::jsonb END
+            ) AS link
+            WHERE (link->>'finalUrl') ILIKE '%winred.com%'
+               OR (link->>'finalUrl') ILIKE '%actblue.com%'
+            LIMIT 1
+          ) AS d ON true
         )
         SELECT
           agg.subject,

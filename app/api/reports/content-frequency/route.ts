@@ -110,7 +110,9 @@ export async function GET(request: Request) {
             c."shareToken" AS example_share_token,
             (
               SELECT link->>'finalUrl'
-              FROM jsonb_array_elements(c."ctaLinks") AS link
+              FROM jsonb_array_elements(
+                CASE WHEN jsonb_typeof(c."ctaLinks") = 'array' THEN c."ctaLinks" ELSE '[]'::jsonb END
+              ) AS link
               WHERE (link->>'finalUrl') ILIKE '%winred.com%'
                  OR (link->>'finalUrl') ILIKE '%actblue.com%'
               LIMIT 1
@@ -118,7 +120,8 @@ export async function GET(request: Request) {
           FROM "CompetitiveInsightCampaign" c
           WHERE c."isHidden" = false
             AND c."isDeleted" = false
-            AND c.subject IN (SELECT subject FROM agg)
+            AND c.subject IS NOT NULL
+            AND c.subject IN (SELECT subject FROM agg WHERE subject IS NOT NULL)
           ORDER BY c.subject, c."dateReceived" DESC
         )
         SELECT

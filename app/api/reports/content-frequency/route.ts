@@ -104,46 +104,26 @@ export async function GET(request: Request) {
           HAVING COUNT(DISTINCT DATE_TRUNC('hour', c."dateReceived")) > 1
         ),
         examples AS (
-          -- Most recent send per subject — for shareToken only
+          -- Most recent send per subject: grab shareToken + first WinRed/ActBlue link from that send
           SELECT DISTINCT ON (c.subject)
             c.subject,
             c.id AS example_id,
-            c."shareToken" AS example_share_token
+            c."shareToken" AS example_share_token,
+            (
+              SELECT NULLIF(link->>'finalUrl', '')
+              FROM jsonb_array_elements(
+                CASE WHEN jsonb_typeof(c."ctaLinks") = 'array' THEN c."ctaLinks" ELSE '[]'::jsonb END
+              ) AS link
+              WHERE NULLIF(link->>'finalUrl', '') ILIKE '%winred.com%'
+                 OR NULLIF(link->>'finalUrl', '') ILIKE '%actblue.com%'
+              LIMIT 1
+            ) AS donation_url
           FROM "CompetitiveInsightCampaign" c
           WHERE c."isHidden" = false
             AND c."isDeleted" = false
             AND c.subject IS NOT NULL
             AND c.subject IN (SELECT subject FROM agg WHERE subject IS NOT NULL)
           ORDER BY c.subject, c."dateReceived" DESC
-        ),
-        donation_urls AS (
-          -- For each subject, find the first WinRed/ActBlue finalUrl (or url as fallback)
-          -- across ALL sends, regardless of date filter
-          SELECT DISTINCT ON (subject)
-            subject,
-            donation_url
-          FROM (
-            SELECT
-              c.subject,
-              COALESCE(
-                NULLIF(link->>'finalUrl', ''),
-                NULLIF(link->>'url', '')
-              ) AS donation_url,
-              c."dateReceived"
-            FROM "CompetitiveInsightCampaign" c
-            CROSS JOIN LATERAL jsonb_array_elements(
-              CASE WHEN jsonb_typeof(c."ctaLinks") = 'array' THEN c."ctaLinks" ELSE '[]'::jsonb END
-            ) AS link
-            WHERE c."isHidden" = false
-              AND c."isDeleted" = false
-              AND c.subject IS NOT NULL
-              AND c.subject IN (SELECT subject FROM agg WHERE subject IS NOT NULL)
-              AND (
-                COALESCE(NULLIF(link->>'finalUrl', ''), link->>'url') ILIKE '%winred.com%'
-                OR COALESCE(NULLIF(link->>'finalUrl', ''), link->>'url') ILIKE '%actblue.com%'
-              )
-          ) ranked
-          ORDER BY subject, "dateReceived" DESC
         )
         SELECT
           agg.subject,
@@ -154,10 +134,9 @@ export async function GET(request: Request) {
           agg.last_sent,
           ex.example_id,
           ex.example_share_token,
-          du.donation_url
+          ex.donation_url
         FROM agg
         JOIN examples ex ON ex.subject = agg.subject
-        LEFT JOIN donation_urls du ON du.subject = agg.subject
         ORDER BY agg.send_days DESC, agg.last_sent DESC
         LIMIT ${limit}
       `),

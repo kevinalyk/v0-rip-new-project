@@ -85,6 +85,20 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       return NextResponse.json({ error: "Seed email not found" }, { status: 404 })
     }
 
+    const body = await request.json()
+    const { assignedToClient, domainHealthMode } = body
+
+    // Handle domain health mode toggle first — this is allowed even on locked emails
+    if (typeof domainHealthMode === "boolean") {
+      const updatedSeed = await prisma.seedEmail.update({
+        where: { id: params.id },
+        data: { domainHealthMode },
+      })
+      console.log(`Seed email ${params.id} domainHealthMode set to ${domainHealthMode}`)
+      return NextResponse.json(updatedSeed)
+    }
+
+    // Locked check only applies to reassignment, not domain health toggling
     if (seedEmail.locked) {
       return NextResponse.json(
         {
@@ -93,19 +107,6 @@ export async function PATCH(request: Request, { params }: { params: { id: string
         },
         { status: 403 },
       )
-    }
-
-    const body = await request.json()
-    const { assignedToClient, domainHealthMode } = body
-
-    // Handle domain health mode toggle — no domain selector needed, scoped to assigned client
-    if (typeof domainHealthMode === "boolean") {
-      const updatedSeed = await prisma.seedEmail.update({
-        where: { id: params.id },
-        data: { domainHealthMode },
-      })
-      console.log(`Seed email ${params.id} domainHealthMode set to ${domainHealthMode}`)
-      return NextResponse.json(updatedSeed)
     }
 
     if (!assignedToClient) {

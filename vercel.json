@@ -82,6 +82,10 @@
     {
       "path": "/api/cron/domain-health-scan",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/click-domain-health-emails",
+      "schedule": "0 10,15,21 * * *"
     }
   ]
 }

@@ -266,11 +266,13 @@ model EngagementLog {
   performedAt      DateTime  @default(now())
   success          Boolean   @default(true)
   errorMessage     String?   @db.Text
+  clickedUrl       String?   @db.Text // URL that was clicked (for action="click")
 
   seedEmail        SeedEmail @relation(fields: [seedEmailId], references: [id], onDelete: Cascade)
 
   @@index([seedEmailId])
   @@index([performedAt])
+  @@index([action])
 }
 
 model SenderFamiliarity {

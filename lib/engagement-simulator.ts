@@ -250,6 +250,7 @@ export class EngagementSimulator {
       WHERE "engagement_enabled" = true
       AND email IS NOT NULL
       AND password IS NOT NULL
+      AND locked = 'true'
       AND ("domainHealthMode" = false OR "domainHealthMode" IS NULL)
       AND ("assignedToClient" IS NULL OR "assignedToClient" != 'RIP')
     `
@@ -943,6 +944,7 @@ export async function checkAllSeedEmails() {
       WHERE "engagement_enabled" = 'true'
       AND email IS NOT NULL
       AND password IS NOT NULL
+      AND locked = 'true'
       AND ("domainHealthMode" = false OR "domainHealthMode" IS NULL)
       AND ("assignedToClient" IS NULL OR "assignedToClient" != 'RIP')
     `

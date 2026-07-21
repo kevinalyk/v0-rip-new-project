@@ -512,7 +512,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
               )}
             </>
 
-            {((userRole === "super_admin" || isAdminView) && (selectedClientSlug === "rip" || !selectedClientSlug || selectedClientSlug === "redsparkstrategy")) && (
+            {(selectedClientSlug === "rip" || !selectedClientSlug || selectedClientSlug === "redsparkstrategy") && (
               <>
                 <NavSection
                   icon={<Inbox size={20} />}

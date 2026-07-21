@@ -12,7 +12,7 @@ export default function InboxLayout({ children }: { children: React.ReactNode })
   const params = useParams()
   const clientSlug = params.clientSlug as string
   const [loading, setLoading] = useState(true)
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+  const [hasAccess, setHasAccess] = useState(false)
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -28,14 +28,15 @@ export default function InboxLayout({ children }: { children: React.ReactNode })
         }
 
         const user = await response.json()
+        const userClientSlug = user.client?.slug ?? ""
 
-        // Check if user is super_admin
-        if (user.role === "super_admin") {
-          setIsSuperAdmin(true)
-        } else {
-          setIsSuperAdmin(false)
-        }
+        // Super admins always get in; Red Spark also has access to Inbox Tools
+        const allowed =
+          user.role === "super_admin" ||
+          userClientSlug === "redsparkstrategy" ||
+          clientSlug === "redsparkstrategy"
 
+        setHasAccess(allowed)
         setLoading(false)
       } catch (error) {
         console.error("Auth check error:", error)
@@ -57,7 +58,7 @@ export default function InboxLayout({ children }: { children: React.ReactNode })
     )
   }
 
-  if (!isSuperAdmin) {
+  if (!hasAccess) {
     return <InboxComingSoon />
   }
 

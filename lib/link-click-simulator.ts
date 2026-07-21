@@ -330,7 +330,6 @@ async function getDomainHealthAccounts(): Promise<DomainHealthSeedAccount[]> {
     WHERE "domainHealthMode" = true
     AND email IS NOT NULL
     AND password IS NOT NULL
-    AND locked = 'false'
     AND ("assignedToClient" IS NULL OR "assignedToClient" != 'RIP')
     AND "engagement_enabled" = true
     AND active = true

@@ -761,11 +761,6 @@ function SeedListContent({
   }
 
   const testConnection = async (id: string, email: string, provider: string) => {
-    if (!selectedDomain) {
-      toast.error("Please select a domain first")
-      return
-    }
-
     try {
       setTestingConnection(id)
       setConnectionResult(null)
@@ -776,7 +771,7 @@ function SeedListContent({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ id, email, provider, domainId: selectedDomain.id }),
+        body: JSON.stringify({ id, email, provider }),
         credentials: "include",
       })
 
@@ -793,11 +788,6 @@ function SeedListContent({
   }
 
   const debugConnection = async (id: string, email: string, provider: string) => {
-    if (!selectedDomain) {
-      toast.error("Please select a domain first")
-      return
-    }
-
     try {
       setDebuggingId(id)
       setDebugResult(null)
@@ -808,7 +798,7 @@ function SeedListContent({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ id, email, provider, domainId: selectedDomain.id }),
+        body: JSON.stringify({ id, email, provider }),
         credentials: "include",
       })
 
@@ -825,11 +815,6 @@ function SeedListContent({
   }
 
   const debugBoxes = async (id: string, email: string, provider: string) => {
-    if (!selectedDomain) {
-      toast.error("Please select a domain first")
-      return
-    }
-
     try {
       setDebuggingBoxesId(id)
       setBoxesResult(null)
@@ -840,7 +825,7 @@ function SeedListContent({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ id, email, provider, domainId: selectedDomain.id }),
+        body: JSON.stringify({ id, email, provider }),
         credentials: "include",
       })
 

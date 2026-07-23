@@ -378,11 +378,6 @@ export default function SeedListContent({
   }
 
   const testConnection = async (id: string, email: string, provider: string) => {
-    if (!selectedDomain) {
-      toast.error("Please select a domain first")
-      return
-    }
-
     try {
       setTestingConnection(id)
       setConnectionResult(null)
@@ -393,7 +388,7 @@ export default function SeedListContent({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ id, email, provider, domainId: selectedDomain.id }),
+        body: JSON.stringify({ id, email, provider }),
         credentials: "include",
       })
 
@@ -410,11 +405,6 @@ export default function SeedListContent({
   }
 
   const debugConnection = async (id: string, email: string, provider: string) => {
-    if (!selectedDomain) {
-      toast.error("Please select a domain first")
-      return
-    }
-
     try {
       setDebuggingId(id)
       setDebugResult(null)
@@ -442,11 +432,6 @@ export default function SeedListContent({
   }
 
   const debugBoxes = async (id: string, email: string, provider: string) => {
-    if (!selectedDomain) {
-      toast.error("Please select a domain first")
-      return
-    }
-
     try {
       setDebuggingBoxesId(id)
       setBoxesResult(null)
@@ -474,11 +459,6 @@ export default function SeedListContent({
   }
 
   const togglePassword = async (emailId: string) => {
-    if (!selectedDomain) {
-      toast.error("Please select a domain first")
-      return
-    }
-
     if (showPasswordStates[emailId]) {
       setShowPasswordStates((prev) => ({ ...prev, [emailId]: false }))
       return

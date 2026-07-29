@@ -658,6 +658,7 @@ function SeedsModal({ onClose, clientSlug }: { onClose: () => void; clientSlug?:
     const url = clientSlug
       ? `/api/domain-health/seeds?clientSlug=${encodeURIComponent(clientSlug)}`
       : "/api/domain-health/seeds"
+    console.log("[v0] SeedsModal fetching:", url, "clientSlug prop:", clientSlug)
     fetch(url, { credentials: "include" })
       .then(async (r) => {
         if (!r.ok) return

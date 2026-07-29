@@ -649,13 +649,16 @@ interface SeedRecord {
   createdAt: string
 }
 
-function SeedsModal({ onClose }: { onClose: () => void }) {
+function SeedsModal({ onClose, clientSlug }: { onClose: () => void; clientSlug?: string }) {
   const [seeds, setSeeds] = useState<SeedRecord[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch("/api/domain-health/seeds", { credentials: "include" })
+    const url = clientSlug
+      ? `/api/domain-health/seeds?clientSlug=${encodeURIComponent(clientSlug)}`
+      : "/api/domain-health/seeds"
+    fetch(url, { credentials: "include" })
       .then(async (r) => {
         if (!r.ok) return
         const data = await r.json()
@@ -920,7 +923,7 @@ export function DomainHealthContent({ clientSlug }: { clientSlug?: string }) {
       />
     )}
     {showSeedsModal && (
-      <SeedsModal onClose={() => setShowSeedsModal(false)} />
+      <SeedsModal onClose={() => setShowSeedsModal(false)} clientSlug={clientSlug} />
     )}
     <div className="p-6 max-w-4xl mx-auto flex flex-col min-h-[calc(100vh-64px)]">
       {/* Header */}

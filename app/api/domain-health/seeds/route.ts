@@ -21,11 +21,13 @@ export async function GET(request: Request) {
       // Super admins may pass a clientSlug to scope, or see all domain health seeds
       const { searchParams } = new URL(request.url)
       const clientSlug = searchParams.get("clientSlug")
+      console.log("[v0] domain-health/seeds super_admin clientSlug:", clientSlug)
       if (clientSlug) {
         const client = await prisma.client.findUnique({
           where: { slug: clientSlug },
           select: { name: true },
         })
+        console.log("[v0] domain-health/seeds resolved clientName:", client?.name)
         clientName = client?.name ?? null
       }
     } else {

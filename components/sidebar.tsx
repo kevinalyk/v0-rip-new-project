@@ -530,6 +530,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                       collapsed={false}
                       onClick={() => navigate(`/${getClientSlug()}/inbox/domain-health`)}
                     />
+                    <NavItem
+                      icon={<MailCheck size={18} />}
+                      label="Spam Tester"
+                      active={pathname.includes("/inbox/spam-test")}
+                      collapsed={false}
+                      onClick={() => navigate(`/${getClientSlug()}/inbox/spam-test`)}
+                    />
                   </div>
                 )}
               </>

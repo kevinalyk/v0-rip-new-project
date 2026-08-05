@@ -183,6 +183,7 @@ model Client {
   personalEmailDomains PersonalEmailDomain[] // Personal email domains for CI
   personalPhoneNumbers PersonalPhoneNumber[] // Personal phone numbers for CI
   clientDomains        ClientDomain[]        // Sending domains for deliverability monitoring
+  spamTests            SpamTest[]
   
   @@index([totalUsers])
 }
@@ -860,6 +861,36 @@ model LookupSearch {
 
   @@index([userId])
   @@index([query])
+}
+
+// ─── Spam Test ────────────────────────────────────────────────────────────────
+
+model SpamTest {
+  id            String    @id @default(uuid())
+  clientId      String
+  clientSlug    String
+  testAddress   String    @unique // e.g. test-abc123@mg.rip-tool.com
+  status        String    @default("pending") // "pending" | "received" | "expired"
+  expiresAt     DateTime
+  receivedAt    DateTime?
+  subject       String?   @db.Text
+  fromAddress   String?
+  score         Float?    // SpamAssassin score (lower = better)
+  maxScore      Float?    // Max possible score (usually 10)
+  spamRules     Json?     // Array of { name, score, description }
+  spfResult     String?   // "pass" | "fail" | "neutral" | "none"
+  dkimResult    String?   // "pass" | "fail" | "none"
+  dmarcResult   String?   // "pass" | "fail" | "none"
+  htmlAnalysis  Json?     // { hasHtml, linkCount, imageCount, textHtmlRatio, hasUnsubscribe }
+  rawHeaders    Json?     // Snapshot of key headers
+  createdAt     DateTime  @default(now())
+
+  client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([clientSlug])
+  @@index([status])
+  @@index([createdAt])
 }
 
 // ─── Internal Changelog ───────────────────────────────────────────────────────

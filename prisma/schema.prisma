@@ -881,9 +881,13 @@ model SpamTest {
   spfResult     String?   // "pass" | "fail" | "neutral" | "none"
   dkimResult    String?   // "pass" | "fail" | "none"
   dmarcResult   String?   // "pass" | "fail" | "none"
-  htmlAnalysis  Json?     // { hasHtml, linkCount, imageCount, textHtmlRatio, hasUnsubscribe }
-  rawHeaders    Json?     // Snapshot of key headers
-  createdAt     DateTime  @default(now())
+  htmlAnalysis      Json?     // { hasHtml, linkCount, imageCount, textHtmlRatio, hasUnsubscribe }
+  rawHeaders        Json?     // Snapshot of key headers
+  bodyHtml          String?   @db.Text
+  bodyText          String?   @db.Text
+  blocklistResults  Json?     // Array of { list, listed, ip, domain }
+  linkCheckResults  Json?     // Array of { url, ok, statusCode, error }
+  createdAt         DateTime  @default(now())
 
   client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
 

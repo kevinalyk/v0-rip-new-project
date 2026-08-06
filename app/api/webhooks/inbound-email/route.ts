@@ -89,6 +89,101 @@ function analyzeHtml(htmlBody: string, textBody: string): Record<string, unknown
   return { hasHtml: true, linkCount, imageCount, textHtmlRatio, hasUnsubscribe }
 }
 
+// ─── Blocklist check ──────────────────────────────────────────────────────────
+
+// Check a single IP against a DNS-based RBL (returns true if listed)
+async function checkRbl(ip: string, rbl: string): Promise<boolean> {
+  try {
+    const reversed = ip.split(".").reverse().join(".")
+    const lookup = `${reversed}.${rbl}`
+    const { promises: dns } = await import("dns")
+    await dns.resolve4(lookup)
+    return true // resolves = listed
+  } catch {
+    return false // NXDOMAIN = not listed
+  }
+}
+
+async function runBlocklistCheck(fromAddress: string, fields: Record<string, string>): Promise<
+  Array<{ list: string; listed: boolean; value: string; type: "ip" | "domain" }>
+> {
+  // Extract sending IP from Received headers or X-Originating-IP
+  const receivedHeader = fields["Received"] || fields["received"] || ""
+  const ipMatch = /\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]/.exec(receivedHeader)
+  const sendingIp = ipMatch?.[1] ?? null
+
+  // Extract sending domain from From address
+  const domainMatch = /@([\w.-]+)/.exec(fromAddress)
+  const sendingDomain = domainMatch?.[1] ?? null
+
+  const rbls = [
+    { list: "Spamhaus ZEN", rbl: "zen.spamhaus.org", type: "ip" as const },
+    { list: "Spamhaus DBL", rbl: "dbl.spamhaus.org", type: "domain" as const },
+    { list: "Barracuda", rbl: "b.barracudacentral.org", type: "ip" as const },
+    { list: "SORBS SPAM", rbl: "spam.sorbs.net", type: "ip" as const },
+    { list: "SpamCop", rbl: "bl.spamcop.net", type: "ip" as const },
+  ]
+
+  const results: Array<{ list: string; listed: boolean; value: string; type: "ip" | "domain" }> = []
+
+  await Promise.all(
+    rbls.map(async ({ list, rbl, type }) => {
+      const value = type === "ip" ? sendingIp : sendingDomain
+      if (!value) {
+        results.push({ list, listed: false, value: "unknown", type })
+        return
+      }
+      const listed = await checkRbl(value, rbl)
+      results.push({ list, listed, value, type })
+    })
+  )
+
+  return results.sort((a, b) => a.list.localeCompare(b.list))
+}
+
+// ─── Link check ───────────────────────────────────────────────────────────────
+
+async function runLinkCheck(htmlBody: string): Promise<
+  Array<{ url: string; ok: boolean; statusCode?: number; error?: string }>
+> {
+  if (!htmlBody) return []
+
+  const urlRegex = /href=["']([^"']+)["']/gi
+  const urls: string[] = []
+  let match: RegExpExecArray | null
+  while ((match = urlRegex.exec(htmlBody)) !== null) {
+    const url = match[1]
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      if (!urls.includes(url)) urls.push(url)
+    }
+  }
+
+  const dedupedUrls = urls.slice(0, 20) // cap at 20 links
+
+  const results = await Promise.all(
+    dedupedUrls.map(async (url) => {
+      try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 8000)
+        const resp = await fetch(url, {
+          method: "HEAD",
+          redirect: "follow",
+          signal: controller.signal,
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; RIPToolBot/1.0)" },
+        })
+        clearTimeout(timeout)
+        return { url, ok: resp.ok, statusCode: resp.status }
+      } catch (err) {
+        return { url, ok: false, error: err instanceof Error ? err.message : "Request failed" }
+      }
+    })
+  )
+
+  return results
+}
+
+// ─── Main spam test handler ───────────────────────────────────────────────────
+
 async function handleSpamTestEmail(fields: Record<string, string>) {
   const recipient = (fields["recipient"] || fields["To"] || fields["to"] || "").toLowerCase()
   const subject = fields["subject"] || fields["Subject"] || ""
@@ -118,9 +213,14 @@ async function handleSpamTestEmail(fields: Record<string, string>) {
       bodyText || "(no body)",
     ].join("\r\n")
 
-  const spamResult = await runSpamCheck(emailForCheck)
-  const authResults = parseAuthResults(fields)
-  const htmlAnalysis = analyzeHtml(bodyHtml, bodyText)
+  // Run all checks in parallel
+  const [spamResult, authResults, htmlAnalysis, blocklistResults, linkCheckResults] = await Promise.all([
+    runSpamCheck(emailForCheck),
+    Promise.resolve(parseAuthResults(fields)),
+    Promise.resolve(analyzeHtml(bodyHtml, bodyText)),
+    runBlocklistCheck(fromAddress, fields),
+    runLinkCheck(bodyHtml),
+  ])
 
   const rawHeaders: Record<string, string> = {}
   for (const h of [
@@ -146,6 +246,10 @@ async function handleSpamTestEmail(fields: Record<string, string>) {
       dmarcResult: authResults.dmarc,
       htmlAnalysis,
       rawHeaders,
+      bodyHtml: bodyHtml || null,
+      bodyText: bodyText || null,
+      blocklistResults,
+      linkCheckResults,
     },
   })
 

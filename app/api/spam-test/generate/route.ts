@@ -79,22 +79,36 @@ export async function POST(request: Request) {
       "walker","young","allen","king","wright","scott","torres","nguyen","hill","flores",
       "green","adams","nelson","baker","hall","rivera","campbell","mitchell","carter","roberts",
     ]
-    const first = firstNames[Math.floor(Math.random() * firstNames.length)]
-    const last = lastNames[Math.floor(Math.random() * lastNames.length)]
-    const num = Math.floor(1000 + Math.random() * 9000)
-    const testAddress = `${first}.${last}${num}@${mailgunDomain}`
     const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000) // 72 hours
 
-    const spamTest = await prisma.spamTest.create({
-      data: {
-        id: uuidv4(),
-        clientId,
-        clientSlug,
-        testAddress,
-        status: "pending",
-        expiresAt,
-      },
-    })
+    // Retry loop — handles the extremely rare case of a collision
+    let spamTest = null
+    let attempts = 0
+    while (!spamTest && attempts < 5) {
+      attempts++
+      const first = firstNames[Math.floor(Math.random() * firstNames.length)]
+      const last = lastNames[Math.floor(Math.random() * lastNames.length)]
+      const num = Math.floor(1000 + Math.random() * 9000)
+      const candidate = `${first}.${last}${num}@${mailgunDomain}`
+
+      const existing = await prisma.spamTest.findUnique({ where: { testAddress: candidate } })
+      if (existing) continue
+
+      spamTest = await prisma.spamTest.create({
+        data: {
+          id: uuidv4(),
+          clientId,
+          clientSlug,
+          testAddress: candidate,
+          status: "pending",
+          expiresAt,
+        },
+      })
+    }
+
+    if (!spamTest) {
+      return NextResponse.json({ error: "Failed to generate a unique address, please try again" }, { status: 500 })
+    }
 
     return NextResponse.json({ testAddress, expiresAt, id: spamTest.id })
   } catch (error) {

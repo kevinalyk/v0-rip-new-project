@@ -65,22 +65,55 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Mailgun not configured" }, { status: 500 })
     }
 
-    const shortId = uuidv4().replace(/-/g, "").slice(0, 10)
-    const testAddress = `spamtest-${shortId}@${mailgunDomain}`
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24h
+    const firstNames = [
+      "james","john","robert","michael","william","david","richard","joseph","thomas","charles",
+      "mary","patricia","jennifer","linda","barbara","elizabeth","susan","jessica","sarah","karen",
+      "christopher","daniel","matthew","anthony","mark","donald","steven","paul","andrew","joshua",
+      "kevin","brian","george","edward","ronald","timothy","jason","jeffrey","ryan","jacob",
+      "gary","nicholas","eric","stephen","jonathan","larry","justin","scott","brandon","benjamin",
+    ]
+    const lastNames = [
+      "smith","johnson","williams","brown","jones","garcia","miller","davis","rodriguez","martinez",
+      "hernandez","lopez","gonzalez","wilson","anderson","thomas","taylor","moore","jackson","martin",
+      "lee","perez","thompson","white","harris","sanchez","clark","ramirez","lewis","robinson",
+      "walker","young","allen","king","wright","scott","torres","nguyen","hill","flores",
+      "green","adams","nelson","baker","hall","rivera","campbell","mitchell","carter","roberts",
+    ]
+    const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000) // 72 hours
 
-    const spamTest = await prisma.spamTest.create({
-      data: {
-        id: uuidv4(),
-        clientId,
-        clientSlug,
-        testAddress,
-        status: "pending",
-        expiresAt,
-      },
-    })
+    // Retry loop — handles the extremely rare case of a collision
+    let spamTest = null
+    let attempts = 0
+    while (!spamTest && attempts < 5) {
+      attempts++
+      const first = firstNames[Math.floor(Math.random() * firstNames.length)]
+      const last = lastNames[Math.floor(Math.random() * lastNames.length)]
+      const num = Math.floor(1000 + Math.random() * 9000)
+      const candidate = `${first}.${last}${num}@${mailgunDomain}`
 
-    return NextResponse.json({ testAddress, expiresAt, id: spamTest.id })
+      // Only treat as a collision if an active (non-expired) record exists
+      const existing = await prisma.spamTest.findFirst({
+        where: { testAddress: candidate, expiresAt: { gt: new Date() } },
+      })
+      if (existing) continue
+
+      spamTest = await prisma.spamTest.create({
+        data: {
+          id: uuidv4(),
+          clientId,
+          clientSlug,
+          testAddress: candidate,
+          status: "pending",
+          expiresAt,
+        },
+      })
+    }
+
+    if (!spamTest) {
+      return NextResponse.json({ error: "Failed to generate a unique address, please try again" }, { status: 500 })
+    }
+
+    return NextResponse.json({ testAddress: spamTest.testAddress, expiresAt: spamTest.expiresAt, id: spamTest.id })
   } catch (error) {
     console.error("Error generating spam test address:", error)
     return NextResponse.json({ error: "Failed to generate test address" }, { status: 500 })

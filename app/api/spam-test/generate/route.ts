@@ -91,7 +91,10 @@ export async function POST(request: Request) {
       const num = Math.floor(1000 + Math.random() * 9000)
       const candidate = `${first}.${last}${num}@${mailgunDomain}`
 
-      const existing = await prisma.spamTest.findUnique({ where: { testAddress: candidate } })
+      // Only treat as a collision if an active (non-expired) record exists
+      const existing = await prisma.spamTest.findFirst({
+        where: { testAddress: candidate, expiresAt: { gt: new Date() } },
+      })
       if (existing) continue
 
       spamTest = await prisma.spamTest.create({
@@ -110,7 +113,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to generate a unique address, please try again" }, { status: 500 })
     }
 
-    return NextResponse.json({ testAddress, expiresAt, id: spamTest.id })
+    return NextResponse.json({ testAddress: spamTest.testAddress, expiresAt: spamTest.expiresAt, id: spamTest.id })
   } catch (error) {
     console.error("Error generating spam test address:", error)
     return NextResponse.json({ error: "Failed to generate test address" }, { status: 500 })

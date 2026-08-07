@@ -1557,3 +1557,251 @@ To unsubscribe: ${settingsUrl}
     return false
   }
 }
+
+// ─── Campaign Launch Alert Digest ─────────────────────────────────────────────
+
+export interface CampaignAlertMatch {
+  alertName: string
+  launches: {
+    name: string
+    office: string | null
+    party: string | null
+    state: string | null
+    launchedAt: Date | null
+    profileUrl: string | null
+  }[]
+}
+
+export async function sendCampaignAlertDigest(params: {
+  to: string
+  firstName: string | null
+  matches: CampaignAlertMatch[]
+  runDate: string // e.g. "Thursday, August 6, 2026"
+}): Promise<boolean> {
+  const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
+  const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN
+
+  if (!MAILGUN_API_KEY || !MAILGUN_DOMAIN) {
+    console.error("[campaign-alerts] Mailgun credentials not configured")
+    return false
+  }
+
+  const { to, firstName, matches, runDate } = params
+  const APP_URL = "https://app.rip-tool.com"
+  const radarUrl = `${APP_URL}/directory/new-campaigns`
+  const settingsUrl = `${APP_URL}/directory/new-campaigns`
+
+  const greeting = firstName ? `Hi ${firstName},` : "Hi there,"
+
+  const totalLaunches = matches.reduce((sum, m) => sum + m.launches.length, 0)
+
+  const partyColor = (party: string | null) => {
+    if (!party) return "#6b7280"
+    const p = party.toLowerCase()
+    if (p === "republican") return "#dc2626"
+    if (p === "democrat") return "#2563eb"
+    return "#d97706"
+  }
+
+  const partyBg = (party: string | null) => {
+    if (!party) return "#1f2937"
+    const p = party.toLowerCase()
+    if (p === "republican") return "rgba(220,38,38,0.15)"
+    if (p === "democrat") return "rgba(37,99,235,0.15)"
+    return "rgba(217,119,6,0.15)"
+  }
+
+  const partyLabel = (party: string | null) => {
+    if (!party) return null
+    return party.charAt(0).toUpperCase() + party.slice(1)
+  }
+
+  const formatDate = (date: Date | null) => {
+    if (!date) return "Recently"
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(date)
+  }
+
+  const alertSectionsHtml = matches
+    .map((match) => {
+      const rowsHtml = match.launches
+        .map((launch, i) => {
+          const bg = i % 2 === 0 ? "#111827" : "#0f172a"
+          const pl = partyLabel(launch.party)
+          const partyBadge = pl
+            ? `<span style="display:inline-block;padding:1px 7px;border-radius:12px;font-size:10px;font-weight:700;letter-spacing:0.2px;color:${partyColor(launch.party)};background:${partyBg(launch.party)};margin-right:5px;">${pl}</span>`
+            : ""
+          const stateBadge = launch.state && launch.state !== "US"
+            ? `<span style="display:inline-block;padding:1px 7px;border-radius:12px;font-size:10px;font-weight:600;color:#9ca3af;background:#1f2937;margin-right:5px;">${launch.state}</span>`
+            : ""
+
+          const nameHtml = launch.profileUrl
+            ? `<a href="${launch.profileUrl}" target="_blank" style="font-size:14px;font-weight:600;color:#f9fafb;text-decoration:none;">${launch.name}</a>`
+            : `<span style="font-size:14px;font-weight:600;color:#f9fafb;">${launch.name}</span>`
+
+          const officeHtml = launch.office
+            ? `<p style="margin:2px 0 0;font-size:12px;color:#9ca3af;">${launch.office}</p>`
+            : ""
+
+          const viewBtn = launch.profileUrl
+            ? `<a href="${launch.profileUrl}" target="_blank" style="display:inline-block;padding:3px 10px;border:1px solid #374151;border-radius:4px;font-size:11px;font-weight:500;color:#9ca3af;text-decoration:none;white-space:nowrap;">View Profile ↗</a>`
+            : ""
+
+          return `
+            <tr>
+              <td style="padding:12px 20px;background:${bg};border-bottom:1px solid #1f2937;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="vertical-align:top;">
+                      ${nameHtml}
+                      ${officeHtml}
+                      <div style="margin-top:5px;">${partyBadge}${stateBadge}</div>
+                    </td>
+                    <td style="text-align:right;vertical-align:top;white-space:nowrap;padding-left:12px;">
+                      <p style="margin:0 0 5px;font-size:11px;color:#6b7280;">${formatDate(launch.launchedAt)}</p>
+                      ${viewBtn}
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>`
+        })
+        .join("")
+
+      return `
+        <tr>
+          <td style="padding:20px 20px 0;">
+            <p style="margin:0 0 4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:#6b7280;">Alert</p>
+            <p style="margin:0;font-size:17px;font-weight:700;color:#f9fafb;">${match.alertName}</p>
+            <p style="margin:4px 0 0;font-size:12px;color:#6b7280;">${match.launches.length} new ${match.launches.length === 1 ? "campaign" : "campaigns"}</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:12px 20px 0;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="border-radius:8px;overflow:hidden;border:1px solid #1f2937;">
+              ${rowsHtml}
+            </table>
+          </td>
+        </tr>`
+    })
+    .join(`<tr><td style="padding:20px 20px 0;"><div style="border-top:1px solid #1f2937;"></div></td></tr>`)
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Campaign Launch Alert — ${runDate}</title>
+</head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:24px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:580px;background:#111827;border-radius:12px;overflow:hidden;border:1px solid #1f2937;">
+
+          <!-- Header -->
+          <tr>
+            <td style="background:#dc2626;padding:24px 28px;">
+              <p style="margin:0;color:rgba(255,255,255,0.75);font-size:10px;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;">Inbox.GOP — Launch Radar</p>
+              <h1 style="margin:6px 0 0;color:#ffffff;font-size:22px;font-weight:800;line-height:1.2;">
+                ${totalLaunches} New Campaign${totalLaunches === 1 ? "" : "s"} Launched
+              </h1>
+              <p style="margin:6px 0 0;color:rgba(255,255,255,0.75);font-size:13px;">${runDate}</p>
+            </td>
+          </tr>
+
+          <!-- Greeting -->
+          <tr>
+            <td style="padding:24px 28px 8px;">
+              <p style="margin:0;font-size:15px;color:#d1d5db;line-height:1.6;">${greeting}</p>
+              <p style="margin:10px 0 0;font-size:14px;color:#9ca3af;line-height:1.6;">
+                The following new federal campaigns match your alert criteria and were filed with the FEC since the last check.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Alert sections -->
+          ${alertSectionsHtml}
+
+          <!-- Footer CTA -->
+          <tr>
+            <td style="padding:24px 28px;">
+              <table cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding-right:10px;">
+                    <a href="${radarUrl}" target="_blank" style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:6px;font-size:13px;font-weight:700;">View Launch Radar ↗</a>
+                  </td>
+                  <td>
+                    <a href="${settingsUrl}" target="_blank" style="display:inline-block;color:#6b7280;text-decoration:none;padding:10px 16px;border-radius:6px;font-size:13px;border:1px solid #1f2937;">Manage Alerts</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:16px 28px;border-top:1px solid #1f2937;">
+              <p style="margin:0;font-size:11px;color:#4b5563;line-height:1.6;">
+                You received this email because you set up a Campaign Launch Alert on Inbox.GOP. 
+                <a href="${settingsUrl}" target="_blank" style="color:#6b7280;text-decoration:underline;">Manage your alerts</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+
+  const text = `${greeting}
+
+${totalLaunches} new campaign${totalLaunches === 1 ? "" : "s"} matching your alerts — ${runDate}
+
+${matches
+  .map(
+    (m) =>
+      `=== ${m.alertName} (${m.launches.length} new) ===\n` +
+      m.launches
+        .map((l) => `${l.name} — ${l.office ?? "Unknown office"} — ${l.party ?? "Unknown party"}${l.state ? ` — ${l.state}` : ""}`)
+        .join("\n"),
+  )
+  .join("\n\n")}
+
+View the Launch Radar: ${radarUrl}
+Manage your alerts: ${settingsUrl}
+`
+
+  const formData = new FormData()
+  formData.append("from", `Inbox.GOP Alerts <alerts@${MAILGUN_DOMAIN}>`)
+  formData.append("to", to)
+  formData.append("subject", `${totalLaunches} new campaign${totalLaunches === 1 ? "" : "s"} match your alerts — ${runDate}`)
+  formData.append("html", html)
+  formData.append("text", text)
+
+  try {
+    const response = await fetch(`https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`api:${MAILGUN_API_KEY}`).toString("base64")}`,
+      },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("[campaign-alerts] Mailgun error:", response.status, errorText)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error("[campaign-alerts] Error sending alert digest:", error)
+    return false
+  }
+}

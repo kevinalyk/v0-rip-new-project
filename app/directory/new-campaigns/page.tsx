@@ -10,6 +10,7 @@ import { ArrowLeft, ArrowRight, Sparkles, Megaphone, MapPin, Building2 } from "l
 import prisma from "@/lib/prisma"
 import { nameToSlug } from "@/lib/directory"
 import NewCampaignsFilters from "@/components/new-campaigns-filters"
+import CampaignAlertDialog from "@/components/campaign-alert-dialog"
 import { OFFICES } from "@/lib/campaign-filter-options"
 import AdBanner from "@/components/ad-banner"
 import { shouldShowAd } from "@/lib/ads"
@@ -169,11 +170,14 @@ export default async function NewCampaignsPage({
               Profiles are enriched over time as more information becomes available.
             </p>
           </div>
-          {!isEmpty && !(party || state || office) && (
-            <div className="flex-shrink-0 text-sm text-muted-foreground pt-1">
-              {launches.length} new {launches.length === 1 ? "campaign" : "campaigns"} this week
-            </div>
-          )}
+          <div className="flex items-center gap-3 flex-shrink-0 pt-1">
+            {!isEmpty && !(party || state || office) && (
+              <span className="text-sm text-muted-foreground">
+                {launches.length} new {launches.length === 1 ? "campaign" : "campaigns"} this week
+              </span>
+            )}
+            {clientSlug && <CampaignAlertDialog />}
+          </div>
         </div>
 
         {/* Filters */}

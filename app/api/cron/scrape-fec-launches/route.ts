@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { enrichEntityFromBallotpedia } from "@/lib/ballotpedia-enrich"
+import { sendCampaignAlertDigest, type CampaignAlertMatch } from "@/lib/mailgun"
+import { nameToSlug } from "@/lib/directory-utils"
 
 export const runtime = "nodejs"
 // Allow up to 5 minutes — we may be fetching many candidates + creating entities
@@ -409,6 +411,116 @@ export async function GET(request: Request) {
 
     console.log(`[fec-scraper] Done — launches created: ${created}, entities created: ${entitiesCreated}`)
 
+    // ── Campaign alert dispatch ────────────────────────────────────────────────
+    // Only bother if we actually inserted new launches this run
+    let alertsSent = 0
+    if (created > 0) {
+      try {
+        // Fetch the newly-created launches (the ones we just inserted)
+        const newLaunchRecords = await prisma.campaignLaunch.findMany({
+          where: {
+            sourceExternalId: { in: formattedCandidates.map((c) => c.fecId) },
+            status: "active",
+          },
+          select: {
+            name: true,
+            party: true,
+            state: true,
+            office: true,
+            launchedAt: true,
+            linkedEntity: { select: { name: true } },
+          },
+        })
+
+        // Fetch all alert subscriptions with user email
+        const alertSubs = await prisma.campaignAlertSubscription.findMany({
+          include: {
+            user: { select: { id: true, email: true, firstName: true } },
+          },
+        })
+
+        // Group subscriptions by user
+        const subsByUser = new Map<string, typeof alertSubs>()
+        for (const sub of alertSubs) {
+          if (!sub.user.email) continue
+          if (!subsByUser.has(sub.user.id)) subsByUser.set(sub.user.id, [])
+          subsByUser.get(sub.user.id)!.push(sub)
+        }
+
+        const runDate = new Intl.DateTimeFormat("en-US", {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+          timeZone: "America/New_York",
+        }).format(new Date())
+
+        const APP_URL = "https://app.rip-tool.com"
+
+        for (const [, subs] of subsByUser) {
+          const user = subs[0].user
+          const matches: CampaignAlertMatch[] = []
+
+          for (const sub of subs) {
+            // Filter new launches against this alert's criteria
+            const matching = newLaunchRecords.filter((launch: typeof newLaunchRecords[number]) => {
+              if (sub.party && launch.party !== sub.party) return false
+              if (sub.state && launch.state !== sub.state) return false
+              if (sub.office) {
+                // office stored as "house" | "senate" | "president" — match against text
+                const officeMap: Record<string, string> = {
+                  house: "U.S. House",
+                  senate: "U.S. Senate",
+                  president: "President",
+                }
+                const needle = officeMap[sub.office] ?? sub.office
+                if (!launch.office?.toLowerCase().includes(needle.toLowerCase())) return false
+              }
+              return true
+            })
+
+            if (matching.length > 0) {
+              matches.push({
+                alertName: sub.name,
+                launches: matching.map((l: typeof newLaunchRecords[number]) => {
+                  const slug = l.linkedEntity ? nameToSlug(l.linkedEntity.name) : nameToSlug(l.name)
+                  return {
+                    name: l.name,
+                    office: l.office,
+                    party: l.party,
+                    state: l.state,
+                    launchedAt: l.launchedAt,
+                    profileUrl: slug ? `${APP_URL}/directory/${slug}` : null,
+                  }
+                }),
+              })
+            }
+          }
+
+          if (matches.length === 0) continue
+
+          const ok = await sendCampaignAlertDigest({
+            to: user.email!,
+            firstName: user.firstName ?? null,
+            matches,
+            runDate,
+          })
+
+          if (ok) {
+            alertsSent++
+            console.log(`[fec-scraper] Alert sent to ${user.email}`)
+          } else {
+            console.error(`[fec-scraper] Alert failed for ${user.email}`)
+          }
+        }
+
+        console.log(`[fec-scraper] Alerts sent: ${alertsSent}`)
+      } catch (alertErr) {
+        // Never let alert errors break the main cron response
+        console.error("[fec-scraper] Alert dispatch error:", alertErr)
+      }
+    }
+
     return NextResponse.json({
       success: true,
       totalFromFecAfterFilter: newLaunches.length,
@@ -421,6 +533,7 @@ export async function GET(request: Request) {
       ballotpediaUrlsAttempted: candidatesToResolve.length,
       skipped,
       createdNames,
+      alertsSent,
       diagnostics,
     })
   } catch (error) {

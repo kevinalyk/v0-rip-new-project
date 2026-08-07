@@ -34,6 +34,7 @@ model User {
   ciViews       CiView[]
   entityTags    EntityTag[] // Added relation to entity tags created by this user
   lookupSearches LookupSearch[] // Searches made via the public lookup tool
+  campaignAlerts CampaignAlertSubscription[]
 }
 
 model Domain {
@@ -861,6 +862,23 @@ model LookupSearch {
 
   @@index([userId])
   @@index([query])
+}
+
+// ─── Campaign Launch Alerts ───────────────────────────────────────────────────
+
+model CampaignAlertSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String   // User-given label, e.g. "Republican Senate in Alabama"
+  party     String?  // "republican" | "democrat" | "independent" | null = any
+  state     String?  // two-letter code, null = any
+  office    String?  // "house" | "senate" | "president" | null = any
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // ─── Spam Test ────────────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@ import NewsPageClient from "@/components/news-page-client"
 import { Megaphone } from "lucide-react"
 import AdBanner from "@/components/ad-banner"
 import { shouldShowAd } from "@/lib/ads"
+import { NewsArticleImage } from "@/components/news-article-image"
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
@@ -110,9 +111,11 @@ export default async function NewsPage() {
                   className="rounded-xl border border-border bg-card overflow-hidden hover:border-[#dc2a28]/40 hover:shadow-md transition-all"
                 >
                   {a.imageUrl && (
-                    <div className="w-full aspect-[16/6] overflow-hidden bg-muted">
-                      <img src={a.imageUrl} alt={a.title} className="w-full h-full object-cover" />
-                    </div>
+                    <NewsArticleImage
+                      src={a.imageUrl}
+                      alt={a.title}
+                      containerClassName="w-full aspect-[16/6] overflow-hidden bg-muted"
+                    />
                   )}
                   <div className="px-5 py-4">
                     <time

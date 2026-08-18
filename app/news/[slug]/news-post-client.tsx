@@ -26,6 +26,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
+import { NewsArticleImage } from "@/components/news-article-image"
 import { format, differenceInDays } from "date-fns"
 import {
   Loader2, ArrowLeft, Facebook, Link2, Pencil, Trash2,
@@ -277,9 +278,11 @@ export default function NewsPostClient({ slug, initialPost }: { slug: string; in
   return (
     <>
       {post.imageUrl && (
-        <div className="w-full h-[260px] overflow-hidden">
-          <img src={post.imageUrl} alt={post.title} className="w-full h-full object-cover" />
-        </div>
+        <NewsArticleImage
+          src={post.imageUrl}
+          alt={post.title}
+          containerClassName="w-full h-[260px] overflow-hidden bg-muted"
+        />
       )}
 
       <div className="container mx-auto py-8 px-4 max-w-3xl">

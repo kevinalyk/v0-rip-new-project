@@ -1,41 +1,33 @@
-"use client"
-
-import { useState } from "react"
-
 interface NewsArticleImageProps {
   src: string
   alt: string
-  /** Classes for the fixed-size clipping container (controls the banner's footprint on the page). */
-  containerClassName: string
+  /**
+   * Classes for the outer wrapper. Should NOT set a fixed height or
+   * `overflow-hidden` — the image renders at its natural aspect ratio, so
+   * the wrapper's height follows the image automatically. Width/rounding/
+   * background classes are still fine to pass here.
+   */
+  containerClassName?: string
 }
 
 /**
- * Renders an announcement banner image inside a fixed-size container.
+ * Renders an announcement banner image without ever cropping it.
  *
- * Wide/landscape images (e.g. designed 16:6 banners) are cropped to fill the
- * container exactly like before. Tall images (e.g. product screenshots or
- * portrait mockups) would lose their top/bottom content if cropped the same
- * way, so those are instead scaled to fit fully inside the container with
- * letterboxing. The decision is made from the image's real dimensions once
- * it loads, so existing wide banners keep their current look untouched.
+ * Earlier versions of this component tried to force every image into a
+ * fixed-aspect-ratio box (via `object-cover`, or a heuristic that guessed
+ * whether to crop vs. letterbox). Both approaches cut off real content for
+ * some images (e.g. a headline running along the top edge) because the
+ * guess didn't match the image's actual composition.
+ *
+ * The reliable fix is to not crop at all: the image is rendered at
+ * `w-full h-auto`, so it always displays in full at its natural aspect
+ * ratio, and the container height simply follows the image instead of the
+ * other way around.
  */
 export function NewsArticleImage({ src, alt, containerClassName }: NewsArticleImageProps) {
-  const [isTall, setIsTall] = useState(false)
-
   return (
     <div className={containerClassName}>
-      <img
-        src={src}
-        alt={alt}
-        className={isTall ? "w-full h-full object-contain" : "w-full h-full object-cover"}
-        crossOrigin="anonymous"
-        onLoad={(e) => {
-          const img = e.currentTarget
-          if (img.naturalWidth && img.naturalHeight) {
-            setIsTall(img.naturalHeight / img.naturalWidth > 0.7)
-          }
-        }}
-      />
+      <img src={src} alt={alt} className="w-full h-auto block" />
     </div>
   )
 }

@@ -114,7 +114,7 @@ export default async function NewsPage() {
                     <NewsArticleImage
                       src={a.imageUrl}
                       alt={a.title}
-                      containerClassName="w-full aspect-[16/6] overflow-hidden bg-muted"
+                      containerClassName="w-full bg-muted"
                     />
                   )}
                   <div className="px-5 py-4">

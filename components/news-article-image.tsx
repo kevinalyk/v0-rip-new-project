@@ -1,54 +1,33 @@
-"use client"
-
-import { useRef, useState } from "react"
-
 interface NewsArticleImageProps {
   src: string
   alt: string
-  /** Classes for the fixed-size clipping container (controls the banner's footprint on the page). */
-  containerClassName: string
+  /**
+   * Classes for the outer wrapper. Should NOT set a fixed height or
+   * `overflow-hidden` — the image renders at its natural aspect ratio, so
+   * the wrapper's height follows the image automatically. Width/rounding/
+   * background classes are still fine to pass here.
+   */
+  containerClassName?: string
 }
 
 /**
- * Renders an announcement banner image inside a fixed-size container.
+ * Renders an announcement banner image without ever cropping it.
  *
- * Images whose aspect ratio closely matches the container (e.g. banners
- * designed for that exact footprint) are cropped to fill it exactly like
- * before. Images that are proportionally narrower/taller than the container
- * (e.g. product screenshots or portrait mockups) would lose meaningful
- * top/bottom content if cropped the same way, so those are instead scaled to
- * fit fully inside the container with letterboxing.
+ * Earlier versions of this component tried to force every image into a
+ * fixed-aspect-ratio box (via `object-cover`, or a heuristic that guessed
+ * whether to crop vs. letterbox). Both approaches cut off real content for
+ * some images (e.g. a headline running along the top edge) because the
+ * guess didn't match the image's actual composition.
  *
- * The decision compares the image's real aspect ratio against the
- * container's actual rendered aspect ratio (not a fixed constant), since the
- * container shape differs between the news list cards and the article detail
- * banner.
+ * The reliable fix is to not crop at all: the image is rendered at
+ * `w-full h-auto`, so it always displays in full at its natural aspect
+ * ratio, and the container height simply follows the image instead of the
+ * other way around.
  */
 export function NewsArticleImage({ src, alt, containerClassName }: NewsArticleImageProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [fit, setFit] = useState<"cover" | "contain">("cover")
-
   return (
-    <div ref={containerRef} className={containerClassName}>
-      <img
-        src={src}
-        alt={alt}
-        className={fit === "contain" ? "w-full h-full object-contain" : "w-full h-full object-cover"}
-        onLoad={(e) => {
-          const img = e.currentTarget
-          const container = containerRef.current
-          if (!img.naturalWidth || !img.naturalHeight || !container) return
-
-          const imageAspect = img.naturalWidth / img.naturalHeight
-          const containerAspect = container.clientWidth / container.clientHeight
-
-          // If the image is meaningfully narrower (more portrait) than the
-          // container, cropping to fill would cut off real content -
-          // letterbox it instead. A small tolerance avoids flipping modes
-          // for banners that are already a near-exact match.
-          setFit(imageAspect < containerAspect * 0.9 ? "contain" : "cover")
-        }}
-      />
+    <div className={containerClassName}>
+      <img src={src} alt={alt} className="w-full h-auto block" />
     </div>
   )
 }

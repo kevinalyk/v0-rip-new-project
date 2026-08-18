@@ -281,7 +281,7 @@ export default function NewsPostClient({ slug, initialPost }: { slug: string; in
         <NewsArticleImage
           src={post.imageUrl}
           alt={post.title}
-          containerClassName="w-full h-[260px] overflow-hidden bg-muted"
+          containerClassName="w-full bg-muted"
         />
       )}
 

@@ -2,6 +2,18 @@ import { SignJWT, jwtVerify } from "jose"
 import prisma from "@/lib/prisma"
 import { getAuthenticatedUser } from "@/lib/auth"
 
+// The single shared Vercel Connect Slack connector. Every client installs
+// this same app into their own workspace; Connect keeps each workspace's
+// bot token isolated under its own installationId within this one connector.
+export const SLACK_CONNECTOR_UID = "slack/rip-tool-slack-alerts"
+
+// Bot scopes this app actually calls: conversations.list (channels:read),
+// conversations.join (channels:join), and chat.postMessage (chat:write).
+// Vercel Connect passes these through to Slack's OAuth consent screen, so
+// they must be the real Slack scope names, not a wildcard - Slack has no "*".
+// Keep this identical across startAuthorization and every getToken call.
+export const SLACK_SCOPES = ["channels:read", "channels:join", "chat:write"]
+
 // Roles allowed to connect, reconfigure, or disconnect the company-wide Slack
 // integration. Every other role (editor, viewer) can view connection status
 // but not change it - Slack is a company-wide setting, not a per-user one.

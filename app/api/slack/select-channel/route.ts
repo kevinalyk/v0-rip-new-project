@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server"
 import { getToken } from "@vercel/connect"
 import prisma from "@/lib/prisma"
-import { canManageSlackIntegration, getRequestingClientUser } from "@/lib/slack-integration-auth"
-import { SLACK_CONNECTOR_UID } from "@/app/api/slack/connect/route"
+import {
+  canManageSlackIntegration,
+  getRequestingClientUser,
+  SLACK_CONNECTOR_UID,
+  SLACK_SCOPES,
+} from "@/lib/slack-integration-auth"
 
 // Finalizes setup: joins the chosen channel, posts a confirmation message,
 // and marks the integration "connected" for the whole client.
@@ -35,7 +39,7 @@ export async function POST(request: Request) {
     const botToken = await getToken(SLACK_CONNECTOR_UID, {
       subject: { type: "user", id: clientId },
       installationId: integration.installationId ?? undefined,
-      scopes: ["*"],
+      scopes: SLACK_SCOPES,
     })
 
     const joinResponse = await fetch("https://slack.com/api/conversations.join", {

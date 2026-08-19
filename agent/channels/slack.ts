@@ -5,7 +5,7 @@ import { defaultSlackAuth, slackChannel } from "eve/channels/slack"
 // resolves the right bot token per event). Client isolation happens in our
 // own data layer via `SlackIntegration.teamId`, not via separate connectors.
 export default slackChannel({
-  credentials: connectSlackCredentials("slack/rip-tool"),
+  credentials: connectSlackCredentials("slack/rip-tool-slack-alerts"),
   onAppMention(ctx, message) {
     if (!message.author) return null
     return { auth: defaultSlackAuth(message, ctx) }

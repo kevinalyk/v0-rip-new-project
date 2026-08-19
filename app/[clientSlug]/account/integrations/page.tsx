@@ -145,7 +145,7 @@ export default function AccountIntegrationsPage() {
   const handleConnect = async () => {
     setConnecting(true)
     try {
-      const response = await fetch("/api/slack/connect", { credentials: "include" })
+      const response = await fetch("/api/slack/connect", { method: "POST", credentials: "include" })
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
         throw new Error(data.error ?? "Failed to start Slack connection")

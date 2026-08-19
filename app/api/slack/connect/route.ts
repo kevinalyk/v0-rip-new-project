@@ -11,7 +11,7 @@ import {
 // The single shared Vercel Connect Slack connector. Every client installs
 // this same app into their own workspace; Connect keeps each workspace's
 // bot token isolated under its own installationId within this one connector.
-export const SLACK_CONNECTOR_UID = "slack/rip-tool"
+export const SLACK_CONNECTOR_UID = "slack/rip-tool-slack-alerts"
 
 // Starts the company-wide Slack connection flow. Only Owners/Admins may
 // initiate this - Slack is a single, shared integration for the whole

@@ -197,7 +197,7 @@ model Client {
 model SlackIntegration {
   id                String    @id @default(cuid())
   clientId          String    @unique
-  installationId    String?   @unique // Vercel Connect's per-workspace installation identifier for the shared "slack/rip-tool" connector
+  installationId    String?   @unique // Vercel Connect's per-workspace installation identifier for the shared "slack/rip-tool-slack-alerts" connector
   teamId            String?   @unique // Slack workspace (team) ID, e.g. "T0123ABC" - resolves inbound events to this client
   teamName          String? // Slack workspace display name, shown in the UI
   channelId         String? // Slack channel the bot posts alerts into

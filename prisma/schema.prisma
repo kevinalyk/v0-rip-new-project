@@ -35,6 +35,7 @@ model User {
   entityTags    EntityTag[] // Added relation to entity tags created by this user
   lookupSearches LookupSearch[] // Searches made via the public lookup tool
   campaignAlerts CampaignAlertSubscription[]
+  slackIntegrationsConnected SlackIntegration[] // Slack integrations this user (as Owner/Admin) completed setup for
 }
 
 model Domain {
@@ -185,8 +186,33 @@ model Client {
   personalPhoneNumbers PersonalPhoneNumber[] // Personal phone numbers for CI
   clientDomains        ClientDomain[]        // Sending domains for deliverability monitoring
   spamTests            SpamTest[]
+  slackIntegration     SlackIntegration?
   
   @@index([totalUsers])
+}
+
+// Company-wide Slack connection for a client. One row per client (never per-user) -
+// connecting Slack applies to the entire organization, and any member can see alerts
+// posted to the linked channel once an Owner/Admin has set it up.
+model SlackIntegration {
+  id                String    @id @default(cuid())
+  clientId          String    @unique
+  installationId    String?   @unique // Vercel Connect's per-workspace installation identifier for the shared "slack/rip-tool-slack-alerts" connector
+  teamId            String?   @unique // Slack workspace (team) ID, e.g. "T0123ABC" - resolves inbound events to this client
+  teamName          String? // Slack workspace display name, shown in the UI
+  channelId         String? // Slack channel the bot posts alerts into
+  channelName       String? // Display name of the channel, e.g. "#rip-alerts"
+  status            String    @default("pending") // "pending" (install started, not yet completed) | "awaiting_channel" (authorized, channel not yet chosen) | "connected" | "disconnected"
+  connectedByUserId String? // The Owner/Admin who completed setup, for audit purposes
+  connectedAt       DateTime?
+  disconnectedAt    DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  client            Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  connectedByUser   User?     @relation(fields: [connectedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([teamId])
 }
 
 model ClientDomain {

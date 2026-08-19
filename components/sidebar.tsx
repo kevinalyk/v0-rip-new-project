@@ -22,6 +22,7 @@ import {
   BarChart3,
   Lightbulb,
   CreditCard,
+  Plug,
   Wrench,
   Building2,
   ChevronDown,
@@ -695,6 +696,15 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                   collapsed={false}
                   onClick={() => navigate(`/${getClientSlug()}/account/billing`)}
                 />
+                {userRole === "super_admin" && (
+                  <NavItem
+                    icon={<Plug size={18} />}
+                    label="Integrations"
+                    active={pathname.includes("/account/integrations")}
+                    collapsed={false}
+                    onClick={() => navigate(`/${getClientSlug()}/account/integrations`)}
+                  />
+                )}
               </div>
             )}
           </nav>

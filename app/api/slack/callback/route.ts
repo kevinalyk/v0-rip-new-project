@@ -41,7 +41,7 @@ export async function GET(request: Request) {
 
   try {
     const tokenResponse = await getTokenResponse(SLACK_CONNECTOR_UID, {
-      subject: { type: "app" },
+      subject: { type: "user", id: state.clientId },
       scopes: ["*"],
     })
 

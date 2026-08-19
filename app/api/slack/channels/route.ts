@@ -30,7 +30,7 @@ export async function GET(request: Request) {
 
   try {
     const botToken = await getToken(SLACK_CONNECTOR_UID, {
-      subject: { type: "app" },
+      subject: { type: "user", id: userRecord.clientId as string },
       installationId: integration.installationId ?? undefined,
       scopes: ["*"],
     })

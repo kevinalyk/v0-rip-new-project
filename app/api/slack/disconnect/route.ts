@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
   try {
     await revokeToken(SLACK_CONNECTOR_UID, {
-      subject: { type: "app" },
+      subject: { type: "user", id: clientId },
       installationId: integration.installationId ?? undefined,
     })
   } catch (error) {

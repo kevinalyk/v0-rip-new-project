@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 
   try {
     const botToken = await getToken(SLACK_CONNECTOR_UID, {
-      subject: { type: "app" },
+      subject: { type: "user", id: clientId },
       installationId: integration.installationId ?? undefined,
       scopes: ["*"],
     })

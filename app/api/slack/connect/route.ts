@@ -37,7 +37,7 @@ export async function POST(request: Request) {
 
     const { url } = await startAuthorization(
       SLACK_CONNECTOR_UID,
-      { subject: { type: "app" }, scopes: ["*"] },
+      { subject: { type: "user", id: clientId }, scopes: ["*"] },
       { callbackUrl: `${origin}/api/slack/callback?state=${encodeURIComponent(state)}` },
     )
 

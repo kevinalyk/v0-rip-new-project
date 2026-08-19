@@ -2,8 +2,7 @@ import { NextResponse } from "next/server"
 import { getTokenResponse } from "@vercel/connect"
 import prisma from "@/lib/prisma"
 import { getOrigin } from "@/lib/get-origin"
-import { verifySlackConnectState } from "@/lib/slack-integration-auth"
-import { SLACK_CONNECTOR_UID } from "@/app/api/slack/connect/route"
+import { verifySlackConnectState, SLACK_CONNECTOR_UID, SLACK_SCOPES } from "@/lib/slack-integration-auth"
 
 // Slack redirects the browser here (via Vercel Connect) once the workspace
 // admin approves the install. We resolve which client initiated this via the
@@ -42,7 +41,7 @@ export async function GET(request: Request) {
   try {
     const tokenResponse = await getTokenResponse(SLACK_CONNECTOR_UID, {
       subject: { type: "user", id: state.clientId },
-      scopes: ["*"],
+      scopes: SLACK_SCOPES,
     })
 
     const teamId =

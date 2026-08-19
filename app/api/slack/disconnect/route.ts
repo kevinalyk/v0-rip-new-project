@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server"
 import { revokeToken } from "@vercel/connect"
 import prisma from "@/lib/prisma"
-import { canManageSlackIntegration, getRequestingClientUser } from "@/lib/slack-integration-auth"
-import { SLACK_CONNECTOR_UID } from "@/app/api/slack/connect/route"
+import {
+  canManageSlackIntegration,
+  getRequestingClientUser,
+  SLACK_CONNECTOR_UID,
+} from "@/lib/slack-integration-auth"
 
 export async function POST(request: Request) {
   const userRecord = await getRequestingClientUser(request)

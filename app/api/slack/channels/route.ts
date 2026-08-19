@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server"
 import { getToken } from "@vercel/connect"
 import prisma from "@/lib/prisma"
-import { canManageSlackIntegration, getRequestingClientUser } from "@/lib/slack-integration-auth"
-import { SLACK_CONNECTOR_UID } from "@/app/api/slack/connect/route"
+import {
+  canManageSlackIntegration,
+  getRequestingClientUser,
+  SLACK_CONNECTOR_UID,
+  SLACK_SCOPES,
+} from "@/lib/slack-integration-auth"
 
 // Lists public channels in the connected workspace so an Owner/Admin can
 // pick where alerts get posted. Requires the workspace authorization step
@@ -32,7 +36,7 @@ export async function GET(request: Request) {
     const botToken = await getToken(SLACK_CONNECTOR_UID, {
       subject: { type: "user", id: userRecord.clientId as string },
       installationId: integration.installationId ?? undefined,
-      scopes: ["*"],
+      scopes: SLACK_SCOPES,
     })
 
     const response = await fetch(

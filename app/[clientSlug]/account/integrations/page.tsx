@@ -51,7 +51,24 @@ export default function AccountIntegrationsPage() {
       const response = await fetch("/api/slack/status", { credentials: "include" })
       if (response.ok) {
         const data = await response.json()
-        setSlackStatus(data)
+        // /api/slack/status returns { integration, canManage } with the
+        // connector's status nested inside `integration` and the connector
+        // user surfaced as `connectedByUser` - flatten that into the shape
+        // this page's UI checks (slackStatus.status, .connectedByName, etc).
+        const integration = data.integration
+        const connectedByUser = integration?.connectedByUser
+        const connectedByName = connectedByUser
+          ? [connectedByUser.firstName, connectedByUser.lastName].filter(Boolean).join(" ") ||
+            connectedByUser.email
+          : null
+        setSlackStatus({
+          connected: integration?.status === "connected",
+          status: integration?.status ?? null,
+          teamName: integration?.teamName ?? null,
+          channelName: integration?.channelName ?? null,
+          connectedByName,
+          connectedAt: integration?.connectedAt ?? null,
+        })
       }
     } catch (error) {
       console.error("[v0] Error fetching Slack status:", error)
@@ -340,6 +357,14 @@ export default function AccountIntegrationsPage() {
                       Connect channel
                     </Button>
                   </div>
+                  <Button
+                    variant="outline"
+                    onClick={handleDisconnect}
+                    disabled={disconnecting || savingChannel}
+                  >
+                    {disconnecting && <Loader2 size={14} className="mr-2 animate-spin" />}
+                    Disconnect Slack
+                  </Button>
                 </div>
               )}
 

@@ -696,13 +696,15 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                   collapsed={false}
                   onClick={() => navigate(`/${getClientSlug()}/account/billing`)}
                 />
-                <NavItem
-                  icon={<Plug size={18} />}
-                  label="Integrations"
-                  active={pathname.includes("/account/integrations")}
-                  collapsed={false}
-                  onClick={() => navigate(`/${getClientSlug()}/account/integrations`)}
-                />
+                {userRole === "super_admin" && (
+                  <NavItem
+                    icon={<Plug size={18} />}
+                    label="Integrations"
+                    active={pathname.includes("/account/integrations")}
+                    collapsed={false}
+                    onClick={() => navigate(`/${getClientSlug()}/account/integrations`)}
+                  />
+                )}
               </div>
             )}
           </nav>

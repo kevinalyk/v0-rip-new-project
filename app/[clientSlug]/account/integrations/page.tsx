@@ -93,13 +93,23 @@ export default function AccountIntegrationsPage() {
           if (!verifyResponse.ok) {
             if (userData.role === "super_admin") {
               router.push("/rip/ci/campaigns")
-            } else if (userData.clientSlug) {
-              router.push(`/${userData.clientSlug}`)
+            } else if (clientSlug) {
+              router.push(`/${clientSlug}`)
             } else {
               router.push("/login")
             }
             return
           }
+        }
+
+        // Integrations are still being rolled out - restrict access to super_admins for now.
+        if (userData.role !== "super_admin") {
+          if (!isAdminRoute && clientSlug) {
+            router.push(`/${clientSlug}/account/settings`)
+          } else {
+            router.push("/login")
+          }
+          return
         }
 
         setCurrentUserRole(userData.role ?? null)

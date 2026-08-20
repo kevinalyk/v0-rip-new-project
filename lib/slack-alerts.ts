@@ -3,6 +3,15 @@ import { decrypt } from "@/lib/encryption"
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
+// entityId only becomes non-null well after a message actually arrived in several
+// paths: the twice-daily auto-assign-unassigned cron sweeps a backlog of anything
+// left unassigned, and manual "assign this sender to entity X" retroactively
+// touches every historical unassigned message from that sender/domain/phone. Both
+// call this same function, so without a recency check they'd alert on day-old (or
+// older) backlog as if it "just happened." Anything older than this window is
+// treated as backlog catch-up: it still gets assigned, just not alerted on.
+const ALERT_FRESHNESS_WINDOW_MS = 3 * 60 * 60 * 1000 // 3 hours
+
 interface NotifyNewEmailParams {
   kind: "email"
   entityId: string
@@ -11,6 +20,8 @@ interface NotifyNewEmailParams {
   senderEmail: string
   subject: string
   shareToken: string
+  /** When the message actually arrived (e.g. campaign.dateReceived / sms.createdAt) - NOT when it was assigned/detected. */
+  occurredAt: Date
 }
 
 interface NotifyNewSmsParams {
@@ -20,6 +31,8 @@ interface NotifyNewSmsParams {
   phoneNumber: string | null
   message: string | null
   shareToken: string
+  /** When the message actually arrived (e.g. campaign.dateReceived / sms.createdAt) - NOT when it was assigned/detected. */
+  occurredAt: Date
 }
 
 type NotifyParams = NotifyNewEmailParams | NotifyNewSmsParams
@@ -30,9 +43,22 @@ type NotifyParams = NotifyNewEmailParams | NotifyNewSmsParams
  * moment a message's entityId becomes non-null - at ingestion, on manual
  * assignment, or from the auto-assign cron. Never throws: a Slack failure
  * (revoked token, rate limit, etc.) must not block the caller's write path.
+ *
+ * Skips sending (but the caller should still keep the assignment) if
+ * `params.occurredAt` is older than ALERT_FRESHNESS_WINDOW_MS - this is what
+ * prevents backlog catch-up (cron sweeps, retroactive manual assignment) from
+ * alerting on messages that arrived hours or days ago as if they were live.
  */
 export async function notifyFollowersOfNewMessage(params: NotifyParams): Promise<void> {
   try {
+    const ageMs = Date.now() - params.occurredAt.getTime()
+    if (ageMs > ALERT_FRESHNESS_WINDOW_MS) {
+      console.log(
+        `[v0] Skipping Slack alert for stale message (occurred ${Math.round(ageMs / (60 * 60 * 1000))}h ago, entity ${params.entityId}) - backlog catch-up, not live`,
+      )
+      return
+    }
+
     const subscriptions = await prisma.ciEntitySubscription.findMany({
       where: { entityId: params.entityId },
       select: { clientId: true },
@@ -43,8 +69,12 @@ export async function notifyFollowersOfNewMessage(params: NotifyParams): Promise
 
     const clientIds = subscriptions.map((sub: { clientId: string }) => sub.clientId)
 
+    // Only clients that are (a) actually connected and (b) have this specific alert
+    // type toggled on receive the message. The toggle lives on the settings page so
+    // a client can opt out of "followed entity" alerts without disconnecting Slack
+    // entirely (e.g. once other alert types ship and they only want a subset).
     const integrations = await prisma.slackIntegration.findMany({
-      where: { clientId: { in: clientIds }, status: "connected" },
+      where: { clientId: { in: clientIds }, status: "connected", notifyOnFollowedEntityMessages: true },
     })
 
     if (integrations.length === 0) return

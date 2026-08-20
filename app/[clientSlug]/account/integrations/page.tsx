@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import { Loader2, MessageSquare, Building2, Hash, Info } from "lucide-react"
 import { toast } from "sonner"
 import AppLayout from "@/components/app-layout"
@@ -25,6 +27,7 @@ type SlackStatus = {
   channelName: string | null
   connectedByName: string | null
   connectedAt: string | null
+  notifyOnFollowedEntityMessages: boolean
 }
 
 export default function AccountIntegrationsPage() {
@@ -43,6 +46,7 @@ export default function AccountIntegrationsPage() {
   const [channelsLoading, setChannelsLoading] = useState(false)
   const [selectedChannelId, setSelectedChannelId] = useState<string>("")
   const [savingChannel, setSavingChannel] = useState(false)
+  const [savingPreferences, setSavingPreferences] = useState(false)
 
   const canManageSlack = currentUserRole !== null && MANAGER_ROLES.includes(currentUserRole)
 
@@ -68,6 +72,7 @@ export default function AccountIntegrationsPage() {
           channelName: integration?.channelName ?? null,
           connectedByName,
           connectedAt: integration?.connectedAt ?? null,
+          notifyOnFollowedEntityMessages: integration?.notifyOnFollowedEntityMessages ?? true,
         })
       }
     } catch (error) {
@@ -219,6 +224,32 @@ export default function AccountIntegrationsPage() {
     }
   }
 
+  const handleToggleFollowedEntityAlerts = async (checked: boolean) => {
+    if (!slackStatus) return
+    // Optimistic update so the switch feels immediate; rolled back on failure.
+    setSlackStatus({ ...slackStatus, notifyOnFollowedEntityMessages: checked })
+    setSavingPreferences(true)
+    try {
+      const response = await fetch("/api/slack/notification-preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ notifyOnFollowedEntityMessages: checked }),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error ?? "Failed to update notification preferences")
+      }
+      toast.success(checked ? "Followed entity alerts turned on" : "Followed entity alerts turned off")
+    } catch (error) {
+      console.error("[v0] Error updating Slack notification preferences:", error)
+      toast.error(error instanceof Error ? error.message : "Failed to update notification preferences")
+      setSlackStatus({ ...slackStatus, notifyOnFollowedEntityMessages: !checked })
+    } finally {
+      setSavingPreferences(false)
+    }
+  }
+
   const handleDisconnect = async () => {
     setDisconnecting(true)
     try {
@@ -314,6 +345,36 @@ export default function AccountIntegrationsPage() {
                         : ""}
                     </p>
                   )}
+
+                  <div className="space-y-3 rounded-md border border-border p-4">
+                    <p className="text-sm font-medium">Alert types</p>
+                    <p className="text-sm text-muted-foreground">
+                      Choose which alerts post to this channel. More alert types will show up
+                      here as we add them, so your team can opt in or out of each on its own.
+                    </p>
+                    <div className="flex items-start justify-between gap-4 py-1">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="notify-followed-entities" className="font-normal">
+                          Followed entity activity
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          New emails or texts from entities your organization follows.
+                        </p>
+                      </div>
+                      <Switch
+                        id="notify-followed-entities"
+                        checked={slackStatus.notifyOnFollowedEntityMessages}
+                        onCheckedChange={handleToggleFollowedEntityAlerts}
+                        disabled={!canManageSlack || savingPreferences}
+                      />
+                    </div>
+                    {!canManageSlack && (
+                      <p className="text-sm text-muted-foreground">
+                        Only Owners and Admins can change alert preferences.
+                      </p>
+                    )}
+                  </div>
+
                   {canManageSlack ? (
                     <Button
                       variant="outline"

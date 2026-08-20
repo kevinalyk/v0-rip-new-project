@@ -1,72 +1,34 @@
 import { PrismaClient } from "@prisma/client"
 import { generateObject } from "ai"
 import { z } from "zod"
-import { notifyFollowersOfNewMessage } from "@/lib/slack-alerts"
 import { nanoid } from "nanoid"
 
 const prisma = new PrismaClient()
 
-/**
- * Ensures a shareToken exists on a campaign row, generating one if needed,
- * then fires a real-time Slack alert to any client following the entity.
- * Never throws - Slack failures are logged and swallowed inside the helper.
- */
-async function alertFollowersForCampaign(campaign: {
-  id: string
-  senderName: string
-  senderEmail: string
-  subject: string
-  shareToken: string | null
-}, entityName: string, entityId: string) {
-  const shareToken =
-    campaign.shareToken ||
-    (await prisma.competitiveInsightCampaign
-      .update({
-        where: { id: campaign.id },
-        data: { shareToken: nanoid(16), shareTokenCreatedAt: new Date(), shareTokenSource: "Slack Alert" },
-        select: { shareToken: true },
-      })
-      .then((c) => c.shareToken!))
+// Intentionally NOT sending Slack alerts from manual/retroactive assignment in
+// this file. `assignCampaignsToEntity` / `assignSmsToEntity` (below) only ever
+// run against messages that already existed and failed entity detection at
+// ingestion time - by definition backlog, not something that "just happened."
+// Alerting here previously caused day(s)-old messages to show up in Slack as
+// "New email!" the moment someone clicked "Assign sender." Live alerts belong
+// only at the two true ingestion points: processCompetitiveInsights() (email)
+// and the SMS webhook, where entityId is set the moment the message arrives.
+// We still backfill a shareToken here since share links/digests depend on it
+// regardless of how a message got assigned.
 
-  await notifyFollowersOfNewMessage({
-    kind: "email",
-    entityId,
-    entityName,
-    senderName: campaign.senderName,
-    senderEmail: campaign.senderEmail,
-    subject: campaign.subject,
-    shareToken,
+async function ensureShareTokenForCampaign(campaign: { id: string; shareToken: string | null }): Promise<void> {
+  if (campaign.shareToken) return
+  await prisma.competitiveInsightCampaign.update({
+    where: { id: campaign.id },
+    data: { shareToken: nanoid(16), shareTokenCreatedAt: new Date(), shareTokenSource: "Manual Assignment" },
   })
 }
 
-/**
- * Ensures a shareToken exists on an SMS row, generating one if needed,
- * then fires a real-time Slack alert to any client following the entity.
- * Never throws - Slack failures are logged and swallowed inside the helper.
- */
-async function alertFollowersForSms(sms: {
-  id: string
-  phoneNumber: string | null
-  message: string | null
-  shareToken: string | null
-}, entityName: string, entityId: string) {
-  const shareToken =
-    sms.shareToken ||
-    (await prisma.smsQueue
-      .update({
-        where: { id: sms.id },
-        data: { shareToken: nanoid(16), shareTokenCreatedAt: new Date(), shareTokenSource: "Slack Alert" },
-        select: { shareToken: true },
-      })
-      .then((s) => s.shareToken!))
-
-  await notifyFollowersOfNewMessage({
-    kind: "sms",
-    entityId,
-    entityName,
-    phoneNumber: sms.phoneNumber,
-    message: sms.message,
-    shareToken,
+async function ensureShareTokenForSms(sms: { id: string; shareToken: string | null }): Promise<void> {
+  if (sms.shareToken) return
+  await prisma.smsQueue.update({
+    where: { id: sms.id },
+    data: { shareToken: nanoid(16), shareTokenCreatedAt: new Date(), shareTokenSource: "Manual Assignment" },
   })
 }
 
@@ -620,10 +582,9 @@ export async function updateEntity(
  */
 export async function assignCampaignsToEntity(campaignIds: string[], entityId: string, createMapping = true) {
   try {
-    // Fetch content for the alert before we lose the "just became assigned" moment
     const directCampaigns = await prisma.competitiveInsightCampaign.findMany({
       where: { id: { in: campaignIds } },
-      select: { id: true, senderName: true, senderEmail: true, subject: true, shareToken: true },
+      select: { id: true, shareToken: true },
     })
 
     await prisma.competitiveInsightCampaign.updateMany({
@@ -635,15 +596,8 @@ export async function assignCampaignsToEntity(campaignIds: string[], entityId: s
       },
     })
 
-    const entity = await prisma.ciEntity.findUnique({ where: { id: entityId }, select: { name: true } })
-    if (entity) {
-      for (const campaign of directCampaigns) {
-        try {
-          await alertFollowersForCampaign(campaign, entity.name, entityId)
-        } catch (alertError) {
-          console.error("[v0] Error sending Slack alert for assigned campaign:", alertError)
-        }
-      }
+    for (const campaign of directCampaigns) {
+      await ensureShareTokenForCampaign(campaign)
     }
 
     let additionalAssignedCount = 0
@@ -689,7 +643,7 @@ export async function assignCampaignsToEntity(campaignIds: string[], entityId: s
 
         const additionalCampaigns = await prisma.competitiveInsightCampaign.findMany({
           where: matchingWhere,
-          select: { id: true, senderName: true, senderEmail: true, subject: true, shareToken: true },
+          select: { id: true, shareToken: true },
         })
 
         const matchingCampaigns = await prisma.competitiveInsightCampaign.updateMany({
@@ -701,14 +655,8 @@ export async function assignCampaignsToEntity(campaignIds: string[], entityId: s
           },
         })
 
-        if (entity) {
-          for (const additionalCampaign of additionalCampaigns) {
-            try {
-              await alertFollowersForCampaign(additionalCampaign, entity.name, entityId)
-            } catch (alertError) {
-              console.error("[v0] Error sending Slack alert for domain-matched campaign:", alertError)
-            }
-          }
+        for (const additionalCampaign of additionalCampaigns) {
+          await ensureShareTokenForCampaign(additionalCampaign)
         }
 
         additionalAssignedCount += matchingCampaigns.count
@@ -734,7 +682,7 @@ export async function assignSmsToEntity(smsIds: string[], entityId: string, crea
     // Fetch content for the alert before we lose the "just became assigned" moment
     const directSms = await prisma.smsQueue.findMany({
       where: { id: { in: smsIds } },
-      select: { id: true, phoneNumber: true, message: true, shareToken: true },
+      select: { id: true, shareToken: true },
     })
 
     await prisma.smsQueue.updateMany({
@@ -746,15 +694,8 @@ export async function assignSmsToEntity(smsIds: string[], entityId: string, crea
       },
     })
 
-    const entity = await prisma.ciEntity.findUnique({ where: { id: entityId }, select: { name: true } })
-    if (entity) {
-      for (const sms of directSms) {
-        try {
-          await alertFollowersForSms(sms, entity.name, entityId)
-        } catch (alertError) {
-          console.error("[v0] Error sending Slack alert for assigned SMS:", alertError)
-        }
-      }
+    for (const sms of directSms) {
+      await ensureShareTokenForSms(sms)
     }
 
     let additionalAssignedCount = 0
@@ -795,7 +736,7 @@ export async function assignSmsToEntity(smsIds: string[], entityId: string, crea
 
         const additionalSms = await prisma.smsQueue.findMany({
           where: matchingSmsWhere,
-          select: { id: true, phoneNumber: true, message: true, shareToken: true },
+          select: { id: true, shareToken: true },
         })
 
         const matchingSms = await prisma.smsQueue.updateMany({
@@ -807,14 +748,8 @@ export async function assignSmsToEntity(smsIds: string[], entityId: string, crea
           },
         })
 
-        if (entity) {
-          for (const additionalSmsItem of additionalSms) {
-            try {
-              await alertFollowersForSms(additionalSmsItem, entity.name, entityId)
-            } catch (alertError) {
-              console.error("[v0] Error sending Slack alert for phone-matched SMS:", alertError)
-            }
-          }
+        for (const additionalSmsItem of additionalSms) {
+          await ensureShareTokenForSms(additionalSmsItem)
         }
 
         additionalAssignedCount += matchingSms.count

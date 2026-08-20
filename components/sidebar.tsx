@@ -47,6 +47,7 @@ import {
   TrendingUp,
   Type,
   Tags,
+  MessageSquareOff,
 } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { useTheme } from "next-themes"
@@ -637,6 +638,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                       active={pathname === "/rip/admin/seo-dashboard"}
                       collapsed={false}
                       onClick={() => navigate("/rip/admin/seo-dashboard")}
+                    />
+                    <NavItem
+                      icon={<MessageSquareOff size={18} />}
+                      label="Cancellation Feedback"
+                      active={pathname === "/rip/admin/cancellation-feedback"}
+                      collapsed={false}
+                      onClick={() => navigate("/rip/admin/cancellation-feedback")}
                     />
                   </div>
                 )}

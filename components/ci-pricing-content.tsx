@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { cancelSubscription } from "@/app/actions/stripe"
+import { CancellationFeedbackFields } from "@/components/cancellation-feedback-fields"
 
 interface BillingData {
   client: {
@@ -193,8 +194,10 @@ export function CIPricingContent() {
   const [loading, setLoading] = useState(true)
   const [checkingOutPlan, setCheckingOutPlan] = useState<SubscriptionPlan | null>(null)
   const [clientSlug, setClientSlug] = useState<string>("")
-  const [showCancelDialog, setShowCancelDialog] = useState(false)
-  const [canceling, setCanceling] = useState(false)
+ const [showCancelDialog, setShowCancelDialog] = useState(false)
+ const [canceling, setCanceling] = useState(false)
+ const [cancelReason, setCancelReason] = useState("")
+ const [cancelComment, setCancelComment] = useState("")
   const [clientId, setClientId] = useState<string>("")
   const [subscriptionRenewDate, setSubscriptionRenewDate] = useState<string | null>(null)
   // null = not checked yet, false = guest, true = logged in
@@ -246,8 +249,14 @@ export function CIPricingContent() {
     if (!clientId) return
     try {
       setCanceling(true)
-      await cancelSubscription(clientId, "plan")
+      await cancelSubscription(
+        clientId,
+        "plan",
+        cancelReason ? { reason: cancelReason, comment: cancelComment } : undefined,
+      )
       setShowCancelDialog(false)
+      setCancelReason("")
+      setCancelComment("")
       const base = clientSlug ? `/${clientSlug}` : ""
       router.push(`${base}/account/billing?cancelled=true`)
     } catch (error) {
@@ -354,6 +363,12 @@ export function CIPricingContent() {
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <CancellationFeedbackFields
+            reason={cancelReason}
+            onReasonChange={setCancelReason}
+            comment={cancelComment}
+            onCommentChange={setCancelComment}
+          />
           <AlertDialogFooter>
             <AlertDialogCancel disabled={canceling}>Keep My Subscription</AlertDialogCancel>
             <AlertDialogAction

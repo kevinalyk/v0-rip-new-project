@@ -1,8 +1,74 @@
 import { PrismaClient } from "@prisma/client"
 import { generateObject } from "ai"
 import { z } from "zod"
+import { notifyFollowersOfNewMessage } from "@/lib/slack-alerts"
+import { nanoid } from "nanoid"
 
 const prisma = new PrismaClient()
+
+/**
+ * Ensures a shareToken exists on a campaign row, generating one if needed,
+ * then fires a real-time Slack alert to any client following the entity.
+ * Never throws - Slack failures are logged and swallowed inside the helper.
+ */
+async function alertFollowersForCampaign(campaign: {
+  id: string
+  senderName: string
+  senderEmail: string
+  subject: string
+  shareToken: string | null
+}, entityName: string, entityId: string) {
+  const shareToken =
+    campaign.shareToken ||
+    (await prisma.competitiveInsightCampaign
+      .update({
+        where: { id: campaign.id },
+        data: { shareToken: nanoid(16), shareTokenCreatedAt: new Date(), shareTokenSource: "Slack Alert" },
+        select: { shareToken: true },
+      })
+      .then((c) => c.shareToken!))
+
+  await notifyFollowersOfNewMessage({
+    kind: "email",
+    entityId,
+    entityName,
+    senderName: campaign.senderName,
+    senderEmail: campaign.senderEmail,
+    subject: campaign.subject,
+    shareToken,
+  })
+}
+
+/**
+ * Ensures a shareToken exists on an SMS row, generating one if needed,
+ * then fires a real-time Slack alert to any client following the entity.
+ * Never throws - Slack failures are logged and swallowed inside the helper.
+ */
+async function alertFollowersForSms(sms: {
+  id: string
+  phoneNumber: string | null
+  message: string | null
+  shareToken: string | null
+}, entityName: string, entityId: string) {
+  const shareToken =
+    sms.shareToken ||
+    (await prisma.smsQueue
+      .update({
+        where: { id: sms.id },
+        data: { shareToken: nanoid(16), shareTokenCreatedAt: new Date(), shareTokenSource: "Slack Alert" },
+        select: { shareToken: true },
+      })
+      .then((s) => s.shareToken!))
+
+  await notifyFollowersOfNewMessage({
+    kind: "sms",
+    entityId,
+    entityName,
+    phoneNumber: sms.phoneNumber,
+    message: sms.message,
+    shareToken,
+  })
+}
 
 // Type for platform-specific donation identifiers
 export type DonationIdentifiers = {
@@ -554,6 +620,12 @@ export async function updateEntity(
  */
 export async function assignCampaignsToEntity(campaignIds: string[], entityId: string, createMapping = true) {
   try {
+    // Fetch content for the alert before we lose the "just became assigned" moment
+    const directCampaigns = await prisma.competitiveInsightCampaign.findMany({
+      where: { id: { in: campaignIds } },
+      select: { id: true, senderName: true, senderEmail: true, subject: true, shareToken: true },
+    })
+
     await prisma.competitiveInsightCampaign.updateMany({
       where: { id: { in: campaignIds } },
       data: {
@@ -562,6 +634,17 @@ export async function assignCampaignsToEntity(campaignIds: string[], entityId: s
         assignedAt: new Date(),
       },
     })
+
+    const entity = await prisma.ciEntity.findUnique({ where: { id: entityId }, select: { name: true } })
+    if (entity) {
+      for (const campaign of directCampaigns) {
+        try {
+          await alertFollowersForCampaign(campaign, entity.name, entityId)
+        } catch (alertError) {
+          console.error("[v0] Error sending Slack alert for assigned campaign:", alertError)
+        }
+      }
+    }
 
     let additionalAssignedCount = 0
 
@@ -596,20 +679,37 @@ export async function assignCampaignsToEntity(campaignIds: string[], entityId: s
           })
         }
 
+        const matchingWhere = {
+          entityId: null, // Only update unassigned campaigns
+          OR: [
+            { senderEmail: senderEmail },
+            { senderEmail: { endsWith: `@${domain}` } }, // Match all emails from this domain
+          ],
+        }
+
+        const additionalCampaigns = await prisma.competitiveInsightCampaign.findMany({
+          where: matchingWhere,
+          select: { id: true, senderName: true, senderEmail: true, subject: true, shareToken: true },
+        })
+
         const matchingCampaigns = await prisma.competitiveInsightCampaign.updateMany({
-          where: {
-            entityId: null, // Only update unassigned campaigns
-            OR: [
-              { senderEmail: senderEmail },
-              { senderEmail: { endsWith: `@${domain}` } }, // Match all emails from this domain
-            ],
-          },
+          where: matchingWhere,
           data: {
             entityId,
             assignmentMethod: "manual",
             assignedAt: new Date(),
           },
         })
+
+        if (entity) {
+          for (const additionalCampaign of additionalCampaigns) {
+            try {
+              await alertFollowersForCampaign(additionalCampaign, entity.name, entityId)
+            } catch (alertError) {
+              console.error("[v0] Error sending Slack alert for domain-matched campaign:", alertError)
+            }
+          }
+        }
 
         additionalAssignedCount += matchingCampaigns.count
       }
@@ -631,6 +731,12 @@ export async function assignCampaignsToEntity(campaignIds: string[], entityId: s
  */
 export async function assignSmsToEntity(smsIds: string[], entityId: string, createMapping = true) {
   try {
+    // Fetch content for the alert before we lose the "just became assigned" moment
+    const directSms = await prisma.smsQueue.findMany({
+      where: { id: { in: smsIds } },
+      select: { id: true, phoneNumber: true, message: true, shareToken: true },
+    })
+
     await prisma.smsQueue.updateMany({
       where: { id: { in: smsIds } },
       data: {
@@ -639,6 +745,17 @@ export async function assignSmsToEntity(smsIds: string[], entityId: string, crea
         assignedAt: new Date(),
       },
     })
+
+    const entity = await prisma.ciEntity.findUnique({ where: { id: entityId }, select: { name: true } })
+    if (entity) {
+      for (const sms of directSms) {
+        try {
+          await alertFollowersForSms(sms, entity.name, entityId)
+        } catch (alertError) {
+          console.error("[v0] Error sending Slack alert for assigned SMS:", alertError)
+        }
+      }
+    }
 
     let additionalAssignedCount = 0
 
@@ -671,17 +788,34 @@ export async function assignSmsToEntity(smsIds: string[], entityId: string, crea
           })
         }
 
+        const matchingSmsWhere = {
+          entityId: null, // Only update unassigned SMS
+          phoneNumber: sms.phoneNumber,
+        }
+
+        const additionalSms = await prisma.smsQueue.findMany({
+          where: matchingSmsWhere,
+          select: { id: true, phoneNumber: true, message: true, shareToken: true },
+        })
+
         const matchingSms = await prisma.smsQueue.updateMany({
-          where: {
-            entityId: null, // Only update unassigned SMS
-            phoneNumber: sms.phoneNumber,
-          },
+          where: matchingSmsWhere,
           data: {
             entityId,
             assignmentMethod: "manual",
             assignedAt: new Date(),
           },
         })
+
+        if (entity) {
+          for (const additionalSmsItem of additionalSms) {
+            try {
+              await alertFollowersForSms(additionalSmsItem, entity.name, entityId)
+            } catch (alertError) {
+              console.error("[v0] Error sending Slack alert for phone-matched SMS:", alertError)
+            }
+          }
+        }
 
         additionalAssignedCount += matchingSms.count
       }

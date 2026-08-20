@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server"
-import { getTokenResponse } from "@vercel/connect"
 import prisma from "@/lib/prisma"
 import { getOrigin } from "@/lib/get-origin"
-import { verifySlackConnectState, SLACK_CONNECTOR_UID, SLACK_SCOPES } from "@/lib/slack-integration-auth"
+import { encrypt } from "@/lib/encryption"
+import { exchangeSlackOAuthCode, verifySlackConnectState } from "@/lib/slack-integration-auth"
 
-// Slack redirects the browser here (via Vercel Connect) once the workspace
-// admin approves the install. We resolve which client initiated this via the
-// signed state token, then fetch the resulting installation's team info and
-// mark the integration as awaiting a channel selection.
+// Slack redirects the browser here directly (no Vercel Connect involved)
+// once the workspace admin approves the install. We resolve which client
+// initiated this via the signed state token, exchange the `code` for a bot
+// token ourselves, then mark the integration as awaiting a channel selection.
 export async function GET(request: Request) {
   const origin = await getOrigin()
   const url = new URL(request.url)
+  const code = url.searchParams.get("code")
   const stateToken = url.searchParams.get("state")
   const errorParam = url.searchParams.get("error")
 
@@ -38,31 +39,21 @@ export async function GET(request: Request) {
     return redirectTo(null, `slack_error=invalid_state`)
   }
 
+  if (!code) {
+    return redirectTo(state.clientId, `slack_error=missing_code`)
+  }
+
   try {
-    const tokenResponse = await getTokenResponse(SLACK_CONNECTOR_UID, {
-      subject: { type: "user", id: state.clientId },
-      scopes: SLACK_SCOPES,
+    const { accessToken, teamId, teamName, botUserId } = await exchangeSlackOAuthCode({
+      code,
+      redirectUri: `${origin}/api/slack/callback`,
     })
-
-    const teamId =
-      (tokenResponse.metadata?.team_id as string | undefined) ??
-      (tokenResponse.metadata?.teamId as string | undefined) ??
-      tokenResponse.tenantId ??
-      null
-    const teamName =
-      (tokenResponse.metadata?.team_name as string | undefined) ??
-      (tokenResponse.metadata?.teamName as string | undefined) ??
-      null
-
-    if (!teamId) {
-      console.error("[v0] Slack token response missing team identifier:", tokenResponse)
-      return redirectTo(state.clientId, `slack_error=missing_team`)
-    }
 
     await prisma.slackIntegration.update({
       where: { clientId: state.clientId },
       data: {
-        installationId: tokenResponse.installationId ?? null,
+        botAccessToken: encrypt(accessToken),
+        botUserId,
         teamId,
         teamName,
         status: "awaiting_channel",

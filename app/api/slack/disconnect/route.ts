@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server"
-import { revokeToken } from "@vercel/connect"
 import prisma from "@/lib/prisma"
-import {
-  canManageSlackIntegration,
-  getRequestingClientUser,
-  SLACK_CONNECTOR_UID,
-} from "@/lib/slack-integration-auth"
+import { decrypt } from "@/lib/encryption"
+import { canManageSlackIntegration, getRequestingClientUser } from "@/lib/slack-integration-auth"
 
 export async function POST(request: Request) {
   const userRecord = await getRequestingClientUser(request)
@@ -27,15 +23,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Slack is not connected." }, { status: 400 })
   }
 
-  try {
-    await revokeToken(SLACK_CONNECTOR_UID, {
-      subject: { type: "user", id: clientId },
-      installationId: integration.installationId ?? undefined,
-    })
-  } catch (error) {
-    // Continue even if the remote revoke fails - we still want to reflect
-    // "disconnected" locally so the client can retry connecting cleanly.
-    console.error("[v0] Error revoking Slack token:", error)
+  if (integration.botAccessToken) {
+    try {
+      const botToken = decrypt(integration.botAccessToken)
+      await fetch("https://slack.com/api/auth.revoke", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${botToken}` },
+      })
+    } catch (error) {
+      // Continue even if the remote revoke fails - we still want to reflect
+      // "disconnected" locally so the client can retry connecting cleanly.
+      console.error("[v0] Error revoking Slack token:", error)
+    }
   }
 
   const updated = await prisma.slackIntegration.update({
@@ -43,7 +42,8 @@ export async function POST(request: Request) {
     data: {
       status: "disconnected",
       disconnectedAt: new Date(),
-      installationId: null,
+      botAccessToken: null,
+      botUserId: null,
       teamId: null,
       teamName: null,
       channelId: null,

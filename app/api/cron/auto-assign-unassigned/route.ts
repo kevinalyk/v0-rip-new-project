@@ -1,17 +1,7 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { findEntityForSender, findEntityForPhone, findEntityByCtaDomain } from "@/lib/ci-entity-utils"
-import { notifyFollowersOfNewMessage } from "@/lib/slack-alerts"
 import { nanoid } from "nanoid"
-
-// Cache entity names within a single cron run to avoid redundant lookups
-const entityNameCache = new Map<string, string | null>()
-async function getEntityName(entityId: string): Promise<string | null> {
-  if (entityNameCache.has(entityId)) return entityNameCache.get(entityId)!
-  const entity = await prisma.ciEntity.findUnique({ where: { id: entityId }, select: { name: true } })
-  entityNameCache.set(entityId, entity?.name ?? null)
-  return entity?.name ?? null
-}
 
 /**
  * Auto-assign unassigned campaigns using AI and donation identifier matching
@@ -120,34 +110,19 @@ export async function GET(request: Request) {
             `[v0] Auto-Assign Cron: Email Campaign ID ${campaign.id} - ASSIGNED to Entity ${entityResult.entityId} via ${entityResult.method}`
           )
 
-          // Fire a real-time Slack alert to any client following this entity.
-          // Never blocks the cron loop - errors are logged and swallowed.
-          try {
-            const entityName = await getEntityName(entityResult.entityId)
-            if (entityName) {
-              const shareToken =
-                campaign.shareToken ||
-                (await prisma.competitiveInsightCampaign
-                  .update({
-                    where: { id: campaign.id },
-                    data: { shareToken: nanoid(16), shareTokenCreatedAt: new Date(), shareTokenSource: "Slack Alert" },
-                    select: { shareToken: true },
-                  })
-                  .then((c) => c.shareToken!))
-
-              await notifyFollowersOfNewMessage({
-                kind: "email",
-                entityId: entityResult.entityId,
-                entityName,
-                senderName: campaign.senderName,
-                senderEmail: campaign.senderEmail,
-                subject: campaign.subject,
-                shareToken,
-                occurredAt: campaign.dateReceived,
-              })
-            }
-          } catch (alertError) {
-            console.error(`[v0] Auto-Assign Cron: Error sending Slack alert for campaign ${campaign.id}:`, alertError)
+          // Intentionally NOT sending a Slack alert here. This cron only ever
+          // touches messages that arrived earlier and failed entity detection
+          // at ingestion time - alerting here would (and did) fire "New email!"
+          // hours or days after the fact. Live alerts belong only at the two
+          // true ingestion points: processCompetitiveInsights() and the SMS
+          // webhook, where entityId is set the moment the message arrives.
+          // Still backfill the shareToken so share links/digests work even
+          // when a message is picked up here instead of at ingestion.
+          if (!campaign.shareToken) {
+            await prisma.competitiveInsightCampaign.update({
+              where: { id: campaign.id },
+              data: { shareToken: nanoid(16), shareTokenCreatedAt: new Date(), shareTokenSource: "Auto-Assign Cron" },
+            })
           }
         } else {
           stats.emailCampaigns.skipped++
@@ -226,33 +201,14 @@ export async function GET(request: Request) {
             `[v0] Auto-Assign Cron: SMS ID ${sms.id} - ASSIGNED to Entity ${entityResult.entityId} via ${entityResult.assignmentMethod || "auto_phone"}`
           )
 
-          // Fire a real-time Slack alert to any client following this entity.
-          // Never blocks the cron loop - errors are logged and swallowed.
-          try {
-            const entityName = await getEntityName(entityResult.entityId)
-            if (entityName) {
-              const shareToken =
-                sms.shareToken ||
-                (await prisma.smsQueue
-                  .update({
-                    where: { id: sms.id },
-                    data: { shareToken: nanoid(16), shareTokenCreatedAt: new Date(), shareTokenSource: "Slack Alert" },
-                    select: { shareToken: true },
-                  })
-                  .then((s) => s.shareToken!))
-
-              await notifyFollowersOfNewMessage({
-                kind: "sms",
-                entityId: entityResult.entityId,
-                entityName,
-                phoneNumber: sms.phoneNumber,
-                message: sms.message,
-                shareToken,
-                occurredAt: sms.createdAt,
-              })
-            }
-          } catch (alertError) {
-            console.error(`[v0] Auto-Assign Cron: Error sending Slack alert for SMS ${sms.id}:`, alertError)
+          // Intentionally NOT sending a Slack alert here - see the matching
+          // comment in the email branch above. This is backfill, not a live
+          // event, so it must not alert. Still backfill the shareToken.
+          if (!sms.shareToken) {
+            await prisma.smsQueue.update({
+              where: { id: sms.id },
+              data: { shareToken: nanoid(16), shareTokenCreatedAt: new Date(), shareTokenSource: "Auto-Assign Cron" },
+            })
           }
         } else {
           stats.smsMessages.skipped++

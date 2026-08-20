@@ -5,6 +5,8 @@ import crypto from "crypto"
 import { findEntityForPhone } from "@/lib/ci-entity-utils"
 import { extractSmsCtaLinks } from "@/lib/sms-link-extractor"
 import { getRedactedNames, applyRedaction } from "@/lib/redaction-utils"
+import { notifyFollowersOfNewMessage } from "@/lib/slack-alerts"
+import { nanoid } from "nanoid"
 
 // Verify FullStack webhook signature (if they provide one)
 // You'll need to ask FullStack if they send a signature header and what the signing method is
@@ -195,6 +197,30 @@ export async function POST(request: Request) {
     }
 
     console.log("[FullStack SMS] SMS queued for processing:", result.id)
+
+    // Fire a real-time Slack alert to any client following this entity.
+    // Never blocks the webhook response - internally logs and swallows errors.
+    if (entityAssignment?.entityId) {
+      const entity = await prisma.ciEntity.findUnique({
+        where: { id: entityAssignment.entityId },
+        select: { name: true },
+      })
+      if (entity) {
+        const shareToken = nanoid(16)
+        await prisma.smsQueue.update({
+          where: { id: result.id },
+          data: { shareToken, shareTokenCreatedAt: new Date(), shareTokenSource: "Slack Alert" },
+        })
+        await notifyFollowersOfNewMessage({
+          kind: "sms",
+          entityId: entityAssignment.entityId,
+          entityName: entity.name,
+          phoneNumber: actualSender,
+          message: redactedMessage,
+          shareToken,
+        })
+      }
+    }
 
     // Return a success response to FullStack
     return NextResponse.json({

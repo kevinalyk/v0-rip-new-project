@@ -9,6 +9,8 @@ import { getRedactedNames, applyRedaction, clearRedactionCache, findUniqueRedact
 import { detectDonationPlatform } from "@/lib/detect-donation-platform"
 import { computeBodyFingerprint } from "@/lib/body-fingerprint"
 import { classifyMessageTypes } from "@/lib/message-classifier"
+import { notifyFollowersOfNewMessage } from "@/lib/slack-alerts"
+import { nanoid } from "nanoid"
 
 // Custom fetch using Node's http/https modules to properly handle SSL
 async function customFetch(
@@ -1673,6 +1675,32 @@ export async function processCompetitiveInsights(
           }
         } catch (err) {
           console.error("[message-classifier] post-ingest classification failed:", err)
+        }
+
+        // Fire a real-time Slack alert to any client following this entity.
+        // Never blocks campaign creation - internally logs and swallows errors.
+        if (entityId) {
+          try {
+            const entity = await prisma.ciEntity.findUnique({ where: { id: entityId }, select: { name: true } })
+            if (entity) {
+              const shareToken = nanoid(16)
+              await prisma.competitiveInsightCampaign.update({
+                where: { id: newCampaign.id },
+                data: { shareToken, shareTokenCreatedAt: new Date(), shareTokenSource: "Slack Alert" },
+              })
+              await notifyFollowersOfNewMessage({
+                kind: "email",
+                entityId,
+                entityName: entity.name,
+                senderName: redactedSenderName,
+                senderEmail,
+                subject: redactedSubject,
+                shareToken,
+              })
+            }
+          } catch (slackError) {
+            console.error("[v0] Error sending Slack alert for new campaign:", slackError)
+          }
         }
 
         // Genuinely new campaign created

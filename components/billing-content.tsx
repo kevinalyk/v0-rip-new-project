@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { CancellationFeedbackFields } from "@/components/cancellation-feedback-fields"
 import { useParams, useRouter } from "next/navigation"
 
 interface BillingData {
@@ -169,6 +170,8 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
   const [redirectingToPortal, setRedirectingToPortal] = useState(false)
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loadingInvoices, setLoadingInvoices] = useState(false)
+  const [cancelReason, setCancelReason] = useState("")
+  const [cancelComment, setCancelComment] = useState("")
   const params = useParams()
   const router = useRouter()
   const resolvedClientSlug = clientSlug || (params.clientSlug as string)
@@ -223,7 +226,11 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
 
     try {
       setCanceling(true)
-      await cancelSubscription(billingData.client.id, "plan")
+      await cancelSubscription(
+        billingData.client.id,
+        "plan",
+        cancelReason ? { reason: cancelReason, comment: cancelComment } : undefined,
+      )
 
       setBillingData((prev) => {
         if (!prev) return prev
@@ -235,6 +242,9 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
           },
         }
       })
+
+      setCancelReason("")
+      setCancelComment("")
 
       setTimeout(() => {
         fetchBillingData()
@@ -429,6 +439,12 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
                               date, you'll be downgraded to the free Starter plan.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
+                          <CancellationFeedbackFields
+                            reason={cancelReason}
+                            onReasonChange={setCancelReason}
+                            comment={cancelComment}
+                            onCommentChange={setCancelComment}
+                          />
                           <AlertDialogFooter>
                             <AlertDialogCancel>Keep Subscription</AlertDialogCancel>
                             <AlertDialogAction

@@ -942,6 +942,25 @@ model SpamTest {
   @@index([createdAt])
 }
 
+// ─── Subscription Cancellation Feedback ───────────────────────────────────────
+
+model SubscriptionCancellationFeedback {
+  id               String   @id @default(cuid())
+  clientId         String
+  clientName       String   // denormalized for easy admin display
+  userId           String?  // who clicked cancel
+  userEmail        String?
+  subscriptionType String   // "plan" | "ci"
+  plan             String   // plan they were cancelling from, e.g. "paid", "all", "advanced"
+  reason           String   // "too_expensive" | "not_using" | "missing_features" | "switching_competitor" | "poor_support" | "other"
+  comment          String?  @db.Text
+  createdAt        DateTime @default(now())
+
+  @@index([clientId])
+  @@index([reason])
+  @@index([createdAt])
+}
+
 // ─── Internal Changelog ───────────────────────────────────────────────────────
 
 model Changelog {

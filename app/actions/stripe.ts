@@ -151,27 +151,48 @@ export async function createCheckoutSession(data: {
   }
 }
 
-export async function cancelSubscription(clientId: string, subscriptionType: "plan" | "ci" = "plan") {
+export async function cancelSubscription(
+  clientId: string,
+  subscriptionType: "plan" | "ci" = "plan",
+  feedback?: { reason: string; comment?: string },
+) {
   const session = await getServerSession()
   if (!session?.user?.id) {
-    throw new Error("Unauthorized")
+  throw new Error("Unauthorized")
   }
-
+  
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    include: { client: true },
+  where: { id: session.user.id },
+  include: { client: true },
   })
-
+  
   if (!user || (user.role !== "owner" && user.role !== "admin")) {
-    throw new Error("Only owners and admins can cancel subscriptions")
+  throw new Error("Only owners and admins can cancel subscriptions")
+  }
+  
+  const client = await prisma.client.findUnique({
+  where: { id: clientId },
+  })
+  
+  if (!client) {
+  throw new Error("Client not found")
   }
 
-  const client = await prisma.client.findUnique({
-    where: { id: clientId },
-  })
-
-  if (!client) {
-    throw new Error("Client not found")
+  // Record why the client is cancelling before touching Stripe, so we still capture the
+  // feedback even if the Stripe call below fails for some reason.
+  if (feedback?.reason) {
+    await prisma.subscriptionCancellationFeedback.create({
+      data: {
+        clientId: client.id,
+        clientName: client.name,
+        userId: user.id,
+        userEmail: user.email,
+        subscriptionType,
+        plan: subscriptionType === "ci" ? "ci" : client.subscriptionPlan,
+        reason: feedback.reason,
+        comment: feedback.comment?.trim() || null,
+      },
+    })
   }
 
   console.log("[v0] Cancel request:", {

@@ -4,7 +4,19 @@
   "installCommand": "npm install && npx prisma generate",
   "crons": [
     {
-      "path": "/api/cron/detect-competitive-insights",
+      "path": "/api/cron/detect-competitive-insights?providers=gmail",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/detect-competitive-insights?providers=yahoo",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/detect-competitive-insights?providers=outlook,hotmail,live",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/detect-competitive-insights?providers=aol",
       "schedule": "*/30 * * * *"
     },
     {

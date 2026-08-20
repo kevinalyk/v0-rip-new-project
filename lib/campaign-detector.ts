@@ -697,16 +697,25 @@ async function fetchRecentEmailsIMAP(
 export async function scanForCompetitiveInsights(options: {
   daysToScan?: number
   maxEmailsPerSeed?: number
+  // Optional email-provider filter (e.g. ["gmail"] or ["outlook", "hotmail", "live"]).
+  // Lets the cron be split into multiple provider-scoped invocations so one slow/timing-out
+  // provider doesn't block or exhaust the time budget for the others. Omit to scan all providers.
+  providers?: string[]
 }): Promise<{
   success: boolean
   newInsights: number
   totalEmails: number
+  providers?: string[]
   error?: string
 }> {
-  const { daysToScan = 1, maxEmailsPerSeed = 50 } = options
+  const { daysToScan = 1, maxEmailsPerSeed = 50, providers } = options
 
   try {
-    console.log(`🔍 Starting competitive insights scan (${daysToScan} days)`)
+    console.log(
+      `🔍 Starting competitive insights scan (${daysToScan} days)${
+        providers?.length ? ` [providers: ${providers.join(", ")}]` : ""
+      }`,
+    )
 
     // Get RIP client
     const ripClient = await prisma.client.findFirst({
@@ -732,6 +741,7 @@ export async function scanForCompetitiveInsights(options: {
         locked: true,
         assignedToClient: { not: null },
         domainHealthMode: false,
+        ...(providers?.length ? { provider: { in: providers } } : {}),
       },
     })
 
@@ -1017,6 +1027,7 @@ export async function scanForCompetitiveInsights(options: {
       success: true,
       newInsights: newInsightsCount,
       totalEmails: totalEmailsScanned,
+      ...(providers?.length ? { providers } : {}),
     }
   } catch (error) {
     console.error("❌ Error in competitive insights scan:", error)

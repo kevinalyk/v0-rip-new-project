@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server"
-import { startAuthorization } from "@vercel/connect"
 import prisma from "@/lib/prisma"
 import { getOrigin } from "@/lib/get-origin"
 import {
+  buildSlackAuthorizeUrl,
   canManageSlackIntegration,
   getRequestingClientUser,
   signSlackConnectState,
-  SLACK_CONNECTOR_UID,
-  SLACK_SCOPES,
+  SLACK_CLIENT_ID,
 } from "@/lib/slack-integration-auth"
 
 // Starts the company-wide Slack connection flow. Only Owners/Admins may
@@ -15,6 +14,11 @@ import {
 // client, not a per-user connection.
 export async function POST(request: Request) {
   try {
+    if (!SLACK_CLIENT_ID) {
+      console.error("[v0] SLACK_CLIENT_ID is not configured")
+      return NextResponse.json({ error: "Slack is not configured on this server." }, { status: 500 })
+    }
+
     const userRecord = await getRequestingClientUser(request)
     if (!userRecord) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -32,11 +36,10 @@ export async function POST(request: Request) {
     const origin = await getOrigin()
     const state = await signSlackConnectState({ clientId, userId: userRecord.id })
 
-    const { url } = await startAuthorization(
-      SLACK_CONNECTOR_UID,
-      { subject: { type: "user", id: clientId }, scopes: SLACK_SCOPES },
-      { callbackUrl: `${origin}/api/slack/callback?state=${encodeURIComponent(state)}` },
-    )
+    const url = buildSlackAuthorizeUrl({
+      redirectUri: `${origin}/api/slack/callback`,
+      state,
+    })
 
     await prisma.slackIntegration.upsert({
       where: { clientId },

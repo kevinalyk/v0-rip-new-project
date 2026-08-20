@@ -192,13 +192,18 @@ export default function AccountIntegrationsPage() {
 
   const handleSelectChannel = async () => {
     if (!selectedChannelId) return
+    const selectedChannel = channels.find((channel) => channel.id === selectedChannelId)
+    if (!selectedChannel) {
+      toast.error("Please select a channel from the list.")
+      return
+    }
     setSavingChannel(true)
     try {
       const response = await fetch("/api/slack/select-channel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ channelId: selectedChannelId }),
+        body: JSON.stringify({ channelId: selectedChannel.id, channelName: selectedChannel.name }),
       })
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))

@@ -161,36 +161,61 @@ export async function POST(request: Request) {
     const urlRegex = /https?:\/\/[^\s]+|(?<![a-zA-Z0-9@])(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:\/[^\s]*)?/g
     const redactedMessage = nameRedactedMessage.replace(urlRegex, "[Omitted Link]")
 
-    // Save to the SmsQueue table using upsert on dedupHash.
-    // If two webhooks arrive simultaneously they both try to insert the same dedupHash —
-    // the DB unique constraint ensures only one succeeds; the other is silently ignored.
+    // Save to the SmsQueue table.
+    // NOTE: We use create() + catch P2002 rather than upsert() here. Prisma's upsert with an
+    // empty update payload ({}) cannot compile to a single atomic `INSERT ... ON CONFLICT DO
+    // UPDATE` (there's nothing to update), so it falls back to a non-atomic "check, then write"
+    // path. Under real broadcast-SMS volume, many webhook calls arrive within milliseconds with
+    // the exact same sender+message (same dedupHash) - they all pass the existence check, then
+    // race to create(), and every loser throws an uncaught P2002 straight to the outer catch
+    // block (returning a 500 before entity assignment / Slack alerts ever run). Catching P2002
+    // here and treating it as "already inserted by a concurrent request" is the actual
+    // race-safe pattern - the DB's unique constraint still does the real dedup work, we just
+    // handle its rejection gracefully instead of crashing on it.
     const smsId = uuidv4()
-    const result = await prisma.smsQueue.upsert({
-      where: { dedupHash },
-      create: {
-        id: smsId,
-        rawData: body,
-        processed: true,
-        processingAttempts: 0,
-        phoneNumber: actualSender,
-        toNumber: receivingNumber, // The number that received the SMS (your seed phone)
-        message: redactedMessage,
-        campaignId: data.campaign_id,
-        companyId: data.company_id,
-        entityId: entityAssignment?.entityId || null,
-        assignmentMethod: entityAssignment?.assignmentMethod || null,
-        assignedAt: entityAssignment ? new Date() : null,
-        ctaLinks: JSON.stringify(ctaLinks),
-        dedupHash,
-        // Personal SMS assignment
-        clientId: personalPhoneAssignment?.clientId || null,
-        source: personalPhoneAssignment ? "personal" : "seed",
-        createdAt: new Date(),
-      },
-      update: {}, // no-op: if it already exists, do nothing
-    })
+    let result: { id: string }
+    let isDuplicate = false
+    try {
+      result = await prisma.smsQueue.create({
+        data: {
+          id: smsId,
+          rawData: body,
+          processed: true,
+          processingAttempts: 0,
+          phoneNumber: actualSender,
+          toNumber: receivingNumber, // The number that received the SMS (your seed phone)
+          message: redactedMessage,
+          campaignId: data.campaign_id,
+          companyId: data.company_id,
+          entityId: entityAssignment?.entityId || null,
+          assignmentMethod: entityAssignment?.assignmentMethod || null,
+          assignedAt: entityAssignment ? new Date() : null,
+          ctaLinks: JSON.stringify(ctaLinks),
+          dedupHash,
+          // Personal SMS assignment
+          clientId: personalPhoneAssignment?.clientId || null,
+          source: personalPhoneAssignment ? "personal" : "seed",
+          createdAt: new Date(),
+        },
+      })
+    } catch (createError: any) {
+      // P2002 = unique constraint violation. Another concurrent request won the race for this
+      // exact dedupHash - fetch the row it created and treat this request as a duplicate.
+      if (createError?.code === "P2002") {
+        const existing = await prisma.smsQueue.findUnique({ where: { dedupHash }, select: { id: true } })
+        if (existing) {
+          result = existing
+          isDuplicate = true
+        } else {
+          // Extremely unlikely (row deleted between the constraint failure and this lookup) -
+          // surface the original error rather than silently dropping a real SMS.
+          throw createError
+        }
+      } else {
+        throw createError
+      }
+    }
 
-    const isDuplicate = result.id !== smsId
     if (isDuplicate) {
       console.log("[FullStack SMS] Duplicate SMS detected via dedupHash, ignored:", result.id)
       return NextResponse.json({ success: true, message: "Duplicate SMS ignored", smsId: result.id })

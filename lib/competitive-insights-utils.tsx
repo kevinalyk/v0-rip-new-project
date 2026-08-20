@@ -1696,6 +1696,7 @@ export async function processCompetitiveInsights(
                 senderEmail,
                 subject: redactedSubject,
                 shareToken,
+                occurredAt: dateReceived,
               })
             }
           } catch (slackError) {

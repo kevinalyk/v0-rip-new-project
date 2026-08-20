@@ -243,6 +243,7 @@ export async function POST(request: Request) {
           phoneNumber: actualSender,
           message: redactedMessage,
           shareToken,
+          occurredAt: new Date(),
         })
       }
     }

@@ -143,6 +143,7 @@ export async function GET(request: Request) {
                 senderEmail: campaign.senderEmail,
                 subject: campaign.subject,
                 shareToken,
+                occurredAt: campaign.dateReceived,
               })
             }
           } catch (alertError) {
@@ -247,6 +248,7 @@ export async function GET(request: Request) {
                 phoneNumber: sms.phoneNumber,
                 message: sms.message,
                 shareToken,
+                occurredAt: sms.createdAt,
               })
             }
           } catch (alertError) {

@@ -17,6 +17,7 @@ async function alertFollowersForCampaign(campaign: {
   senderEmail: string
   subject: string
   shareToken: string | null
+  dateReceived: Date
 }, entityName: string, entityId: string) {
   const shareToken =
     campaign.shareToken ||
@@ -36,6 +37,10 @@ async function alertFollowersForCampaign(campaign: {
     senderEmail: campaign.senderEmail,
     subject: campaign.subject,
     shareToken,
+    // Manual/domain-matched assignment can retroactively sweep old unassigned
+    // campaigns - alert freshness is judged by when the email actually arrived,
+    // not by when it happened to get assigned.
+    occurredAt: campaign.dateReceived,
   })
 }
 
@@ -49,6 +54,7 @@ async function alertFollowersForSms(sms: {
   phoneNumber: string | null
   message: string | null
   shareToken: string | null
+  createdAt: Date
 }, entityName: string, entityId: string) {
   const shareToken =
     sms.shareToken ||
@@ -67,6 +73,10 @@ async function alertFollowersForSms(sms: {
     phoneNumber: sms.phoneNumber,
     message: sms.message,
     shareToken,
+    // Manual/phone-matched assignment can retroactively sweep old unassigned SMS -
+    // alert freshness is judged by when the text actually arrived, not by when it
+    // happened to get assigned.
+    occurredAt: sms.createdAt,
   })
 }
 
@@ -623,7 +633,7 @@ export async function assignCampaignsToEntity(campaignIds: string[], entityId: s
     // Fetch content for the alert before we lose the "just became assigned" moment
     const directCampaigns = await prisma.competitiveInsightCampaign.findMany({
       where: { id: { in: campaignIds } },
-      select: { id: true, senderName: true, senderEmail: true, subject: true, shareToken: true },
+      select: { id: true, senderName: true, senderEmail: true, subject: true, shareToken: true, dateReceived: true },
     })
 
     await prisma.competitiveInsightCampaign.updateMany({
@@ -689,7 +699,7 @@ export async function assignCampaignsToEntity(campaignIds: string[], entityId: s
 
         const additionalCampaigns = await prisma.competitiveInsightCampaign.findMany({
           where: matchingWhere,
-          select: { id: true, senderName: true, senderEmail: true, subject: true, shareToken: true },
+          select: { id: true, senderName: true, senderEmail: true, subject: true, shareToken: true, dateReceived: true },
         })
 
         const matchingCampaigns = await prisma.competitiveInsightCampaign.updateMany({
@@ -734,7 +744,7 @@ export async function assignSmsToEntity(smsIds: string[], entityId: string, crea
     // Fetch content for the alert before we lose the "just became assigned" moment
     const directSms = await prisma.smsQueue.findMany({
       where: { id: { in: smsIds } },
-      select: { id: true, phoneNumber: true, message: true, shareToken: true },
+      select: { id: true, phoneNumber: true, message: true, shareToken: true, createdAt: true },
     })
 
     await prisma.smsQueue.updateMany({
@@ -795,7 +805,7 @@ export async function assignSmsToEntity(smsIds: string[], entityId: string, crea
 
         const additionalSms = await prisma.smsQueue.findMany({
           where: matchingSmsWhere,
-          select: { id: true, phoneNumber: true, message: true, shareToken: true },
+          select: { id: true, phoneNumber: true, message: true, shareToken: true, createdAt: true },
         })
 
         const matchingSms = await prisma.smsQueue.updateMany({

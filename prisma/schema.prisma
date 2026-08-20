@@ -204,6 +204,10 @@ model SlackIntegration {
   channelId         String? // Slack channel the bot posts alerts into
   channelName       String? // Display name of the channel, e.g. "#rip-alerts"
   status            String    @default("pending") // "pending" (install started, not yet completed) | "awaiting_channel" (authorized, channel not yet chosen) | "connected" | "disconnected"
+  // Per-alert-type toggle, company-wide (like the rest of this model). Add one boolean per
+  // future alert type here (e.g. notifyOnCampaignAssignment) rather than a JSON blob, so each
+  // is a plain indexed/queryable column and the settings UI can render a switch per row.
+  notifyOnFollowedEntityMessages Boolean @default(true)
   connectedByUserId String? // The Owner/Admin who completed setup, for audit purposes
   connectedAt       DateTime?
   disconnectedAt    DateTime?

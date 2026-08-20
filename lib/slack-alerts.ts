@@ -43,8 +43,12 @@ export async function notifyFollowersOfNewMessage(params: NotifyParams): Promise
 
     const clientIds = subscriptions.map((sub: { clientId: string }) => sub.clientId)
 
+    // Only clients that are (a) actually connected and (b) have this specific alert
+    // type toggled on receive the message. The toggle lives on the settings page so
+    // a client can opt out of "followed entity" alerts without disconnecting Slack
+    // entirely (e.g. once other alert types ship and they only want a subset).
     const integrations = await prisma.slackIntegration.findMany({
-      where: { clientId: { in: clientIds }, status: "connected" },
+      where: { clientId: { in: clientIds }, status: "connected", notifyOnFollowedEntityMessages: true },
     })
 
     if (integrations.length === 0) return

@@ -18,6 +18,7 @@ export async function GET(request: Request) {
       channelId: true,
       channelName: true,
       connectedAt: true,
+      notifyOnFollowedEntityMessages: true,
       connectedByUser: { select: { firstName: true, lastName: true, email: true } },
     },
   })

@@ -78,6 +78,10 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
   const [mounted, setMounted] = useState(false)
   const { domains, selectedDomain, setSelectedDomain, loading: domainsLoading } = useDomain()
   const [userRole, setUserRole] = useState<string | null>(null)
+  // The signed-in user's own client slug (distinct from `selectedClientSlug`, which is
+  // whichever client a super_admin is currently viewing). Used to grant WinRed's own
+  // users visibility into the Integrations nav item without granting it org-wide.
+  const [userClientSlug, setUserClientSlug] = useState<string | null>(null)
   const [authLoaded, setAuthLoaded] = useState(false)
   const [clients, setClients] = useState<Client[]>([])
   const [loadingClients, setLoadingClients] = useState(false)
@@ -108,6 +112,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
         if (response.ok) {
           const user = await response.json()
           setUserRole(user.role)
+          setUserClientSlug(user.client?.slug ?? null)
         }
       } catch (error) {
         console.error("Error fetching user role:", error)
@@ -704,15 +709,18 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                   collapsed={false}
                   onClick={() => navigate(`/${getClientSlug()}/account/billing`)}
                 />
-                {userRole === "super_admin" && (
-                  <NavItem
-                    icon={<Plug size={18} />}
-                    label="Integrations"
-                    active={pathname.includes("/account/integrations")}
-                    collapsed={false}
-                    onClick={() => navigate(`/${getClientSlug()}/account/integrations`)}
-                  />
-                )}
+              {/* Integrations is still being rolled out - visible to super_admins everywhere,
+                  plus WinRed's own users, regardless of their role (Owners/Admins can set it
+                  up, other roles can view the connection status - matches the page's own check). */}
+              {(userRole === "super_admin" || userClientSlug === "winred") && (
+              <NavItem
+              icon={<Plug size={18} />}
+              label="Integrations"
+              active={pathname.includes("/account/integrations")}
+              collapsed={false}
+              onClick={() => navigate(`/${getClientSlug()}/account/integrations`)}
+              />
+              )}
               </div>
             )}
           </nav>

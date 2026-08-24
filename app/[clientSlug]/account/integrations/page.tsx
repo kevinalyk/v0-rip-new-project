@@ -24,6 +24,7 @@ type SlackStatus = {
   connected: boolean
   status: "pending" | "awaiting_channel" | "connected" | "disconnected" | null
   teamName: string | null
+  channelId: string | null
   channelName: string | null
   connectedByName: string | null
   connectedAt: string | null
@@ -46,6 +47,10 @@ export default function AccountIntegrationsPage() {
   const [channelsLoading, setChannelsLoading] = useState(false)
   const [selectedChannelId, setSelectedChannelId] = useState<string>("")
   const [savingChannel, setSavingChannel] = useState(false)
+  // Lets an already-connected workspace switch its posting channel without a
+  // full disconnect/reconnect - reuses the same channel list + select-channel
+  // endpoint as initial setup, since that endpoint works regardless of status.
+  const [changingChannel, setChangingChannel] = useState(false)
   const [savingPreferences, setSavingPreferences] = useState(false)
 
   const canManageSlack = currentUserRole !== null && MANAGER_ROLES.includes(currentUserRole)
@@ -69,6 +74,7 @@ export default function AccountIntegrationsPage() {
           connected: integration?.status === "connected",
           status: integration?.status ?? null,
           teamName: integration?.teamName ?? null,
+          channelId: integration?.channelId ?? null,
           channelName: integration?.channelName ?? null,
           connectedByName,
           connectedAt: integration?.connectedAt ?? null,
@@ -124,8 +130,12 @@ export default function AccountIntegrationsPage() {
           }
         }
 
-        // Integrations are still being rolled out - restrict access to super_admins for now.
-        if (userData.role !== "super_admin") {
+        // Integrations are still being rolled out - restrict access to super_admins,
+        // plus WinRed's own users (any role) since WinRed is the only client using
+        // this today. Setup/management itself stays gated to Owners/Admins below
+        // via canManageSlack - this only controls whether the page is visible at all.
+        const isWinRedUser = userData.client?.slug === "winred"
+        if (userData.role !== "super_admin" && !isWinRedUser) {
           if (!isAdminRoute && clientSlug) {
             router.push(`/${clientSlug}/account/settings`)
           } else {
@@ -214,7 +224,13 @@ export default function AccountIntegrationsPage() {
         const data = await response.json().catch(() => ({}))
         throw new Error(data.error ?? "Failed to connect the channel")
       }
-      toast.success("Slack is connected. Alerts will post to that channel.")
+      toast.success(
+        changingChannel
+          ? `Alerts will now post to #${selectedChannel.name}.`
+          : "Slack is connected. Alerts will post to that channel.",
+      )
+      setChangingChannel(false)
+      setSelectedChannelId("")
       await fetchSlackStatus()
     } catch (error) {
       console.error("[v0] Error selecting Slack channel:", error)
@@ -222,6 +238,17 @@ export default function AccountIntegrationsPage() {
     } finally {
       setSavingChannel(false)
     }
+  }
+
+  const handleStartChangeChannel = () => {
+    setChangingChannel(true)
+    setSelectedChannelId(slackStatus?.channelId ?? "")
+    fetchChannels()
+  }
+
+  const handleCancelChangeChannel = () => {
+    setChangingChannel(false)
+    setSelectedChannelId("")
   }
 
   const handleToggleFollowedEntityAlerts = async (checked: boolean) => {
@@ -264,6 +291,7 @@ export default function AccountIntegrationsPage() {
       toast.success("Slack disconnected")
       setChannels([])
       setSelectedChannelId("")
+      setChangingChannel(false)
       await fetchSlackStatus()
     } catch (error) {
       console.error("[v0] Error disconnecting Slack:", error)
@@ -327,16 +355,64 @@ export default function AccountIntegrationsPage() {
 
               {isConnected && slackStatus && (
                 <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-                    <div className="flex items-center gap-2 text-foreground">
-                      <Building2 className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">{slackStatus.teamName ?? "Slack workspace"}</span>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                      <div className="flex items-center gap-2 text-foreground">
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{slackStatus.teamName ?? "Slack workspace"}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-foreground">
+                        <Hash className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{slackStatus.channelName ?? "unknown channel"}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-foreground">
-                      <Hash className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">{slackStatus.channelName ?? "unknown channel"}</span>
-                    </div>
+                    {canManageSlack && !changingChannel && (
+                      <Button variant="outline" size="sm" onClick={handleStartChangeChannel}>
+                        Change channel
+                      </Button>
+                    )}
                   </div>
+
+                  {changingChannel && (
+                    <div className="space-y-3 rounded-md border border-border p-4">
+                      <p className="text-sm font-medium">Move alerts to a different channel</p>
+                      <p className="text-sm text-muted-foreground">
+                        Pick a new channel and the bot will join it automatically. Alerts will stop
+                        posting to #{slackStatus.channelName ?? "the current channel"} once this is
+                        saved.
+                      </p>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <Select value={selectedChannelId} onValueChange={setSelectedChannelId}>
+                          <SelectTrigger className="sm:w-64">
+                            <SelectValue
+                              placeholder={channelsLoading ? "Loading channels..." : "Select a channel"}
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {channels.map((channel) => (
+                              <SelectItem key={channel.id} value={channel.id}>
+                                #{channel.name}
+                                {channel.isPrivate ? " (private)" : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          onClick={handleSelectChannel}
+                          disabled={
+                            !selectedChannelId || selectedChannelId === slackStatus.channelId || savingChannel || channelsLoading
+                          }
+                        >
+                          {savingChannel && <Loader2 size={14} className="mr-2 animate-spin" />}
+                          Save channel
+                        </Button>
+                        <Button variant="ghost" onClick={handleCancelChangeChannel} disabled={savingChannel}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                   {slackStatus.connectedByName && (
                     <p className="text-sm text-muted-foreground">
                       Connected by {slackStatus.connectedByName}

@@ -23,6 +23,13 @@ import {
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -460,6 +467,8 @@ interface ClientDomainRecord {
   verifiedAt: string | null
   lastCheckedAt: string | null
   createdAt: string
+  googleVerified: boolean
+  googleVerifiedAt: string | null
 }
 
 // ─── Add Domain Modal ─────────────────────────────────────────────────────────
@@ -912,6 +921,50 @@ export function DomainHealthContent({ clientSlug }: { clientSlug?: string }) {
     setSelectedDomainId(record.id)
   }
 
+  const [togglingGoogleVerified, setTogglingGoogleVerified] = useState(false)
+
+  async function handleToggleGoogleVerified(next: boolean) {
+    if (!selectedRecord) return
+    setTogglingGoogleVerified(true)
+    // Optimistic update
+    setClientDomains((prev) =>
+      prev.map((d) =>
+        d.id === selectedRecord.id
+          ? { ...d, googleVerified: next, googleVerifiedAt: next ? new Date().toISOString() : null }
+          : d
+      )
+    )
+    try {
+      const res = await fetch(`/api/client-domains/${selectedRecord.id}/google-verified`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ googleVerified: next, ...(clientSlug ? { clientSlug } : {}) }),
+      })
+      if (!res.ok) throw new Error("Failed to update")
+      const data = await res.json()
+      setClientDomains((prev) =>
+        prev.map((d) =>
+          d.id === selectedRecord.id
+            ? { ...d, googleVerified: data.googleVerified, googleVerifiedAt: data.googleVerifiedAt }
+            : d
+        )
+      )
+    } catch (err) {
+      console.error("[domain-health] google-verified toggle error", err)
+      // Revert optimistic update on failure
+      setClientDomains((prev) =>
+        prev.map((d) =>
+          d.id === selectedRecord.id
+            ? { ...d, googleVerified: !next, googleVerifiedAt: selectedRecord.googleVerifiedAt }
+            : d
+        )
+      )
+    } finally {
+      setTogglingGoogleVerified(false)
+    }
+  }
+
   return (
     <>
     {(showAddModal || pendingVerifyRecord) && (
@@ -1006,6 +1059,49 @@ export function DomainHealthContent({ clientSlug }: { clientSlug?: string }) {
             )}
           </div>
 
+          {/* Google Verified toggle — unique per domain, self-reported */}
+          {selectedRecord && (
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <label
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors cursor-pointer select-none",
+                      selectedRecord.googleVerified
+                        ? "bg-emerald-500/10 border-emerald-500/30"
+                        : "bg-card border-border hover:bg-muted/30"
+                    )}
+                  >
+                    <Checkbox
+                      checked={selectedRecord.googleVerified}
+                      disabled={togglingGoogleVerified}
+                      onCheckedChange={(checked) => handleToggleGoogleVerified(checked === true)}
+                      className={cn(
+                        selectedRecord.googleVerified && "data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        "text-sm font-medium",
+                        selectedRecord.googleVerified ? "text-emerald-500" : "text-foreground"
+                      )}
+                    >
+                      Google Verified
+                    </span>
+                    {togglingGoogleVerified && <Loader2 size={12} className="animate-spin text-muted-foreground" />}
+                  </label>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-64">
+                  <p className="text-xs">
+                    Confirms this domain has been verified in Google&apos;s bulk sender console /
+                    Postmaster Tools, required by Google&apos;s sender program launching Sept 8. This
+                    is self-reported and specific to {selectedRecord.domain} — it does not carry
+                    over to other domains.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
         </div>
 
         {/* Meta row — only when a domain is selected */}

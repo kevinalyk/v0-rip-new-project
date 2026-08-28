@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Loader2, MessageSquare, Building2, Hash, Info } from "lucide-react"
 import { toast } from "sonner"
 import AppLayout from "@/components/app-layout"
+import { PaywallOverlay } from "@/components/paywall-overlay"
 
 const MANAGER_ROLES = ["owner", "admin", "super_admin"]
 
@@ -40,6 +41,8 @@ export default function AccountIntegrationsPage() {
 
   const [loading, setLoading] = useState(true)
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
+  const [subscriptionPlan, setSubscriptionPlan] = useState<"starter" | "professional" | "enterprise" | null>(null)
+  const [loadingSubscription, setLoadingSubscription] = useState(true)
   const [slackStatus, setSlackStatus] = useState<SlackStatus | null>(null)
   const [connecting, setConnecting] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
@@ -86,6 +89,24 @@ export default function AccountIntegrationsPage() {
     }
   }, [])
 
+  const fetchSubscriptionInfo = useCallback(async () => {
+    try {
+      const url = isAdminRoute ? "/api/billing" : `/api/billing?clientSlug=${clientSlug}`
+      const response = await fetch(url, { credentials: "include" })
+      if (response.ok) {
+        const data = await response.json()
+        setSubscriptionPlan(data.client?.subscriptionPlan || (isAdminRoute ? "professional" : "starter"))
+      } else {
+        setSubscriptionPlan(isAdminRoute ? "professional" : "starter")
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching subscription info:", error)
+      setSubscriptionPlan(isAdminRoute ? "professional" : "starter")
+    } finally {
+      setLoadingSubscription(false)
+    }
+  }, [clientSlug, isAdminRoute])
+
   const fetchChannels = useCallback(async () => {
     setChannelsLoading(true)
     try {
@@ -131,7 +152,7 @@ export default function AccountIntegrationsPage() {
         }
 
         setCurrentUserRole(userData.role ?? null)
-        await fetchSlackStatus()
+        await Promise.all([fetchSlackStatus(), fetchSubscriptionInfo()])
       } catch (error) {
         console.error("[v0] Auth check failed:", error)
         router.push("/login")
@@ -140,7 +161,7 @@ export default function AccountIntegrationsPage() {
       }
     }
     checkAuth()
-  }, [clientSlug, isAdminRoute, router, fetchSlackStatus])
+  }, [clientSlug, isAdminRoute, router, fetchSlackStatus, fetchSubscriptionInfo])
 
   // Handle redirect back from the Slack OAuth flow
   useEffect(() => {
@@ -287,7 +308,7 @@ export default function AccountIntegrationsPage() {
     }
   }
 
-  if (loading) {
+  if (loading || loadingSubscription) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -297,6 +318,8 @@ export default function AccountIntegrationsPage() {
       </div>
     )
   }
+
+  const hasIntegrationsAccess = subscriptionPlan === "professional" || subscriptionPlan === "enterprise"
 
   const isConnected = slackStatus?.status === "connected"
   const isAwaitingChannel = slackStatus?.status === "awaiting_channel"
@@ -312,6 +335,45 @@ export default function AccountIntegrationsPage() {
             </p>
           </div>
 
+          {!hasIntegrationsAccess ? (
+            <div className="relative min-h-[420px]">
+              <div className="blur-md pointer-events-none">
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
+                          <MessageSquare className="h-5 w-5 text-foreground" />
+                        </div>
+                        <div>
+                          <CardTitle>Slack</CardTitle>
+                          <CardDescription>
+                            Get alerted in Slack the moment an entity your organization follows sends an email or
+                            text.
+                          </CardDescription>
+                        </div>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="h-40 bg-muted/20 rounded" />
+                  </CardContent>
+                </Card>
+              </div>
+              <PaywallOverlay
+                title="Unlock Integrations"
+                description="Connect Slack to get real-time alerts for the entities your organization follows."
+                features={[
+                  "Real-time Slack alerts for followed entities",
+                  "Post alerts to any channel your team already uses",
+                  "Toggle alerting on or off at any time",
+                ]}
+                currentPlan="starter"
+                requiredPlan="professional"
+                targetPlan="professional"
+              />
+            </div>
+          ) : (
           <Card>
             <CardHeader>
               <div className="flex items-start justify-between gap-4">
@@ -519,6 +581,7 @@ export default function AccountIntegrationsPage() {
               )}
             </CardContent>
           </Card>
+          )}
         </div>
       </div>
     </AppLayout>

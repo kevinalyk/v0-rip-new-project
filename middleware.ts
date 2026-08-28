@@ -34,7 +34,12 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/lookup/") ||
     request.nextUrl.pathname.startsWith("/api/lookup/") ||
     // Email click tracking — links are clicked from email clients with no session
-    request.nextUrl.pathname === "/api/track/click"
+    request.nextUrl.pathname === "/api/track/click" ||
+    // Claude CI Assignment MCP server — authenticates itself via Bearer token
+    // against the ApiKey table (see lib/ci-api-auth.ts + withMcpAuth in
+    // app/api/mcp/ci-assignment/route.ts), not the cookie-based session used
+    // by the rest of the app.
+    request.nextUrl.pathname.startsWith("/api/mcp/ci-assignment")
   ) {
     return NextResponse.next()
   }

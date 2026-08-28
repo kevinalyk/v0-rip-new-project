@@ -368,7 +368,10 @@ const handler = createMcpHandler(
   {
     serverInfo: { name: "rip-tool-ci-assignment", version: "1.0.0" },
   },
-  { basePath: "/api/mcp/ci-assignment" },
+  // This route file lives at a single fixed path (app/api/mcp/ci-assignment/route.ts),
+  // not a [transport] catch-all, so the handler must match the streamable HTTP
+  // endpoint to this exact pathname rather than deriving "<basePath>/mcp" from it.
+  { streamableHttpEndpoint: "/api/mcp/ci-assignment", disableSse: true },
 )
 
 const authHandler = withMcpAuth(

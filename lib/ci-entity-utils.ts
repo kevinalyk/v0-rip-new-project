@@ -578,9 +578,68 @@ export async function updateEntity(
 }
 
 /**
+ * Merge new donation-platform identifiers into an existing entity's
+ * `donationIdentifiers` JSON, without touching any other field (name, type,
+ * party, state, description, ballotpediaUrl, image, etc.). Used by the
+ * Claude-facing CI Assignment MCP's `update_entity_donation_identifiers`
+ * tool, which is deliberately restricted to only this one field to keep
+ * blast radius small. Array-valued platforms (winred, anedot, actblue,
+ * psqimpact, ngpvan, engage, revv) are unioned/de-duped with existing
+ * values; string-valued platforms (substack) are overwritten with the new
+ * value. Returns the before/after state so callers can log a full audit
+ * trail and support Undo.
+ */
+export async function mergeEntityDonationIdentifiers(entityId: string, newIdentifiers: DonationIdentifiers) {
+  try {
+    const entity = await prisma.ciEntity.findUnique({ where: { id: entityId } })
+    if (!entity) {
+      return { success: false, error: `Entity ${entityId} not found` }
+    }
+
+    const before = (entity.donationIdentifiers as DonationIdentifiers | null) || {}
+    const merged: DonationIdentifiers = { ...before }
+
+    const arrayKeys: (keyof DonationIdentifiers)[] = [
+      "winred",
+      "anedot",
+      "actblue",
+      "psqimpact",
+      "ngpvan",
+      "engage",
+      "revv",
+    ]
+    for (const key of arrayKeys) {
+      const incoming = newIdentifiers[key] as string[] | undefined
+      if (!incoming || incoming.length === 0) continue
+      const existing = (before[key] as string[] | undefined) || []
+      merged[key] = Array.from(new Set([...existing, ...incoming])) as never
+    }
+
+    if (newIdentifiers.substack) {
+      merged.substack = newIdentifiers.substack
+    }
+
+    const updated = await prisma.ciEntity.update({
+      where: { id: entityId },
+      data: { donationIdentifiers: merged },
+    })
+
+    return { success: true, entity: updated, before, after: merged }
+  } catch (error: any) {
+    console.error("Error merging entity donation identifiers:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
  * Assign campaigns to an entity and create mapping
  */
-export async function assignCampaignsToEntity(campaignIds: string[], entityId: string, createMapping = true) {
+export async function assignCampaignsToEntity(
+  campaignIds: string[],
+  entityId: string,
+  createMapping = true,
+  assignmentMethod: "manual" | "api_claude" = "manual",
+) {
   try {
     const directCampaigns = await prisma.competitiveInsightCampaign.findMany({
       where: { id: { in: campaignIds } },
@@ -591,7 +650,7 @@ export async function assignCampaignsToEntity(campaignIds: string[], entityId: s
       where: { id: { in: campaignIds } },
       data: {
         entityId,
-        assignmentMethod: "manual",
+        assignmentMethod,
         assignedAt: new Date(),
       },
     })
@@ -650,7 +709,7 @@ export async function assignCampaignsToEntity(campaignIds: string[], entityId: s
           where: matchingWhere,
           data: {
             entityId,
-            assignmentMethod: "manual",
+            assignmentMethod,
             assignedAt: new Date(),
           },
         })
@@ -677,7 +736,12 @@ export async function assignCampaignsToEntity(campaignIds: string[], entityId: s
 /**
  * Assign SMS messages to an entity and create phone mapping
  */
-export async function assignSmsToEntity(smsIds: string[], entityId: string, createMapping = true) {
+export async function assignSmsToEntity(
+  smsIds: string[],
+  entityId: string,
+  createMapping = true,
+  assignmentMethod: "manual" | "api_claude" = "manual",
+) {
   try {
     // Fetch content for the alert before we lose the "just became assigned" moment
     const directSms = await prisma.smsQueue.findMany({
@@ -689,7 +753,7 @@ export async function assignSmsToEntity(smsIds: string[], entityId: string, crea
       where: { id: { in: smsIds } },
       data: {
         entityId,
-        assignmentMethod: "manual",
+        assignmentMethod,
         assignedAt: new Date(),
       },
     })
@@ -743,7 +807,7 @@ export async function assignSmsToEntity(smsIds: string[], entityId: string, crea
           where: matchingSmsWhere,
           data: {
             entityId,
-            assignmentMethod: "manual",
+            assignmentMethod,
             assignedAt: new Date(),
           },
         })

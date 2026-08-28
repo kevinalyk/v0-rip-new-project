@@ -1000,3 +1000,57 @@ model Changelog {
   @@index([category])
   @@index([publishedAt])
 }
+
+// ─── Claude CI Assignment MCP API ─────────────────────────────────────────────
+// Narrow, revocable credentials + full audit trail for the Claude-facing MCP
+// server that assigns unassigned CI messages to entities. See
+// docs/plans/CLAUDE_CI_ASSIGNMENT_MCP.md for the full design rationale.
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  name        String    // human label, e.g. "Claude - CI Assignment"
+  keyHash     String    @unique // SHA-256 hash of the raw key; raw key is never stored
+  keyPrefix   String    // first 8 chars of raw key, shown in UI for identification (e.g. "rip_ci_a")
+  scope       String    @default("ci_assignment") // reserved for future scopes; only "ci_assignment" is honored today
+  createdBy   String?   // User ID of the super_admin who created this key
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  revokedBy   String?
+
+  actionLogs  CiApiActionLog[]
+
+  @@index([keyHash])
+  @@index([revokedAt])
+}
+
+model CiApiActionLog {
+  id             String   @id @default(cuid())
+  apiKeyId       String
+  apiKey         ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  action         String   // "assign_messages" | "create_entity" | "update_entity_identifiers"
+  reasoning      String?  @db.Text // Claude's stated rationale for this action
+  targetType     String?  // "sms" | "campaign" | "entity"
+  targetIds      Json?    // array of affected record IDs (SmsQueue/CompetitiveInsightCampaign/CiEntity)
+  entityId       String?  // CiEntity involved, when applicable
+  beforeState    Json?    // minimal snapshot needed to support Undo
+  afterState     Json?
+  undone         Boolean  @default(false)
+  undoneAt       DateTime?
+  undoneBy       String?
+  requestIp      String?
+  createdAt      DateTime @default(now())
+
+  @@index([apiKeyId])
+  @@index([action])
+  @@index([entityId])
+  @@index([createdAt])
+  @@index([undone])
+}
+
+model AutomationSetting {
+  id                    String   @id @default(cuid())
+  ciAssignmentEnabled   Boolean  @default(true) // Global kill switch for the Claude CI assignment MCP tools
+  updatedAt             DateTime @updatedAt
+  updatedBy             String?
+}

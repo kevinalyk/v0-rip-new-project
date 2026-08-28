@@ -840,6 +840,17 @@ model DkimSenderMapping {
   updatedAt     DateTime @updatedAt
 }
 
+model PhoneCarrierMapping {
+  id          String   @id @default(cuid())
+  phoneNumber String   @unique // Normalized sender phone number from SMS ingestion, e.g. "+14342298933"
+  carrierName String            // Human-readable carrier name, e.g. "AT&T", "Verizon", "T-Mobile"
+  notes       String?           // Optional internal notes
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([carrierName])
+}
+
 model DkimProviderMapping {
   id           String   @id @default(cuid())
   selector     String   @unique // DKIM .s= value (e.g. "gears", "s1", "k1")

@@ -577,6 +577,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                       onClick={() => navigate("/rip/admin/ci-entities")}
                     />
                     <NavItem
+                      icon={<Key size={18} />}
+                      label="Automation API"
+                      active={pathname === "/rip/admin/automation-api"}
+                      collapsed={false}
+                      onClick={() => navigate("/rip/admin/automation-api")}
+                    />
+                    <NavItem
                       icon={<Shield size={18} />}
                       label="Blocked Domains"
                       active={pathname === "/rip/admin/blocked-domains"}

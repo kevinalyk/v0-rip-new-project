@@ -810,12 +810,14 @@ model ApiKey {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
+  actionLogs     CiApiActionLog[] @relation("CiApiActionLogs")
+
   @@index([keyHash])
   @@index([keyPrefix])
   @@index([clientId])
   @@index([isActive])
   @@index([expiresAt])
-}
+  }
 
 model SiteVisit {
   id            String    @id @default(cuid())
@@ -999,4 +1001,42 @@ model Changelog {
 
   @@index([category])
   @@index([publishedAt])
+}
+
+// ─── Claude CI Assignment MCP API ─────────────────────────────────────────────
+// Reuses the existing ApiKey model/system (see ApiKey above, lib/api-auth.ts,
+// and app/api/admin/api-keys/*) with new scopes: "ci:read", "ci:assign",
+// "ci:create_entity", "ci:update_entity". Adds a dedicated audit trail below
+// since this endpoint runs fully autonomously and needs per-action Undo. See
+// docs/plans/CLAUDE_CI_ASSIGNMENT_MCP.md for the full design rationale.
+
+model CiApiActionLog {
+  id             String   @id @default(cuid())
+  apiKeyId       String
+  apiKey         ApiKey   @relation("CiApiActionLogs", fields: [apiKeyId], references: [id], onDelete: Cascade)
+  action         String   // "assign_messages" | "create_entity" | "update_entity_identifiers"
+  reasoning      String?  @db.Text // Claude's stated rationale for this action
+  targetType     String?  // "sms" | "campaign" | "entity"
+  targetIds      Json?    // array of affected record IDs (SmsQueue/CompetitiveInsightCampaign/CiEntity)
+  entityId       String?  // CiEntity involved, when applicable
+  beforeState    Json?    // minimal snapshot needed to support Undo
+  afterState     Json?
+  undone         Boolean  @default(false)
+  undoneAt       DateTime?
+  undoneBy       String?
+  requestIp      String?
+  createdAt      DateTime @default(now())
+
+  @@index([apiKeyId])
+  @@index([action])
+  @@index([entityId])
+  @@index([createdAt])
+  @@index([undone])
+}
+
+model AutomationSetting {
+  id                    String   @id @default(cuid())
+  ciAssignmentEnabled   Boolean  @default(true) // Global kill switch for the Claude CI assignment MCP tools
+  updatedAt             DateTime @updatedAt
+  updatedBy             String?
 }

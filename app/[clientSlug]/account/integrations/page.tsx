@@ -130,20 +130,6 @@ export default function AccountIntegrationsPage() {
           }
         }
 
-        // Integrations are still being rolled out - restrict access to super_admins,
-        // plus WinRed's own users (any role) since WinRed is the only client using
-        // this today. Setup/management itself stays gated to Owners/Admins below
-        // via canManageSlack - this only controls whether the page is visible at all.
-        const isWinRedUser = userData.client?.slug === "winred"
-        if (userData.role !== "super_admin" && !isWinRedUser) {
-          if (!isAdminRoute && clientSlug) {
-            router.push(`/${clientSlug}/account/settings`)
-          } else {
-            router.push("/login")
-          }
-          return
-        }
-
         setCurrentUserRole(userData.role ?? null)
         await fetchSlackStatus()
       } catch (error) {

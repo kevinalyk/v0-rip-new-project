@@ -31,6 +31,7 @@ model User {
   // Domain relationships
   domainAccess      UserDomainAccess[]
   submittedDomains  ClientDomain[]
+  googleVerifiedDomains ClientDomain[] @relation("GoogleVerifiedByUser")
   ciViews       CiView[]
   entityTags    EntityTag[] // Added relation to entity tags created by this user
   lookupSearches LookupSearch[] // Searches made via the public lookup tool
@@ -229,11 +230,18 @@ model ClientDomain {
   verifiedAt          DateTime?
   lastCheckedAt       DateTime?
   submittedByUserId   String?
+  // Self-reported toggle: has this specific domain been verified in Google's bulk sender
+  // console / Postmaster Tools? Needed for the Google sender requirements program (Sept 8).
+  // Unique per ClientDomain row (i.e. per domain) - never carried over between domains.
+  googleVerified         Boolean   @default(false)
+  googleVerifiedAt       DateTime?
+  googleVerifiedByUserId String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
   client          Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
   submittedBy     User?   @relation(fields: [submittedByUserId], references: [id], onDelete: SetNull)
+  googleVerifiedByUser User? @relation("GoogleVerifiedByUser", fields: [googleVerifiedByUserId], references: [id], onDelete: SetNull)
   emailSamples    DomainHealthEmailSample[]
   dnsResult       DomainHealthDnsResult?
 

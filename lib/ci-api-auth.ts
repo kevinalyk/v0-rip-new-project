@@ -18,8 +18,38 @@
  *   - "ci:update_entity"  update_entity_donation_identifiers
  */
 
-import { createHash } from "crypto"
+import { createHash, randomBytes } from "crypto"
 import prisma from "@/lib/prisma"
+import { getAuthenticatedUser } from "@/lib/auth"
+
+/**
+ * Gate for every /api/admin/ci-automation/* route below. Deliberately
+ * requires super_admin specifically (not the broader isAdmin/isSystemAdmin
+ * check used elsewhere) since this surface manages credentials that can
+ * autonomously write to donor/contact data - only the highest privilege
+ * tier should be able to mint keys, flip the kill switch, or undo actions.
+ */
+export async function requireSuperAdmin(request: Request): Promise<{ id: string; role: string } | null> {
+  const user = await getAuthenticatedUser(request)
+  if (!user || user.role !== "super_admin") return null
+  return { id: user.id, role: user.role }
+}
+
+const CI_API_KEY_PREFIX = "rip_ci_"
+
+/**
+ * Generates a new raw CI-assignment API key (shown once), its hash for
+ * storage, and its prefix for UI display. Separate from
+ * lib/api-auth.ts's generateApiKey only in the "rip_ci_" prefix, so keys
+ * for this surface are visually distinguishable from the public v1 API keys
+ * in the shared ApiKey table.
+ */
+export function generateCiApiKey(): { key: string; keyHash: string; keyPrefix: string } {
+  const key = `${CI_API_KEY_PREFIX}${randomBytes(24).toString("hex")}`
+  const keyHash = createHash("sha256").update(key).digest("hex")
+  const keyPrefix = key.slice(0, 12)
+  return { key, keyHash, keyPrefix }
+}
 
 export const CI_SCOPES = {
   READ: "ci:read",

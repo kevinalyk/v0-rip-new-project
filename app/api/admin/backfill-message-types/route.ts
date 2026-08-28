@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireSuperAdmin } from "@/lib/auth"
+import { getAuthenticatedUser } from "@/lib/auth"
 import { classifyMessageTypes } from "@/lib/message-classifier"
 
 // Process 25 campaigns per request to stay within serverless function time limits.
@@ -8,8 +8,10 @@ import { classifyMessageTypes } from "@/lib/message-classifier"
 const BATCH_SIZE = 25
 
 export async function POST(request: Request) {
-  const authResult = await requireSuperAdmin(request)
-  if (authResult instanceof NextResponse) return authResult
+  const user = await getAuthenticatedUser(request)
+  if (!user || user.role !== "super_admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
   try {
     const body = await request.json().catch(() => ({}))
@@ -103,8 +105,10 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const authResult = await requireSuperAdmin(request)
-  if (authResult instanceof NextResponse) return authResult
+  const user = await getAuthenticatedUser(request)
+  if (!user || user.role !== "super_admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
   // Return count of unclassified campaigns
   const pending = await prisma.competitiveInsightCampaign.count({

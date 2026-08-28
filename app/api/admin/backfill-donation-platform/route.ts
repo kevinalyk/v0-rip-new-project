@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireSuperAdmin } from "@/lib/auth"
+import { getAuthenticatedUser } from "@/lib/auth"
 import { detectDonationPlatform } from "@/lib/detect-donation-platform"
 
 export async function POST(request: Request) {
-  const authResult = await requireSuperAdmin(request)
-  if (authResult instanceof NextResponse) return authResult
+  const user = await getAuthenticatedUser(request)
+  if (!user || user.role !== "super_admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
   try {
     const body = await request.json().catch(() => ({}))

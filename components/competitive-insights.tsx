@@ -1759,7 +1759,7 @@ export function CompetitiveInsights({
               <div
                 className={cn(
                   // Desktop layout (md+)
-                  "md:relative md:z-auto md:inset-auto md:transform-none md:rounded-none md:border-0 md:bg-transparent md:p-0 md:max-h-none md:overflow-visible md:flex md:flex-col md:gap-2 md:transition-none md:translate-y-0",
+                  "md:relative md:z-auto md:inset-auto md:transform-none md:rounded-none md:border-0 md:bg-transparent md:p-0 md:max-h-none md:overflow-visible md:flex md:flex-col md:gap-2 md:transition-none md:translate-y-0 md:shadow-none",
                   // Mobile bottom sheet
                   "fixed inset-x-0 bottom-0 z-50 bg-background border-t border-border rounded-t-2xl p-4 pb-8 max-h-[85vh] overflow-y-auto flex flex-col gap-3 transition-transform duration-300 ease-in-out shadow-2xl",
                   mobileFiltersOpen ? "translate-y-0" : "translate-y-full",

@@ -34,7 +34,7 @@ import {
   Loader2,
   Link2,
 } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -118,6 +118,7 @@ interface EntityMapping {
 
 export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [entities, setEntities] = useState<Entity[]>([])
   const [pagination, setPagination] = useState({
     page: 1,
@@ -724,6 +725,34 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
     setShowCreateDialog(true)
     fetchEntityMappings(entity.id)
   }
+
+  // Deep-link support: opening this page with ?edit=<entityId> (e.g. from the
+  // "Edit Entity" link in the campaign preview modal) auto-opens that entity's
+  // edit dialog. The entity may not be on the currently loaded page, so it's
+  // fetched directly rather than looked up in local state.
+  useEffect(() => {
+    const editEntityId = searchParams.get("edit")
+    if (!editEntityId) return
+
+    ;(async () => {
+      try {
+        const response = await fetch(`/api/ci-entities?pageSize=10000`)
+        if (!response.ok) return
+        const data = await response.json()
+        const entity = (data.entities || []).find((e: Entity) => e.id === editEntityId)
+        if (entity) handleEditEntity(entity)
+      } catch (error) {
+        console.error("Error loading entity from deep link:", error)
+      } finally {
+        // Strip the query param so a refresh doesn't reopen the dialog.
+        // Note: `clientSlug` here is a prop label ("admin" or a tenant slug),
+        // not a URL segment, so build the path from the real route instead -
+        // this deep link is only ever opened from /rip/admin/ci-entities.
+        router.replace("/rip/admin/ci-entities")
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleScrapeEntity = async (entity: Entity) => {
     setScrapingEntityId(entity.id)

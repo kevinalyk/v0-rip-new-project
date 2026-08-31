@@ -35,6 +35,7 @@ import {
   UserPlus,
   Loader2,
   Server,
+  Pencil,
 } from "lucide-react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -2962,7 +2963,7 @@ export function CompetitiveInsights({
                             )}
                           </Button>
                         )}
-                        {resolvedUser?.role === "super_admin" && (
+                        {resolvedUser?.role === "super_admin" && !selectedCampaign.entity && (
                           <Button
                             variant="outline"
                             size="sm"
@@ -2974,7 +2975,20 @@ export function CompetitiveInsights({
                             className="gap-2"
                           >
                             <UserPlus className="h-4 w-4" />
-                            {selectedCampaign.entity ? "Change Entity" : "Assign Entity"}
+                            Assign Entity
+                          </Button>
+                        )}
+                        {resolvedUser?.role === "super_admin" && selectedCampaign.entity && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              window.open(`/${clientSlug}/ci-entities?edit=${selectedCampaign.entity!.id}`, "_blank")
+                            }}
+                            className="gap-2"
+                          >
+                            <Pencil className="h-4 w-4" />
+                            Edit Entity
                           </Button>
                         )}
                         {selectedCampaign.entity && (

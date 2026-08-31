@@ -22,6 +22,22 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const action = searchParams.get("action")
+    const id = searchParams.get("id")
+
+    if (id) {
+      const entity = await prisma.ciEntity.findUnique({
+        where: { id },
+        include: {
+          _count: {
+            select: { campaigns: true, smsMessages: true, mappings: true },
+          },
+        },
+      })
+      if (!entity) {
+        return NextResponse.json({ error: "Entity not found" }, { status: 404 })
+      }
+      return NextResponse.json({ entity })
+    }
 
     if (action === "unassigned") {
       const campaigns = await getUnassignedCampaigns()

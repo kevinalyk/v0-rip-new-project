@@ -34,7 +34,7 @@ import {
   Loader2,
   Link2,
 } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -118,6 +118,9 @@ interface EntityMapping {
 
 export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [deepLinkEntityLoading, setDeepLinkEntityLoading] = useState(false)
   const [entities, setEntities] = useState<Entity[]>([])
   const [pagination, setPagination] = useState({
     page: 1,
@@ -724,6 +727,43 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
     setShowCreateDialog(true)
     fetchEntityMappings(entity.id)
   }
+
+  // Deep-link support: opening this page with ?edit=<entityId> (e.g. from the
+  // "Edit Entity" button in a message preview) fetches that entity directly
+  // and opens the edit dialog for it, regardless of current filters/pagination.
+  useEffect(() => {
+    const editEntityId = searchParams.get("edit")
+    if (!editEntityId) return
+
+    let cancelled = false
+    setDeepLinkEntityLoading(true)
+    fetch(`/api/ci-entities?id=${editEntityId}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("Not found"))))
+      .then((data) => {
+        if (cancelled) return
+        if (data.entity) {
+          handleEditEntity(data.entity)
+        } else {
+          toast.error("Entity not found")
+        }
+      })
+      .catch(() => {
+        if (!cancelled) toast.error("Failed to load entity for editing")
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDeepLinkEntityLoading(false)
+          // Remove the query param so closing/reopening the dialog doesn't re-trigger this
+          router.replace(pathname)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+    // Only run once on mount for the initial deep link
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleScrapeEntity = async (entity: Entity) => {
     setScrapingEntityId(entity.id)

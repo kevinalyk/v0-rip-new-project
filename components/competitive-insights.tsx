@@ -35,7 +35,6 @@ import {
   UserPlus,
   Loader2,
   Server,
-  Pencil,
 } from "lucide-react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -2829,21 +2828,6 @@ export function CompetitiveInsights({
                                   >
                                     [View Profile]
                                   </Button>
-                                  {resolvedUser?.role === "super_admin" && (
-                                    <Button
-                                      variant="link"
-                                      size="sm"
-                                      className="h-auto p-0 text-xs gap-1"
-                                      onClick={() =>
-                                        // Entity editing only exists under the "rip" tenant's admin
-                                        // console, regardless of which client's insights this is.
-                                        window.open(`/rip/admin/ci-entities?edit=${selectedCampaign.entity?.id}`, "_blank")
-                                      }
-                                    >
-                                      <Pencil className="h-3 w-3" />
-                                      Edit Entity
-                                    </Button>
-                                  )}
                                 </div>
                                 {selectedCampaign.entity.party && (
                                   <div>

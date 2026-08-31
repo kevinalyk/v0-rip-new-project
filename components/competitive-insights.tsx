@@ -1190,6 +1190,10 @@ export function CompetitiveInsights({
       toast({ title: "Assigned", description: "Message assigned and mapping created." })
       setAssignPopoverCampaignId(null)
       setAssignEntitySearch("")
+      // Close the preview modal (if open) so it doesn't show a stale entity
+      if (selectedCampaign?.id === campaign.id) {
+        setSelectedCampaign(null)
+      }
       fetchCampaigns()
     } catch {
       toast({ title: "Error", description: "Failed to assign message.", variant: "destructive" })
@@ -2956,6 +2960,21 @@ export function CompetitiveInsights({
                                 Hide
                               </>
                             )}
+                          </Button>
+                        )}
+                        {resolvedUser?.role === "super_admin" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setAssignDialogCampaign(selectedCampaign)
+                              setAssignPopoverCampaignId(selectedCampaign.id)
+                              setAssignEntitySearch("")
+                            }}
+                            className="gap-2"
+                          >
+                            <UserPlus className="h-4 w-4" />
+                            {selectedCampaign.entity ? "Change Entity" : "Assign Entity"}
                           </Button>
                         )}
                         {selectedCampaign.entity && (

@@ -188,6 +188,7 @@ model Client {
   clientDomains        ClientDomain[]        // Sending domains for deliverability monitoring
   spamTests            SpamTest[]
   slackIntegration     SlackIntegration?
+  slackEntityFilters   SlackEntityFilter[]
   
   @@index([totalUsers])
 }
@@ -209,19 +210,41 @@ model SlackIntegration {
   // future alert type here (e.g. notifyOnCampaignAssignment) rather than a JSON blob, so each
   // is a plain indexed/queryable column and the settings UI can render a switch per row.
   notifyOnFollowedEntityMessages Boolean @default(true)
+  // Whether this client has opted into filtering Slack alerts down to a specific set of
+  // entities (via SlackEntityFilter). False (the default) preserves legacy behavior: alert
+  // on every followed entity. Flip to true only once the client explicitly saves a filter
+  // selection, so existing connected workspaces see no behavior change until they do.
+  entityFilterConfigured Boolean @default(false)
   connectedByUserId String? // The Owner/Admin who completed setup, for audit purposes
   connectedAt       DateTime?
   disconnectedAt    DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
-
+  
   client            Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
   connectedByUser   User?     @relation(fields: [connectedByUserId], references: [id], onDelete: SetNull)
-
+  
   @@index([teamId])
-}
+  }
 
-model ClientDomain {
+  // Entities a client's Slack alerts should be limited to, when SlackIntegration.entityFilterConfigured
+  // is true. Independent from CiEntitySubscription ("Following" on the CI Feed) - seeded from it once
+  // during setup/first edit, but not kept in sync afterward, per product decision.
+  model SlackEntityFilter {
+  id        String   @id @default(cuid())
+  clientId  String
+  entityId  String
+  createdAt DateTime @default(now())
+
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  entity    CiEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, entityId])
+  @@index([clientId])
+  @@index([entityId])
+  }
+  
+  model ClientDomain {
   id                  String    @id @default(uuid())
   clientId            String
   domain              String
@@ -537,6 +560,7 @@ model CiEntity {
   subscriptions   CiEntitySubscription[]
   tags            EntityTag[]
   campaignLaunches CampaignLaunch[]
+  slackEntityFilters SlackEntityFilter[]
   
   @@index([party])
   @@index([state])

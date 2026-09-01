@@ -40,18 +40,23 @@ export function SlackEntityPicker({
 }: SlackEntityPickerProps) {
   const [searchTerm, setSearchTerm] = useState("")
 
+  // Freeze the "selected first" ordering to how things looked when this picker was opened
+  // (this component remounts each time the panel opens/closes). Toggling an entity mid-session
+  // must NOT reshuffle the list - it only re-sorts the next time the picker is reopened.
+  const [orderSnapshot] = useState(() => new Set(selectedIds))
+
   const filtered = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()
     const list = term ? entities.filter((e) => e.name.toLowerCase().includes(term)) : entities
 
-    // Selected first (alphabetical within group), then everyone else (alphabetical).
+    // Selected-at-open first (alphabetical within group), then everyone else (alphabetical).
     return [...list].sort((a, b) => {
-      const aSelected = selectedIds.has(a.id)
-      const bSelected = selectedIds.has(b.id)
+      const aSelected = orderSnapshot.has(a.id)
+      const bSelected = orderSnapshot.has(b.id)
       if (aSelected !== bSelected) return aSelected ? -1 : 1
       return a.name.localeCompare(b.name)
     })
-  }, [entities, searchTerm, selectedIds])
+  }, [entities, searchTerm, orderSnapshot])
 
   return (
     <div className={className}>
@@ -81,7 +86,17 @@ export function SlackEntityPicker({
               className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer"
               onClick={() => onToggle(entity.id)}
             >
-              <Checkbox checked={selectedIds.has(entity.id)} onCheckedChange={() => onToggle(entity.id)} />
+              <Checkbox
+                checked={selectedIds.has(entity.id)}
+                // The row's onClick already toggles selection. Without stopping propagation
+                // here, clicking directly on the box fires both this and the row handler,
+                // which cancel each other out - net effect: no change, so the box appears unclickable.
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggle(entity.id)
+                }}
+                onCheckedChange={() => {}}
+              />
               <span className="flex-1 truncate text-sm">{entity.name}</span>
               {followedEntityIds?.has(entity.id) && (
                 <Badge

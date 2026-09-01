@@ -37,6 +37,7 @@ model User {
   lookupSearches LookupSearch[] // Searches made via the public lookup tool
   campaignAlerts CampaignAlertSubscription[]
   slackIntegrationsConnected SlackIntegration[] // Slack integrations this user (as Owner/Admin) completed setup for
+  slackChannelsConnected     SlackChannel[] // Additional (paid, add-on) Slack bot channels this user completed setup for
 }
 
 model Domain {
@@ -173,6 +174,13 @@ model Client {
   stripeUserSeatPriceId  String?   // Stripe price ID for additional user seats
   totalUsers             Int       @default(0) // Auto-updated count of users
   paidUserSeats          Int?      // Total seats already paid for (custom/manual subscriptions only). When set, only charge for seats beyond this number.
+
+  // Additional (paid) Slack bot channels, on top of the one free bot included with every
+  // Slack integration. Gated by SLACK_MULTI_BOT_ENABLED (lib/feature-flags.ts) - the plumbing
+  // is fully wired but not user-facing until that flag flips.
+  additionalSlackBots    Int       @default(0) // Extra paid Slack bot channels purchased
+  stripeSlackBotsItemId  String?   @unique // Subscription item ID for additional Slack bots (si_xxx)
+  stripeSlackBotPriceId  String?   // Stripe price ID for additional Slack bots (per-bot, e.g. $50/mo)
   
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
@@ -189,6 +197,7 @@ model Client {
   spamTests            SpamTest[]
   slackIntegration     SlackIntegration?
   slackEntityFilters   SlackEntityFilter[]
+  slackChannels        SlackChannel[] // Additional (paid, add-on) Slack bot channels
   
   @@index([totalUsers])
 }
@@ -223,8 +232,57 @@ model SlackIntegration {
   
   client            Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
   connectedByUser   User?     @relation(fields: [connectedByUserId], references: [id], onDelete: SetNull)
-  
+  additionalChannels SlackChannel[] // Extra paid bot channels riding on this same Slack workspace/bot token
+
   @@index([teamId])
+  }
+
+  // An additional (paid, add-on) Slack bot channel on top of the one free bot on SlackIntegration.
+  // Reuses the parent SlackIntegration's bot token/workspace (one Slack app install per client),
+  // just posts alerts into a different channel with its own independent entity filter. Gated by
+  // SLACK_MULTI_BOT_ENABLED (lib/feature-flags.ts) - fully wired but hidden until that flag flips.
+  model SlackChannel {
+  id                String    @id @default(cuid())
+  clientId          String
+  slackIntegrationId String
+  label             String? // User-facing name, e.g. "Bot 2", set at creation time
+  channelId         String? // Slack channel this bot posts alerts into
+  channelName       String? // Display name of the channel, e.g. "#state-races-alerts"
+  status            String    @default("awaiting_channel") // "awaiting_channel" | "connected" | "disconnected"
+  notifyOnFollowedEntityMessages Boolean @default(true)
+  // Mirrors SlackIntegration.entityFilterConfigured - false means alert on every followed
+  // entity, true means limit to SlackChannelEntityFilter rows for this channel.
+  entityFilterConfigured Boolean @default(false)
+  connectedByUserId String?
+  connectedAt       DateTime?
+  disconnectedAt    DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  client            Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  slackIntegration  SlackIntegration  @relation(fields: [slackIntegrationId], references: [id], onDelete: Cascade)
+  connectedByUser   User?             @relation(fields: [connectedByUserId], references: [id], onDelete: SetNull)
+  entityFilters     SlackChannelEntityFilter[]
+
+  @@index([clientId])
+  @@index([slackIntegrationId])
+  }
+
+  // Entities a SlackChannel's alerts should be limited to, when that channel's
+  // entityFilterConfigured is true. Same pattern as SlackEntityFilter, but per add-on channel
+  // rather than per client, since each add-on bot has its own independent filter.
+  model SlackChannelEntityFilter {
+  id             String   @id @default(cuid())
+  slackChannelId String
+  entityId       String
+  createdAt      DateTime @default(now())
+
+  slackChannel   SlackChannel @relation(fields: [slackChannelId], references: [id], onDelete: Cascade)
+  entity         CiEntity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([slackChannelId, entityId])
+  @@index([slackChannelId])
+  @@index([entityId])
   }
 
   // Entities a client's Slack alerts should be limited to, when SlackIntegration.entityFilterConfigured
@@ -561,6 +619,7 @@ model CiEntity {
   tags            EntityTag[]
   campaignLaunches CampaignLaunch[]
   slackEntityFilters SlackEntityFilter[]
+  slackChannelEntityFilters SlackChannelEntityFilter[]
   
   @@index([party])
   @@index([state])

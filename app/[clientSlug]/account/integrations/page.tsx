@@ -13,6 +13,8 @@ import { toast } from "sonner"
 import AppLayout from "@/components/app-layout"
 import { PaywallOverlay } from "@/components/paywall-overlay"
 import { SlackEntityPicker, type SlackPickerEntity } from "@/components/slack-entity-picker"
+import { SlackAdditionalBots } from "@/components/slack-additional-bots"
+import { SLACK_MULTI_BOT_ENABLED } from "@/lib/feature-flags"
 
 const MANAGER_ROLES = ["owner", "admin", "super_admin"]
 
@@ -767,6 +769,10 @@ export default function AccountIntegrationsPage() {
               )}
             </CardContent>
           </Card>
+          )}
+
+          {hasIntegrationsAccess && isConnected && SLACK_MULTI_BOT_ENABLED && (
+            <SlackAdditionalBots canManageSlack={canManageSlack} />
           )}
         </div>
       </div>

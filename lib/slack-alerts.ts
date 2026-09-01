@@ -73,9 +73,35 @@ export async function notifyFollowersOfNewMessage(params: NotifyParams): Promise
     // type toggled on receive the message. The toggle lives on the settings page so
     // a client can opt out of "followed entity" alerts without disconnecting Slack
     // entirely (e.g. once other alert types ship and they only want a subset).
-    const integrations = await prisma.slackIntegration.findMany({
+    const candidateIntegrations = await prisma.slackIntegration.findMany({
       where: { clientId: { in: clientIds }, status: "connected", notifyOnFollowedEntityMessages: true },
     })
+
+    if (candidateIntegrations.length === 0) return
+
+    // Clients that have opted into entity filtering (entityFilterConfigured) only get
+    // alerted when this message's entity is in their SlackEntityFilter selection.
+    // Clients who haven't configured a filter keep the legacy behavior of alerting on
+    // every followed entity, so this never silently changes existing workspaces.
+    const filteredClientIds = candidateIntegrations
+      .filter((integration: { entityFilterConfigured: boolean }) => integration.entityFilterConfigured)
+      .map((integration: { clientId: string }) => integration.clientId)
+
+    const allowedFilteredClientIds = new Set(
+      filteredClientIds.length > 0
+        ? (
+            await prisma.slackEntityFilter.findMany({
+              where: { clientId: { in: filteredClientIds }, entityId: params.entityId },
+              select: { clientId: true },
+            })
+          ).map((f: { clientId: string }) => f.clientId)
+        : [],
+    )
+
+    const integrations = candidateIntegrations.filter(
+      (integration: { clientId: string; entityFilterConfigured: boolean }) =>
+        !integration.entityFilterConfigured || allowedFilteredClientIds.has(integration.clientId),
+    )
 
     if (integrations.length === 0) return
 

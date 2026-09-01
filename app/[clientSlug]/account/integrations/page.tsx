@@ -12,6 +12,7 @@ import { Loader2, MessageSquare, Building2, Hash, Info } from "lucide-react"
 import { toast } from "sonner"
 import AppLayout from "@/components/app-layout"
 import { PaywallOverlay } from "@/components/paywall-overlay"
+import { SlackEntityPicker, type SlackPickerEntity } from "@/components/slack-entity-picker"
 
 const MANAGER_ROLES = ["owner", "admin", "super_admin"]
 
@@ -55,6 +56,21 @@ export default function AccountIntegrationsPage() {
   // endpoint as initial setup, since that endpoint works regardless of status.
   const [changingChannel, setChangingChannel] = useState(false)
   const [savingPreferences, setSavingPreferences] = useState(false)
+
+  // Entity filter: which followed entities' messages actually get posted to Slack.
+  // entityFilterConfigured=false means legacy "alert on everything followed" behavior;
+  // savedFilterEntityIds only matters once entityFilterConfigured is true.
+  const [allEntities, setAllEntities] = useState<SlackPickerEntity[]>([])
+  const [entitiesLoading, setEntitiesLoading] = useState(false)
+  const [followedEntityIds, setFollowedEntityIds] = useState<Set<string>>(new Set())
+  const [entityFilterConfigured, setEntityFilterConfigured] = useState(false)
+  const [savedFilterEntityIds, setSavedFilterEntityIds] = useState<Set<string>>(new Set())
+  const [entityFilterPanelOpen, setEntityFilterPanelOpen] = useState(false)
+  const [draftEntityIds, setDraftEntityIds] = useState<Set<string>>(new Set())
+  const [savingEntityFilter, setSavingEntityFilter] = useState(false)
+  // Distinguishes the one-time "set this up now" prompt shown right after finishing channel
+  // setup (offers "Skip for now") from editing an already-configured filter (offers "Cancel").
+  const [isInitialEntitySetup, setIsInitialEntitySetup] = useState(false)
 
   const canManageSlack = currentUserRole !== null && MANAGER_ROLES.includes(currentUserRole)
 
@@ -125,6 +141,44 @@ export default function AccountIntegrationsPage() {
     }
   }, [])
 
+  const fetchEntityFilter = useCallback(async () => {
+    try {
+      const response = await fetch("/api/slack/entity-filter", { credentials: "include" })
+      if (!response.ok) return null
+      const data = await response.json()
+      setEntityFilterConfigured(Boolean(data.entityFilterConfigured))
+      setSavedFilterEntityIds(new Set<string>(data.entityIds ?? []))
+      return data as { entityFilterConfigured: boolean; entityIds: string[] }
+    } catch (error) {
+      console.error("[v0] Error fetching Slack entity filter:", error)
+      return null
+    }
+  }, [])
+
+  // Loads the full entity list for the picker plus the org's current CI "Following" list
+  // (for the star badge) - independent of the saved Slack filter itself.
+  const fetchPickerEntities = useCallback(async () => {
+    setEntitiesLoading(true)
+    try {
+      const [entitiesResponse, followedResponse] = await Promise.all([
+        fetch("/api/competitive-insights/senders", { credentials: "include" }),
+        fetch("/api/ci/subscriptions/check-all", { credentials: "include" }),
+      ])
+      if (entitiesResponse.ok) {
+        const data = await entitiesResponse.json()
+        setAllEntities(data.entities ?? [])
+      }
+      if (followedResponse.ok) {
+        const data = await followedResponse.json()
+        setFollowedEntityIds(new Set<string>(data.entityIds ?? []))
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching entities for Slack entity filter:", error)
+    } finally {
+      setEntitiesLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -191,6 +245,13 @@ export default function AccountIntegrationsPage() {
     }
   }, [slackStatus?.status, fetchChannels])
 
+  useEffect(() => {
+    if (slackStatus?.status === "connected") {
+      fetchEntityFilter()
+      fetchPickerEntities()
+    }
+  }, [slackStatus?.status, fetchEntityFilter, fetchPickerEntities])
+
   const handleConnect = async () => {
     setConnecting(true)
     try {
@@ -219,6 +280,9 @@ export default function AccountIntegrationsPage() {
       toast.error("Please select a channel from the list.")
       return
     }
+    // Capture before resetting - only the very first channel selection (not a later
+    // "change channel") should trigger the follow-up entity setup prompt.
+    const wasInitialSetup = !changingChannel
     setSavingChannel(true)
     try {
       const response = await fetch("/api/slack/select-channel", {
@@ -239,6 +303,13 @@ export default function AccountIntegrationsPage() {
       setChangingChannel(false)
       setSelectedChannelId("")
       await fetchSlackStatus()
+
+      if (wasInitialSetup) {
+        const [filterData] = await Promise.all([fetchEntityFilter(), fetchPickerEntities()])
+        setDraftEntityIds(new Set<string>(filterData?.entityIds ?? []))
+        setIsInitialEntitySetup(true)
+        setEntityFilterPanelOpen(true)
+      }
     } catch (error) {
       console.error("[v0] Error selecting Slack channel:", error)
       toast.error(error instanceof Error ? error.message : "Failed to connect the channel")
@@ -281,6 +352,62 @@ export default function AccountIntegrationsPage() {
       setSlackStatus({ ...slackStatus, notifyOnFollowedEntityMessages: !checked })
     } finally {
       setSavingPreferences(false)
+    }
+  }
+
+  const handleToggleEntityInDraft = (entityId: string) => {
+    setDraftEntityIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(entityId)) {
+        next.delete(entityId)
+      } else {
+        next.add(entityId)
+      }
+      return next
+    })
+  }
+
+  const handleOpenEntityFilterEditor = () => {
+    setDraftEntityIds(new Set(savedFilterEntityIds))
+    setIsInitialEntitySetup(false)
+    setEntityFilterPanelOpen(true)
+    if (allEntities.length === 0) fetchPickerEntities()
+  }
+
+  const handleCloseEntityFilterPanel = () => {
+    setEntityFilterPanelOpen(false)
+    setIsInitialEntitySetup(false)
+  }
+
+  const handleSaveEntityFilter = async () => {
+    setSavingEntityFilter(true)
+    try {
+      const response = await fetch("/api/slack/entity-filter", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ entityIds: Array.from(draftEntityIds) }),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error ?? "Failed to save entity filter")
+      }
+      setEntityFilterConfigured(true)
+      setSavedFilterEntityIds(new Set(draftEntityIds))
+      setEntityFilterPanelOpen(false)
+      setIsInitialEntitySetup(false)
+      toast.success(
+        draftEntityIds.size === 0
+          ? "Saved. No entities are selected, so Slack alerts are paused until you pick some."
+          : `Saved. Slack alerts will only post for ${draftEntityIds.size} selected ${
+              draftEntityIds.size === 1 ? "entity" : "entities"
+            }.`,
+      )
+    } catch (error) {
+      console.error("[v0] Error saving Slack entity filter:", error)
+      toast.error(error instanceof Error ? error.message : "Failed to save entity filter")
+    } finally {
+      setSavingEntityFilter(false)
     }
   }
 
@@ -495,6 +622,65 @@ export default function AccountIntegrationsPage() {
                     {!canManageSlack && (
                       <p className="text-sm text-muted-foreground">
                         Only Owners and Admins can change alert preferences.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-3 rounded-md border border-border p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium">Entities</p>
+                        <p className="text-sm text-muted-foreground">
+                          {entityFilterConfigured
+                            ? `Alerts are limited to ${savedFilterEntityIds.size} selected ${
+                                savedFilterEntityIds.size === 1 ? "entity" : "entities"
+                              }.`
+                            : "Alerts post for every entity your organization follows."}
+                        </p>
+                      </div>
+                      {canManageSlack && !entityFilterPanelOpen && (
+                        <Button variant="outline" size="sm" onClick={handleOpenEntityFilterEditor}>
+                          {entityFilterConfigured ? "Edit entities" : "Limit to specific entities"}
+                        </Button>
+                      )}
+                    </div>
+
+                    {entityFilterPanelOpen && (
+                      <div className="space-y-3 border-t border-border pt-3">
+                        {isInitialEntitySetup && (
+                          <p className="text-sm text-muted-foreground">
+                            Choose which entities should trigger Slack alerts. We&apos;ve pre-selected
+                            everything your organization currently follows - unselect anything you
+                            don&apos;t want, or pick different entities entirely.
+                          </p>
+                        )}
+                        <SlackEntityPicker
+                          entities={allEntities}
+                          selectedIds={draftEntityIds}
+                          onToggle={handleToggleEntityInDraft}
+                          onClearAll={() => setDraftEntityIds(new Set())}
+                          followedEntityIds={followedEntityIds}
+                          loading={entitiesLoading}
+                        />
+                        <div className="flex items-center gap-2">
+                          <Button onClick={handleSaveEntityFilter} disabled={savingEntityFilter}>
+                            {savingEntityFilter && <Loader2 size={14} className="mr-2 animate-spin" />}
+                            Save entities
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            onClick={handleCloseEntityFilterPanel}
+                            disabled={savingEntityFilter}
+                          >
+                            {isInitialEntitySetup ? "Skip for now" : "Cancel"}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {!canManageSlack && (
+                      <p className="text-sm text-muted-foreground">
+                        Only Owners and Admins can change which entities trigger alerts.
                       </p>
                     )}
                   </div>

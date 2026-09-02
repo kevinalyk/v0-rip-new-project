@@ -38,6 +38,7 @@ const ALL_SCOPES = [
   { value: "ci:assign", label: "Assign messages to entities" },
   { value: "ci:create_entity", label: "Create new entities" },
   { value: "ci:update_entity", label: "Update entity donation identifiers" },
+  { value: "ci:delete", label: "Delete junk messages (per SOP rules)" },
 ]
 
 interface ApiKeyRow {
@@ -290,9 +291,9 @@ export default function AutomationApiPage() {
             <h2 className="text-2xl font-bold">Automation API</h2>
             <p className="text-sm text-muted-foreground mt-1">
               Manage the credentials and audit trail for the Claude CI Assignment MCP server. This connector can
-              list unassigned messages, assign them to entities, create new entities, and update donation
-              identifiers on existing entities. Nothing else - see the tool descriptions in the connector itself for
-              exact scope.
+              list unassigned messages, assign them to entities, create new entities, update donation
+              identifiers on existing entities, and delete messages that match the SOP&apos;s junk rules. Nothing
+              else - see the tool descriptions in the connector itself for exact scope.
             </p>
           </div>
 

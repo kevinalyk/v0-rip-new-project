@@ -512,6 +512,197 @@ export async function getUnassignedSms() {
   }
 }
 
+// ── SOP-based junk detection for delete_messages / list_delete_eligible_messages ──
+//
+// Senders/shortcodes the SOP says to always delete on sight, regardless of
+// anything else about the message.
+const SOP_DELETE_SENDER_EMAILS = new Set(["no-reply@multiscreensite.com", "alana@superhuman.com"])
+const SOP_DELETE_SMS_SENDERS = new Set(["57414", "6232805635"])
+// Any CTA landing on an official .gov page (e.g. a member's official House/Senate
+// site) is not a real campaign call-to-action - members can't fundraise off
+// taxpayer-funded government infrastructure, so a message whose only links are
+// .gov links is functionally CTA-less for this SOP's purposes.
+const NON_REAL_CTA_HOST_SUFFIX = ".gov"
+
+type ParsedCtaLink = { url?: string; finalUrl?: string; type?: string }
+
+function parseCtaLinks(raw: unknown): ParsedCtaLink[] {
+  if (!raw) return []
+  try {
+    const value = typeof raw === "string" ? JSON.parse(raw) : raw
+    return Array.isArray(value) ? (value as ParsedCtaLink[]) : []
+  } catch {
+    return []
+  }
+}
+
+function linkHostname(link: ParsedCtaLink): string | null {
+  const target = link.finalUrl || link.url
+  if (!target) return null
+  try {
+    return new URL(target).hostname.toLowerCase()
+  } catch {
+    return null
+  }
+}
+
+/** Real CTAs = links that aren't a bare .gov page. */
+function countRealCtas(rawCtaLinks: unknown): number {
+  const links = parseCtaLinks(rawCtaLinks)
+  return links.filter((link) => {
+    const host = linkHostname(link)
+    return !(host && host.endsWith(NON_REAL_CTA_HOST_SUFFIX))
+  }).length
+}
+
+/** True if any CTA link is (or resolves through) the dead t.ly/redirect intermediate page. */
+function hasTlyRedirectPlaceholder(rawCtaLinks: unknown): boolean {
+  const links = parseCtaLinks(rawCtaLinks)
+  return links.some((link) => {
+    const target = (link.finalUrl || link.url || "").toLowerCase()
+    return target.includes("t.ly/redirect")
+  })
+}
+
+function normalizePhone(phone: string | null | undefined): string {
+  return (phone || "").replace(/[^0-9]/g, "")
+}
+
+export interface SopDeleteEvaluation {
+  eligible: boolean
+  reasons: string[]
+}
+
+/**
+ * Evaluates a single unassigned email campaign against the SOP's "always
+ * delete" rules. Purely a pure function over already-loaded fields so it's
+ * cheap to run over a whole backlog and easy to unit test / eyeball.
+ */
+export function evaluateCampaignForSopDelete(campaign: {
+  senderEmail: string
+  ctaLinks: unknown
+  dateReceived: Date
+}): SopDeleteEvaluation {
+  const reasons: string[] = []
+  const senderEmail = campaign.senderEmail.toLowerCase()
+  const domain = senderEmail.split("@")[1]
+
+  if (SOP_DELETE_SENDER_EMAILS.has(senderEmail)) {
+    reasons.push(`sender ${senderEmail} is on the always-delete sender list`)
+  }
+  if (domain?.endsWith(".gov")) {
+    reasons.push(`sender domain "${domain}" is a .gov address`)
+  }
+  if (hasTlyRedirectPlaceholder(campaign.ctaLinks)) {
+    reasons.push("CTA resolves to the dead t.ly/redirect page")
+  }
+  if (countRealCtas(campaign.ctaLinks) === 0) {
+    reasons.push("0 real CTAs (.gov links don't count)")
+  }
+  if (campaign.dateReceived.getTime() < Date.now() - 24 * 60 * 60 * 1000) {
+    reasons.push("message is more than 1 day old")
+  }
+
+  return { eligible: reasons.length > 0, reasons }
+}
+
+/**
+ * Evaluates a single unassigned SMS message against the SOP's "always
+ * delete" rules.
+ */
+export function evaluateSmsForSopDelete(sms: {
+  phoneNumber: string | null
+  ctaLinks: unknown
+  createdAt: Date
+}): SopDeleteEvaluation {
+  const reasons: string[] = []
+  const phone = normalizePhone(sms.phoneNumber)
+
+  if (phone && SOP_DELETE_SMS_SENDERS.has(phone)) {
+    reasons.push(`shortcode/number ${sms.phoneNumber} is on the always-delete sender list`)
+  }
+  if (hasTlyRedirectPlaceholder(sms.ctaLinks)) {
+    reasons.push("CTA is/resolves to t.ly/redirect")
+  }
+  if (countRealCtas(sms.ctaLinks) === 0) {
+    reasons.push("0 real CTAs (.gov links don't count)")
+  }
+  if (sms.createdAt.getTime() < Date.now() - 24 * 60 * 60 * 1000) {
+    reasons.push("message is more than 1 day old")
+  }
+
+  return { eligible: reasons.length > 0, reasons }
+}
+
+/**
+ * Scans the current unassigned backlog (same source as getUnassignedCampaigns /
+ * getUnassignedSms) and returns only the ones that match at least one SOP
+ * "always delete" rule, each tagged with the specific reason(s) it matched.
+ */
+export async function getSopDeleteEligibleMessages(): Promise<{
+  emails: Array<{ id: string; senderEmail: string; subject: string; dateReceived: Date; reasons: string[] }>
+  sms: Array<{ id: string; phoneNumber: string | null; message: string | null; createdAt: Date; reasons: string[] }>
+}> {
+  const [campaigns, smsMessages]: [any[], any[]] = await Promise.all([getUnassignedCampaigns(), getUnassignedSms()])
+
+  const emails = campaigns
+    .map((c: any) => ({ campaign: c, evaluation: evaluateCampaignForSopDelete(c) }))
+    .filter((row: { campaign: any; evaluation: SopDeleteEvaluation }) => row.evaluation.eligible)
+    .map((row: { campaign: any; evaluation: SopDeleteEvaluation }) => ({
+      id: row.campaign.id,
+      senderEmail: row.campaign.senderEmail,
+      subject: row.campaign.subject,
+      dateReceived: row.campaign.dateReceived,
+      reasons: row.evaluation.reasons,
+    }))
+
+  const sms = smsMessages
+    .map((s: any) => ({ sms: s, evaluation: evaluateSmsForSopDelete(s) }))
+    .filter((row: { sms: any; evaluation: SopDeleteEvaluation }) => row.evaluation.eligible)
+    .map((row: { sms: any; evaluation: SopDeleteEvaluation }) => ({
+      id: row.sms.id,
+      phoneNumber: row.sms.phoneNumber,
+      message: row.sms.message,
+      createdAt: row.sms.createdAt,
+      reasons: row.evaluation.reasons,
+    }))
+
+  return { emails, sms }
+}
+
+/**
+ * Soft-deletes a batch of email campaigns and/or SMS messages (same
+ * isDeleted/deletedAt/deletedBy fields the admin UI's manual delete uses -
+ * see app/api/campaigns/[id]/route.ts and app/api/sms/[id]/route.ts).
+ * Never hard-deletes, and never touches anything already assigned to an
+ * entity or already deleted, so a bad batch only ever double-marks rows
+ * that are already gone.
+ */
+export async function softDeleteMessages(
+  campaignIds: string[],
+  smsIds: string[],
+  deletedBy: string,
+): Promise<{ deletedCampaignCount: number; deletedSmsCount: number }> {
+  const now = new Date()
+
+  const [campaignResult, smsResult] = await Promise.all([
+    campaignIds.length > 0
+      ? prisma.competitiveInsightCampaign.updateMany({
+          where: { id: { in: campaignIds }, isDeleted: false },
+          data: { isDeleted: true, deletedAt: now, deletedBy },
+        })
+      : Promise.resolve({ count: 0 }),
+    smsIds.length > 0
+      ? prisma.smsQueue.updateMany({
+          where: { id: { in: smsIds }, isDeleted: false },
+          data: { isDeleted: true, deletedAt: now, deletedBy },
+        })
+      : Promise.resolve({ count: 0 }),
+  ])
+
+  return { deletedCampaignCount: campaignResult.count, deletedSmsCount: smsResult.count }
+}
+
 /**
  * Create a new entity
  */

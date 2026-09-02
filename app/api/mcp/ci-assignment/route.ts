@@ -3,7 +3,7 @@
  * Claude.ai / Claude Desktop custom connector. See
  * docs/plans/CLAUDE_CI_ASSIGNMENT_MCP.md for the full design.
  *
- * Deliberately exposes ONLY these 5 tools - nothing else exists on this
+ * Deliberately exposes ONLY these 7 tools - nothing else exists on this
  * surface, so Claude physically cannot call anything beyond this narrow
  * workflow:
  *   1. list_unassigned_messages   (ci:read)
@@ -11,6 +11,8 @@
  *   3. assign_messages_to_entity  (ci:assign)
  *   4. create_entity              (ci:create_entity)
  *   5. update_entity_donation_identifiers (ci:update_entity)
+ *   6. list_delete_eligible_messages (ci:read)
+ *   7. delete_messages            (ci:delete)
  *
  * Auth: bearer token -> ApiKey table (shared with the read-only public v1
  * API, distinguished by scope strings - see lib/ci-api-auth.ts). Every write
@@ -40,6 +42,8 @@ import {
   assignCampaignsToEntity,
   assignSmsToEntity,
   mergeEntityDonationIdentifiers,
+  getSopDeleteEligibleMessages,
+  softDeleteMessages,
   type DonationIdentifiers,
 } from "@/lib/ci-entity-utils"
 import { sendCiEntityCreatedByApiNotification } from "@/lib/ci-api-notifications"
@@ -356,6 +360,87 @@ const handler = createMcpHandler(
               {
                 type: "text" as const,
                 text: JSON.stringify({ success: true, entityId, donationIdentifiers: result.after }, null, 2),
+              },
+            ],
+          }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 6: list_delete_eligible_messages ───────────────────────────────
+    server.registerTool(
+      "list_delete_eligible_messages",
+      {
+        title: "List Delete-Eligible Messages",
+        description:
+          'Scans unassigned email/SMS messages against the SOP\'s "always delete" rules and returns only the ones that match, each with the specific reason(s) it matched (bad sender, no real CTA, dead t.ly/redirect link, or older than 1 day). Read-only - use this to preview exactly what delete_messages would remove before calling it.',
+        inputSchema: {},
+      },
+      async (_args, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.READ)
+          const results = await getSopDeleteEligibleMessages()
+          return { content: [{ type: "text" as const, text: JSON.stringify(results, null, 2) }] }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 7: delete_messages ──────────────────────────────────────────────
+    server.registerTool(
+      "delete_messages",
+      {
+        title: "Delete Messages",
+        description: `Soft-deletes a batch of unassigned email and/or SMS message IDs per the SOP's "always delete" rules (bad sender/domain, 0 real CTAs, dead t.ly/redirect link, or >1 day old). Requires a "reasoning" string explaining which rule(s) matched - stored in the audit log. Never hard-deletes (an admin can undo from the Automation API activity log), and never touches messages already assigned to an entity. Max ${CI_API_LIMITS.MAX_BATCH_SIZE} message IDs per call. Use list_delete_eligible_messages first to confirm what you're about to delete.`,
+        inputSchema: {
+          campaignIds: z.array(z.string()).max(CI_API_LIMITS.MAX_BATCH_SIZE).default([]),
+          smsIds: z.array(z.string()).max(CI_API_LIMITS.MAX_BATCH_SIZE).default([]),
+          reasoning: z.string().min(1).describe("Which SOP delete rule(s) this batch matched"),
+        },
+      },
+      async ({ campaignIds, smsIds, reasoning }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.DELETE)
+          await assertAutomationEnabled()
+
+          const totalCount = campaignIds.length + smsIds.length
+          if (totalCount === 0) {
+            throw new CiApiError("At least one campaignId or smsId is required", 400)
+          }
+          if (totalCount > CI_API_LIMITS.MAX_BATCH_SIZE) {
+            throw new CiApiError(`Batch size exceeds the max of ${CI_API_LIMITS.MAX_BATCH_SIZE} messages`, 400)
+          }
+
+          const apiKeyId = extra.authInfo!.extra!.apiKeyId as string
+          await enforceCiRateLimit(apiKeyId, "delete_messages")
+
+          const result = await softDeleteMessages(campaignIds, smsIds, `api_claude:${apiKeyId}`)
+
+          await logCiApiAction({
+            apiKeyId,
+            action: "delete_messages",
+            reasoning,
+            targetType: campaignIds.length > 0 && smsIds.length > 0 ? undefined : campaignIds.length > 0 ? "campaign" : "sms",
+            targetIds: [...campaignIds, ...smsIds],
+            afterState: { campaignIds, smsIds },
+          })
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  {
+                    success: true,
+                    deletedEmailCount: result.deletedCampaignCount,
+                    deletedSmsCount: result.deletedSmsCount,
+                  },
+                  null,
+                  2,
+                ),
               },
             ],
           }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { findEntityForSender, findEntityForPhone, findEntityByCtaDomain } from "@/lib/ci-entity-utils"
+import { isSenderThirdParty, isPhoneThirdParty } from "@/lib/ci-mapping-cache"
 import { nanoid } from "nanoid"
 
 /**
@@ -95,6 +96,9 @@ export async function GET(request: Request) {
         }
 
         if (entityResult && entityResult.entityId) {
+          // Frozen at assignment time — same rule as ingestion (see lib/ci-mapping-cache.ts)
+          const isThirdParty = await isSenderThirdParty(entityResult.entityId, campaign.senderEmail)
+
           // Found a match! Assign it
           await prisma.competitiveInsightCampaign.update({
             where: { id: campaign.id },
@@ -102,6 +106,7 @@ export async function GET(request: Request) {
               entityId: entityResult.entityId,
               assignmentMethod: entityResult.method,
               assignedAt: new Date(),
+              isThirdParty,
             },
           })
 
@@ -186,6 +191,9 @@ export async function GET(request: Request) {
         }
 
         if (entityResult && entityResult.entityId) {
+          // Frozen at assignment time — same rule as ingestion (see lib/ci-mapping-cache.ts)
+          const isThirdParty = await isPhoneThirdParty(entityResult.entityId, sms.phoneNumber)
+
           // Found a match! Assign it
           await prisma.smsQueue.update({
             where: { id: sms.id },
@@ -193,6 +201,7 @@ export async function GET(request: Request) {
               entityId: entityResult.entityId,
               assignmentMethod: entityResult.assignmentMethod || "auto_phone",
               assignedAt: new Date(),
+              isThirdParty,
             },
           })
 

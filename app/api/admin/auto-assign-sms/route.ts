@@ -3,6 +3,7 @@ import { verifyAuth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { resolveRedirects, stripQueryParams } from "@/lib/competitive-insights-utils"
 import { extractWinRedIdentifiers, extractAnedotIdentifiers, extractPSQIdentifiers } from "@/lib/ci-entity-utils"
+import { isPhoneThirdParty } from "@/lib/ci-mapping-cache"
 
 export const maxDuration = 300 // 5 minutes
 

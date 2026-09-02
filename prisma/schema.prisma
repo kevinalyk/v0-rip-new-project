@@ -492,6 +492,7 @@ model CompetitiveInsightCampaign {
   entity              CiEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
   assignmentMethod    String?  // "auto_winred", "auto_anedot", "auto_actblue", "auto_domain", "auto_phone", "manual"
   assignedAt          DateTime? // When the campaign was assigned to an entity
+  isThirdParty        Boolean? // Frozen at assignment time: true = sender not in entity's own mappings (rented/partner list), false = house file, null = unassigned or entity is a data broker
   clientId            String?  // Client who subscribed via personal email
   source              String   @default("seed") // "seed" or "personal"
   shareToken          String?  @unique // Unique token for sharing
@@ -540,6 +541,7 @@ model CompetitiveInsightCampaign {
   @@index([dkimSelector])
   @@index([sendingIp])
   @@index([sendingProvider])
+  @@index([isThirdParty])
   // Composite indexes for common CI query patterns
   @@index([isDeleted, isHidden, dateReceived])
   @@index([entityId, dateReceived])
@@ -672,6 +674,7 @@ model SmsQueue {
   source             String    @default("seed") // "seed" or "personal"
   assignmentMethod   String?  // "auto_winred", "auto_anedot", "auto_actblue", "auto_phone", "manual"
   assignedAt         DateTime? // When the SMS was assigned to an entity
+  isThirdParty       Boolean? // Frozen at assignment time: true = phone not in entity's own mappings (rented/partner list), false = house file, null = unassigned or entity is a data broker
   ctaLinks           String?   @db.Text // JSON array of CTA links extracted from message
   shareToken          String?  @unique // Unique token for sharing
   shareTokenCreatedAt DateTime? // When the share token was created
@@ -704,6 +707,7 @@ model SmsQueue {
   @@index([isDeleted])
   @@index([clientId])
   @@index([source])
+  @@index([isThirdParty])
   // Composite indexes for CI SMS query patterns
   @@index([isDeleted, entityId, createdAt])
   @@index([isDeleted, isHidden, createdAt])

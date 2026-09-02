@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client"
 import { generateObject } from "ai"
 import { z } from "zod"
 import { nanoid } from "nanoid"
+import { isSenderThirdParty, isPhoneThirdParty, invalidateEntityMappingCache } from "@/lib/ci-mapping-cache"
 
 const prisma = new PrismaClient()
 
@@ -643,17 +644,38 @@ export async function assignCampaignsToEntity(
   try {
     const directCampaigns = await prisma.competitiveInsightCampaign.findMany({
       where: { id: { in: campaignIds } },
-      select: { id: true, shareToken: true },
+      select: { id: true, shareToken: true, senderEmail: true },
     })
 
-    await prisma.competitiveInsightCampaign.updateMany({
-      where: { id: { in: campaignIds } },
-      data: {
-        entityId,
-        assignmentMethod,
-        assignedAt: new Date(),
-      },
-    })
+    if (createMapping) {
+      // A mapping is about to be created for these senders (below), so once that happens
+      // they become the entity's own confirmed identity — freeze isThirdParty=false now
+      // rather than resolving it against the pre-mapping state.
+      await prisma.competitiveInsightCampaign.updateMany({
+        where: { id: { in: campaignIds } },
+        data: {
+          entityId,
+          assignmentMethod,
+          assignedAt: new Date(),
+          isThirdParty: false,
+        },
+      })
+    } else {
+      // No mapping is being created — classify each campaign against whatever mappings
+      // already exist for this entity (may still resolve to third-party=true).
+      for (const campaign of directCampaigns) {
+        const isThirdParty = await isSenderThirdParty(entityId, campaign.senderEmail)
+        await prisma.competitiveInsightCampaign.update({
+          where: { id: campaign.id },
+          data: {
+            entityId,
+            assignmentMethod,
+            assignedAt: new Date(),
+            isThirdParty,
+          },
+        })
+      }
+    }
 
     for (const campaign of directCampaigns) {
       await ensureShareTokenForCampaign(campaign)
@@ -690,6 +712,9 @@ export async function assignCampaignsToEntity(
               senderDomain: domain,
             },
           })
+          // New mapping just changed the classification rules — drop the stale cache
+          // immediately so any concurrent/subsequent reads in this request see it.
+          invalidateEntityMappingCache()
         }
 
         const matchingWhere = {
@@ -705,12 +730,15 @@ export async function assignCampaignsToEntity(
           select: { id: true, shareToken: true },
         })
 
+        // These campaigns match the sender/domain we just mapped to this entity's own
+        // identity, so they are house file (isThirdParty=false) by construction.
         const matchingCampaigns = await prisma.competitiveInsightCampaign.updateMany({
           where: matchingWhere,
           data: {
             entityId,
             assignmentMethod,
             assignedAt: new Date(),
+            isThirdParty: false,
           },
         })
 
@@ -746,17 +774,38 @@ export async function assignSmsToEntity(
     // Fetch content for the alert before we lose the "just became assigned" moment
     const directSms = await prisma.smsQueue.findMany({
       where: { id: { in: smsIds } },
-      select: { id: true, shareToken: true },
+      select: { id: true, shareToken: true, phoneNumber: true },
     })
 
-    await prisma.smsQueue.updateMany({
-      where: { id: { in: smsIds } },
-      data: {
-        entityId,
-        assignmentMethod,
-        assignedAt: new Date(),
-      },
-    })
+    if (createMapping) {
+      // A mapping is about to be created for these phone numbers (below), so once that
+      // happens they become the entity's own confirmed identity — freeze isThirdParty=false
+      // now rather than resolving it against the pre-mapping state.
+      await prisma.smsQueue.updateMany({
+        where: { id: { in: smsIds } },
+        data: {
+          entityId,
+          assignmentMethod,
+          assignedAt: new Date(),
+          isThirdParty: false,
+        },
+      })
+    } else {
+      // No mapping is being created — classify each SMS against whatever mappings
+      // already exist for this entity (may still resolve to third-party=true).
+      for (const sms of directSms) {
+        const isThirdParty = await isPhoneThirdParty(entityId, sms.phoneNumber)
+        await prisma.smsQueue.update({
+          where: { id: sms.id },
+          data: {
+            entityId,
+            assignmentMethod,
+            assignedAt: new Date(),
+            isThirdParty,
+          },
+        })
+      }
+    }
 
     for (const sms of directSms) {
       await ensureShareTokenForSms(sms)
@@ -791,6 +840,9 @@ export async function assignSmsToEntity(
               senderPhone: normalizedPhone,
             },
           })
+          // New mapping just changed the classification rules — drop the stale cache
+          // immediately so any concurrent/subsequent reads in this request see it.
+          invalidateEntityMappingCache()
         }
 
         const matchingSmsWhere = {
@@ -803,12 +855,15 @@ export async function assignSmsToEntity(
           select: { id: true, shareToken: true },
         })
 
+        // These SMS match the phone number we just mapped to this entity's own
+        // identity, so they are house file (isThirdParty=false) by construction.
         const matchingSms = await prisma.smsQueue.updateMany({
           where: matchingSmsWhere,
           data: {
             entityId,
             assignmentMethod,
             assignedAt: new Date(),
+            isThirdParty: false,
           },
         })
 

@@ -10,6 +10,7 @@ import { detectDonationPlatform } from "@/lib/detect-donation-platform"
 import { computeBodyFingerprint } from "@/lib/body-fingerprint"
 import { classifyMessageTypes } from "@/lib/message-classifier"
 import { notifyFollowersOfNewMessage } from "@/lib/slack-alerts"
+import { isSenderThirdParty } from "@/lib/ci-mapping-cache"
 import { nanoid } from "nanoid"
 
 // Custom fetch using Node's http/https modules to properly handle SSL
@@ -1628,6 +1629,10 @@ export async function processCompetitiveInsights(
           }
         }
 
+        // Frozen at ingestion time: was this sender already a known/confirmed identity
+        // for the assigned entity, or does it look like a rented/partner (third-party) send?
+        const isThirdParty = await isSenderThirdParty(entityId, senderEmail)
+
         const newCampaign = await prisma.competitiveInsightCampaign.create({
           data: {
             senderEmail,
@@ -1649,6 +1654,7 @@ export async function processCompetitiveInsights(
             entityId,
             assignmentMethod,
             assignedAt: entityId ? new Date() : null,
+            isThirdParty,
             clientId,
             source: clientId ? "personal" : "seed",
             rawHeaders: rawHeaders ?? null,

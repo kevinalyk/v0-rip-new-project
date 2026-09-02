@@ -3,8 +3,9 @@ import prisma from "@/lib/prisma"
 import { decrypt } from "@/lib/encryption"
 import { canManageSlackIntegration, getRequestingClientUser } from "@/lib/slack-integration-auth"
 
-// Finalizes setup: joins the chosen channel, posts a confirmation message,
-// and marks the integration "connected" for the whole client.
+// Finalizes setup: joins the chosen channel and marks the integration
+// "connected" for the whole client. No confirmation message is posted -
+// the channel should stay silent until real alerts start flowing.
 export async function POST(request: Request) {
   const userRecord = await getRequestingClientUser(request)
   if (!userRecord) {
@@ -50,18 +51,6 @@ export async function POST(request: Request) {
         { status: 502 },
       )
     }
-
-    await fetch("https://slack.com/api/chat.postMessage", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${botToken}`,
-        "Content-Type": "application/json; charset=utf-8",
-      },
-      body: JSON.stringify({
-        channel: channelId,
-        text: "RIP Tool is now connected to this channel. Alerts for your organization will be posted here.",
-      }),
-    })
 
     const updated = await prisma.slackIntegration.update({
       where: { clientId },

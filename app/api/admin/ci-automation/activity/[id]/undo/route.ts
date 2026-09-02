@@ -13,6 +13,9 @@
  *                                 orphaning messages that were separately
  *                                 assigned to it afterward, including by a
  *                                 human). Returns 409 if blocked.
+ *   - delete_messages:            clears isDeleted/deletedAt/deletedBy back
+ *                                 to not-deleted on the exact target message
+ *                                 IDs recorded on the log row.
  *
  * Already-undone rows are rejected with 409.
  */
@@ -74,6 +77,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       )
     }
     await prisma.ciEntity.delete({ where: { id: log.entityId } })
+  } else if (log.action === "delete_messages") {
+    const targetIds = Array.isArray(log.targetIds) ? (log.targetIds as string[]) : []
+    if (targetIds.length > 0) {
+      await prisma.competitiveInsightCampaign.updateMany({
+        where: { id: { in: targetIds } },
+        data: { isDeleted: false, deletedAt: null, deletedBy: null },
+      })
+      await prisma.smsQueue.updateMany({
+        where: { id: { in: targetIds } },
+        data: { isDeleted: false, deletedAt: null, deletedBy: null },
+      })
+    }
   } else {
     return NextResponse.json({ error: `Unknown action type: ${log.action}` }, { status: 400 })
   }

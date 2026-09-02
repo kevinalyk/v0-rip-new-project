@@ -12,10 +12,11 @@
  * Reuses the existing ApiKey table/model (see prisma/schema.prisma, and key
  * creation/hash helpers in lib/api-auth.ts) rather than a second credential
  * system. CI-assignment keys are distinguished purely by scope strings:
- *   - "ci:read"           list_unassigned_messages, list_entities
+ *   - "ci:read"           list_unassigned_messages, list_entities, list_delete_eligible_messages
  *   - "ci:assign"         assign_messages_to_entity
  *   - "ci:create_entity"  create_entity
  *   - "ci:update_entity"  update_entity_donation_identifiers
+ *   - "ci:delete"         delete_messages
  */
 
 import { createHash, randomBytes } from "crypto"
@@ -56,6 +57,7 @@ export const CI_SCOPES = {
   ASSIGN: "ci:assign",
   CREATE_ENTITY: "ci:create_entity",
   UPDATE_ENTITY: "ci:update_entity",
+  DELETE: "ci:delete",
 } as const
 
 export type CiScope = (typeof CI_SCOPES)[keyof typeof CI_SCOPES]
@@ -65,6 +67,7 @@ export const CI_ASSIGNMENT_ALL_SCOPES: CiScope[] = [
   CI_SCOPES.ASSIGN,
   CI_SCOPES.CREATE_ENTITY,
   CI_SCOPES.UPDATE_ENTITY,
+  CI_SCOPES.DELETE,
 ]
 
 // Guardrail caps - deliberately conservative. Raise only with a clear reason;
@@ -75,6 +78,7 @@ export const CI_API_LIMITS = {
   MAX_ASSIGNMENTS_PER_HOUR: 500,
   MAX_NEW_ENTITIES_PER_DAY: 20,
   MAX_ENTITY_UPDATES_PER_DAY: 50,
+  MAX_DELETES_PER_HOUR: 300, // max message IDs soft-deleted per hour via delete_messages
 }
 
 export class CiApiError extends Error {
@@ -168,7 +172,7 @@ export async function assertAutomationEnabled(): Promise<void> {
  */
 export async function enforceCiRateLimit(
   apiKeyId: string,
-  action: "assign_messages" | "create_entity" | "update_entity_identifiers",
+  action: "assign_messages" | "create_entity" | "update_entity_identifiers" | "delete_messages",
 ): Promise<void> {
   const now = Date.now()
 
@@ -210,6 +214,21 @@ export async function enforceCiRateLimit(
       )
     }
   }
+
+  if (action === "delete_messages") {
+    const windowStart = new Date(now - 60 * 60 * 1000)
+    const rows = await prisma.ciApiActionLog.findMany({
+      where: { apiKeyId, action: "delete_messages", createdAt: { gte: windowStart } },
+      select: { targetIds: true },
+    })
+    const deletedCount = rows.reduce(
+      (sum: number, row: { targetIds: unknown }) => sum + (Array.isArray(row.targetIds) ? row.targetIds.length : 0),
+      0,
+    )
+    if (deletedCount >= CI_API_LIMITS.MAX_DELETES_PER_HOUR) {
+      throw new CiApiError(`Rate limit exceeded: max ${CI_API_LIMITS.MAX_DELETES_PER_HOUR} message deletions per hour`, 429)
+    }
+  }
 }
 
 /**
@@ -220,7 +239,7 @@ export async function enforceCiRateLimit(
  */
 export async function logCiApiAction(params: {
   apiKeyId: string
-  action: "assign_messages" | "create_entity" | "update_entity_identifiers"
+  action: "assign_messages" | "create_entity" | "update_entity_identifiers" | "delete_messages"
   reasoning?: string
   targetType?: "sms" | "campaign" | "entity"
   targetIds?: string[]

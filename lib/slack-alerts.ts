@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma"
 import { decrypt } from "@/lib/encryption"
 import { SLACK_MULTI_BOT_ENABLED } from "@/lib/feature-flags"
+import { matchesMessageFilters } from "@/lib/slack-message-filters"
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
@@ -17,6 +18,12 @@ interface NotifyNewEmailParams {
   kind: "email"
   entityId: string
   entityName: string
+  /** Entity-level fields needed to evaluate the party/state/entityType message filters below. */
+  entityParty: string | null
+  entityState: string | null
+  entityType: string
+  /** Frozen at ingestion/assignment time - see lib/ci-mapping-cache.ts. Needed to evaluate the houseFileFilter message filter. */
+  isThirdParty: boolean
   senderName: string
   senderEmail: string
   subject: string
@@ -29,6 +36,12 @@ interface NotifyNewSmsParams {
   kind: "sms"
   entityId: string
   entityName: string
+  /** Entity-level fields needed to evaluate the party/state/entityType message filters below. */
+  entityParty: string | null
+  entityState: string | null
+  entityType: string
+  /** Frozen at ingestion/assignment time - see lib/ci-mapping-cache.ts. Needed to evaluate the houseFileFilter message filter. */
+  isThirdParty: boolean
   phoneNumber: string | null
   message: string | null
   shareToken: string
@@ -99,10 +112,24 @@ export async function notifyFollowersOfNewMessage(params: NotifyParams): Promise
         : [],
     )
 
-    const integrations = candidateIntegrations.filter(
-      (integration: { clientId: string; entityFilterConfigured: boolean }) =>
-        !integration.entityFilterConfigured || allowedFilteredClientIds.has(integration.clientId),
-    )
+    const messageFilterContext = {
+      kind: params.kind,
+      isThirdParty: params.isThirdParty,
+      entityParty: params.entityParty,
+      entityState: params.entityState,
+      entityType: params.entityType,
+    }
+
+    const integrations = candidateIntegrations
+      .filter(
+        (integration: { clientId: string; entityFilterConfigured: boolean }) =>
+          !integration.entityFilterConfigured || allowedFilteredClientIds.has(integration.clientId),
+      )
+      // Message-level filters (channel, house file/third party, party, state, entity type) -
+      // independent of the entity allow-list above, all default to "all" (no restriction).
+      .filter((integration: Parameters<typeof matchesMessageFilters>[0]) =>
+        matchesMessageFilters(integration, messageFilterContext),
+      )
 
     // Additional (paid, add-on) Slack bot channels - hidden behind SLACK_MULTI_BOT_ENABLED.
     // Until that flag flips there are no SlackChannel rows in the first place (the only way
@@ -134,6 +161,10 @@ export async function notifyFollowersOfNewMessage(params: NotifyParams): Promise
         .filter(
           (channel: { id: string; entityFilterConfigured: boolean }) =>
             !channel.entityFilterConfigured || allowedFilteredChannelIds.has(channel.id),
+        )
+        // Same message-level filters as the primary integration, independent per add-on channel.
+        .filter((channel: Parameters<typeof matchesMessageFilters>[0]) =>
+          matchesMessageFilters(channel, messageFilterContext),
         )
         .map((channel: { id: string; channelId: string | null; slackIntegration: { botAccessToken: string | null } }) => ({
           id: channel.id,

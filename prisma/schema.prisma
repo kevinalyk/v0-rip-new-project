@@ -224,6 +224,17 @@ model SlackIntegration {
   // on every followed entity. Flip to true only once the client explicitly saves a filter
   // selection, so existing connected workspaces see no behavior change until they do.
   entityFilterConfigured Boolean @default(false)
+  // Message-level filters, applied in addition to the entity allow-list above (all must
+  // pass - AND, not OR). Each defaults to "all" (no restriction), which is the legacy
+  // behavior for every existing connected workspace until a client explicitly saves a
+  // narrower value. Mirrors the same dimensions as the CI Feed's own filters
+  // (components/competitive-insights.tsx) so Slack alerts and the CI Feed stay consistent -
+  // see lib/slack-message-filters.ts for the shared allowed-value lists and matching logic.
+  messageTypeFilter String @default("all") // "all" | "email" | "sms"
+  houseFileFilter   String @default("all") // "all" | "house_file" | "third_party"
+  partyFilter       String @default("all") // "all" | "republican" | "democrat" | "third party"
+  stateFilter       String @default("all") // "all" | two-letter state code (e.g. "CA")
+  entityTypeFilter  String @default("all") // "all" | "politician" | "pac" | "organization"
   connectedByUserId String? // The Owner/Admin who completed setup, for audit purposes
   connectedAt       DateTime?
   disconnectedAt    DateTime?
@@ -253,6 +264,13 @@ model SlackIntegration {
   // Mirrors SlackIntegration.entityFilterConfigured - false means alert on every followed
   // entity, true means limit to SlackChannelEntityFilter rows for this channel.
   entityFilterConfigured Boolean @default(false)
+  // Same message-level filters as SlackIntegration, independent per add-on channel. See
+  // lib/slack-message-filters.ts.
+  messageTypeFilter String @default("all") // "all" | "email" | "sms"
+  houseFileFilter   String @default("all") // "all" | "house_file" | "third_party"
+  partyFilter       String @default("all") // "all" | "republican" | "democrat" | "third party"
+  stateFilter       String @default("all") // "all" | two-letter state code (e.g. "CA")
+  entityTypeFilter  String @default("all") // "all" | "politician" | "pac" | "organization"
   connectedByUserId String?
   connectedAt       DateTime?
   disconnectedAt    DateTime?

@@ -1687,7 +1687,10 @@ export async function processCompetitiveInsights(
         // Never blocks campaign creation - internally logs and swallows errors.
         if (entityId) {
           try {
-            const entity = await prisma.ciEntity.findUnique({ where: { id: entityId }, select: { name: true } })
+            const entity = await prisma.ciEntity.findUnique({
+              where: { id: entityId },
+              select: { name: true, party: true, state: true, type: true },
+            })
             if (entity) {
               const shareToken = nanoid(16)
               await prisma.competitiveInsightCampaign.update({
@@ -1698,6 +1701,10 @@ export async function processCompetitiveInsights(
                 kind: "email",
                 entityId,
                 entityName: entity.name,
+                entityParty: entity.party,
+                entityState: entity.state,
+                entityType: entity.type,
+                isThirdParty,
                 senderName: redactedSenderName,
                 senderEmail,
                 subject: redactedSubject,

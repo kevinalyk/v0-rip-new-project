@@ -234,7 +234,7 @@ export async function POST(request: Request) {
     if (entityAssignment?.entityId) {
       const entity = await prisma.ciEntity.findUnique({
         where: { id: entityAssignment.entityId },
-        select: { name: true },
+        select: { name: true, party: true, state: true, type: true },
       })
       if (entity) {
         const shareToken = nanoid(16)
@@ -246,6 +246,10 @@ export async function POST(request: Request) {
           kind: "sms",
           entityId: entityAssignment.entityId,
           entityName: entity.name,
+          entityParty: entity.party,
+          entityState: entity.state,
+          entityType: entity.type,
+          isThirdParty,
           phoneNumber: actualSender,
           message: redactedMessage,
           shareToken,

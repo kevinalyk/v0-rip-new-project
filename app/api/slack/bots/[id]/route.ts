@@ -4,6 +4,13 @@ import { decrypt } from "@/lib/encryption"
 import { canManageSlackIntegration, getRequestingClientUser } from "@/lib/slack-integration-auth"
 import { updateClientSlackBotSeats } from "@/lib/stripe-slack-bots"
 import { SLACK_MULTI_BOT_ENABLED } from "@/lib/feature-flags"
+import {
+  isValidMessageTypeFilter,
+  isValidHouseFileFilter,
+  isValidPartyFilter,
+  isValidStateFilter,
+  isValidEntityTypeFilter,
+} from "@/lib/slack-message-filters"
 
 // Fully wired but hidden behind SLACK_MULTI_BOT_ENABLED until launch. See app/api/slack/bots/route.ts.
 
@@ -49,6 +56,54 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       where: { id: bot.id },
       data: { notifyOnFollowedEntityMessages: body.notifyOnFollowedEntityMessages },
     })
+    return NextResponse.json({ bot: updated })
+  }
+
+  // Message-level filters (channel, house file/third party, party, state, entity type) -
+  // same dimensions and validation as the primary integration's /api/slack/message-filters.
+  // Only the fields present in the body are updated.
+  const messageFilterKeys = [
+    "messageTypeFilter",
+    "houseFileFilter",
+    "partyFilter",
+    "stateFilter",
+    "entityTypeFilter",
+  ] as const
+  if (messageFilterKeys.some((key) => key in body)) {
+    const data: Record<string, string> = {}
+
+    if ("messageTypeFilter" in body) {
+      if (!isValidMessageTypeFilter(body.messageTypeFilter)) {
+        return NextResponse.json({ error: "Invalid messageTypeFilter" }, { status: 400 })
+      }
+      data.messageTypeFilter = body.messageTypeFilter
+    }
+    if ("houseFileFilter" in body) {
+      if (!isValidHouseFileFilter(body.houseFileFilter)) {
+        return NextResponse.json({ error: "Invalid houseFileFilter" }, { status: 400 })
+      }
+      data.houseFileFilter = body.houseFileFilter
+    }
+    if ("partyFilter" in body) {
+      if (!isValidPartyFilter(body.partyFilter)) {
+        return NextResponse.json({ error: "Invalid partyFilter" }, { status: 400 })
+      }
+      data.partyFilter = body.partyFilter
+    }
+    if ("stateFilter" in body) {
+      if (!isValidStateFilter(body.stateFilter)) {
+        return NextResponse.json({ error: "Invalid stateFilter" }, { status: 400 })
+      }
+      data.stateFilter = body.stateFilter
+    }
+    if ("entityTypeFilter" in body) {
+      if (!isValidEntityTypeFilter(body.entityTypeFilter)) {
+        return NextResponse.json({ error: "Invalid entityTypeFilter" }, { status: 400 })
+      }
+      data.entityTypeFilter = body.entityTypeFilter
+    }
+
+    const updated = await prisma.slackChannel.update({ where: { id: bot.id }, data })
     return NextResponse.json({ bot: updated })
   }
 

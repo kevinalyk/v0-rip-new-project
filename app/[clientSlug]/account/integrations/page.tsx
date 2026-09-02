@@ -13,8 +13,17 @@ import { toast } from "sonner"
 import AppLayout from "@/components/app-layout"
 import { PaywallOverlay } from "@/components/paywall-overlay"
 import { SlackEntityPicker, type SlackPickerEntity } from "@/components/slack-entity-picker"
+import { SlackMessageFilters, type SlackMessageFilterValues } from "@/components/slack-message-filters"
 import { SlackAdditionalBots } from "@/components/slack-additional-bots"
 import { SLACK_MULTI_BOT_ENABLED } from "@/lib/feature-flags"
+
+const DEFAULT_MESSAGE_FILTERS: SlackMessageFilterValues = {
+  messageTypeFilter: "all",
+  houseFileFilter: "all",
+  partyFilter: "all",
+  stateFilter: "all",
+  entityTypeFilter: "all",
+}
 
 const MANAGER_ROLES = ["owner", "admin", "super_admin"]
 

@@ -5,9 +5,9 @@
  * isPhoneThirdParty), reimplemented here in plain JS since this script runs
  * outside the Next.js/TS toolchain.
  *
- * Classification:
+ * Classification (identical for data-broker entities as any other — neither live
+ * route special-cases them in this specific match, see lib/ci-mapping-cache.ts):
  *   - No entity assigned -> null (skipped, nothing to do)
- *   - Entity is a data broker -> null (excluded from this facet)
  *   - Entity has no known mappings -> false (house file by default)
  *   - Sender email/domain (or phone) IS in the entity's known mappings -> false
  *   - Sender email/domain (or phone) is NOT in the entity's known mappings -> true
@@ -62,65 +62,93 @@ async function loadMappings() {
   return { mappingsByEntity, phonesByEntity, entityTypeById }
 }
 
-function classifySender(entityId, senderEmail, { mappingsByEntity, entityTypeById }) {
-  if (!entityId) return null
-  if (entityTypeById[entityId] === "data_broker") return null
-  const em = mappingsByEntity[entityId]
-  if (!em) return false
-  const email = (senderEmail ?? "").toLowerCase()
-  const domain = email.split("@")[1]
-  return !em.emails.has(email) && (!domain || !em.domains.has(domain))
+async function backfillCampaigns(mappings) {
+  const { mappingsByEntity } = mappings
+
+  const distinctEntities = await prisma.competitiveInsightCampaign.findMany({
+    where: { entityId: { not: null }, isThirdParty: null },
+    select: { entityId: true },
+    distinct: ["entityId"],
+  })
+  console.log(`[backfill] ${distinctEntities.length} distinct entities with unclassified campaigns`)
+
+  let houseFileUpdated = 0
+  let thirdPartyUpdated = 0
+
+  for (const { entityId } of distinctEntities) {
+    const em = mappingsByEntity[entityId]
+    const baseWhere = { entityId, isThirdParty: null }
+
+    if (em && (em.emails.size > 0 || em.domains.size > 0)) {
+      // Known senders for this entity -> house file (false)
+      const orClauses = [
+        ...(em.emails.size > 0 ? [{ senderEmail: { in: [...em.emails] } }] : []),
+        ...[...em.domains].map((d) => ({ senderEmail: { endsWith: `@${d}`, mode: "insensitive" } })),
+      ]
+      if (orClauses.length > 0) {
+        const res = await prisma.competitiveInsightCampaign.updateMany({
+          where: { ...baseWhere, OR: orClauses },
+          data: { isThirdParty: false },
+        })
+        houseFileUpdated += res.count
+      }
+    }
+
+    // Everything else still unclassified for this entity -> third party (true)
+    const res = await prisma.competitiveInsightCampaign.updateMany({
+      where: baseWhere,
+      data: { isThirdParty: true },
+    })
+    thirdPartyUpdated += res.count
+  }
+
+  console.log(`[backfill] Campaigns: ${houseFileUpdated} house file, ${thirdPartyUpdated} third party`)
 }
 
-function classifyPhone(entityId, phoneNumber, { phonesByEntity, entityTypeById }) {
-  if (!entityId) return null
-  if (entityTypeById[entityId] === "data_broker") return null
-  const phones = phonesByEntity[entityId]
-  if (!phones) return false
-  return !phones.has(phoneNumber ?? "")
+async function backfillSms(mappings) {
+  const { phonesByEntity } = mappings
+
+  const distinctEntities = await prisma.smsQueue.findMany({
+    where: { entityId: { not: null }, isThirdParty: null },
+    select: { entityId: true },
+    distinct: ["entityId"],
+  })
+  console.log(`[backfill] ${distinctEntities.length} distinct entities with unclassified SMS`)
+
+  let houseFileUpdated = 0
+  let thirdPartyUpdated = 0
+
+  for (const { entityId } of distinctEntities) {
+    const phones = phonesByEntity[entityId]
+    const baseWhere = { entityId, isThirdParty: null }
+
+    if (phones && phones.size > 0) {
+      const res = await prisma.smsQueue.updateMany({
+        where: { ...baseWhere, phoneNumber: { in: [...phones] } },
+        data: { isThirdParty: false },
+      })
+      houseFileUpdated += res.count
+    }
+
+    const res = await prisma.smsQueue.updateMany({
+      where: baseWhere,
+      data: { isThirdParty: true },
+    })
+    thirdPartyUpdated += res.count
+  }
+
+  console.log(`[backfill] SMS: ${houseFileUpdated} house file, ${thirdPartyUpdated} third party`)
 }
 
 async function main() {
   console.log("[backfill] Loading entity mappings...")
   const mappings = await loadMappings()
 
-  console.log("[backfill] Fetching assigned campaigns missing isThirdParty...")
-  const campaigns = await prisma.competitiveInsightCampaign.findMany({
-    where: { entityId: { not: null }, isThirdParty: null },
-    select: { id: true, entityId: true, senderEmail: true },
-  })
-  console.log(`[backfill] ${campaigns.length} campaigns to classify`)
+  console.log("[backfill] Backfilling campaigns...")
+  await backfillCampaigns(mappings)
 
-  let campaignUpdated = 0
-  for (const c of campaigns) {
-    const isThirdParty = classifySender(c.entityId, c.senderEmail, mappings)
-    if (isThirdParty === null) continue // data broker or no entity - leave null
-    await prisma.competitiveInsightCampaign.update({
-      where: { id: c.id },
-      data: { isThirdParty },
-    })
-    campaignUpdated++
-  }
-  console.log(`[backfill] Updated ${campaignUpdated} campaigns`)
-
-  console.log("[backfill] Fetching assigned SMS missing isThirdParty...")
-  const smsMessages = await prisma.smsQueue.findMany({
-    where: { entityId: { not: null }, isThirdParty: null },
-    select: { id: true, entityId: true, phoneNumber: true },
-  })
-  console.log(`[backfill] ${smsMessages.length} SMS messages to classify`)
-
-  let smsUpdated = 0
-  for (const s of smsMessages) {
-    const isThirdParty = classifyPhone(s.entityId, s.phoneNumber, mappings)
-    if (isThirdParty === null) continue
-    await prisma.smsQueue.update({
-      where: { id: s.id },
-      data: { isThirdParty },
-    })
-    smsUpdated++
-  }
-  console.log(`[backfill] Updated ${smsUpdated} SMS messages`)
+  console.log("[backfill] Backfilling SMS...")
+  await backfillSms(mappings)
 
   console.log("[backfill] Done.")
 }

@@ -84,10 +84,17 @@ export function invalidateEntityMappingCache(): void {
  * Canonical third-party/house-file classification for an email sender, mirroring the
  * live filter logic used by the CI feed and analytics routes:
  *   - No entity assigned yet → null (not applicable)
- *   - Entity is a data broker → null (data brokers are excluded from this facet entirely)
- *   - Entity has no known mappings → false (house file by default)
+ *   - Entity has no known mappings → false (house file by default — no test to fail)
  *   - Sender email/domain IS in the entity's known mappings → false (house file)
  *   - Sender email/domain is NOT in the entity's known mappings → true (third party)
+ *
+ * Note: this does NOT special-case data-broker entities. Neither live route
+ * (app/api/competitive-insights/route.ts, app/api/ci/analytics/route.ts) excludes
+ * data brokers from this specific classification math — one route separately
+ * filters data brokers out of its feed via `entity: { type: { not: "data_broker" } }`,
+ * the other includes them. Keep isThirdParty purely about sender-identity matching,
+ * and apply any data-broker inclusion/exclusion as a separate filter on top, exactly
+ * as those routes already do.
  *
  * Call this at the moment entityId is set (ingestion auto-assignment or manual/API
  * assignment) so the result can be frozen and stored on the row via `isThirdParty`.
@@ -97,8 +104,7 @@ export async function isSenderThirdParty(
   senderEmail: string | null | undefined,
 ): Promise<boolean | null> {
   if (!entityId) return null
-  const { mappingsByEntity, entityTypeById } = await getEntityMappings()
-  if (entityTypeById[entityId] === "data_broker") return null
+  const { mappingsByEntity } = await getEntityMappings()
   const em = mappingsByEntity[entityId]
   if (!em) return false
   const email = (senderEmail ?? "").toLowerCase()
@@ -115,8 +121,7 @@ export async function isPhoneThirdParty(
   phoneNumber: string | null | undefined,
 ): Promise<boolean | null> {
   if (!entityId) return null
-  const { phonesByEntity, entityTypeById } = await getEntityMappings()
-  if (entityTypeById[entityId] === "data_broker") return null
+  const { phonesByEntity } = await getEntityMappings()
   const phones = phonesByEntity[entityId]
   if (!phones) return false
   return !phones.has(phoneNumber ?? "")

@@ -83,6 +83,11 @@ export default function AccountIntegrationsPage() {
   // setup (offers "Skip for now") from editing an already-configured filter (offers "Cancel").
   const [isInitialEntitySetup, setIsInitialEntitySetup] = useState(false)
 
+  // Message-level filters (channel, house file/third party, party, state, entity type) -
+  // independent of the entity allow-list above, all default to "all" (no restriction).
+  const [messageFilters, setMessageFilters] = useState<SlackMessageFilterValues>(DEFAULT_MESSAGE_FILTERS)
+  const [savingMessageFilters, setSavingMessageFilters] = useState(false)
+
   const canManageSlack = currentUserRole !== null && MANAGER_ROLES.includes(currentUserRole)
 
   const fetchSlackStatus = useCallback(async () => {
@@ -163,6 +168,23 @@ export default function AccountIntegrationsPage() {
     } catch (error) {
       console.error("[v0] Error fetching Slack entity filter:", error)
       return null
+    }
+  }, [])
+
+  const fetchMessageFilters = useCallback(async () => {
+    try {
+      const response = await fetch("/api/slack/message-filters", { credentials: "include" })
+      if (!response.ok) return
+      const data = await response.json()
+      setMessageFilters({
+        messageTypeFilter: data.messageTypeFilter ?? "all",
+        houseFileFilter: data.houseFileFilter ?? "all",
+        partyFilter: data.partyFilter ?? "all",
+        stateFilter: data.stateFilter ?? "all",
+        entityTypeFilter: data.entityTypeFilter ?? "all",
+      })
+    } catch (error) {
+      console.error("[v0] Error fetching Slack message filters:", error)
     }
   }, [])
 
@@ -260,8 +282,9 @@ export default function AccountIntegrationsPage() {
     if (slackStatus?.status === "connected") {
       fetchEntityFilter()
       fetchPickerEntities()
+      fetchMessageFilters()
     }
-  }, [slackStatus?.status, fetchEntityFilter, fetchPickerEntities])
+  }, [slackStatus?.status, fetchEntityFilter, fetchPickerEntities, fetchMessageFilters])
 
   const handleConnect = async () => {
     setConnecting(true)
@@ -419,6 +442,30 @@ export default function AccountIntegrationsPage() {
       toast.error(error instanceof Error ? error.message : "Failed to save entity filter")
     } finally {
       setSavingEntityFilter(false)
+    }
+  }
+
+  const handleSaveMessageFilters = async (next: SlackMessageFilterValues) => {
+    setMessageFilters(next) // optimistic
+    setSavingMessageFilters(true)
+    try {
+      const response = await fetch("/api/slack/message-filters", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(next),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error ?? "Failed to save message filters")
+      }
+      toast.success("Slack alert filters saved")
+    } catch (error) {
+      console.error("[v0] Error saving Slack message filters:", error)
+      toast.error(error instanceof Error ? error.message : "Failed to save message filters")
+      fetchMessageFilters() // roll back to server state
+    } finally {
+      setSavingMessageFilters(false)
     }
   }
 
@@ -692,6 +739,27 @@ export default function AccountIntegrationsPage() {
                     {!canManageSlack && (
                       <p className="text-sm text-muted-foreground">
                         Only Owners and Admins can change which entities trigger alerts.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-3 rounded-md border border-border p-4">
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-medium">Message filters</p>
+                      <p className="text-sm text-muted-foreground">
+                        Further narrow which messages post to this channel. These apply on top
+                        of the entity selection above - a message must match every filter here
+                        to be sent.
+                      </p>
+                    </div>
+                    <SlackMessageFilters
+                      values={messageFilters}
+                      onChange={handleSaveMessageFilters}
+                      disabled={!canManageSlack || savingMessageFilters}
+                    />
+                    {!canManageSlack && (
+                      <p className="text-sm text-muted-foreground">
+                        Only Owners and Admins can change message filters.
                       </p>
                     )}
                   </div>

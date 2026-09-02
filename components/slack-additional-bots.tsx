@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Loader2, Hash, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { SlackEntityPicker, type SlackPickerEntity } from "@/components/slack-entity-picker"
+import { SlackMessageFilters, type SlackMessageFilterValues } from "@/components/slack-message-filters"
 
 type Bot = {
   id: string
@@ -26,6 +27,11 @@ type Bot = {
   status: "awaiting_channel" | "connected" | "disconnected"
   notifyOnFollowedEntityMessages: boolean
   entityFilterConfigured: boolean
+  messageTypeFilter: string
+  houseFileFilter: string
+  partyFilter: string
+  stateFilter: string
+  entityTypeFilter: string
 }
 
 type SlackChannelOption = { id: string; name: string; isPrivate: boolean }
@@ -51,6 +57,7 @@ export function SlackAdditionalBots({ canManageSlack }: { canManageSlack: boolea
   const [filterPanelBotId, setFilterPanelBotId] = useState<string | null>(null)
   const [draftEntityIds, setDraftEntityIds] = useState<Set<string>>(new Set())
   const [savingFilter, setSavingFilter] = useState(false)
+  const [savingMessageFiltersBotId, setSavingMessageFiltersBotId] = useState<string | null>(null)
 
   const fetchBots = useCallback(async () => {
     setLoading(true)
@@ -219,6 +226,27 @@ export function SlackAdditionalBots({ canManageSlack }: { canManageSlack: boolea
       toast.error("Failed to save entity filter")
     } finally {
       setSavingFilter(false)
+    }
+  }
+
+  const handleSaveBotMessageFilters = async (botId: string, next: SlackMessageFilterValues) => {
+    setBots((prev) => prev.map((b) => (b.id === botId ? { ...b, ...next } : b))) // optimistic
+    setSavingMessageFiltersBotId(botId)
+    try {
+      const response = await fetch(`/api/slack/bots/${botId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(next),
+      })
+      if (!response.ok) throw new Error("Failed to save message filters")
+      toast.success("Message filters saved.")
+    } catch (error) {
+      console.error("[v0] Error saving message filters for additional bot:", error)
+      toast.error("Failed to save message filters")
+      fetchBots() // roll back to server state
+    } finally {
+      setSavingMessageFiltersBotId(null)
     }
   }
 
@@ -430,6 +458,21 @@ export function SlackAdditionalBots({ canManageSlack }: { canManageSlack: boolea
                           </div>
                         </div>
                       )}
+                    </div>
+
+                    <div className="space-y-3 border-t border-border pt-3">
+                      <p className="text-sm font-medium">Message filters</p>
+                      <SlackMessageFilters
+                        values={{
+                          messageTypeFilter: bot.messageTypeFilter,
+                          houseFileFilter: bot.houseFileFilter,
+                          partyFilter: bot.partyFilter,
+                          stateFilter: bot.stateFilter,
+                          entityTypeFilter: bot.entityTypeFilter,
+                        }}
+                        onChange={(next) => handleSaveBotMessageFilters(bot.id, next)}
+                        disabled={!canManageSlack || savingMessageFiltersBotId === bot.id}
+                      />
                     </div>
                   </>
                 )}

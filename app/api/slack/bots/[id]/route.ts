@@ -140,18 +140,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       )
     }
 
-    await fetch("https://slack.com/api/chat.postMessage", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${botToken}`,
-        "Content-Type": "application/json; charset=utf-8",
-      },
-      body: JSON.stringify({
-        channel: channelId,
-        text: "RIP Tool is now connected to this channel. Alerts for your organization will be posted here.",
-      }),
-    })
-
     const updated = await prisma.slackChannel.update({
       where: { id: bot.id },
       data: {

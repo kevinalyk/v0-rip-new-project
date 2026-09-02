@@ -207,12 +207,15 @@ export async function POST(request: NextRequest) {
 
         // Step 7: Assign SMS to entity if match found
         if (matchedEntity) {
+          const isThirdParty = await isPhoneThirdParty(matchedEntity.id, sms.phoneNumber)
+
           await prisma.smsQueue.update({
             where: { id: sms.id },
             data: {
               entityId: matchedEntity.id,
               assignmentMethod: matchedEntity.method,
               assignedAt: new Date(),
+              isThirdParty,
             },
           })
 

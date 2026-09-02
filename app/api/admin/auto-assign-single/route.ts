@@ -9,6 +9,7 @@ import {
   extractRevvIdentifiers,
   findEntityByCtaDomain,
 } from "@/lib/ci-entity-utils"
+import { isSenderThirdParty, isPhoneThirdParty } from "@/lib/ci-mapping-cache"
 
 /**
  * Auto-assign a single unassigned message (email campaign or SMS) to an entity
@@ -38,23 +39,26 @@ export async function POST(request: NextRequest) {
 
     // Fetch the message
     let ctaLinks: any = null
+    let senderIdentity: string | null = null // senderEmail (email) or phoneNumber (sms)
 
     if (type === "email") {
       const campaign = await prisma.competitiveInsightCampaign.findUnique({
         where: { id },
-        select: { id: true, ctaLinks: true, entityId: true },
+        select: { id: true, ctaLinks: true, entityId: true, senderEmail: true },
       })
       if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
       if (campaign.entityId) return NextResponse.json({ error: "Already assigned" }, { status: 400 })
       ctaLinks = campaign.ctaLinks
+      senderIdentity = campaign.senderEmail
     } else {
       const sms = await prisma.smsQueue.findUnique({
         where: { id },
-        select: { id: true, ctaLinks: true, entityId: true },
+        select: { id: true, ctaLinks: true, entityId: true, phoneNumber: true },
       })
       if (!sms) return NextResponse.json({ error: "SMS not found" }, { status: 404 })
       if (sms.entityId) return NextResponse.json({ error: "Already assigned" }, { status: 400 })
       ctaLinks = sms.ctaLinks
+      senderIdentity = sms.phoneNumber
     }
 
     // Parse CTA links
@@ -142,14 +146,16 @@ export async function POST(request: NextRequest) {
 
     // Assign the message
     if (type === "email") {
+      const isThirdParty = await isSenderThirdParty(matchedEntity.id, senderIdentity)
       await prisma.competitiveInsightCampaign.update({
         where: { id },
-        data: { entityId: matchedEntity.id, assignmentMethod: matchedEntity.method, assignedAt: new Date() },
+        data: { entityId: matchedEntity.id, assignmentMethod: matchedEntity.method, assignedAt: new Date(), isThirdParty },
       })
     } else {
+      const isThirdParty = await isPhoneThirdParty(matchedEntity.id, senderIdentity)
       await prisma.smsQueue.update({
         where: { id },
-        data: { entityId: matchedEntity.id, assignmentMethod: matchedEntity.method, assignedAt: new Date() },
+        data: { entityId: matchedEntity.id, assignmentMethod: matchedEntity.method, assignedAt: new Date(), isThirdParty },
       })
     }
 

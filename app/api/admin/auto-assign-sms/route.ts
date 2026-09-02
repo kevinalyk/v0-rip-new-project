@@ -3,6 +3,7 @@ import { verifyAuth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { resolveRedirects, stripQueryParams } from "@/lib/competitive-insights-utils"
 import { extractWinRedIdentifiers, extractAnedotIdentifiers, extractPSQIdentifiers } from "@/lib/ci-entity-utils"
+import { isPhoneThirdParty } from "@/lib/ci-mapping-cache"
 
 export const maxDuration = 300 // 5 minutes
 
@@ -206,12 +207,15 @@ export async function POST(request: NextRequest) {
 
         // Step 7: Assign SMS to entity if match found
         if (matchedEntity) {
+          const isThirdParty = await isPhoneThirdParty(matchedEntity.id, sms.phoneNumber)
+
           await prisma.smsQueue.update({
             where: { id: sms.id },
             data: {
               entityId: matchedEntity.id,
               assignmentMethod: matchedEntity.method,
               assignedAt: new Date(),
+              isThirdParty,
             },
           })
 

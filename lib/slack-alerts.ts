@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma"
 import { decrypt } from "@/lib/encryption"
+import { SLACK_MULTI_BOT_ENABLED } from "@/lib/feature-flags"
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
@@ -103,14 +104,53 @@ export async function notifyFollowersOfNewMessage(params: NotifyParams): Promise
         !integration.entityFilterConfigured || allowedFilteredClientIds.has(integration.clientId),
     )
 
-    if (integrations.length === 0) return
+    // Additional (paid, add-on) Slack bot channels - hidden behind SLACK_MULTI_BOT_ENABLED.
+    // Until that flag flips there are no SlackChannel rows in the first place (the only way
+    // to create one is the add-bot route, which itself checks the flag), so this is mostly
+    // defense-in-depth: skip the query entirely rather than rely solely on "no rows exist yet."
+    let channelTargets: { id: string; botAccessToken: string | null; channelId: string | null }[] = []
+    if (SLACK_MULTI_BOT_ENABLED) {
+      const candidateChannels = await prisma.slackChannel.findMany({
+        where: { clientId: { in: clientIds }, status: "connected", notifyOnFollowedEntityMessages: true },
+        include: { slackIntegration: { select: { botAccessToken: true } } },
+      })
+
+      const filteredChannelIds = candidateChannels
+        .filter((channel: { entityFilterConfigured: boolean }) => channel.entityFilterConfigured)
+        .map((channel: { id: string }) => channel.id)
+
+      const allowedFilteredChannelIds = new Set(
+        filteredChannelIds.length > 0
+          ? (
+              await prisma.slackChannelEntityFilter.findMany({
+                where: { slackChannelId: { in: filteredChannelIds }, entityId: params.entityId },
+                select: { slackChannelId: true },
+              })
+            ).map((f: { slackChannelId: string }) => f.slackChannelId)
+          : [],
+      )
+
+      channelTargets = candidateChannels
+        .filter(
+          (channel: { id: string; entityFilterConfigured: boolean }) =>
+            !channel.entityFilterConfigured || allowedFilteredChannelIds.has(channel.id),
+        )
+        .map((channel: { id: string; channelId: string | null; slackIntegration: { botAccessToken: string | null } }) => ({
+          id: channel.id,
+          botAccessToken: channel.slackIntegration.botAccessToken,
+          channelId: channel.channelId,
+        }))
+    }
+
+    if (integrations.length === 0 && channelTargets.length === 0) return
 
     const shareUrl = `${APP_URL}/share/${params.shareToken}`
     const text = buildSlackMessageText(params, shareUrl)
 
     await Promise.all(
-      integrations.map((integration: { id: string; botAccessToken: string | null; channelId: string | null }) =>
-        postSlackAlert(integration, text),
+      [...integrations, ...channelTargets].map(
+        (target: { id: string; botAccessToken: string | null; channelId: string | null }) =>
+          postSlackAlert(target, text),
       ),
     )
   } catch (error) {

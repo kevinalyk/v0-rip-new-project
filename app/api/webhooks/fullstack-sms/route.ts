@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma"
 import { v4 as uuidv4 } from "uuid"
 import crypto from "crypto"
 import { findEntityForPhone } from "@/lib/ci-entity-utils"
+import { isPhoneThirdParty } from "@/lib/ci-mapping-cache"
 import { extractSmsCtaLinks } from "@/lib/sms-link-extractor"
 import { getRedactedNames, applyRedaction } from "@/lib/redaction-utils"
 import { notifyFollowersOfNewMessage } from "@/lib/slack-alerts"
@@ -172,6 +173,10 @@ export async function POST(request: Request) {
     // here and treating it as "already inserted by a concurrent request" is the actual
     // race-safe pattern - the DB's unique constraint still does the real dedup work, we just
     // handle its rejection gracefully instead of crashing on it.
+    // Frozen at ingestion time: was this phone number already a known/confirmed sending
+    // identity for the assigned entity, or does it look like a rented/partner (third-party) send?
+    const isThirdParty = await isPhoneThirdParty(entityAssignment?.entityId, actualSender)
+
     const smsId = uuidv4()
     let result: { id: string }
     let isDuplicate = false
@@ -190,6 +195,7 @@ export async function POST(request: Request) {
           entityId: entityAssignment?.entityId || null,
           assignmentMethod: entityAssignment?.assignmentMethod || null,
           assignedAt: entityAssignment ? new Date() : null,
+          isThirdParty,
           ctaLinks: JSON.stringify(ctaLinks),
           dedupHash,
           // Personal SMS assignment

@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { verifyAuth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { extractWinRedIdentifiers, extractAnedotIdentifiers, extractActBlueIdentifiers, extractPSQIdentifiers, extractRevvIdentifiers } from "@/lib/ci-entity-utils"
+import { isSenderThirdParty, isPhoneThirdParty } from "@/lib/ci-mapping-cache"
 
 export const maxDuration = 300 // 5 minutes
 
@@ -103,6 +104,7 @@ export async function POST(request: NextRequest) {
         id: true,
         subject: true,
         ctaLinks: true,
+        senderEmail: true,
       },
       take: 1000, // Process in batches
     })
@@ -124,12 +126,15 @@ export async function POST(request: NextRequest) {
         const matchResult = await matchCampaignToEntity(campaign.ctaLinks, entityIdentifiers)
 
         if (matchResult) {
+          const isThirdParty = await isSenderThirdParty(matchResult.entityId, campaign.senderEmail)
+
           await prisma.competitiveInsightCampaign.update({
             where: { id: campaign.id },
             data: {
               entityId: matchResult.entityId,
               assignmentMethod: matchResult.method,
               assignedAt: new Date(),
+              isThirdParty,
             },
           })
 
@@ -201,12 +206,15 @@ export async function POST(request: NextRequest) {
         const matchResult = await matchCampaignToEntity(parsedLinks, entityIdentifiers)
 
         if (matchResult) {
+          const isThirdParty = await isPhoneThirdParty(matchResult.entityId, sms.phoneNumber)
+
           await prisma.smsQueue.update({
             where: { id: sms.id },
             data: {
               entityId: matchResult.entityId,
               assignmentMethod: matchResult.method,
               assignedAt: new Date(),
+              isThirdParty,
             },
           })
 

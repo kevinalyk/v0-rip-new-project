@@ -79,27 +79,34 @@ async function backfillCampaigns(mappings) {
     const em = mappingsByEntity[entityId]
     const baseWhere = { entityId, isThirdParty: null }
 
-    if (em && (em.emails.size > 0 || em.domains.size > 0)) {
-      // Known senders for this entity -> house file (false)
-      const orClauses = [
-        ...(em.emails.size > 0 ? [{ senderEmail: { in: [...em.emails] } }] : []),
-        ...[...em.domains].map((d) => ({ senderEmail: { endsWith: `@${d}`, mode: "insensitive" } })),
-      ]
-      if (orClauses.length > 0) {
-        const res = await prisma.competitiveInsightCampaign.updateMany({
-          where: { ...baseWhere, OR: orClauses },
-          data: { isThirdParty: false },
-        })
-        houseFileUpdated += res.count
-      }
+    // No known mappings at all for this entity -> house file (false) by default,
+    // matching lib/ci-mapping-cache.ts's `if (!em) return false`.
+    if (!em || (em.emails.size === 0 && em.domains.size === 0)) {
+      const res = await prisma.competitiveInsightCampaign.updateMany({
+        where: baseWhere,
+        data: { isThirdParty: false },
+      })
+      houseFileUpdated += res.count
+      continue
     }
 
+    // Known senders for this entity -> house file (false)
+    const orClauses = [
+      ...(em.emails.size > 0 ? [{ senderEmail: { in: [...em.emails] } }] : []),
+      ...[...em.domains].map((d) => ({ senderEmail: { endsWith: `@${d}`, mode: "insensitive" } })),
+    ]
+    const res1 = await prisma.competitiveInsightCampaign.updateMany({
+      where: { ...baseWhere, OR: orClauses },
+      data: { isThirdParty: false },
+    })
+    houseFileUpdated += res1.count
+
     // Everything else still unclassified for this entity -> third party (true)
-    const res = await prisma.competitiveInsightCampaign.updateMany({
+    const res2 = await prisma.competitiveInsightCampaign.updateMany({
       where: baseWhere,
       data: { isThirdParty: true },
     })
-    thirdPartyUpdated += res.count
+    thirdPartyUpdated += res2.count
   }
 
   console.log(`[backfill] Campaigns: ${houseFileUpdated} house file, ${thirdPartyUpdated} third party`)
@@ -122,19 +129,28 @@ async function backfillSms(mappings) {
     const phones = phonesByEntity[entityId]
     const baseWhere = { entityId, isThirdParty: null }
 
-    if (phones && phones.size > 0) {
+    // No known phone mappings at all for this entity -> house file (false) by
+    // default, matching lib/ci-mapping-cache.ts's `if (!phones) return false`.
+    if (!phones || phones.size === 0) {
       const res = await prisma.smsQueue.updateMany({
-        where: { ...baseWhere, phoneNumber: { in: [...phones] } },
+        where: baseWhere,
         data: { isThirdParty: false },
       })
       houseFileUpdated += res.count
+      continue
     }
 
-    const res = await prisma.smsQueue.updateMany({
+    const res1 = await prisma.smsQueue.updateMany({
+      where: { ...baseWhere, phoneNumber: { in: [...phones] } },
+      data: { isThirdParty: false },
+    })
+    houseFileUpdated += res1.count
+
+    const res2 = await prisma.smsQueue.updateMany({
       where: baseWhere,
       data: { isThirdParty: true },
     })
-    thirdPartyUpdated += res.count
+    thirdPartyUpdated += res2.count
   }
 
   console.log(`[backfill] SMS: ${houseFileUpdated} house file, ${thirdPartyUpdated} third party`)

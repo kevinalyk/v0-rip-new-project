@@ -361,10 +361,18 @@ model DomainHealthEmailSample {
   subject        String?   @db.Text
   receivedAt     DateTime?
   firstSeenAt    DateTime  @default(now())
-  placement      String    @default("inbox") // "inbox" | "spam" | "promotions" | "social" | "other"
+  placement      String    @default("inbox") // "inbox" | "spam" | "promotions" | "social" | "other" — historical placement, never overwritten
   // Raw boolean check results for THIS individual email:
   // { spf: true, dkim: false, tls: true, ... }
   checks         Json      @default("{}")
+  // Set when we detected this email landed in spam for a verified domain and moved it to the inbox.
+  // placement above stays "spam" so we retain that it originally misfired.
+  correctedToInbox Boolean   @default(false)
+  correctedAt      DateTime?
+  // First ~300 chars of plain-text body — enough for auto-reply classification without re-fetching mail.
+  emailPreview     String?   @db.Text
+  // First ~500 chars of raw headers — enough to check Auto-Submitted/Precedence for auto-reply safety.
+  rawHeadersSnippet String?  @db.Text
 
   clientDomain   ClientDomain @relation(fields: [clientDomainId], references: [id], onDelete: Cascade)
 
@@ -373,6 +381,18 @@ model DomainHealthEmailSample {
   @@index([clientId])
   @@index([source])
   @@index([receivedAt])
+}
+
+// Short auto-reply message pool for the auto-reply-verified-domains cron. messageType=null
+// rows are the generic fallback pool used when no category-specific template is active.
+model AutoReplyTemplate {
+  id          String   @id @default(uuid())
+  messageType String?  // "thank_you" | "event_invite" | "news_update" | "fundraising_ask" | "general" | null (generic)
+  body        String   @db.Text
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([messageType])
 }
 
 // One row per domain — latest DNS check results, upserted on every scan.

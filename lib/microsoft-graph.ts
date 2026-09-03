@@ -8,6 +8,8 @@ interface GraphEmail {
   messageId?: string
   emailContent?: string
   rawHeaders?: string
+  // Graph API message id (distinct from the RFC 2822 messageId above) — needed to move the message.
+  graphMessageId?: string
 }
 
 export async function fetchOutlookEmails(seedEmail: any, startDate: Date, maxEmails: number): Promise<GraphEmail[]> {
@@ -47,6 +49,7 @@ async function fetchFromFolder(
     messageId?: string
     emailContent?: string
     rawHeaders?: string
+    graphMessageId?: string
   }>
 > {
   const maxRetries = 3
@@ -59,7 +62,7 @@ async function fetchFromFolder(
       const url =
         `https://graph.microsoft.com/v1.0/me/mailfolders/${folderName}/messages?` +
         `$filter=receivedDateTime ge ${filterDate}&` +
-        `$select=subject,from,receivedDateTime,internetMessageId,body,internetMessageHeaders&` +
+        `$select=id,subject,from,receivedDateTime,internetMessageId,body,internetMessageHeaders&` +
         `$orderby=receivedDateTime desc&` +
         `$top=${Math.min(maxEmails, 50)}`
 
@@ -116,6 +119,7 @@ async function fetchFromFolder(
             messageId: message.internetMessageId,
             emailContent: message.body?.content || "",
             rawHeaders,
+            graphMessageId: message.id,
           }
         })
 
@@ -148,4 +152,94 @@ async function fetchFromFolder(
 export function shouldUseGraphAPI(provider: string): boolean {
   const outlookProviders = ["outlook", "hotmail", "live"]
   return outlookProviders.includes(provider.toLowerCase())
+}
+
+// Moves a message out of Junk Email and into the Inbox, which also tells Outlook's spam
+// filter to stop flagging future mail from that sender the same way. Returns false (never
+// throws) on failure so a single failed move never aborts a larger scan.
+export async function moveOutlookMessageToInbox(seedEmailId: string, graphMessageId: string): Promise<boolean> {
+  try {
+    const accessToken = await getValidAccessToken(seedEmailId)
+    if (!accessToken) {
+      console.error(`No valid access token to move message ${graphMessageId}`)
+      return false
+    }
+
+    const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${graphMessageId}/move`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ destinationId: "inbox" }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`Failed to move Outlook message ${graphMessageId} to inbox:`, response.status, errorText)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error(`Error moving Outlook message ${graphMessageId} to inbox:`, error)
+    return false
+  }
+}
+
+// Sends a short auto-reply from a seed mailbox via Graph's sendMail. Threads the reply where
+// Graph allows it by setting a "Re:" subject and, when available, an In-Reply-To /
+// References header via internetMessageHeaders (requires the "Prefer: IdType=ImmutableId"
+// header to be omitted and the tenant to allow custom headers — Graph silently drops the
+// property if unsupported, which is fine since threading is a nice-to-have here, not required
+// for correctness). Never throws — returns false on any failure so a single bad send never
+// aborts a larger batch.
+export async function sendOutlookReply(
+  seedEmailId: string,
+  options: { to: string; subject: string; body: string; inReplyToMessageId?: string | null },
+): Promise<boolean> {
+  try {
+    const accessToken = await getValidAccessToken(seedEmailId)
+    if (!accessToken) {
+      console.error(`No valid access token to send reply from seed ${seedEmailId}`)
+      return false
+    }
+
+    const subject = /^re:/i.test(options.subject) ? options.subject : `Re: ${options.subject}`
+
+    const internetMessageHeaders = options.inReplyToMessageId
+      ? [
+          { name: "In-Reply-To", value: options.inReplyToMessageId },
+          { name: "References", value: options.inReplyToMessageId },
+        ]
+      : undefined
+
+    const response = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: {
+          subject,
+          body: { contentType: "Text", content: options.body },
+          toRecipients: [{ emailAddress: { address: options.to } }],
+          ...(internetMessageHeaders ? { internetMessageHeaders } : {}),
+        },
+        saveToSentItems: true,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`Failed to send Outlook reply to ${options.to}:`, response.status, errorText)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error(`Error sending Outlook reply to ${options.to}:`, error)
+    return false
+  }
 }

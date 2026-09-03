@@ -12,8 +12,8 @@ function StaticFollowing() {
   return (
     <div className="space-y-6 px-4 py-6 pointer-events-none select-none" aria-hidden="true">
       <div>
-        <h1 className="text-3xl font-bold">Competitive Insights</h1>
-        <p className="text-muted-foreground mt-1">Track and analyze political campaigns from across the spectrum</p>
+        <h1 className="text-3xl font-bold">Following</h1>
+        <p className="text-muted-foreground mt-1">Messages from the candidates and organizations you follow</p>
       </div>
       <div className="rounded-lg border bg-card p-6 space-y-4">
         <div className="h-10 w-full rounded bg-muted/50" />

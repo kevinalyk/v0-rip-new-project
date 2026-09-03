@@ -37,9 +37,11 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-  /* Converting RIP brand colors to OKLCH format for proper Tailwind v4 compatibility */
-  --rip-red: oklch(0.62 0.22 20); /* #EB3847 converted to OKLCH */
-  --rip-blue: oklch(0.44 0.05 240); /* #37627F converted to OKLCH */
+  /* RIP brand colors - kept as the exact hex used across marketing/auth pages
+     so the design-token version matches, rather than an approximated OKLCH
+     conversion that drifted slightly off-brand. */
+  --rip-red: #eb3847;
+  --rip-blue: #37627f;
 }
 
 .dark {
@@ -75,13 +77,13 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.269 0 0);
   --sidebar-ring: oklch(0.439 0 0);
-  /* Same OKLCH colors for dark mode */
-  --rip-red: oklch(0.62 0.22 20);
-  --rip-blue: oklch(0.44 0.05 240);
+  /* Same brand colors for dark mode */
+  --rip-red: #eb3847;
+  --rip-blue: #5b8bab;
 }
 
 @theme inline {
-  --font-sans: "Geist", "Geist Fallback";
+  --font-sans: var(--font-hanken-grotesk), "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", "Geist Mono Fallback";
   --color-background: var(--background);
   --color-foreground: var(--foreground);

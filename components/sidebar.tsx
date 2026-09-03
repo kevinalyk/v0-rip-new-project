@@ -260,12 +260,12 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
     return (
       <div
         className={cn(
-          "fixed left-0 top-0 h-full bg-background border-r border-border transition-all duration-300 ease-in-out flex flex-col z-50",
+          "fixed left-0 top-0 h-full bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out flex flex-col z-50",
           collapsed ? "w-16" : "w-64",
           className,
         )}
       >
-        <div className="p-4 flex justify-between items-center">
+        <div className="p-4 flex justify-between items-center border-b border-sidebar-border">
           <div className="flex-1 flex justify-center">
             <Logo collapsed={collapsed} variant="icon" />
           </div>
@@ -275,14 +275,14 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
         </div>
 
         <div className="p-4 mt-auto">
-          <Separator className="mb-4" />
-          <div className="space-y-2">
+          <Separator className="mb-4 bg-sidebar-border" />
+          <div className="space-y-1">
             <Button
               variant="ghost"
               size="sm"
               className={cn(
                 "w-full justify-start gap-3 px-3",
-                pathname.startsWith("/news") && "bg-[#dc2a28]/10 text-[#dc2a28] hover:bg-[#dc2a28]/20",
+                pathname.startsWith("/news") && "bg-rip-red/10 text-rip-red hover:bg-rip-red/20 hover:text-rip-red",
                 collapsed && "justify-center",
               )}
               onClick={() => navigate("/news")}
@@ -314,7 +314,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
               variant="ghost"
               size="sm"
               className={cn(
-                "w-full justify-start gap-3 px-3 text-[#dc2a28] hover:text-[#dc2a28]/90 hover:bg-[#dc2a28]/10",
+                "w-full justify-start gap-3 px-3 text-rip-red hover:text-rip-red hover:bg-rip-red/10",
                 collapsed && "justify-center",
               )}
               onClick={() => navigate("/login")}
@@ -332,13 +332,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
     <>
     <div
       className={cn(
-        "fixed left-0 top-0 h-full bg-background border-r border-border transition-all duration-300 ease-in-out flex flex-col z-50",
+        "fixed left-0 top-0 h-full bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out flex flex-col z-50",
         collapsed ? "w-16" : "w-64",
         className,
       )}
     >
       <div className="flex flex-col min-h-0 flex-grow">
-        <div className="p-4 flex justify-between items-center">
+        <div className="p-4 flex justify-between items-center border-b border-sidebar-border">
           <div className="flex-1 flex justify-center">
             <Logo collapsed={collapsed} variant="icon" />
           </div>
@@ -348,11 +348,11 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
         </div>
 
         {userRole === "super_admin" && !collapsed && (
-          <div className="px-4 mb-2">
+          <div className="px-4 mt-3 mb-1">
             <Select value={selectedClientSlug} onValueChange={handleClientSwitch} disabled={loadingClients}>
               <SelectTrigger className="w-full bg-transparent">
                 <div className="flex items-center gap-2">
-                  <Building size={16} />
+                  <Building size={16} className="text-rip-blue" />
                   <SelectValue placeholder={loadingClients ? "Loading clients..." : "Select Client"} />
                 </div>
               </SelectTrigger>
@@ -724,15 +724,14 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
         </div>
       </div>
 
-      <div className="p-4 mt-auto">
-        <Separator className="mb-4" />
-        <div className="space-y-2">
+      <div className="p-4 mt-auto border-t border-sidebar-border">
+        <div className="space-y-1">
           <Button
             variant="ghost"
             size="sm"
             className={cn(
               "w-full justify-start gap-3 px-3",
-              pathname.startsWith("/news") && "bg-[#dc2a28]/10 text-[#dc2a28] hover:bg-[#dc2a28]/20",
+              pathname.startsWith("/news") && "bg-rip-red/10 text-rip-red hover:bg-rip-red/20 hover:text-rip-red",
               collapsed && "justify-center",
             )}
             onClick={() => navigate("/news")}
@@ -775,7 +774,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
             variant="ghost"
             size="sm"
             className={cn(
-              "w-full justify-start gap-3 px-3 text-rip-red hover:text-rip-red/90 hover:bg-rip-red/10",
+              "w-full justify-start gap-3 px-3 text-rip-red hover:text-rip-red hover:bg-rip-red/10",
               collapsed && "justify-center",
             )}
             onClick={handleLogout}
@@ -804,9 +803,16 @@ function NavSection({ icon, label, collapsed, expanded, onToggle }: NavSectionPr
   return (
     <Button
       variant="ghost"
-      className={cn("w-full justify-start gap-3 px-3 font-medium", collapsed && "justify-center")}
+      className={cn(
+        "relative w-full justify-start gap-3 px-3 font-medium",
+        expanded && "bg-rip-red/10 text-rip-red hover:bg-rip-red/15 hover:text-rip-red",
+        collapsed && "justify-center",
+      )}
       onClick={onToggle}
     >
+      {expanded && (
+        <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-rip-red" aria-hidden="true" />
+      )}
       {icon}
       {!collapsed && (
         <>
@@ -832,12 +838,15 @@ function NavItem({ icon, label, active, collapsed, onClick }: NavItemProps) {
       variant={active ? "secondary" : "ghost"}
       size="sm"
       className={cn(
-        "w-full justify-start gap-3 px-3",
-        active && "bg-[#dc2a28]/10 hover:bg-[#dc2a28]/20 text-[#dc2a28]",
+        "relative w-full justify-start gap-3 px-3",
+        active && "bg-rip-red/10 hover:bg-rip-red/15 text-rip-red hover:text-rip-red",
         collapsed && "justify-center",
       )}
       onClick={onClick}
     >
+      {active && (
+        <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-rip-red" aria-hidden="true" />
+      )}
       {icon}
       {!collapsed && <span>{label}</span>}
     </Button>

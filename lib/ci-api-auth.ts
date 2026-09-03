@@ -13,7 +13,7 @@
  * creation/hash helpers in lib/api-auth.ts) rather than a second credential
  * system. CI-assignment keys are distinguished purely by scope strings:
  *   - "ci:read"           list_unassigned_messages, list_entities, list_delete_eligible_messages
- *   - "ci:assign"         assign_messages_to_entity
+ *   - "ci:assign"         assign_messages_to_entity, categorize_messages
  *   - "ci:create_entity"  create_entity
  *   - "ci:update_entity"  update_entity_donation_identifiers
  *   - "ci:delete"         delete_messages
@@ -172,14 +172,17 @@ export async function assertAutomationEnabled(): Promise<void> {
  */
 export async function enforceCiRateLimit(
   apiKeyId: string,
-  action: "assign_messages" | "create_entity" | "update_entity_identifiers" | "delete_messages",
+  action: "assign_messages" | "categorize_messages" | "create_entity" | "update_entity_identifiers" | "delete_messages",
 ): Promise<void> {
   const now = Date.now()
 
-  if (action === "assign_messages") {
+  // assign_messages_to_entity and categorize_messages both result in a
+  // message getting an entityId, so they share one combined hourly budget
+  // rather than each getting their own MAX_ASSIGNMENTS_PER_HOUR pool.
+  if (action === "assign_messages" || action === "categorize_messages") {
     const windowStart = new Date(now - 60 * 60 * 1000)
     const count = await prisma.ciApiActionLog.count({
-      where: { apiKeyId, action: "assign_messages", createdAt: { gte: windowStart } },
+      where: { apiKeyId, action: { in: ["assign_messages", "categorize_messages"] }, createdAt: { gte: windowStart } },
     })
     if (count >= CI_API_LIMITS.MAX_ASSIGNMENTS_PER_HOUR) {
       throw new CiApiError(
@@ -239,7 +242,7 @@ export async function enforceCiRateLimit(
  */
 export async function logCiApiAction(params: {
   apiKeyId: string
-  action: "assign_messages" | "create_entity" | "update_entity_identifiers" | "delete_messages"
+  action: "assign_messages" | "categorize_messages" | "create_entity" | "update_entity_identifiers" | "delete_messages"
   reasoning?: string
   targetType?: "sms" | "campaign" | "entity"
   targetIds?: string[]

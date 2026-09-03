@@ -16,6 +16,11 @@
  *   - delete_messages:            clears isDeleted/deletedAt/deletedBy back
  *                                 to not-deleted on the exact target message
  *                                 IDs recorded on the log row.
+ *   - categorize_messages:        clears entityId/assignedAt/assignmentMethod
+ *                                 back to unassigned on the exact target
+ *                                 message IDs, regardless of entity (a
+ *                                 single categorize_messages call can match
+ *                                 different messages to different entities).
  *
  * Already-undone rows are rejected with 409.
  */
@@ -77,6 +82,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       )
     }
     await prisma.ciEntity.delete({ where: { id: log.entityId } })
+  } else if (log.action === "categorize_messages") {
+    const targetIds = Array.isArray(log.targetIds) ? (log.targetIds as string[]) : []
+    if (targetIds.length > 0) {
+      await prisma.competitiveInsightCampaign.updateMany({
+        where: { id: { in: targetIds } },
+        data: { entityId: null, assignedAt: null, assignmentMethod: null },
+      })
+      await prisma.smsQueue.updateMany({
+        where: { id: { in: targetIds } },
+        data: { entityId: null, assignedAt: null, assignmentMethod: null },
+      })
+    }
   } else if (log.action === "delete_messages") {
     const targetIds = Array.isArray(log.targetIds) ? (log.targetIds as string[]) : []
     if (targetIds.length > 0) {

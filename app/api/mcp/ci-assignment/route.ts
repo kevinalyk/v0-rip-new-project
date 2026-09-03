@@ -3,7 +3,7 @@
  * Claude.ai / Claude Desktop custom connector. See
  * docs/plans/CLAUDE_CI_ASSIGNMENT_MCP.md for the full design.
  *
- * Deliberately exposes ONLY these 7 tools - nothing else exists on this
+ * Deliberately exposes ONLY these 8 tools - nothing else exists on this
  * surface, so Claude physically cannot call anything beyond this narrow
  * workflow:
  *   1. list_unassigned_messages   (ci:read)
@@ -13,6 +13,7 @@
  *   5. update_entity_donation_identifiers (ci:update_entity)
  *   6. list_delete_eligible_messages (ci:read)
  *   7. delete_messages            (ci:delete)
+ *   8. categorize_messages        (ci:assign)
  *
  * Auth: bearer token -> ApiKey table (shared with the read-only public v1
  * API, distinguished by scope strings - see lib/ci-api-auth.ts). Every write
@@ -44,6 +45,7 @@ import {
   mergeEntityDonationIdentifiers,
   getSopDeleteEligibleMessages,
   softDeleteMessages,
+  categorizeMessages,
   type DonationIdentifiers,
 } from "@/lib/ci-entity-utils"
 import { sendCiEntityCreatedByApiNotification } from "@/lib/ci-api-notifications"
@@ -438,6 +440,70 @@ const handler = createMcpHandler(
                     deletedEmailCount: result.deletedCampaignCount,
                     deletedSmsCount: result.deletedSmsCount,
                   },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 8: categorize_messages ─────────────────────────────────────────
+    server.registerTool(
+      "categorize_messages",
+      {
+        title: "Categorize Messages",
+        description:
+          'Same logic as the "Categorize" button in the admin UI: attempts to auto-assign each message by matching its CTA links against donation-platform identifiers (WinRed/ActBlue/Anedot/PSQ/Revv) or a known CTA root-domain mapping already saved on an entity - for when the sender email domain or phone number alone can\'t identify the entity, but the donation URL on the message can. Conservative by design: only assigns on an exact identifier/domain match already on file, never a guess, and never touches an already-assigned message. No "reasoning" needed since the match is deterministic - each result reports which method matched (auto_winred, auto_actblue, auto_cta_domain, etc.) or why it was skipped. Use list_unassigned_messages first to get IDs, then call this before falling back to assign_messages_to_entity for anything left unmatched.',
+        inputSchema: {
+          campaignIds: z.array(z.string()).max(CI_API_LIMITS.MAX_BATCH_SIZE).default([]),
+          smsIds: z.array(z.string()).max(CI_API_LIMITS.MAX_BATCH_SIZE).default([]),
+        },
+      },
+      async ({ campaignIds, smsIds }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.ASSIGN)
+          await assertAutomationEnabled()
+
+          const totalCount = campaignIds.length + smsIds.length
+          if (totalCount === 0) {
+            throw new CiApiError("At least one campaignId or smsId is required", 400)
+          }
+          if (totalCount > CI_API_LIMITS.MAX_BATCH_SIZE) {
+            throw new CiApiError(`Batch size exceeds the max of ${CI_API_LIMITS.MAX_BATCH_SIZE} messages`, 400)
+          }
+
+          const apiKeyId = extra.authInfo!.extra!.apiKeyId as string
+          await enforceCiRateLimit(apiKeyId, "categorize_messages")
+
+          const items = [
+            ...campaignIds.map((id) => ({ id, type: "email" as const })),
+            ...smsIds.map((id) => ({ id, type: "sms" as const })),
+          ]
+          const results = await categorizeMessages(items)
+          const matched = results.filter((r) => r.success)
+
+          if (matched.length > 0) {
+            await logCiApiAction({
+              apiKeyId,
+              action: "categorize_messages",
+              reasoning: "Auto-matched via donation platform identifiers / CTA domain (deterministic, no entity guessing)",
+              targetType: undefined,
+              targetIds: matched.map((m) => m.id),
+              afterState: { results: matched },
+            })
+          }
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  { matchedCount: matched.length, totalCount: results.length, results },
                   null,
                   2,
                 ),

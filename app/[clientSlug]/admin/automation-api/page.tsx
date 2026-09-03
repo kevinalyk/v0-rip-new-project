@@ -291,9 +291,10 @@ export default function AutomationApiPage() {
             <h2 className="text-2xl font-bold">Automation API</h2>
             <p className="text-sm text-muted-foreground mt-1">
               Manage the credentials and audit trail for the Claude CI Assignment MCP server. This connector can
-              list unassigned messages, assign them to entities, create new entities, update donation
-              identifiers on existing entities, and delete messages that match the SOP&apos;s junk rules. Nothing
-              else - see the tool descriptions in the connector itself for exact scope.
+              list unassigned messages, assign them to entities, auto-categorize messages by donation-platform
+              identifier or CTA domain, create new entities, update donation identifiers on existing entities, and
+              delete messages that match the SOP&apos;s junk rules. Nothing else - see the tool descriptions in the
+              connector itself for exact scope.
             </p>
           </div>
 

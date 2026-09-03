@@ -1,20 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyAuth } from "@/lib/auth"
-import prisma from "@/lib/prisma"
-import {
-  extractWinRedIdentifiers,
-  extractAnedotIdentifiers,
-  extractActBlueIdentifiers,
-  extractPSQIdentifiers,
-  extractRevvIdentifiers,
-  findEntityByCtaDomain,
-} from "@/lib/ci-entity-utils"
-import { isSenderThirdParty, isPhoneThirdParty } from "@/lib/ci-mapping-cache"
+import { categorizeMessage } from "@/lib/ci-entity-utils"
 
 /**
  * Auto-assign a single unassigned message (email campaign or SMS) to an entity
  * by matching donation platform identifiers (WinRed, Anedot, ActBlue, PSQ, Revv)
- * found in its CTA links.
+ * found in its CTA links, or a known CTA domain mapping.
+ *
+ * Shares its matching logic with the Claude-facing categorize_messages MCP
+ * tool - see categorizeMessage in lib/ci-entity-utils.ts - so the admin UI's
+ * "Categorize" button and the MCP tool always behave identically.
  *
  * POST /api/admin/auto-assign-single
  * Body: { id: string, type: "email" | "sms" }
@@ -37,133 +32,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields: id, type" }, { status: 400 })
     }
 
-    // Fetch the message
-    let ctaLinks: any = null
-    let senderIdentity: string | null = null // senderEmail (email) or phoneNumber (sms)
+    const result = await categorizeMessage(id, type)
 
-    if (type === "email") {
-      const campaign = await prisma.competitiveInsightCampaign.findUnique({
-        where: { id },
-        select: { id: true, ctaLinks: true, entityId: true, senderEmail: true },
-      })
-      if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
-      if (campaign.entityId) return NextResponse.json({ error: "Already assigned" }, { status: 400 })
-      ctaLinks = campaign.ctaLinks
-      senderIdentity = campaign.senderEmail
-    } else {
-      const sms = await prisma.smsQueue.findUnique({
-        where: { id },
-        select: { id: true, ctaLinks: true, entityId: true, phoneNumber: true },
-      })
-      if (!sms) return NextResponse.json({ error: "SMS not found" }, { status: 404 })
-      if (sms.entityId) return NextResponse.json({ error: "Already assigned" }, { status: 400 })
-      ctaLinks = sms.ctaLinks
-      senderIdentity = sms.phoneNumber
-    }
-
-    // Parse CTA links
-    const links: Array<{ url: string; finalUrl?: string; type: string }> = Array.isArray(ctaLinks)
-      ? ctaLinks
-      : typeof ctaLinks === "string"
-        ? (() => { try { return JSON.parse(ctaLinks) } catch { return [] } })()
-        : []
-
-    if (links.length === 0) {
-      return NextResponse.json({ success: false, reason: "No CTA links found in this message" })
-    }
-
-    // Extract donation identifiers from all links
-    const winredIds = new Set(extractWinRedIdentifiers(links))
-    const anedotIds = new Set(extractAnedotIdentifiers(links))
-    const actblueIds = new Set(extractActBlueIdentifiers(links))
-    const psqIds = new Set(extractPSQIdentifiers(links))
-    const revvIds = new Set(extractRevvIdentifiers(links))
-
-    // Load all entities with donation identifiers (skip if none extracted — ctaDomain pass will still run)
-    const entities = await prisma.ciEntity.findMany({
-      where: { donationIdentifiers: { not: null }, type: { not: "data_broker" } },
-      select: { id: true, name: true, donationIdentifiers: true },
-    })
-
-    let matchedEntity: { id: string; name: string; method: string } | null = null
-
-    for (const entity of entities) {
-      let ids: any = {}
-      try {
-        ids =
-          typeof entity.donationIdentifiers === "string"
-            ? JSON.parse(entity.donationIdentifiers)
-            : entity.donationIdentifiers ?? {}
-      } catch {
-        continue
+    if (!result.success) {
+      const status = result.reason === "Campaign not found" || result.reason === "SMS not found" ? 404 : 200
+      if (status === 404) {
+        return NextResponse.json({ error: result.reason }, { status: 404 })
       }
-
-      const winred: string[] = (ids.winred ?? []).map((s: string) => s.toLowerCase())
-      const anedot: string[] = (ids.anedot ?? []).map((s: string) => s.toLowerCase())
-      const actblue: string[] = (ids.actblue ?? []).map((s: string) => s.toLowerCase())
-      const psq: string[] = (ids.psq ?? []).map((s: string) => s.toLowerCase())
-      const revv: string[] = (ids.revv ?? []).map((s: string) => s.toLowerCase())
-
-      if ([...winredIds].some((id) => winred.includes(id))) {
-        matchedEntity = { id: entity.id, name: entity.name, method: "auto_winred" }
-        break
+      if (result.reason === "Already assigned") {
+        return NextResponse.json({ error: result.reason }, { status: 400 })
       }
-      if ([...anedotIds].some((id) => anedot.includes(id))) {
-        matchedEntity = { id: entity.id, name: entity.name, method: "auto_anedot" }
-        break
-      }
-      if ([...actblueIds].some((id) => actblue.includes(id))) {
-        matchedEntity = { id: entity.id, name: entity.name, method: "auto_actblue" }
-        break
-      }
-      if ([...psqIds].some((id) => psq.includes(id))) {
-        matchedEntity = { id: entity.id, name: entity.name, method: "auto_psq" }
-        break
-      }
-      if ([...revvIds].some((id) => revv.includes(id))) {
-        matchedEntity = { id: entity.id, name: entity.name, method: "auto_revv" }
-        break
-      }
-    }
-
-    // Fallback: match by ctaDomain mapping (e.g. donate.gregabbott.com)
-    if (!matchedEntity) {
-      const ctaMatch = await findEntityByCtaDomain(links)
-      if (ctaMatch) {
-        const entity = await prisma.ciEntity.findUnique({
-          where: { id: ctaMatch.entityId },
-          select: { id: true, name: true },
-        })
-        if (entity) {
-          matchedEntity = { id: entity.id, name: entity.name, method: ctaMatch.assignmentMethod }
-        }
-      }
-    }
-
-    if (!matchedEntity) {
-      return NextResponse.json({ success: false, reason: "No matching entity found via donation identifiers or CTA domain" })
-    }
-
-    // Assign the message
-    if (type === "email") {
-      const isThirdParty = await isSenderThirdParty(matchedEntity.id, senderIdentity)
-      await prisma.competitiveInsightCampaign.update({
-        where: { id },
-        data: { entityId: matchedEntity.id, assignmentMethod: matchedEntity.method, assignedAt: new Date(), isThirdParty },
-      })
-    } else {
-      const isThirdParty = await isPhoneThirdParty(matchedEntity.id, senderIdentity)
-      await prisma.smsQueue.update({
-        where: { id },
-        data: { entityId: matchedEntity.id, assignmentMethod: matchedEntity.method, assignedAt: new Date(), isThirdParty },
-      })
+      return NextResponse.json({ success: false, reason: result.reason })
     }
 
     return NextResponse.json({
       success: true,
-      entityId: matchedEntity.id,
-      entityName: matchedEntity.name,
-      method: matchedEntity.method,
+      entityId: result.entityId,
+      entityName: result.entityName,
+      method: result.method,
     })
   } catch (error) {
     console.error("[auto-assign-single] Error:", error)

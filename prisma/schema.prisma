@@ -361,10 +361,14 @@ model DomainHealthEmailSample {
   subject        String?   @db.Text
   receivedAt     DateTime?
   firstSeenAt    DateTime  @default(now())
-  placement      String    @default("inbox") // "inbox" | "spam" | "promotions" | "social" | "other"
+  placement      String    @default("inbox") // "inbox" | "spam" | "promotions" | "social" | "other" — historical placement, never overwritten
   // Raw boolean check results for THIS individual email:
   // { spf: true, dkim: false, tls: true, ... }
   checks         Json      @default("{}")
+  // Set when we detected this email landed in spam for a verified domain and moved it to the inbox.
+  // placement above stays "spam" so we retain that it originally misfired.
+  correctedToInbox Boolean   @default(false)
+  correctedAt      DateTime?
 
   clientDomain   ClientDomain @relation(fields: [clientDomainId], references: [id], onDelete: Cascade)
 

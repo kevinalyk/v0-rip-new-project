@@ -69,6 +69,7 @@ interface EmailSample {
   receivedAt: string | null
   placement: string
   checks: Record<string, boolean>
+  correctedToInbox: boolean
 }
 
 interface DomainCheck {
@@ -1343,6 +1344,15 @@ export function DomainHealthContent({ clientSlug }: { clientSlug?: string }) {
                     <span className={cn("text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md", placementColor)}>
                       {sample.placement}
                     </span>
+                    {sample.placement === "spam" && sample.correctedToInbox && (
+                      <span
+                        className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-500"
+                        title="This email landed in spam but was automatically moved to the inbox because the sending domain is verified"
+                      >
+                        <Check size={9} />
+                        Moved to inbox
+                      </span>
+                    )}
                     <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-md bg-muted/50 text-muted-foreground">
                       {sample.source === "seed" ? "Seed" : "CI"}
                     </span>

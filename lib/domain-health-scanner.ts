@@ -15,7 +15,7 @@
 
 import prisma from "@/lib/prisma"
 import { checkEmailCompliance } from "@/lib/email-compliance-checker"
-import { fetchOutlookEmails, shouldUseGraphAPI } from "@/lib/microsoft-graph"
+import { fetchOutlookEmails, shouldUseGraphAPI, moveOutlookMessageToInbox } from "@/lib/microsoft-graph"
 import { decrypt } from "@/lib/encryption"
 import { getServerSettings } from "@/lib/email-connection"
 import * as Imap from "node-imap"
@@ -55,6 +55,9 @@ interface ParsedEmail {
   placement: "inbox" | "spam" | "social" | "promotions" | "other"
   source: "seed" | "ci"
   seedEmail?: string
+  // Set true when this email landed in spam for a verified domain and we successfully
+  // moved it to the inbox. `placement` above still says "spam" — this only records the fix.
+  correctedToInbox?: boolean
 }
 
 // ─── IMAP fetch ───────────────────────────────────────────────────────────────
@@ -68,6 +71,7 @@ async function fetchEmailsFromSeedIMAP(
   seedEmail: any,
   domain: string,
   daysBack = 30,
+  moveVerifiedSpam = false,
 ): Promise<ParsedEmail[]> {
   return new Promise(async (resolve) => {
     const results: ParsedEmail[] = []
@@ -123,18 +127,27 @@ async function fetchEmailsFromSeedIMAP(
           const folder = foldersToCheck[folderIndex++]
           const isSpamFolder = folder.toLowerCase().includes("spam") || folder.toLowerCase() === "junk"
           const isPromos = folder.toLowerCase().includes("promo")
+          // Open spam-like folders writable when we might move mail out of them — MOVE needs
+          // a selected mailbox that isn't read-only. Every other folder stays read-only.
+          const shouldMoveThisFolder = isSpamFolder && moveVerifiedSpam
+          const readOnly = !shouldMoveThisFolder
 
-          imap.openBox(folder, true, (err) => {
+          imap.openBox(folder, readOnly, (err) => {
             if (err) { processNextFolder(); return }
 
             imap.search([["SINCE", formattedDate]], (err, uids) => {
               if (err || !uids || uids.length === 0) { processNextFolder(); return }
 
               const fetch = imap.fetch(uids.slice(-100), { bodies: ["HEADER", "TEXT"], struct: true })
+              // uid -> the ParsedEmail we pushed for it, so we can flag correctedToInbox after a move.
+              const matchedByUid = new Map<number, ParsedEmail>()
 
               fetch.on("message", (msg) => {
                 let rawHeaders = ""
                 let rawBody = ""
+                let uid: number | undefined
+
+                msg.on("attributes", (attrs: any) => { uid = attrs?.uid })
 
                 msg.on("body", (stream, info) => {
                   let buffer = ""
@@ -162,7 +175,7 @@ async function fetchEmailsFromSeedIMAP(
                   if (isSpamFolder) placement = "spam"
                   else if (isPromos) placement = "promotions"
 
-                  results.push({
+                  const parsed: ParsedEmail = {
                     rawHeaders: rawHeaders + "\n" + rawBody,
                     messageId: msgIdLine,
                     subject: subjectLine,
@@ -171,11 +184,31 @@ async function fetchEmailsFromSeedIMAP(
                     placement,
                     source: "seed",
                     seedEmail: seedEmail.email,
-                  })
+                  }
+                  results.push(parsed)
+
+                  if (shouldMoveThisFolder && uid !== undefined) {
+                    matchedByUid.set(uid, parsed)
+                  }
                 })
               })
 
-              fetch.once("end", () => processNextFolder())
+              fetch.once("end", () => {
+                if (shouldMoveThisFolder && matchedByUid.size > 0) {
+                  const uidsToMove = Array.from(matchedByUid.keys())
+                  imap.move(uidsToMove, "INBOX", (moveErr: any) => {
+                    if (moveErr) {
+                      console.error(`[domain-health-scanner] Failed to move ${uidsToMove.length} spam email(s) to inbox for ${seedEmail.email}:`, moveErr)
+                    } else {
+                      console.log(`[domain-health-scanner] Moved ${uidsToMove.length} spam email(s) to inbox for ${seedEmail.email} (verified domain: ${domain})`)
+                      for (const parsedEmail of matchedByUid.values()) parsedEmail.correctedToInbox = true
+                    }
+                    processNextFolder()
+                  })
+                } else {
+                  processNextFolder()
+                }
+              })
               fetch.once("error", () => processNextFolder())
             })
           })
@@ -195,13 +228,14 @@ async function fetchEmailsFromSeedGraph(
   seedEmail: any,
   domain: string,
   daysBack = 30,
+  moveVerifiedSpam = false,
 ): Promise<ParsedEmail[]> {
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - daysBack)
 
   const graphEmails = await fetchOutlookEmails(seedEmail, startDate, 100)
 
-  return graphEmails
+  const matched = graphEmails
     .filter((e) => e.from?.address?.toLowerCase().includes(domain.toLowerCase()) && !!e.rawHeaders)
     .map((e) => ({
       rawHeaders: e.rawHeaders!,
@@ -212,7 +246,21 @@ async function fetchEmailsFromSeedGraph(
       placement: e.placement as ParsedEmail["placement"],
       source: "seed" as const,
       seedEmail: seedEmail.email,
+      graphMessageId: e.graphMessageId,
     }))
+
+  if (moveVerifiedSpam) {
+    for (const email of matched) {
+      if (email.placement !== "spam" || !email.graphMessageId) continue
+      const moved = await moveOutlookMessageToInbox(seedEmail.id, email.graphMessageId)
+      if (moved) {
+        (email as ParsedEmail).correctedToInbox = true
+        console.log(`[domain-health-scanner] Moved spam email to inbox for ${seedEmail.email} (verified domain: ${domain})`)
+      }
+    }
+  }
+
+  return matched
 }
 
 // ─── DNS checks ───────────────────────────────────────────────────────────────
@@ -281,7 +329,10 @@ export async function runDomainHealthScan(
 
   const domain = clientDomain.domain
   const clientId = clientDomain.clientId
-
+  // Client-side domain verification (NOT Google's bulk-sender verification) — only for a
+  // verified domain do we correct spam placement by moving mail to the inbox.
+  const isVerifiedDomain = clientDomain.status === "verified"
+  
   const seedEmails = await prisma.seedEmail.findMany({
     where: {
       domainHealthMode: true,
@@ -331,15 +382,20 @@ export async function runDomainHealthScan(
   // Fetch live seed inbox emails
   const seedEmails_parsed: ParsedEmail[] = []
   for (const seed of seedEmails) {
-    try {
-      const emails = shouldUseGraphAPI(seed.provider)
-        ? await fetchEmailsFromSeedGraph(seed, domain)
-        : await fetchEmailsFromSeedIMAP(seed, domain)
-      console.log(`[domain-health-scanner] ${seed.email}: ${emails.length} email(s)`)
-      seedEmails_parsed.push(...emails)
-    } catch (err) {
-      console.error(`[domain-health-scanner] Error fetching ${seed.email}:`, err)
-    }
+  try {
+  // Spam-to-inbox move support ships for Gmail (IMAP MOVE) and Outlook/Hotmail/Live (Graph API)
+  // first — other IMAP providers (Yahoo, AOL, iCloud) still get scanned, just not auto-corrected.
+  const isGmail = seed.provider?.toLowerCase() === "gmail"
+  const usesGraph = shouldUseGraphAPI(seed.provider)
+  const moveVerifiedSpam = isVerifiedDomain && (isGmail || usesGraph)
+  const emails = usesGraph
+  ? await fetchEmailsFromSeedGraph(seed, domain, 30, moveVerifiedSpam)
+  : await fetchEmailsFromSeedIMAP(seed, domain, 30, moveVerifiedSpam)
+  console.log(`[domain-health-scanner] ${seed.email}: ${emails.length} email(s)`)
+  seedEmails_parsed.push(...emails)
+  } catch (err) {
+  console.error(`[domain-health-scanner] Error fetching ${seed.email}:`, err)
+  }
   }
 
   const allEmails: ParsedEmail[] = [...seedEmails_parsed, ...ciEmails]
@@ -390,11 +446,13 @@ export async function runDomainHealthScan(
           seedEmail: email.seedEmail ?? null,
           fromAddress: email.fromAddress,
           subject: email.subject,
-          receivedAt: email.receivedAt,
-          placement: email.placement,
-          checks,
-        },
-      })
+  receivedAt: email.receivedAt,
+  placement: email.placement,
+  checks,
+  correctedToInbox: email.correctedToInbox ?? false,
+  correctedAt: email.correctedToInbox ? new Date() : null,
+  },
+  })
       if (email.messageId) existingMessageIds.add(email.messageId)
       newSamples++
     } catch (err: any) {
@@ -438,7 +496,7 @@ export async function getLatestScanResults(
 ): Promise<{
   scan: { scannedAt: string; seedEmailCount: number; ciRowCount: number } | null
   results: Record<string, { status: string; value: string | null; note: string | null; source: string; passCount?: number; failCount?: number; total?: number }>
-  emailSamples: Array<{ id: string; source: string; seedEmail: string | null; fromAddress: string | null; subject: string | null; receivedAt: Date | null; placement: string; checks: any }>
+  emailSamples: Array<{ id: string; source: string; seedEmail: string | null; fromAddress: string | null; subject: string | null; receivedAt: Date | null; placement: string; checks: any; correctedToInbox: boolean; correctedAt: Date | null }>
 }> {
   const [emailSamples, dnsRecord] = await Promise.all([
     prisma.domainHealthEmailSample.findMany({

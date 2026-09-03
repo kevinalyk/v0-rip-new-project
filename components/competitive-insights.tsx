@@ -1472,10 +1472,14 @@ export function CompetitiveInsights({
         <div className="mb-6 flex items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-foreground mb-2">
-              {isReportingView ? "Analytics" : "Competitive Insights"}
+              {isReportingView ? "Analytics" : subscriptionsOnly ? "Following" : "Feed"}
             </h1>
             {!isReportingView && (
-              <p className="text-muted-foreground">Track and analyze political campaigns from across the spectrum</p>
+              <p className="text-muted-foreground">
+                {subscriptionsOnly
+                  ? "Messages from the candidates and organizations you follow"
+                  : "Track and analyze political campaigns from across the spectrum"}
+              </p>
             )}
           </div>
           {isReportingView && (

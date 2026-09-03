@@ -186,3 +186,60 @@ export async function moveOutlookMessageToInbox(seedEmailId: string, graphMessag
     return false
   }
 }
+
+// Sends a short auto-reply from a seed mailbox via Graph's sendMail. Threads the reply where
+// Graph allows it by setting a "Re:" subject and, when available, an In-Reply-To /
+// References header via internetMessageHeaders (requires the "Prefer: IdType=ImmutableId"
+// header to be omitted and the tenant to allow custom headers — Graph silently drops the
+// property if unsupported, which is fine since threading is a nice-to-have here, not required
+// for correctness). Never throws — returns false on any failure so a single bad send never
+// aborts a larger batch.
+export async function sendOutlookReply(
+  seedEmailId: string,
+  options: { to: string; subject: string; body: string; inReplyToMessageId?: string | null },
+): Promise<boolean> {
+  try {
+    const accessToken = await getValidAccessToken(seedEmailId)
+    if (!accessToken) {
+      console.error(`No valid access token to send reply from seed ${seedEmailId}`)
+      return false
+    }
+
+    const subject = /^re:/i.test(options.subject) ? options.subject : `Re: ${options.subject}`
+
+    const internetMessageHeaders = options.inReplyToMessageId
+      ? [
+          { name: "In-Reply-To", value: options.inReplyToMessageId },
+          { name: "References", value: options.inReplyToMessageId },
+        ]
+      : undefined
+
+    const response = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: {
+          subject,
+          body: { contentType: "Text", content: options.body },
+          toRecipients: [{ emailAddress: { address: options.to } }],
+          ...(internetMessageHeaders ? { internetMessageHeaders } : {}),
+        },
+        saveToSentItems: true,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`Failed to send Outlook reply to ${options.to}:`, response.status, errorText)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error(`Error sending Outlook reply to ${options.to}:`, error)
+    return false
+  }
+}

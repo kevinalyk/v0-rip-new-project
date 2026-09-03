@@ -58,6 +58,10 @@ interface ParsedEmail {
   // Set true when this email landed in spam for a verified domain and we successfully
   // moved it to the inbox. `placement` above still says "spam" — this only records the fix.
   correctedToInbox?: boolean
+  // First ~300 chars of plain-text body and ~500 chars of raw headers — captured here so the
+  // auto-reply cron can classify + safety-check the email without re-fetching it later.
+  emailPreview?: string | null
+  rawHeadersSnippet?: string | null
 }
 
 // ─── IMAP fetch ───────────────────────────────────────────────────────────────
@@ -65,6 +69,21 @@ interface ParsedEmail {
 function formatDateForImap(date: Date): string {
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
   return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`
+}
+
+// Strips HTML tags/entities down to a short plain-text preview, for auto-reply classification.
+function stripToPreview(body: string, maxLen = 300): string {
+  const text = body
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s+/g, " ")
+    .trim()
+  return text.slice(0, maxLen)
 }
 
 async function fetchEmailsFromSeedIMAP(
@@ -184,6 +203,8 @@ async function fetchEmailsFromSeedIMAP(
                     placement,
                     source: "seed",
                     seedEmail: seedEmail.email,
+                    emailPreview: rawBody ? stripToPreview(rawBody) : null,
+                    rawHeadersSnippet: rawHeaders.slice(0, 500),
                   }
                   results.push(parsed)
 
@@ -239,14 +260,16 @@ async function fetchEmailsFromSeedGraph(
     .filter((e) => e.from?.address?.toLowerCase().includes(domain.toLowerCase()) && !!e.rawHeaders)
     .map((e) => ({
       rawHeaders: e.rawHeaders!,
-      messageId: e.internetMessageId ?? null,
+      messageId: e.messageId ?? null,
       subject: e.subject ?? "",
       fromAddress: e.from?.address ?? "",
-      receivedAt: e.receivedDateTime ? new Date(e.receivedDateTime) : null,
+      receivedAt: e.date ? new Date(e.date) : null,
       placement: e.placement as ParsedEmail["placement"],
       source: "seed" as const,
       seedEmail: seedEmail.email,
       graphMessageId: e.graphMessageId,
+      emailPreview: e.emailContent ? stripToPreview(e.emailContent) : null,
+      rawHeadersSnippet: e.rawHeaders ? e.rawHeaders.slice(0, 500) : null,
     }))
 
   if (moveVerifiedSpam) {
@@ -451,6 +474,8 @@ export async function runDomainHealthScan(
   checks,
   correctedToInbox: email.correctedToInbox ?? false,
   correctedAt: email.correctedToInbox ? new Date() : null,
+  emailPreview: email.emailPreview ?? null,
+  rawHeadersSnippet: email.rawHeadersSnippet ?? null,
   },
   })
       if (email.messageId) existingMessageIds.add(email.messageId)

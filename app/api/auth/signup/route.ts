@@ -170,10 +170,11 @@ export async function POST(request: NextRequest) {
 
     // Create client and user in a transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Create client. When a valid trial code was supplied, grant enterprise-equivalent limits
-      // for the trial length — unlimited users, all reporting, all filters — same as a paying
-      // enterprise customer. trialExpiresAt is what marks this as a trial (vs. a real enterprise
-      // account) and what the expire-trials cron checks.
+      // Create the client on the free plan. Trials now require a card via Stripe Checkout, so a
+      // redeemed code does NOT grant the trial here — it's stashed as "pending" and the frontend
+      // redirects to Stripe immediately after signup. The webhook (checkout.session.completed)
+      // is what actually flips subscriptionPlan to "enterprise" and sets trialExpiresAt once the
+      // card is on file and the trialing subscription exists.
       const client = await tx.client.create({
         data: {
           id: clientId,
@@ -184,15 +185,18 @@ export async function POST(request: NextRequest) {
           dataRetentionDays: 90,
           ...(matchedTrialCode
             ? {
-                subscriptionPlan: "enterprise",
-                trialExpiresAt: new Date(Date.now() + matchedTrialCode.trialLengthDays * 24 * 60 * 60 * 1000),
+                pendingTrialCodeId: matchedTrialCode.id,
+                pendingTrialLengthDays: matchedTrialCode.trialLengthDays,
               }
             : {}),
         },
       })
 
       // Record the redemption so this client (and this code, indirectly) can't be reused —
-      // TrialCodeRedemption.clientId is unique, enforcing one redemption per client.
+      // TrialCodeRedemption.clientId is unique, enforcing one redemption per client. Recorded now
+      // (not after checkout) so a code can't be redeemed twice by abandoning and re-signing-up;
+      // if checkout is abandoned, the billing page's "resume checkout" flow reuses the same
+      // pending fields rather than requiring a fresh code.
       if (matchedTrialCode) {
         await tx.trialCodeRedemption.create({
           data: { trialCodeId: matchedTrialCode.id, clientId: client.id },
@@ -222,7 +226,7 @@ export async function POST(request: NextRequest) {
       lastName,
       email,
       organizationName: result.client.name,
-      plan: matchedTrialCode ? `${matchedTrialCode.trialLengthDays}-Day Free Trial (All Features)` : "Free Trial",
+      plan: matchedTrialCode ? `${matchedTrialCode.trialLengthDays}-Day Free Trial (pending card on file)` : "Free Trial",
       loginUrl: "https://app.rip-tool.com/login",
     }).catch((err) => console.error("[Signup] Welcome email failed:", err))
 
@@ -254,7 +258,12 @@ export async function POST(request: NextRequest) {
       {
         message: "Account created successfully",
         clientId: result.client.id,
+        clientSlug: result.client.slug,
         userId: result.user.id,
+        // Tells the signup page to redirect straight to Stripe Checkout to collect a card and
+        // start the trial, instead of going to the dashboard. Only set when a valid trial code
+        // was redeemed above.
+        requiresTrialCheckout: Boolean(matchedTrialCode),
         user: {
           id: result.user.id,
           email: result.user.email,

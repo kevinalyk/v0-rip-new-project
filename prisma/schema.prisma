@@ -182,14 +182,23 @@ model Client {
   stripeSlackBotsItemId  String?   @unique // Subscription item ID for additional Slack bots (si_xxx)
   stripeSlackBotPriceId  String?   // Stripe price ID for additional Slack bots (per-bot, e.g. $50/mo)
 
-  // Free-trial state, set at signup when a valid TrialCode is redeemed. subscriptionPlan is set
-  // to "enterprise" for the duration of the trial (unlimited users/reporting/filters); this field
-  // is what distinguishes a code-redeemed trial from a real paying enterprise customer, and is
-  // what the expire-trials cron checks to know when to revert the client to "free".
+  // Free-trial state. subscriptionPlan is set to "enterprise" for the duration of the trial
+  // (unlimited users/reporting/filters); this field is what distinguishes an active trial from a
+  // real paying enterprise customer. Trials are now Stripe-backed (a card is required and Stripe
+  // auto-charges the Basic $50/mo plan when the trial ends, unless cancelled), so this is set by
+  // the Stripe webhook on checkout.session.completed, not directly at signup.
   trialExpiresAt         DateTime?
   // Flips to false whenever a trial is started or ends, so the "your trial ended, subscribe" popup
   // shows exactly once on the next login. Has no meaning while trialExpiresAt is null.
   trialEndedNoticeSeen   Boolean   @default(true)
+  // A TrialCode redeemed at signup, before the required Stripe checkout/card step completes.
+  // Signup no longer grants the trial directly — it stashes the redeemed code + length here and
+  // creates the client on "free", then redirects to Stripe Checkout. The webhook reads these on
+  // checkout.session.completed to actually start the trial, then clears them. If the user
+  // abandons checkout, the client stays on free with these set so the billing page can offer a
+  // "resume trial checkout" action instead of losing the redemption.
+  pendingTrialCodeId      String?
+  pendingTrialLengthDays  Int?
   
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt

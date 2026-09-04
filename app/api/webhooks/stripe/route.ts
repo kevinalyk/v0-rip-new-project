@@ -5,7 +5,12 @@ import { headers } from "next/headers"
 import type { SubscriptionPlan } from "@/lib/subscription-utils"
 import { unassignClientSeeds } from "@/lib/seed-utils"
 import { getPlanLimits, formatPlanName, getUserSeatsIncluded } from "@/lib/subscription-utils"
-import { sendSubscriptionCancellationWarning, sendNewPaymentNotification } from "@/lib/mailgun"
+import {
+  sendSubscriptionCancellationWarning,
+  sendNewPaymentNotification,
+  sendTrialConvertedEmail,
+  sendTrialEndingSoonEmail,
+} from "@/lib/mailgun"
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
@@ -262,6 +267,31 @@ export async function POST(req: NextRequest) {
             console.log("[Stripe Webhook] Plan-only subscription:", subscription.id)
           }
 
+          // Trial checkout (created via createTrialCheckoutSession): the subscription is created
+          // "trialing" with the Basic product/price, so the loop above already resolved
+          // subscriptionPlan to "paid". Override to "enterprise" for the duration of the trial —
+          // full access, same as a real trial — and record trialExpiresAt from Stripe's
+          // trial_end. When the trial later converts (customer.subscription.updated, status
+          // flips to "active"), the same Basic product naturally resolves back to "paid" without
+          // any override needed there.
+          if (subscription.status === "trialing" && subscription.trial_end) {
+            updateData.subscriptionPlan = "enterprise"
+            updateData.subscriptionStatus = "trialing"
+            const enterpriseLimits = getPlanLimits("enterprise")
+            updateData.emailVolumeLimit =
+              enterpriseLimits.emailVolumeLimit === Number.POSITIVE_INFINITY
+                ? 999999999
+                : enterpriseLimits.emailVolumeLimit
+            updateData.hasCompetitiveInsights = true
+            updateData.trialExpiresAt = new Date(subscription.trial_end * 1000)
+            updateData.trialEndedNoticeSeen = true
+            // Trial has started — clear the pending redemption so the billing page's "resume
+            // checkout" callout stops showing.
+            updateData.pendingTrialCodeId = null
+            updateData.pendingTrialLengthDays = null
+            console.log("[Stripe Webhook] Trial checkout completed, granting enterprise access until:", updateData.trialExpiresAt)
+          }
+
           // Always reset these on a new checkout
           updateData.cancelAtPeriodEnd = false
           updateData.scheduledDowngradePlan = null
@@ -412,6 +442,23 @@ export async function POST(req: NextRequest) {
 
         if (additionalUserSeats > 0) updateData.additionalUserSeats = additionalUserSeats
 
+        // Same trial override as checkout.session.completed — this event can arrive before or
+        // after that one, so both need to independently grant enterprise-level access while
+        // trialing rather than the Basic access the product/price would otherwise resolve to.
+        if (fullSubscription.status === "trialing" && fullSubscription.trial_end) {
+          updateData.subscriptionStatus = "trialing"
+          updateData.subscriptionPlan = "enterprise"
+          const enterpriseLimits = getPlanLimits("enterprise")
+          updateData.emailVolumeLimit =
+            enterpriseLimits.emailVolumeLimit === Number.POSITIVE_INFINITY ? 999999999 : enterpriseLimits.emailVolumeLimit
+          updateData.hasCompetitiveInsights = true
+          updateData.trialExpiresAt = new Date(fullSubscription.trial_end * 1000)
+          updateData.trialEndedNoticeSeen = true
+          updateData.pendingTrialCodeId = null
+          updateData.pendingTrialLengthDays = null
+          console.log("[Stripe Webhook] subscription.created — trialing, granting enterprise access until:", updateData.trialExpiresAt)
+        }
+
         if (hasCiItem && hasPlanItem) {
           updateData.stripeSubscriptionId = subscription.id
           updateData.stripeCiSubscriptionId = null
@@ -507,7 +554,13 @@ export async function POST(req: NextRequest) {
             updateData.subscriptionStatus = "active"
           } else if (subscription.status === "past_due") {
             updateData.subscriptionStatus = "past_due"
+          } else if (subscription.status === "trialing") {
+            updateData.subscriptionStatus = "trialing"
           }
+
+          // Was this client on an active trial before this update? Used below to detect the
+          // trialing -> active conversion moment (bill the card, drop to Basic access, notify).
+          const wasOnTrial = client.trialExpiresAt !== null
 
           let hasPlanItem = false
           let hasCiItem = false
@@ -561,6 +614,39 @@ export async function POST(req: NextRequest) {
           }
 
           updateData.additionalUserSeats = additionalUserSeats
+
+          if (fullSubscription.status === "trialing" && fullSubscription.trial_end) {
+            // Still trialing — the loop above resolved the plan to "paid" (Basic) since that's
+            // the underlying product/price, but the trial should keep full enterprise-level
+            // access until it actually converts or ends. Also refresh trialExpiresAt in case
+            // Stripe extended/shortened the trial.
+            updateData.subscriptionPlan = "enterprise"
+            const enterpriseLimits = getPlanLimits("enterprise")
+            updateData.emailVolumeLimit =
+              enterpriseLimits.emailVolumeLimit === Number.POSITIVE_INFINITY ? 999999999 : enterpriseLimits.emailVolumeLimit
+            updateData.hasCompetitiveInsights = true
+            updateData.trialExpiresAt = new Date(fullSubscription.trial_end * 1000)
+          } else if (wasOnTrial && fullSubscription.status === "active") {
+            // The trial just converted: Stripe successfully charged the card on file for the
+            // Basic plan. The loop above already resolved subscriptionPlan to "paid" from the
+            // Basic product, so access is correctly dropped from enterprise to Basic — just
+            // clear the trial bookkeeping and notify the owner.
+            updateData.trialExpiresAt = null
+            updateData.trialEndedNoticeSeen = false
+            updateData.pendingTrialCodeId = null
+            updateData.pendingTrialLengthDays = null
+
+            const owner = await prisma.user.findFirst({ where: { clientId: client.id, role: "owner" } })
+            if (owner) {
+              sendTrialConvertedEmail({
+                firstName: owner.firstName,
+                email: owner.email,
+                organizationName: client.name,
+                clientSlug: client.slug,
+              }).catch((err) => console.error("[Stripe Webhook] Trial-converted email failed:", err))
+            }
+            console.log("[Stripe Webhook] Trial converted to Basic for client:", client.id)
+          }
 
           const subscriptionRenewDate = new Date(fullSubscription.current_period_end * 1000)
           if (client.subscriptionRenewDate?.getTime() !== subscriptionRenewDate.getTime()) {
@@ -666,6 +752,18 @@ export async function POST(req: NextRequest) {
               updateData.stripeCiSubscriptionItemId = null
             }
 
+            // If this was a Stripe-backed trial that got cancelled (either by the owner, or by
+            // Stripe's trial_settings.end_behavior when no valid payment method exists), clear
+            // trial bookkeeping and the pending redemption so the code can't be treated as
+            // still-pending on the billing page.
+            if (client.trialExpiresAt) {
+              updateData.trialExpiresAt = null
+              updateData.trialEndedNoticeSeen = false
+              updateData.pendingTrialCodeId = null
+              updateData.pendingTrialLengthDays = null
+              console.log("[Stripe Webhook] Trial ended without conversion for client:", client.id)
+            }
+
             await unassignClientSeeds(client.id)
 
             console.log("[Stripe Webhook] Set subscription status to cancelled and plan to free for:", client.id)
@@ -744,6 +842,36 @@ export async function POST(req: NextRequest) {
             data: { subscriptionStatus: "past_due" },
           })
           console.log("[Stripe Webhook] Marked client as past_due:", client.id)
+        }
+        break
+      }
+
+      case "customer.subscription.trial_will_end": {
+        // Fires 3 days before a trial ends (Stripe's default lead time). Gives the owner a
+        // heads-up before their card is charged for Basic.
+        const subscription = event.data.object
+        console.log("[Stripe Webhook] Trial ending soon:", subscription.id)
+
+        if (!subscription.trial_end) break
+
+        const client = await prisma.client.findFirst({
+          where: { stripeSubscriptionId: subscription.id },
+        })
+
+        if (!client) {
+          console.log("[Stripe Webhook] trial_will_end — no client found for subscription:", subscription.id)
+          break
+        }
+
+        const owner = await prisma.user.findFirst({ where: { clientId: client.id, role: "owner" } })
+        if (owner) {
+          sendTrialEndingSoonEmail({
+            firstName: owner.firstName,
+            email: owner.email,
+            organizationName: client.name,
+            clientSlug: client.slug,
+            trialEndsAt: new Date(subscription.trial_end * 1000),
+          }).catch((err) => console.error("[Stripe Webhook] Trial-ending-soon email failed:", err))
         }
         break
       }

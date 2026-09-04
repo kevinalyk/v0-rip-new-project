@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, CreditCard, Calendar, AlertTriangle, Receipt, Download, ExternalLink } from "lucide-react"
 import { format } from "date-fns"
-import { cancelSubscription } from "@/app/actions/stripe"
+import { cancelSubscription, createTrialCheckoutSession } from "@/app/actions/stripe"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +40,8 @@ interface BillingData {
     scheduledDowngradePlan?: string | null // Added scheduledDowngradePlan to interface
     stripeMonthlyAmount?: number | null   // actual amount in cents from Stripe
     stripeBillingInterval?: string | null // "month" | "year"
+    pendingTrialCodeId?: string | null
+    pendingTrialLengthDays?: number | null
   }
   planLimits: {
     emailVolumeLimit: number
@@ -172,6 +174,7 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
   const [loadingInvoices, setLoadingInvoices] = useState(false)
   const [cancelReason, setCancelReason] = useState("")
   const [cancelComment, setCancelComment] = useState("")
+  const [resumingTrialCheckout, setResumingTrialCheckout] = useState(false)
   const params = useParams()
   const router = useRouter()
   const resolvedClientSlug = clientSlug || (params.clientSlug as string)
@@ -296,6 +299,22 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
     }
   }
 
+  const handleResumeTrialCheckout = async () => {
+    if (!billingData?.client.id) return
+
+    try {
+      setResumingTrialCheckout(true)
+      const { url } = await createTrialCheckoutSession(billingData.client.id)
+      if (url) {
+        window.location.href = url
+      }
+    } catch (error) {
+      console.error("Error resuming trial checkout:", error)
+      alert("Failed to resume trial checkout. Please try again.")
+      setResumingTrialCheckout(false)
+    }
+  }
+
   const handleManageSubscription = () => {
     if (resolvedClientSlug) {
       router.push(`/${resolvedClientSlug}/billing`)
@@ -335,6 +354,38 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
           <h2 className="text-3xl font-bold tracking-tight">Billing & Usage</h2>
           <p className="text-muted-foreground">Manage your subscription and monitor usage</p>
         </div>
+
+        {client.pendingTrialCodeId && (
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <CreditCard className="h-5 w-5 text-blue-600 dark:text-blue-500 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-blue-600 dark:text-blue-500">
+                  Finish starting your free trial
+                </h3>
+                <p className="text-sm text-blue-600/90 dark:text-blue-500/90 mt-1">
+                  You redeemed a{" "}
+                  {client.pendingTrialLengthDays ? `${client.pendingTrialLengthDays}-day ` : ""}
+                  free trial, but checkout wasn't completed. Add a card to start your trial — you
+                  won't be charged during the trial, and afterward you'll automatically move to our
+                  Basic plan ($50/month) unless you cancel first.
+                </p>
+                {canManageBilling && (
+                  <Button onClick={handleResumeTrialCheckout} className="mt-3" size="sm" disabled={resumingTrialCheckout}>
+                    {resumingTrialCheckout ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Redirecting...
+                      </>
+                    ) : (
+                      "Add Card & Start Trial"
+                    )}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <Card>
           <CardHeader>

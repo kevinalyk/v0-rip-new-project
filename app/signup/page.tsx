@@ -12,6 +12,7 @@ import { Eye, EyeOff } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { Checkbox } from "@/components/ui/checkbox"
+import { createTrialCheckoutSession } from "@/app/actions/stripe"
 
 export default function SignupPage() {
   const router = useRouter()
@@ -126,6 +127,23 @@ export default function SignupPage() {
 
       if (!response.ok) {
         throw new Error(data.error || "Signup failed")
+      }
+
+      // A redeemed trial code now requires a card via Stripe Checkout before the trial starts —
+      // send them there instead of the dashboard. If they abandon checkout, the billing page
+      // offers to resume it since the redemption is already recorded.
+      if (data.requiresTrialCheckout) {
+        try {
+          const { url } = await createTrialCheckoutSession(data.clientId)
+          if (url) {
+            window.location.href = url
+            return
+          }
+        } catch (checkoutError) {
+          // If Stripe checkout fails to start for any reason, fall back to the dashboard — the
+          // account still exists on the free plan and can resume checkout from billing.
+          console.error("Failed to start trial checkout:", checkoutError)
+        }
       }
 
       // Auth cookie is set by the API — redirect straight to the dashboard
@@ -281,7 +299,9 @@ export default function SignupPage() {
                 autoCapitalize="characters"
               />
               <p className="text-xs text-muted-foreground">
-                Get a free full-featured trial with unlimited users, reporting, and filters.
+                Get a free full-featured trial with unlimited users, reporting, and filters. You&apos;ll be asked to
+                add a card next — you won&apos;t be charged during the trial, but afterward you&apos;ll
+                automatically be subscribed to our Basic plan ($50/month) unless you cancel first.
               </p>
             </div>
 

@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
+import { stripe } from "@/lib/stripe"
 
 export async function POST(
   request: NextRequest,
@@ -43,6 +44,20 @@ export async function POST(
       )
     }
 
+    // If this is a Stripe-backed trial (created via checkout with a card on file), cancel the
+    // Stripe subscription immediately so it can't later auto-charge the card for Basic. This
+    // also fires customer.subscription.deleted, which independently resets the same fields
+    // below — that's expected and harmless (idempotent), it just means the webhook re-confirms
+    // what we're about to set here.
+    if (client.stripeSubscriptionId) {
+      try {
+        await stripe.subscriptions.cancel(client.stripeSubscriptionId)
+        console.log("[end-trial] Cancelled Stripe subscription:", client.stripeSubscriptionId)
+      } catch (err) {
+        console.error("[end-trial] Failed to cancel Stripe subscription, continuing with local reset:", err)
+      }
+    }
+
     // Reset to free: clear plan, CI access, trial state, and raise volume limits back to
     // default. trialEndedNoticeSeen is set to false so the "trial ended" popup shows once on
     // the next login, same as when a trial expires naturally via the cron. Users are
@@ -59,6 +74,10 @@ export async function POST(
         cancelAtPeriodEnd: false,
         trialExpiresAt: null,
         trialEndedNoticeSeen: false,
+        pendingTrialCodeId: null,
+        pendingTrialLengthDays: null,
+        stripeSubscriptionId: null,
+        stripeSubscriptionItemId: null,
       },
     })
 

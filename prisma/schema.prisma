@@ -373,6 +373,10 @@ model DomainHealthEmailSample {
   emailPreview     String?   @db.Text
   // First ~500 chars of raw headers — enough to check Auto-Submitted/Precedence for auto-reply safety.
   rawHeadersSnippet String?  @db.Text
+  // Frozen at ingestion time from clientDomain.googleVerified — needed so reports can compare
+  // delivery before/after the Sept 8 Google bulk-sender requirements even if a domain's
+  // verified status later changes. Never overwritten after the row is created.
+  googleVerifiedSnapshot Boolean @default(false)
 
   clientDomain   ClientDomain @relation(fields: [clientDomainId], references: [id], onDelete: Cascade)
 
@@ -381,6 +385,7 @@ model DomainHealthEmailSample {
   @@index([clientId])
   @@index([source])
   @@index([receivedAt])
+  @@index([googleVerifiedSnapshot])
 }
 
 // Short auto-reply message pool for the auto-reply-verified-domains cron. messageType=null
@@ -558,6 +563,11 @@ model CompetitiveInsightCampaign {
   messageTypes        String[] // AI-classified message types e.g. ["urgency_deadline", "personal_story"]
   messageTypeReasoning String? @db.Text // AI explanation of why those types were assigned
   subjectPatterns     String[] // Detected subject line patterns e.g. ["question", "personalization"]
+  // Frozen at ingestion time by matching the sender's domain against ClientDomain.googleVerified
+  // — null = sender domain didn't match any tracked ClientDomain (unknown), true/false = matched.
+  // Needed so reports can toggle "Google verified" to compare delivery before/after Sept 8
+  // even if a domain's verified status later changes. Never overwritten after creation.
+  googleVerifiedSnapshot Boolean?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -580,6 +590,7 @@ model CompetitiveInsightCampaign {
   @@index([sendingIp])
   @@index([sendingProvider])
   @@index([isThirdParty])
+  @@index([googleVerifiedSnapshot])
   // Composite indexes for common CI query patterns
   @@index([isDeleted, isHidden, dateReceived])
   @@index([entityId, dateReceived])

@@ -1633,6 +1633,17 @@ export async function processCompetitiveInsights(
         // for the assigned entity, or does it look like a rented/partner (third-party) send?
         const isThirdParty = await isSenderThirdParty(entityId, senderEmail)
 
+        // Frozen at ingestion time: does the sender's domain match a domain any client has
+        // marked as Google-verified? null = domain doesn't match any tracked ClientDomain
+        // (unknown), true/false = matched. Needed so reports can toggle "Google verified" to
+        // compare delivery before/after the Sept 8 Google bulk-sender requirements rollout.
+        const matchingClientDomain = await prisma.clientDomain.findFirst({
+          where: { domain: { equals: senderDomain, mode: "insensitive" } },
+          select: { googleVerified: true },
+          orderBy: { googleVerified: "desc" }, // prefer a verified match if multiple clients registered the same domain
+        })
+        const googleVerifiedSnapshot = matchingClientDomain ? matchingClientDomain.googleVerified : null
+
         const newCampaign = await prisma.competitiveInsightCampaign.create({
           data: {
             senderEmail,
@@ -1658,6 +1669,7 @@ export async function processCompetitiveInsights(
             clientId,
             source: clientId ? "personal" : "seed",
             rawHeaders: rawHeaders ?? null,
+            googleVerifiedSnapshot,
           },
         })
 

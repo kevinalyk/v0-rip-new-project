@@ -63,6 +63,8 @@ export async function GET(request: NextRequest) {
         stripeCustomerId: true,
         cancelAtPeriodEnd: true,
         scheduledDowngradePlan: true,
+        pendingTrialCodeId: true,
+        pendingTrialLengthDays: true,
       },
     })
 
@@ -118,6 +120,10 @@ export async function GET(request: NextRequest) {
         scheduledDowngradePlan: client.scheduledDowngradePlan,
         stripeMonthlyAmount,   // actual amount in cents from Stripe, or null
         stripeBillingInterval, // "month" | "year" | null
+        // Set when a trial code was redeemed at signup but the required Stripe checkout (card)
+        // step was abandoned. Lets the billing page offer to resume checkout with the same code.
+        pendingTrialCodeId: client.pendingTrialCodeId,
+        pendingTrialLengthDays: client.pendingTrialLengthDays,
       },
       planLimits,
       hasAdminAccess,

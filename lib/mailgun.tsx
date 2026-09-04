@@ -553,6 +553,210 @@ Questions? Just reply to this email.
   }
 }
 
+// Sent when a Stripe-backed free trial successfully converts into a paid Basic subscription
+// (i.e. the trial ran its full length and the card on file was charged). Distinct from
+// sendTrialEndedEmail, which is for trials that expire/are cancelled without converting.
+export async function sendTrialConvertedEmail(params: {
+  firstName: string
+  email: string
+  organizationName: string
+  clientSlug: string
+  loginUrl?: string
+}): Promise<boolean> {
+  const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
+  const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN
+
+  if (!MAILGUN_API_KEY || !MAILGUN_DOMAIN) {
+    console.error("[Mailgun] Credentials not configured — skipping trial-converted email")
+    return false
+  }
+
+  const { firstName, email, organizationName, clientSlug, loginUrl = "https://app.rip-tool.com/login" } = params
+  const billingUrl = `https://app.rip-tool.com/${clientSlug}/account/billing`
+
+  const html = `
+  <!DOCTYPE html>
+  <html>
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 560px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
+  <div style="background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+  <div style="background: #16a34a; padding: 24px 28px;">
+  <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Inbox.GOP</p>
+  <h1 style="margin: 4px 0 0 0; color: white; font-size: 22px; font-weight: 700;">Your trial has converted to Basic</h1>
+  </div>
+  <div style="padding: 28px;">
+  <p style="margin: 0 0 16px 0; font-size: 15px; color: #1a1a1a;">Hi ${firstName},</p>
+  <p style="margin: 0 0 16px 0; font-size: 15px; color: #1a1a1a;">
+  Your free trial of Inbox.GOP for <strong>${organizationName}</strong> has ended, and your card on file has been charged for our Basic plan ($50/month). Your account has moved from full trial access to Basic-plan limits.
+  </p>
+  <p style="margin: 0 0 24px 0; font-size: 14px; color: #555;">
+  Want to keep unlimited users, deeper campaign history, reporting, and our inboxing and seed testing tools? You can upgrade anytime from your billing page.
+  </p>
+  <div style="text-align: center; margin-bottom: 28px;">
+  <a href="${billingUrl}" style="display: inline-block; background: #16a34a; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-size: 15px; font-weight: 600;">Manage Billing</a>
+  </div>
+  <hr style="border: none; border-top: 1px solid #f0f0f0; margin: 0 0 20px 0;" />
+  <p style="margin: 0; font-size: 13px; color: #888; text-align: center;">
+  Questions? Just reply to this email.<br/>
+  <a href="${loginUrl}" style="color: #16a34a; text-decoration: none;">Log in to Inbox.GOP</a>
+  </p>
+  </div>
+  </div>
+  </body>
+  </html>
+  `
+
+  const text = `
+Hi ${firstName},
+
+Your free trial of Inbox.GOP for ${organizationName} has ended, and your card on file has been charged for our Basic plan ($50/month). Your account has moved from full trial access to Basic-plan limits.
+
+Want to keep unlimited users, deeper campaign history, reporting, and our inboxing and seed testing tools? You can upgrade anytime from your billing page.
+
+Manage billing: ${billingUrl}
+
+Questions? Just reply to this email.
+  `.trim()
+
+  const formData = new FormData()
+  formData.append("from", `Inbox.GOP <inbox@${MAILGUN_DOMAIN}>`)
+  formData.append("to", email)
+  formData.append("h:Reply-To", "kevin@rip-tool.com, ryan@rip-tool.com")
+  formData.append("subject", `Your Inbox.GOP trial has converted to Basic`)
+  formData.append("html", html)
+  formData.append("text", text)
+
+  try {
+    const response = await fetch(`https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`api:${MAILGUN_API_KEY}`).toString("base64")}`,
+      },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("[Mailgun] Trial-converted email error:", response.status, errorText)
+      return false
+    }
+
+    console.log("[Mailgun] Trial-converted email sent to:", email)
+    return true
+  } catch (error) {
+    console.error("[Mailgun] Error sending trial-converted email:", error)
+    return false
+  }
+}
+
+// Sent when Stripe's customer.subscription.trial_will_end webhook fires (by default, 3 days
+// before a trial ends), giving the owner a heads-up before their card is charged for Basic.
+export async function sendTrialEndingSoonEmail(params: {
+  firstName: string
+  email: string
+  organizationName: string
+  clientSlug: string
+  trialEndsAt: Date
+  loginUrl?: string
+}): Promise<boolean> {
+  const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
+  const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN
+
+  if (!MAILGUN_API_KEY || !MAILGUN_DOMAIN) {
+    console.error("[Mailgun] Credentials not configured — skipping trial-ending-soon email")
+    return false
+  }
+
+  const {
+    firstName,
+    email,
+    organizationName,
+    clientSlug,
+    trialEndsAt,
+    loginUrl = "https://app.rip-tool.com/login",
+  } = params
+  const billingUrl = `https://app.rip-tool.com/${clientSlug}/account/billing`
+  const formattedDate = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(trialEndsAt)
+
+  const html = `
+  <!DOCTYPE html>
+  <html>
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 560px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
+  <div style="background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+  <div style="background: #d97706; padding: 24px 28px;">
+  <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Inbox.GOP</p>
+  <h1 style="margin: 4px 0 0 0; color: white; font-size: 22px; font-weight: 700;">Your trial ends on ${formattedDate}</h1>
+  </div>
+  <div style="padding: 28px;">
+  <p style="margin: 0 0 16px 0; font-size: 15px; color: #1a1a1a;">Hi ${firstName},</p>
+  <p style="margin: 0 0 16px 0; font-size: 15px; color: #1a1a1a;">
+  Your free trial of Inbox.GOP for <strong>${organizationName}</strong> ends on <strong>${formattedDate}</strong>. After that, the card on file will be charged for our Basic plan ($50/month) and your account will move to Basic-plan limits.
+  </p>
+  <p style="margin: 0 0 24px 0; font-size: 14px; color: #555;">
+  Nothing to do if you'd like to continue — you'll be moved over automatically. If you'd rather not continue, you can cancel from your billing page before the trial ends and you won't be charged.
+  </p>
+  <div style="text-align: center; margin-bottom: 28px;">
+  <a href="${billingUrl}" style="display: inline-block; background: #d97706; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-size: 15px; font-weight: 600;">Manage Billing</a>
+  </div>
+  <hr style="border: none; border-top: 1px solid #f0f0f0; margin: 0 0 20px 0;" />
+  <p style="margin: 0; font-size: 13px; color: #888; text-align: center;">
+  Questions? Just reply to this email.<br/>
+  <a href="${loginUrl}" style="color: #d97706; text-decoration: none;">Log in to Inbox.GOP</a>
+  </p>
+  </div>
+  </div>
+  </body>
+  </html>
+  `
+
+  const text = `
+Hi ${firstName},
+
+Your free trial of Inbox.GOP for ${organizationName} ends on ${formattedDate}. After that, the card on file will be charged for our Basic plan ($50/month) and your account will move to Basic-plan limits.
+
+Nothing to do if you'd like to continue — you'll be moved over automatically. If you'd rather not continue, you can cancel from your billing page before the trial ends and you won't be charged.
+
+Manage billing: ${billingUrl}
+
+Questions? Just reply to this email.
+  `.trim()
+
+  const formData = new FormData()
+  formData.append("from", `Inbox.GOP <inbox@${MAILGUN_DOMAIN}>`)
+  formData.append("to", email)
+  formData.append("h:Reply-To", "kevin@rip-tool.com, ryan@rip-tool.com")
+  formData.append("subject", `Your Inbox.GOP trial ends ${formattedDate}`)
+  formData.append("html", html)
+  formData.append("text", text)
+
+  try {
+    const response = await fetch(`https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`api:${MAILGUN_API_KEY}`).toString("base64")}`,
+      },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("[Mailgun] Trial-ending-soon email error:", response.status, errorText)
+      return false
+    }
+
+    console.log("[Mailgun] Trial-ending-soon email sent to:", email)
+    return true
+  } catch (error) {
+    console.error("[Mailgun] Error sending trial-ending-soon email:", error)
+    return false
+  }
+}
+
 export async function sendPasswordResetEmail(email: string, resetToken: string): Promise<boolean> {
   const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
   const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN
@@ -1470,7 +1674,7 @@ To stop receiving this digest, update your email settings: ${settingsUrl}
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────��──────
 // Product Update Email
 // ─────────────────────────────────────────────────────────────────────────────
 

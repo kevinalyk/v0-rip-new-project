@@ -151,6 +151,95 @@ export async function createCheckoutSession(data: {
   }
 }
 
+// Starts a Stripe Checkout session for a code-redeemed free trial. The subscription is created
+// immediately in "trialing" status with card details on file — nothing is charged until the
+// trial ends. If the trial isn't cancelled first, Stripe auto-charges the Basic ($50/mo) plan
+// price on trialLengthDays and the webhook (checkout.session.completed +
+// customer.subscription.updated) handles granting Enterprise-level access during the trial and
+// then downgrading feature access to Basic at conversion.
+export async function createTrialCheckoutSession(clientId: string) {
+  const session = await getServerSession()
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized")
+  }
+
+  const requestingUser = await prisma.user.findUnique({ where: { id: session.user.id } })
+  if (!requestingUser || requestingUser.clientId !== clientId) {
+    throw new Error("Unauthorized")
+  }
+
+  const client = await prisma.client.findUnique({
+    where: { id: clientId },
+    include: { users: { where: { role: "owner" }, take: 1 } },
+  })
+
+  if (!client) {
+    throw new Error("Client not found")
+  }
+
+  if (!client.pendingTrialCodeId || !client.pendingTrialLengthDays) {
+    throw new Error("No pending trial to start checkout for")
+  }
+
+  const owner = client.users[0]
+  if (!owner) {
+    throw new Error("Client has no owner user")
+  }
+
+  const basicPrice = PLAN_PRICES.paid // $50/mo — the plan the trial converts into
+
+  const isDevelopment = process.env.NODE_ENV === "development"
+  const baseUrl = isDevelopment ? "http://localhost:3000" : "https://app.rip-tool.com"
+  const successUrl = `${baseUrl}/${client.slug}?trialStarted=true`
+  // Cancelling checkout leaves the client on free with pendingTrialCodeId still set, so the
+  // billing page can offer to resume checkout with the same redeemed code instead of losing it.
+  const cancelUrl = `${baseUrl}/${client.slug}/account/billing?trialCheckoutCanceled=true`
+
+  const checkoutSession = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    // Card only (not "any eligible payment method"): the trial requires a payment method that
+    // can be auto-charged off-session when the trial ends, which not all dynamic payment
+    // methods support.
+    payment_method_types: ["card"],
+    line_items: [
+      {
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: "Basic",
+            description: `Basic Plan — starts after your ${client.pendingTrialLengthDays}-day free trial`,
+          },
+          unit_amount: basicPrice * 100,
+          recurring: {
+            interval: "month",
+          },
+        },
+        quantity: 1,
+      },
+    ],
+    subscription_data: {
+      trial_period_days: client.pendingTrialLengthDays,
+      trial_settings: {
+        end_behavior: { missing_payment_method: "cancel" },
+      },
+    },
+    payment_method_collection: "always",
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    customer_email: owner.email,
+    client_reference_id: client.id,
+    metadata: {
+      clientId: client.id,
+      userId: owner.id,
+      trialCodeId: client.pendingTrialCodeId,
+      trialLengthDays: client.pendingTrialLengthDays.toString(),
+      checkoutPurpose: "trial",
+    },
+  })
+
+  return { url: checkoutSession.url }
+}
+
 export async function cancelSubscription(
   clientId: string,
   subscriptionType: "plan" | "ci" = "plan",

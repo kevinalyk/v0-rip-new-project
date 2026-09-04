@@ -9,7 +9,17 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2, Plus, Ticket } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Loader2, Plus, Ticket, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 interface TrialCode {
@@ -45,6 +55,8 @@ export function AdminTrialCodes() {
   const { data, isLoading, mutate } = useSWR<{ codes: TrialCode[] }>("/api/admin/trial-codes", fetcher)
   const [creating, setCreating] = useState(false)
   const [togglingId, setTogglingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [codeToDelete, setCodeToDelete] = useState<TrialCode | null>(null)
 
   const [newCode, setNewCode] = useState("")
   const [newLabel, setNewLabel] = useState("")
@@ -105,6 +117,26 @@ export function AdminTrialCodes() {
       toast.error(err.message || "Failed to update trial code")
     } finally {
       setTogglingId(null)
+    }
+  }
+
+  const handleDelete = async (code: TrialCode) => {
+    setDeletingId(code.id)
+    try {
+      const response = await fetch(`/api/admin/trial-codes/${code.id}`, {
+        method: "DELETE",
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to delete trial code")
+      }
+      toast.success(`"${code.code}" deleted`)
+      setCodeToDelete(null)
+      mutate()
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete trial code")
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -188,6 +220,7 @@ export function AdminTrialCodes() {
                 <TableHead>Code Expires</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Active</TableHead>
+                <TableHead className="text-right">Delete</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -216,6 +249,22 @@ export function AdminTrialCodes() {
                         onCheckedChange={() => handleToggleActive(code)}
                       />
                     </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-destructive"
+                        disabled={deletingId === code.id}
+                        onClick={() => setCodeToDelete(code)}
+                        aria-label={`Delete trial code ${code.code}`}
+                      >
+                        {deletingId === code.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 )
               })}
@@ -223,6 +272,47 @@ export function AdminTrialCodes() {
           </Table>
         )}
       </CardContent>
+
+      <AlertDialog open={!!codeToDelete} onOpenChange={(open) => !open && setCodeToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete trial code {codeToDelete?.code}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the code so it can no longer be redeemed, and frees up the code string if you
+              want to recreate it with different settings.
+              {codeToDelete && codeToDelete.redemptionCount > 0 ? (
+                <>
+                  {" "}
+                  It has already been redeemed {codeToDelete.redemptionCount}{" "}
+                  {codeToDelete.redemptionCount === 1 ? "time" : "times"}; deleting it won&apos;t affect trials
+                  already granted to those organizations, but the redemption history will be removed.
+                </>
+              ) : null}{" "}
+              This can&apos;t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingId === codeToDelete?.id}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deletingId === codeToDelete?.id}
+              onClick={(e) => {
+                e.preventDefault()
+                if (codeToDelete) handleDelete(codeToDelete)
+              }}
+            >
+              {deletingId === codeToDelete?.id ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete Code"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }

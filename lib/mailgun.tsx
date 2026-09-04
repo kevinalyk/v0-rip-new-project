@@ -460,6 +460,99 @@ Questions? Just reply to this email.
   }
 }
 
+export async function sendTrialEndedEmail(params: {
+  firstName: string
+  email: string
+  organizationName: string
+  clientSlug: string
+  loginUrl?: string
+}): Promise<boolean> {
+  const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
+  const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN
+
+  if (!MAILGUN_API_KEY || !MAILGUN_DOMAIN) {
+    console.error("[Mailgun] Credentials not configured — skipping trial-ended email")
+    return false
+  }
+
+  const { firstName, email, organizationName, clientSlug, loginUrl = "https://app.rip-tool.com/login" } = params
+  const billingUrl = `https://app.rip-tool.com/${clientSlug}/account/billing`
+
+  const html = `
+  <!DOCTYPE html>
+  <html>
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 560px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
+  <div style="background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+  <div style="background: #dc2626; padding: 24px 28px;">
+  <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Inbox.GOP</p>
+  <h1 style="margin: 4px 0 0 0; color: white; font-size: 22px; font-weight: 700;">Your free trial has ended</h1>
+  </div>
+  <div style="padding: 28px;">
+  <p style="margin: 0 0 16px 0; font-size: 15px; color: #1a1a1a;">Hi ${firstName},</p>
+  <p style="margin: 0 0 16px 0; font-size: 15px; color: #1a1a1a;">
+  Your free trial of Inbox.GOP for <strong>${organizationName}</strong> has ended. Your account has been moved to our free Starter plan, which limits access to the last 3 hours of campaigns and basic details.
+  </p>
+  <p style="margin: 0 0 24px 0; font-size: 14px; color: #555;">
+  Subscribe now to keep unlimited users, deeper history, full search and filtering, following entities, analytics, and our inboxing and seed testing tools.
+  </p>
+  <div style="text-align: center; margin-bottom: 28px;">
+  <a href="${billingUrl}" style="display: inline-block; background: #dc2626; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-size: 15px; font-weight: 600;">Subscribe Now</a>
+  </div>
+  <hr style="border: none; border-top: 1px solid #f0f0f0; margin: 0 0 20px 0;" />
+  <p style="margin: 0; font-size: 13px; color: #888; text-align: center;">
+  Questions? Just reply to this email.<br/>
+  <a href="${loginUrl}" style="color: #dc2626; text-decoration: none;">Log in to Inbox.GOP</a>
+  </p>
+  </div>
+  </div>
+  </body>
+  </html>
+  `
+
+  const text = `
+Hi ${firstName},
+
+Your free trial of Inbox.GOP for ${organizationName} has ended. Your account has been moved to our free Starter plan, which limits access to the last 3 hours of campaigns and basic details.
+
+Subscribe now to keep unlimited users, deeper history, full search and filtering, following entities, analytics, and our inboxing and seed testing tools.
+
+Subscribe: ${billingUrl}
+
+Questions? Just reply to this email.
+  `.trim()
+
+  const formData = new FormData()
+  formData.append("from", `Inbox.GOP <inbox@${MAILGUN_DOMAIN}>`)
+  formData.append("to", email)
+  formData.append("h:Reply-To", "kevin@rip-tool.com, ryan@rip-tool.com")
+  formData.append("subject", `Your Inbox.GOP trial has ended`)
+  formData.append("html", html)
+  formData.append("text", text)
+
+  try {
+    const response = await fetch(`https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`api:${MAILGUN_API_KEY}`).toString("base64")}`,
+      },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("[Mailgun] Trial-ended email error:", response.status, errorText)
+      return false
+    }
+
+    console.log("[Mailgun] Trial-ended email sent to:", email)
+    return true
+  } catch (error) {
+    console.error("[Mailgun] Error sending trial-ended email:", error)
+    return false
+  }
+}
+
 export async function sendPasswordResetEmail(email: string, resetToken: string): Promise<boolean> {
   const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
   const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN

@@ -181,6 +181,15 @@ model Client {
   additionalSlackBots    Int       @default(0) // Extra paid Slack bot channels purchased
   stripeSlackBotsItemId  String?   @unique // Subscription item ID for additional Slack bots (si_xxx)
   stripeSlackBotPriceId  String?   // Stripe price ID for additional Slack bots (per-bot, e.g. $50/mo)
+
+  // Free-trial state, set at signup when a valid TrialCode is redeemed. subscriptionPlan is set
+  // to "enterprise" for the duration of the trial (unlimited users/reporting/filters); this field
+  // is what distinguishes a code-redeemed trial from a real paying enterprise customer, and is
+  // what the expire-trials cron checks to know when to revert the client to "free".
+  trialExpiresAt         DateTime?
+  // Flips to false whenever a trial is started or ends, so the "your trial ended, subscribe" popup
+  // shows exactly once on the next login. Has no meaning while trialExpiresAt is null.
+  trialEndedNoticeSeen   Boolean   @default(true)
   
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
@@ -198,8 +207,42 @@ model Client {
   slackIntegration     SlackIntegration?
   slackEntityFilters   SlackEntityFilter[]
   slackChannels        SlackChannel[] // Additional (paid, add-on) Slack bot channels
+  trialCodeRedemption  TrialCodeRedemption?
   
   @@index([totalUsers])
+  @@index([trialExpiresAt])
+}
+
+// A code an admin generates (e.g. "LAUNCH2026") that grants a new signup a time-limited
+// enterprise-equivalent trial. Reusable across unlimited different signups (one redemption per
+// client, enforced by TrialCodeRedemption's unique clientId) until deactivated or expired.
+model TrialCode {
+  id              String    @id @default(uuid())
+  code            String    @unique // e.g. "LAUNCH2026" - matched case-insensitively at signup
+  label           String? // Internal note for admins, e.g. "Spring conference giveaway"
+  trialLengthDays Int       @default(30)
+  active          Boolean   @default(true)
+  expiresAt       DateTime? // Null = no expiration until manually deactivated
+  createdAt       DateTime  @default(now())
+  createdBy       String? // User id of the super_admin who generated it
+
+  redemptions     TrialCodeRedemption[]
+
+  @@index([active])
+}
+
+// One row per client that has redeemed a trial code. The unique clientId enforces "one
+// redemption per client" regardless of how many different codes exist.
+model TrialCodeRedemption {
+  id           String    @id @default(uuid())
+  trialCodeId  String
+  clientId     String    @unique
+  redeemedAt   DateTime  @default(now())
+
+  trialCode    TrialCode @relation(fields: [trialCodeId], references: [id], onDelete: Cascade)
+  client       Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([trialCodeId])
 }
 
 // Company-wide Slack connection for a client. One row per client (never per-user) -
@@ -1036,7 +1079,7 @@ model IpSenderMapping {
   @@index([rdapChecked])
 }
 
-// ─── Who's Contacting Me? ��� public lookup tool ────────────────────────────────
+// ─── Who's Contacting Me? ��� public lookup tool ���───────────────────────────────
 
 model LookupSearch {
   id        String   @id @default(cuid())

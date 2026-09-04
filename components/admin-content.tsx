@@ -11,6 +11,7 @@ import { CompetitiveInsightsDetectionDialog } from "@/components/competitive-ins
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
+import { AdminTrialCodes } from "@/components/admin-trial-codes"
 
 // Define AdminContentProps if it's not defined elsewhere
 interface AdminContentProps {
@@ -1891,6 +1892,9 @@ const downloadActBluePatterns = () => {
   <h2 className="text-2xl font-bold">Admin Tools</h2>
   <p className="text-muted-foreground">Administrative tools and utilities</p>
   </div>
+
+  {/* Trial Codes */}
+  <AdminTrialCodes />
 
   {/* Message Stats Chart */}
   <Card>

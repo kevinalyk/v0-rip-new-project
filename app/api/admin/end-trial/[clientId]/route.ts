@@ -14,7 +14,8 @@ export async function POST(
 
     const { clientId } = params
 
-    // Verify the client exists and is actually a trial (non-free plan, no Stripe)
+    // Verify the client exists and is actually a trial (either a code-redeemed trial with
+    // trialExpiresAt set, or the older heuristic of a non-free plan with no Stripe billing)
     const client = await prisma.client.findUnique({
       where: { id: clientId },
       select: {
@@ -23,6 +24,7 @@ export async function POST(
         subscriptionPlan: true,
         stripeCustomerId: true,
         stripeSubscriptionId: true,
+        trialExpiresAt: true,
       },
     })
 
@@ -31,9 +33,8 @@ export async function POST(
     }
 
     const isTrial =
-      client.subscriptionPlan !== "free" &&
-      !client.stripeCustomerId &&
-      !client.stripeSubscriptionId
+      client.trialExpiresAt !== null ||
+      (client.subscriptionPlan !== "free" && !client.stripeCustomerId && !client.stripeSubscriptionId)
 
     if (!isTrial) {
       return NextResponse.json(
@@ -42,8 +43,10 @@ export async function POST(
       )
     }
 
-    // Reset to free: clear plan, CI access, and raise volume limits back to default.
-    // Users are intentionally left untouched.
+    // Reset to free: clear plan, CI access, trial state, and raise volume limits back to
+    // default. trialEndedNoticeSeen is set to false so the "trial ended" popup shows once on
+    // the next login, same as when a trial expires naturally via the cron. Users are
+    // intentionally left untouched.
     await prisma.client.update({
       where: { id: clientId },
       data: {
@@ -54,6 +57,8 @@ export async function POST(
         subscriptionRenewDate: null,
         subscriptionStatus: "active",
         cancelAtPeriodEnd: false,
+        trialExpiresAt: null,
+        trialEndedNoticeSeen: false,
       },
     })
 

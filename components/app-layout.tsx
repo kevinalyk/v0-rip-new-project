@@ -7,6 +7,7 @@ import { Menu, X } from "lucide-react"
 import { Sidebar } from "@/components/sidebar"
 import { Button } from "@/components/ui/button"
 import { Logo } from "@/components/logo"
+import { TrialStatusBanner } from "@/components/trial-status-banner"
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -73,6 +74,8 @@ function AppLayout({ children, clientSlug, isAdminView = false, defaultCollapsed
             {mobileOpen ? <X size={22} /> : <Menu size={22} />}
           </Button>
         </header>
+
+        {!isAdminView && <TrialStatusBanner />}
 
         <main className="flex-1 overflow-auto">
           {children}

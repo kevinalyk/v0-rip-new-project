@@ -97,6 +97,8 @@ export async function GET(request: Request) {
             id: true,
             name: true,
             slug: true,
+            trialExpiresAt: true,
+            trialEndedNoticeSeen: true,
           },
         },
       },
@@ -123,7 +125,9 @@ export async function GET(request: Request) {
       city,
     })
     
-    return NextResponse.json(user)
+    // currentUser.iat is the JWT "issued at" claim — a fresh value minted on every login — used
+    // client-side as a per-login session id to control the dismissible trial banner.
+    return NextResponse.json({ ...user, iat: currentUser.iat })
   } catch (error) {
     console.error("Error fetching current user:", error)
     return NextResponse.json({ error: "Failed to fetch user" }, { status: 500 })

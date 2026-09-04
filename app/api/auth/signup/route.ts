@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { clientName, firstName, lastName, email, password, _hp, _ts } = body
+    const { clientName, firstName, lastName, email, password, trialCode, _hp, _ts } = body
 
     if (_hp) {
       return NextResponse.json({ error: "Invalid submission" }, { status: 400 })
@@ -136,6 +136,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validate the trial code (optional field) up front, before the transaction, so a bad code
+    // fails fast with a clear message instead of rolling back a half-created account.
+    let matchedTrialCode: { id: string; trialLengthDays: number } | null = null
+    if (trialCode && typeof trialCode === "string" && trialCode.trim().length > 0) {
+      const codeRow = await prisma.trialCode.findFirst({
+        where: { code: { equals: trialCode.trim(), mode: "insensitive" } },
+      })
+
+      if (!codeRow) {
+        return NextResponse.json({ error: "That trial code isn't valid." }, { status: 400 })
+      }
+      if (!codeRow.active) {
+        return NextResponse.json({ error: "That trial code is no longer active." }, { status: 400 })
+      }
+      if (codeRow.expiresAt && codeRow.expiresAt < new Date()) {
+        return NextResponse.json({ error: "That trial code has expired." }, { status: 400 })
+      }
+
+      matchedTrialCode = { id: codeRow.id, trialLengthDays: codeRow.trialLengthDays }
+    }
+
     // Generate description
     const createdDate = new Date().toLocaleDateString("en-US", {
       month: "2-digit",
@@ -149,7 +170,10 @@ export async function POST(request: NextRequest) {
 
     // Create client and user in a transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Create client
+      // Create client. When a valid trial code was supplied, grant enterprise-equivalent limits
+      // for the trial length — unlimited users, all reporting, all filters — same as a paying
+      // enterprise customer. trialExpiresAt is what marks this as a trial (vs. a real enterprise
+      // account) and what the expire-trials cron checks.
       const client = await tx.client.create({
         data: {
           id: clientId,
@@ -158,8 +182,22 @@ export async function POST(request: NextRequest) {
           description,
           active: true,
           dataRetentionDays: 90,
+          ...(matchedTrialCode
+            ? {
+                subscriptionPlan: "enterprise",
+                trialExpiresAt: new Date(Date.now() + matchedTrialCode.trialLengthDays * 24 * 60 * 60 * 1000),
+              }
+            : {}),
         },
       })
+
+      // Record the redemption so this client (and this code, indirectly) can't be reused —
+      // TrialCodeRedemption.clientId is unique, enforcing one redemption per client.
+      if (matchedTrialCode) {
+        await tx.trialCodeRedemption.create({
+          data: { trialCodeId: matchedTrialCode.id, clientId: client.id },
+        })
+      }
 
       // Create user
       const user = await tx.user.create({
@@ -184,7 +222,7 @@ export async function POST(request: NextRequest) {
       lastName,
       email,
       organizationName: result.client.name,
-      plan: "Free Trial",
+      plan: matchedTrialCode ? `${matchedTrialCode.trialLengthDays}-Day Free Trial (All Features)` : "Free Trial",
       loginUrl: "https://app.rip-tool.com/login",
     }).catch((err) => console.error("[Signup] Welcome email failed:", err))
 

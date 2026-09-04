@@ -25,6 +25,7 @@ export default function SignupPage() {
     confirmPassword: "",
     agreeToTerms: false,
     agreeToPrivacy: false,
+    trialCode: "",
     website: "",
   })
   const [showPassword, setShowPassword] = useState(false)
@@ -115,6 +116,7 @@ export default function SignupPage() {
           lastName: formData.lastName,
           email: formData.email,
           password: formData.password,
+          trialCode: formData.trialCode.trim() || undefined,
           _hp: formData.website,
           _ts: loadTime,
         }),
@@ -263,6 +265,24 @@ export default function SignupPage() {
                   {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="trialCode">
+                Trial Code <span className="text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Input
+                id="trialCode"
+                type="text"
+                placeholder="Have a code? Enter it here"
+                value={formData.trialCode}
+                onChange={(e) => setFormData({ ...formData, trialCode: e.target.value })}
+                className="uppercase placeholder:normal-case"
+                autoCapitalize="characters"
+              />
+              <p className="text-xs text-muted-foreground">
+                Get a free full-featured trial with unlimited users, reporting, and filters.
+              </p>
             </div>
 
             <div className="space-y-3 pt-2">

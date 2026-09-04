@@ -476,6 +476,10 @@ export async function runDomainHealthScan(
   correctedAt: email.correctedToInbox ? new Date() : null,
   emailPreview: email.emailPreview ?? null,
   rawHeadersSnippet: email.rawHeadersSnippet ?? null,
+  // Frozen at ingestion — reflects this domain's googleVerified status right now, never
+  // updated later even if the domain's status changes (needed for a clean before/after
+  // Sept 8 comparison in reports).
+  googleVerifiedSnapshot: clientDomain.googleVerified,
   },
   })
       if (email.messageId) existingMessageIds.add(email.messageId)

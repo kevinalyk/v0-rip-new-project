@@ -38,6 +38,7 @@ export async function GET(request: Request) {
         createdAt: true,
         googleVerified: true,
         googleVerifiedAt: true,
+        manualCheckVerifications: true,
         submittedBy: { select: { firstName: true, lastName: true, email: true } },
       },
     })

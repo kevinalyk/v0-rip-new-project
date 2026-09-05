@@ -387,6 +387,10 @@ model SlackIntegration {
   googleVerified         Boolean   @default(false)
   googleVerifiedAt       DateTime?
   googleVerifiedByUserId String?
+  // Self-reported verification for Domain Health checks we cannot fully automate yet
+  // (e.g. "Unsubscribe Honored Within 2 Days", "Spam Rate Below 0.10%").
+  // { [checkId]: { verifiedAt: ISOString, verifiedByUserId: string, verifiedByEmail: string } }
+  manualCheckVerifications Json    @default("{}")
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 

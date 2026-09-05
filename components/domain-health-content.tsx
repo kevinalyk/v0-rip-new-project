@@ -57,7 +57,9 @@ function decodeMimeSubject(subject: string | null): string {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type CheckStatus = "pass" | "fail" | "manual"
+// "verified" = a check we can't fully automate yet, that a human has self-reported as reviewed.
+// It renders like a pass but is never counted toward the automated score.
+type CheckStatus = "pass" | "fail" | "manual" | "verified"
 type Category = "Authentication" | "Google Bulk Sender Rules" | "Sender Practices" | "Sender Identity"
 
 interface EmailSample {
@@ -81,6 +83,10 @@ interface DomainCheck {
   currentState?: string
   fix?: string[]
   manualSteps?: string[]
+  // True only for checks we genuinely cannot automate (need a real Postmaster Tools account or
+  // an actual unsubscribe test cycle) — shows a working "Mark as verified" control. Every other
+  // "manual" check is just a temporary "no data yet" state and gets no button.
+  selfVerifiable?: boolean
 }
 
 
@@ -150,6 +156,10 @@ const CHECKS: DomainCheck[] = [
       "Contact your sending IP provider or ESP and request a PTR record be set for your sending IPs.",
       "Ensure the hostname in the PTR record has a forward DNS A record pointing back to the same IP.",
     ],
+    manualSteps: [
+      "We couldn't extract a sending IP from any of your recent email headers.",
+      "Run another scan once more sample emails have come in through your seed inboxes or CI feed.",
+    ],
   },
   {
     id: "tls",
@@ -172,6 +182,20 @@ const CHECKS: DomainCheck[] = [
       "Verify your sending platform or MTA supports ARC signing.",
       "If using Google Workspace or Microsoft 365, ARC is typically handled automatically.",
       "For custom MTAs (Postfix, Exim), install and configure an ARC signing library.",
+    ],
+  },
+  {
+    id: "valid_message_id",
+    category: "Authentication",
+    name: "Valid Message-ID Header",
+    summary: "Every email includes a properly formatted Message-ID header.",
+    why: "A missing or malformed Message-ID header is a common signal of a poorly configured or spoofed mail system. Gmail and most receiving servers expect a valid RFC 5322 Message-ID (<local@domain>) on every message.",
+    fix: [
+      "Confirm your sending platform generates a unique Message-ID for every outbound email.",
+      "If using a custom MTA, ensure it follows the RFC 5322 <local@domain> format rather than omitting the header.",
+    ],
+    manualSteps: [
+      "No email samples yet — assign seed inboxes or wait for CI data to run this check automatically.",
     ],
   },
   // Google Bulk Sender Rules
@@ -206,6 +230,7 @@ const CHECKS: DomainCheck[] = [
     name: "Unsubscribe Honored Within 2 Days",
     summary: "Opt-outs must be processed within 2 business days.",
     why: "Google's bulk sender policy requires that unsubscribe requests be honored within two business days. Continued sending to opted-out recipients damages your domain reputation and is a CAN-SPAM violation.",
+    selfVerifiable: true,
     manualSteps: [
       "Log in to your list management platform and check how quickly suppression is applied.",
       "Run a test: opt out a test address and verify it is suppressed within 48 hours.",
@@ -218,6 +243,7 @@ const CHECKS: DomainCheck[] = [
     name: "Spam Rate Below 0.10%",
     summary: "Gmail requires spam rate stays under 0.10%.",
     why: "Google requires that your domain's spam rate stay below 0.10% as measured in Google Postmaster Tools. Sustained rates above 0.30% will cause Gmail to block all mail from your domain.",
+    selfVerifiable: true,
     manualSteps: [
       "Sign up for Google Postmaster Tools at postmaster.google.com.",
       "Add and verify your sending domain.",
@@ -227,24 +253,62 @@ const CHECKS: DomainCheck[] = [
   },
   // Sender Practices
   {
-    id: "ip_rep",
-    category: "Sender Practices",
-    name: "IP Reputation",
-    summary: "Sending IPs should have a good reputation score.",
-    why: "Google Postmaster Tools tracks the reputation of your sending IPs separately from your domain reputation. Low IP reputation — even with a clean domain — will cause inbox placement to drop significantly.",
-    manualSteps: [
-      "Sign up for Google Postmaster Tools at postmaster.google.com.",
-      "Navigate to IP Reputation and check your sending IPs.",
-      "If reputation is Low or Bad, investigate recent sending activity for spam-like patterns.",
-      "Consider warming up new IPs gradually before high-volume sends.",
-    ],
-  },
-  {
     id: "from_domain",
     category: "Sender Practices",
     name: "Consistent From Domain",
-    summary: "All senders use the same root domain in the From: address.",
+    summary: "Every observed email is actually sent from this domain.",
     why: "Sending from multiple inconsistent domains or switching domains frequently confuses spam filters and prevents your domain from building a reputation history with Gmail.",
+    currentState: "We extract the real address from each email's From: header and compare its domain against this domain — exact match or a subdomain of it counts as consistent.",
+    fix: [
+      "Confirm every sending platform and campaign is configured to send from this exact domain (or a subdomain of it).",
+      "If you recently migrated senders, check for legacy templates still pointing at an old domain.",
+    ],
+    manualSteps: [
+      "No email samples yet — assign seed inboxes or wait for CI data to run this check automatically.",
+    ],
+  },
+  {
+    id: "no_fake_reply",
+    category: "Sender Practices",
+    name: "No Fake Reply/Forward Prefixes",
+    summary: "Re:/Fwd: subjects only used on an actual reply thread.",
+    why: "Using \"Re:\" or \"Fwd:\" to disguise a cold marketing email as a personal reply and boost open rates is a deceptive practice Gmail explicitly filters for.",
+    currentState: "If the subject starts with Re:/Fwd:/Fw:, we check for a matching In-Reply-To or References header proving it's a real reply.",
+    fix: [
+      "Only use Re:/Fwd: prefixes on emails that are genuinely part of a reply or forward thread.",
+      "Ensure your sending platform includes In-Reply-To and References headers on real replies.",
+    ],
+    manualSteps: [
+      "No email samples yet — assign seed inboxes or wait for CI data to run this check automatically.",
+    ],
+  },
+  {
+    id: "valid_from_to",
+    category: "Sender Practices",
+    name: "Valid From/To Address Format",
+    summary: "From and To headers use properly formatted email addresses.",
+    why: "Malformed From or To addresses are often a symptom of a broken or misconfigured sending pipeline, and can cause messages to be rejected outright by receiving servers before spam filtering even applies.",
+    fix: [
+      "Confirm your sending platform validates email addresses before sending.",
+      "Check for template bugs that could produce a malformed From or To address.",
+    ],
+    manualSteps: [
+      "No email samples yet — assign seed inboxes or wait for CI data to run this check automatically.",
+    ],
+  },
+  {
+    id: "no_hidden_content",
+    category: "Sender Practices",
+    name: "No Hidden Content",
+    summary: "No display:none, visibility:hidden, or white-on-white text.",
+    why: "Hiding text via CSS (display:none, 0px font size, white-on-white color) is a classic technique for keyword stuffing or cloaking links from spam filters. Its presence is one of the strongest per-message spam signals Gmail checks for.",
+    fix: [
+      "Remove any hidden text, links, or tracking pixels relying on display:none, visibility:hidden, font-size:0, or white-on-white styling.",
+      "Audit third-party templates or plugins that may be injecting hidden content without your knowledge.",
+    ],
+    manualSteps: [
+      "No email samples yet — assign seed inboxes or wait for CI data to run this check automatically.",
+    ],
   },
   // Sender Identity
   {
@@ -253,6 +317,15 @@ const CHECKS: DomainCheck[] = [
     name: "Display Name Audit",
     summary: "Sender display names follow best practices.",
     why: "Gmail uses display names as a spam signal. Names using urgency language ('URGENT', 'ACTION REQUIRED'), all caps, or names that don't match the registered organization often trigger spam classification. Consistent, recognizable display names improve inbox placement.",
+    currentState: "Checks each display name for subject-line stuffing, embedding the recipient's name, reply-thread patterns like \"(2)\", and deceptive emojis.",
+    fix: [
+      "Use a consistent, recognizable organization or candidate name as the display name.",
+      "Remove urgency language, all-caps text, or emojis from the display name.",
+      "Avoid embedding the recipient's name or reply-thread markers like \"(2)\" in the display name.",
+    ],
+    manualSteps: [
+      "No email samples yet — assign seed inboxes or wait for CI data to run this check automatically.",
+    ],
   },
   {
     id: "display_name",
@@ -260,10 +333,13 @@ const CHECKS: DomainCheck[] = [
     name: "No Gmail Impersonation",
     summary: "Display name does not impersonate Gmail or Google.",
     why: "Using display names that impersonate Gmail, Google, or other mail providers is a hard policy violation and will result in immediate filtering. Gmail also watches for names that impersonate government agencies or financial institutions.",
+    currentState: "Checks whether any observed display name includes \"@gmail.com\".",
+    fix: [
+      "Remove any reference to Gmail, Google, or other mail providers from your display name.",
+      "Check your email templates and sending platform for any deprecated sender profiles using these names.",
+    ],
     manualSteps: [
-      "Review the display names observed above and confirm none include 'Gmail', 'Google', 'IRS', 'Federal', or similar.",
-      "Check your email templates and sending platform for any deprecated sender profiles.",
-      "Mark as verified once you have confirmed no impersonation is in use.",
+      "No email samples yet — assign seed inboxes or wait for CI data to run this check automatically.",
     ],
   },
 ]
@@ -281,7 +357,7 @@ function gradeFor(pct: number) {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function StatusIcon({ status, size = 22 }: { status: CheckStatus; size?: number }) {
-  if (status === "pass") {
+  if (status === "pass" || status === "verified") {
     return (
       <div className="rounded-full flex items-center justify-center flex-shrink-0" style={{ width: size, height: size, background: "#16a34a1a" }}>
         <Check size={size * 0.5} strokeWidth={3} className="text-green-700" />
@@ -310,6 +386,10 @@ function CheckRow({
   isFirst,
   forceOpen,
   onToggle,
+  verifiedAt,
+  verifiedByEmail,
+  verifying,
+  onMarkVerified,
 }: {
   check: DomainCheck
   status: CheckStatus
@@ -317,11 +397,17 @@ function CheckRow({
   isFirst: boolean
   forceOpen?: boolean
   onToggle?: (id: string, next: boolean) => void
+  verifiedAt?: string
+  verifiedByEmail?: string
+  verifying?: boolean
+  onMarkVerified?: (id: string, verified: boolean) => void
 }) {
   const [open, setOpen] = useState(false)
   const isOpen = forceOpen !== undefined ? forceOpen : open
   const showFix = status === "fail" && check.fix
   const showManual = status === "manual" && check.manualSteps
+  const showVerifyButton = status === "manual" && check.selfVerifiable
+  const showVerifiedInfo = status === "verified"
   const stateLabel = status === "manual" ? "What we can see" : "Current state"
 
   return (
@@ -344,6 +430,9 @@ function CheckRow({
             {status === "manual" && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-500 font-medium tracking-wide">REVIEW</span>
             )}
+            {status === "verified" && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 font-medium tracking-wide">SELF-VERIFIED</span>
+            )}
           </div>
           <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{check.summary}</div>
         </div>
@@ -365,6 +454,13 @@ function CheckRow({
               </div>
             )}
 
+            {showVerifiedInfo && (
+              <div className="text-xs text-emerald-600 bg-emerald-500/8 border border-emerald-500/20 rounded-lg px-3 py-2.5 leading-relaxed">
+                Self-verified{verifiedByEmail ? ` by ${verifiedByEmail}` : ""}
+                {verifiedAt ? ` on ${new Date(verifiedAt).toLocaleDateString()}` : ""}. This does not count toward the automated score above.
+              </div>
+            )}
+
             <div>
               <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium mb-1.5">Why this matters</div>
               <p className="text-sm text-foreground/80 leading-relaxed">{check.why}</p>
@@ -378,24 +474,41 @@ function CheckRow({
                     <li key={i} className="text-sm text-foreground/80 leading-relaxed">{step}</li>
                   ))}
                 </ol>
-                <button className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium bg-foreground text-background px-3 py-1.5 rounded hover:opacity-80 transition-opacity">
-                  Open guided setup <ChevronRight size={11} />
-                </button>
               </div>
             )}
 
             {showManual && (
               <div>
-                <div className="text-[10px] uppercase tracking-widest text-amber-500 font-medium mb-1.5">How to verify yourself</div>
+                <div className="text-[10px] uppercase tracking-widest text-amber-500 font-medium mb-1.5">
+                  {showVerifyButton ? "How to verify yourself" : "What's missing"}
+                </div>
                 <ol className="list-decimal list-inside space-y-1.5">
                   {check.manualSteps!.map((step, i) => (
                     <li key={i} className="text-sm text-foreground/80 leading-relaxed">{step}</li>
                   ))}
                 </ol>
-                <button className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium bg-amber-600 text-white px-3 py-1.5 rounded hover:bg-amber-700 transition-colors">
-                  Mark as verified <Check size={11} />
-                </button>
+                {showVerifyButton && (
+                  <button
+                    onClick={() => onMarkVerified?.(check.id, true)}
+                    disabled={verifying}
+                    className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium bg-amber-600 text-white px-3 py-1.5 rounded hover:bg-amber-700 transition-colors disabled:opacity-50"
+                  >
+                    {verifying ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                    Mark as verified
+                  </button>
+                )}
               </div>
+            )}
+
+            {showVerifiedInfo && check.selfVerifiable && (
+              <button
+                onClick={() => onMarkVerified?.(check.id, false)}
+                disabled={verifying}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              >
+                {verifying ? <Loader2 size={11} className="animate-spin" /> : null}
+                Undo verification
+              </button>
             )}
           </div>
         </div>
@@ -418,6 +531,9 @@ function CategorySection({
   values,
   openCheckId,
   onCheckToggle,
+  manualVerifications,
+  verifyingCheckId,
+  onMarkVerified,
 }: {
   category: Category
   checks: DomainCheck[]
@@ -425,6 +541,9 @@ function CategorySection({
   values: Record<string, string>
   openCheckId: string | null
   onCheckToggle: (id: string, next: boolean) => void
+  manualVerifications: Record<string, { verifiedAt: string; verifiedByEmail?: string }>
+  verifyingCheckId: string | null
+  onMarkVerified: (id: string, verified: boolean) => void
 }) {
   const fails = checks.filter((c) => statuses[c.id] === "fail").length
   const manuals = checks.filter((c) => statuses[c.id] === "manual").length
@@ -451,6 +570,10 @@ function CategorySection({
                 isFirst={i === 0}
                 forceOpen={openCheckId === check.id ? true : undefined}
                 onToggle={onCheckToggle}
+                verifiedAt={manualVerifications[check.id]?.verifiedAt}
+                verifiedByEmail={manualVerifications[check.id]?.verifiedByEmail}
+                verifying={verifyingCheckId === check.id}
+                onMarkVerified={onMarkVerified}
               />
         ))}
       </div>
@@ -470,6 +593,7 @@ interface ClientDomainRecord {
   createdAt: string
   googleVerified: boolean
   googleVerifiedAt: string | null
+  manualCheckVerifications?: Record<string, { verifiedAt: string; verifiedByEmail?: string }>
 }
 
 // ─── Add Domain Modal ─────────────────────────────────────────────────────────
@@ -789,7 +913,7 @@ export function DomainHealthContent({ clientSlug }: { clientSlug?: string }) {
   const [activeTab, setActiveTab] = useState<"report" | "samples">("report")
 
   // Per-status cursors for cycling through issues
-  const cursors = useRef<Record<CheckStatus, number>>({ pass: 0, fail: 0, manual: 0 })
+  const cursors = useRef<Record<CheckStatus, number>>({ pass: 0, fail: 0, manual: 0, verified: 0 })
 
   // Fetch real domains from API — re-run when clientSlug changes (super_admin impersonation)
   useEffect(() => {
@@ -837,6 +961,8 @@ export function DomainHealthContent({ clientSlug }: { clientSlug?: string }) {
   // True only when a domain is selected AND real scan results exist
   const hasData = !!selectedDomainId && Object.keys(scanResults).length > 0
 
+  const manualVerifications = selectedRecord?.manualCheckVerifications ?? {}
+
   // Build statuses/values only from real scan results — no default fallbacks
   const statuses: Record<string, CheckStatus> = {}
   const values: Record<string, string> = {}
@@ -849,9 +975,15 @@ export function DomainHealthContent({ clientSlug }: { clientSlug?: string }) {
     for (const check of CHECKS) {
       if (!(check.id in statuses)) statuses[check.id] = "manual"
     }
+    // A check that is still "manual" but has been self-reported as reviewed renders as
+    // "verified" — never overrides a real pass/fail, and never counts toward the score below.
+    for (const [checkId, status] of Object.entries(statuses)) {
+      if (status === "manual" && manualVerifications[checkId]) statuses[checkId] = "verified"
+    }
   }
 
-  const autoChecks = hasData ? CHECKS.filter((c) => statuses[c.id] !== "manual") : []
+  // "verified" is deliberately excluded here too — self-reported checks never affect the score.
+  const autoChecks = hasData ? CHECKS.filter((c) => statuses[c.id] !== "manual" && statuses[c.id] !== "verified") : []
   const pass = autoChecks.filter((c) => statuses[c.id] === "pass").length
   const fail = autoChecks.filter((c) => statuses[c.id] === "fail").length
   const manual = hasData ? CHECKS.filter((c) => statuses[c.id] === "manual").length : 0
@@ -862,7 +994,7 @@ export function DomainHealthContent({ clientSlug }: { clientSlug?: string }) {
 
   // Reset cursors when domain changes
   useEffect(() => {
-    cursors.current = { pass: 0, fail: 0, manual: 0 }
+    cursors.current = { pass: 0, fail: 0, manual: 0, verified: 0 }
     setOpenCheckId(null)
   }, [selectedDomain])
 
@@ -963,6 +1095,34 @@ export function DomainHealthContent({ clientSlug }: { clientSlug?: string }) {
       )
     } finally {
       setTogglingGoogleVerified(false)
+    }
+  }
+
+  const [verifyingCheckId, setVerifyingCheckId] = useState<string | null>(null)
+
+  async function handleMarkVerified(checkId: string, verified: boolean) {
+    if (!selectedRecord) return
+    setVerifyingCheckId(checkId)
+    try {
+      const res = await fetch(`/api/client-domains/${selectedRecord.id}/manual-checks`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ checkId, verified, ...(clientSlug ? { clientSlug } : {}) }),
+      })
+      if (!res.ok) throw new Error("Failed to update")
+      const data = await res.json()
+      setClientDomains((prev) =>
+        prev.map((d) =>
+          d.id === selectedRecord.id
+            ? { ...d, manualCheckVerifications: data.manualCheckVerifications }
+            : d
+        )
+      )
+    } catch (err) {
+      console.error("[domain-health] manual-check verify error", err)
+    } finally {
+      setVerifyingCheckId(null)
     }
   }
 
@@ -1299,6 +1459,9 @@ export function DomainHealthContent({ clientSlug }: { clientSlug?: string }) {
           onCheckToggle={(id, next) => {
             if (!next && id === openCheckId) setOpenCheckId(null)
           }}
+          manualVerifications={manualVerifications}
+          verifyingCheckId={verifyingCheckId}
+          onMarkVerified={handleMarkVerified}
         />
       ))}
 

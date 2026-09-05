@@ -18,10 +18,13 @@ import { checkEmailCompliance } from "@/lib/email-compliance-checker"
 import { fetchOutlookEmails, shouldUseGraphAPI, moveOutlookMessageToInbox } from "@/lib/microsoft-graph"
 import { decrypt } from "@/lib/encryption"
 import { getServerSettings } from "@/lib/email-connection"
+import { lookupReverseDns } from "@/lib/ip-sender-utils"
 import * as Imap from "node-imap"
 import dns from "dns/promises"
 
-// Header-derived checks (require email samples)
+// Header-derived checks (require email samples). `from_domain` is intentionally NOT here —
+// it's computed separately below because it needs the domain being scanned, not just the
+// compliance result (see the per-email loop in runDomainHealthScan).
 const HEADER_CHECK_MAP: Record<string, (r: any) => boolean> = {
   spf:               (r) => r.hasSpf,
   dkim:              (r) => r.hasDkim,
@@ -30,11 +33,13 @@ const HEADER_CHECK_MAP: Record<string, (r: any) => boolean> = {
   tls:               (r) => r.hasTls,
   one_click_unsub:   (r) => r.hasOneClickUnsubscribeHeaders,
   unsub_link:        (r) => r.hasUnsubscribeLinkInBody,
-  from_domain:       (r) => r.hasSingleFromAddress,
   no_fake_reply:     (r) => r.noFakeReplyPrefix,
   valid_from_to:     (r) => r.hasValidFromTo,
   no_hidden_content: (r) => r.noHiddenContent,
-  display_name:      (r) => r.displayNameClean,
+  // "No Gmail Impersonation" — does the display name claim to be @gmail.com.
+  display_name:      (r) => r.displayNameNotGmail,
+  // "Display Name Audit" — the other display-name quality signals bundled together.
+  sender_name:       (r) => r.displayNameClean && r.displayNameNoRecipient && r.displayNameNoReplyPattern && r.displayNameNoDeceptiveEmojis,
   arc:               (r) => r.hasArcHeaders,
   valid_message_id:  (r) => r.hasValidMessageId,
 }
@@ -42,9 +47,71 @@ const HEADER_CHECK_MAP: Record<string, (r: any) => boolean> = {
 // Header-only checks — marked manual if no samples found
 const HEADER_ONLY_CHECKS = [
   "tls", "one_click_unsub", "unsub_link", "from_domain", "no_fake_reply",
-  "valid_from_to", "no_hidden_content", "display_name", "arc",
-  "valid_message_id", "dkim", "dmarc_align", "rdns",
+  "valid_from_to", "no_hidden_content", "display_name", "sender_name", "arc",
+  "valid_message_id", "dkim", "dmarc_align",
 ] as const
+
+/** Pulls a bare email address out of a raw "From:" header value like
+ *  `"Jane Doe" <jane@example.com>` — falls back to the input if no angle brackets found. */
+function extractBareEmail(fromLine: string): string {
+  if (!fromLine) return ""
+  const angleMatch = fromLine.match(/<([^>]+)>/)
+  if (angleMatch) return angleMatch[1].trim()
+  const bareMatch = fromLine.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
+  return bareMatch ? bareMatch[0].trim() : fromLine.trim()
+}
+
+/** Extracts the IP Gmail/the receiving MTA recorded as the actual sending IP, preferring the
+ *  `client-ip=` value that Authentication-Results / Received-SPF headers stamp, and falling
+ *  back to the first bracketed IPv4 address in a Received: header. */
+function extractSendingIp(rawHeaders: string): string | null {
+  const clientIpMatch = rawHeaders.match(/client-ip=(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/i)
+  if (clientIpMatch) return clientIpMatch[1]
+  const receivedIpMatch = rawHeaders.match(/^received:[^\n]*\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]/im)
+  if (receivedIpMatch) return receivedIpMatch[1]
+  return null
+}
+
+/** Reverse-DNS (PTR) check — pulls the actual sending IP out of a handful of real email
+ *  samples and confirms it resolves to a hostname via Google's DNS-over-HTTPS. Replaces the
+ *  old "self-verify in Postmaster Tools" manual step with a real automated check. */
+async function computeRdnsCheck(
+  emails: ParsedEmail[],
+): Promise<{ status: "pass" | "fail" | "manual"; value: string; note: string }> {
+  const ips = new Set<string>()
+  for (const email of emails) {
+    const ip = extractSendingIp(email.rawHeaders)
+    if (ip) ips.add(ip)
+    if (ips.size >= 5) break
+  }
+
+  if (ips.size === 0) {
+    return {
+      status: "manual",
+      value: "",
+      note: "Could not extract a sending IP from any email headers — insufficient data for a reverse DNS check.",
+    }
+  }
+
+  const lookups = await Promise.all(
+    Array.from(ips).map(async (ip) => ({ ip, ptr: await lookupReverseDns(ip).catch(() => null) })),
+  )
+  const resolved = lookups.filter((r) => r.ptr)
+
+  if (resolved.length > 0) {
+    return {
+      status: "pass",
+      value: resolved.map((r) => `${r.ip} → ${r.ptr}`).join(", "),
+      note: `${resolved.length}/${lookups.length} sending IP(s) have a valid PTR record.`,
+    }
+  }
+
+  return {
+    status: "fail",
+    value: lookups.map((r) => r.ip).join(", "),
+    note: `None of ${lookups.length} sending IP(s) resolved to a hostname via reverse DNS.`,
+  }
+}
 
 interface ParsedEmail {
   rawHeaders: string
@@ -445,8 +512,12 @@ export async function runDomainHealthScan(
 
     let checks: Record<string, boolean> = {}
     try {
+      // email.fromAddress is the raw "From:" header line for IMAP/Graph-sourced samples
+      // (e.g. `Jane Doe for Congress <digest@rip-tool.com>`) — extract the bare address first,
+      // otherwise every regex-based check below silently fails on the display name/brackets.
+      const bareEmail = extractBareEmail(email.fromAddress)
       const compliance = checkEmailCompliance({
-        senderEmail: email.fromAddress,
+        senderEmail: bareEmail,
         senderName: "",
         subject: email.subject,
         rawHeaders: email.rawHeaders,
@@ -455,6 +526,13 @@ export async function runDomainHealthScan(
       for (const [checkId, getFn] of Object.entries(HEADER_CHECK_MAP)) {
         checks[checkId] = getFn(compliance)
       }
+
+      // "Consistent From Domain" — does this email's actual sender domain match the domain
+      // being scanned (allowing legitimate subdomains)? Computed here (not via HEADER_CHECK_MAP)
+      // because it needs `domain`, which checkEmailCompliance has no notion of.
+      const senderDomain = bareEmail.split("@")[1]?.toLowerCase().trim() ?? ""
+      const scannedDomain = domain.toLowerCase()
+      checks["from_domain"] = !!senderDomain && (senderDomain === scannedDomain || senderDomain.endsWith(`.${scannedDomain}`))
     } catch (err) {
       console.error(`[domain-health-scanner] compliance check error:`, err)
     }
@@ -496,6 +574,9 @@ export async function runDomainHealthScan(
 
   // Run DNS checks and upsert into DomainHealthDnsResult
   const dnsResults = await runDnsChecks(domain)
+  // Reverse DNS is derived from real email samples (the sending IP), not the domain itself,
+  // but it lives alongside the other DNS-sourced results so it overlays the same way.
+  dnsResults["rdns"] = await computeRdnsCheck(allEmails)
   await prisma.domainHealthDnsResult.upsert({
     where: { clientDomainId },
     create: { clientDomainId, results: dnsResults },

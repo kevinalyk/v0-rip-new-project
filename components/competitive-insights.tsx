@@ -36,6 +36,7 @@ import {
   Loader2,
   Server,
   Pencil,
+  Download,
 } from "lucide-react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -964,6 +965,44 @@ export function CompetitiveInsights({
     } else {
       return `<head><base target="_blank">${noLinkStyle}</head>${html}`
     }
+  }
+
+  // Strips real destination URLs out of a raw email HTML export so a downloaded file can't be
+  // used to recover live donation/tracking links or mailto/tel targets. Sender/personalization
+  // names are already redacted to "[Omitted]" upstream (see lib/redaction-utils.ts) by the time
+  // emailContent reaches the client, so only link destinations need handling here. Uses the same
+  // "[Omitted Link]" placeholder already used for SMS link redaction (see redact-sms-links route)
+  // for consistency across the app.
+  const redactLinksForDownload = (html: string) => {
+    return html
+      // href="https://..." / mailto:... / tel:... → href="[Omitted Link]"
+      .replace(/href\s*=\s*(["'])(?:https?:|mailto:|tel:)[^"']*\1/gi, 'href=$1[Omitted Link]$1')
+      // Any raw URL left in visible text or other attributes (e.g. background="...")
+      .replace(/https?:\/\/[^\s"'<>]+/gi, "[Omitted Link]")
+  }
+
+  const handleDownloadEmailHtml = () => {
+    if (!selectedCampaign?.emailContent) return
+
+    const redactedHtml = redactLinksForDownload(selectedCampaign.emailContent)
+    const blob = new Blob([redactedHtml], { type: "text/html" })
+    const url = URL.createObjectURL(blob)
+
+    const safeSubject =
+      (selectedCampaign.subject || "email")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 60) || "email"
+    const dateStr = new Date(selectedCampaign.dateReceived).toISOString().slice(0, 10)
+
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `${safeSubject}-${dateStr}.html`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   }
 
   const clearDateRange = () => {
@@ -3021,6 +3060,14 @@ export function CompetitiveInsights({
                           <Share2 className="h-4 w-4 mr-2" />
                           {generatingShareLink ? "Generating..." : "Share"}
                         </Button>
+                        {selectedCampaign.type !== "sms" &&
+                          selectedCampaign.emailContent &&
+                          (resolvedPlan === "all" || resolvedPlan === "enterprise" || resolvedUser?.role === "super_admin") && (
+                            <Button variant="outline" size="sm" onClick={handleDownloadEmailHtml}>
+                              <Download className="h-4 w-4 mr-2" />
+                              Download HTML
+                            </Button>
+                          )}
                       </div>
                     </div>
                   </DialogHeader>

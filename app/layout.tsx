@@ -1,5 +1,5 @@
 import type React from "react"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Hanken_Grotesk } from "next/font/google"
 
 import "./globals.css"
@@ -25,6 +25,16 @@ export const metadata: Metadata = {
     shortcut: { url: "/images/IconOnly_Transparent_NoBuffer.png", type: "image/png" },
     apple: { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
   },
+  manifest: "/manifest.webmanifest",
+}
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Lets fixed/sticky headers and footers extend under the iPhone notch/home
+  // indicator while safe-area padding (see .pt-safe/.pb-safe in globals.css)
+  // keeps content clear of it.
+  viewportFit: "cover",
 }
 
 export default function RootLayout({

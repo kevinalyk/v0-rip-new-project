@@ -39,8 +39,30 @@ export async function middleware(request: NextRequest) {
     // against the ApiKey table (see lib/ci-api-auth.ts + withMcpAuth in
     // app/api/mcp/ci-assignment/route.ts), not the cookie-based session used
     // by the rest of the app.
-    request.nextUrl.pathname.startsWith("/api/mcp/ci-assignment")
+    request.nextUrl.pathname.startsWith("/api/mcp/ci-assignment") ||
+    // Mobile API login/refresh — the only two /api/mobile/v1 endpoints reachable
+    // without a bearer access token (see lib/mobile-auth.ts). Every other
+    // /api/mobile/v1/* path is handled by the dedicated branch below, which requires
+    // a syntactically valid Authorization header before letting the request through;
+    // full verification then happens in withMobileAuth inside the route handler.
+    request.nextUrl.pathname === "/api/mobile/v1/auth/login" ||
+    request.nextUrl.pathname === "/api/mobile/v1/auth/refresh"
   ) {
+    return NextResponse.next()
+  }
+
+  // Mobile API (bearer-token auth, no cookies). This is intentionally scoped to
+  // /api/mobile/v1/* only — it does not weaken cookie enforcement for any other
+  // route. Requests without a syntactically valid `Authorization: Bearer <token>`
+  // header are rejected here with a generic 401; requests that do have one are
+  // passed through to the route handler, which performs full cryptographic
+  // verification and a fresh database reload via withMobileAuth before doing
+  // anything with the request (default-deny).
+  if (request.nextUrl.pathname.startsWith("/api/mobile/v1/")) {
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !/^Bearer\s+.+$/i.test(authHeader)) {
+      return NextResponse.json({ error: { code: "MISSING_TOKEN", message: "Unauthorized" } }, { status: 401 })
+    }
     return NextResponse.next()
   }
 

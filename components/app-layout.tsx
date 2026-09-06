@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Menu, X } from "lucide-react"
 import { Sidebar } from "@/components/sidebar"
 import { Button } from "@/components/ui/button"
@@ -21,8 +21,17 @@ function AppLayout({ children, clientSlug, isAdminView = false, defaultCollapsed
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
   const [mobileOpen, setMobileOpen] = useState(false)
 
+  useEffect(() => {
+    if (!mobileOpen) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileOpen(false)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [mobileOpen])
+
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen h-dvh bg-background">
       {/* ── Desktop sidebar — hidden on mobile via its own root class ─ */}
       <Sidebar
         collapsed={collapsed}
@@ -60,7 +69,7 @@ function AppLayout({ children, clientSlug, isAdminView = false, defaultCollapsed
         }`}
       >
         {/* Mobile top bar */}
-        <header className="flex md:hidden items-center gap-3 px-4 py-3 border-b border-border bg-background sticky top-0 z-30">
+        <header className="flex md:hidden items-center gap-3 px-4 py-3 pt-safe border-b border-border bg-background sticky top-0 z-30">
           <Logo collapsed={false} variant="icon" />
           <div className="flex-1 flex items-center justify-center min-w-0">
             <span className="text-foreground font-bold text-xl tracking-tight">Inbox.GOP</span>
@@ -70,6 +79,7 @@ function AppLayout({ children, clientSlug, isAdminView = false, defaultCollapsed
             size="icon"
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
             onClick={() => setMobileOpen((o) => !o)}
+            className="h-11 w-11"
           >
             {mobileOpen ? <X size={22} /> : <Menu size={22} />}
           </Button>

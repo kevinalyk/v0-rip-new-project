@@ -88,9 +88,6 @@ async function main() {
   const userA = await prisma.user.create({
     data: { email: `${PREFIX}user_a@example.com`, password: "hashed", clientId: clientA.id, firstLogin: false },
   })
-  const userFirstLogin = await prisma.user.create({
-    data: { email: `${PREFIX}user_first_login@example.com`, password: "hashed", clientId: clientA.id, firstLogin: true },
-  })
   const userInactiveClient = await prisma.user.create({
     data: { email: `${PREFIX}user_inactive@example.com`, password: "hashed", clientId: clientBInactive.id, firstLogin: false },
   })
@@ -324,10 +321,10 @@ async function main() {
       },
     })
     try {
-      const visibleToOwner = await getFeedItemById(clientA.id, campaign.id, "email")
+      const visibleToOwner = await getFeedItemById(clientA.id, "enterprise", campaign.id, "email")
       assert(visibleToOwner !== null, "owning client should see its own item")
 
-      const visibleToOtherClient = await getFeedItemById(clientBInactive.id, campaign.id, "email")
+      const visibleToOtherClient = await getFeedItemById(clientBInactive.id, "enterprise", campaign.id, "email")
       assert(visibleToOtherClient === null, "a different client must not see another client's item")
     } finally {
       await prisma.competitiveInsightCampaign.delete({ where: { id: campaign.id } })

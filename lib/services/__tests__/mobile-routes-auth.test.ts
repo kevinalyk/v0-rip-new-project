@@ -74,8 +74,14 @@ function main() {
       const exportedMethods = HTTP_METHODS.filter((m) => new RegExp(`export const ${m}\\b`).test(source))
       for (const method of exportedMethods) {
         // Matches `export const GET = withMobileAuth(` or `withMobileAuth<...>(` —
-        // i.e. the handler is bound directly to the wrapper's return value.
-        const wrapped = new RegExp(`export const ${method}\\s*=\\s*withMobileAuth(<[^>]*>)?\\s*\\(`).test(source)
+        // i.e. the handler is bound directly to the wrapper's return value. The type
+        // parameter (e.g. `<{ params: Promise<{ id: string }> }>`) can itself contain
+        // nested `<...>`, so a simple `[^>]*` won't span it; instead we just require
+        // `withMobileAuth` followed — after skipping anything up to the next `(` —
+        // by an open paren, which is what actually matters (that the call is
+        // `withMobileAuth(...)` or `withMobileAuth<...>(...)`, not a bare reference).
+        const afterExport = source.slice(source.indexOf(`export const ${method}`))
+        const wrapped = new RegExp(`export const ${method}\\s*=\\s*withMobileAuth\\b[^(]*\\(`).test(afterExport)
         assert(wrapped, `${method} is exported but is not assigned withMobileAuth(...)`)
       }
     })

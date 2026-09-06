@@ -363,19 +363,26 @@ or "passing" if a future run's exit code or counts differ from what's recorded h
 | --- | --- | --- |
 | `node --version` / `pnpm --version` | 0 | `v24.16.0` / `10.34.3` |
 | `pnpm install --frozen-lockfile` | 0 | resolves `zod@3.25.76` |
+| `npx prisma generate` / `npx prisma validate` | 0 / 0 | client generated, schema valid |
 | `git diff --check origin/main...HEAD` | 0 | clean |
-| `npx prisma generate` | 0 | client generated |
-| `npx prisma validate` | 0 | schema valid |
-| `pnpm run test:mobile-db-preflight` (no DB, no env file) | 0 | 10 passed, 0 failed |
+| `pnpm run test:mobile-db-preflight` (no DB, no env file) | 0 | 11 passed, 0 failed |
 | `pnpm run test:mobile-routes-auth` (no DB) | 0 | 32 passed, 0 failed |
-| Targeted `eslint` on all 29 PR-touched `.ts`/`.tsx`/`.mjs` files | 0 | 0 errors, 0 warnings |
-| Repo-wide `tsc --noEmit` | 2 | 569 errors — all pre-existing except one in `components/sidebar.tsx` (see above), which predates this pass |
-| Repo-wide `pnpm run lint` | 1 | 893 problems (844 errors, 49 warnings) — none in any PR-touched file (verified: no PR-touched path appears as an error/warning file header in the lint output) |
-| `pnpm run build` (with the project's connected dev env vars) | 0 | `✓ Compiled successfully`, all 273 static pages generated, `Finalizing page optimization`; all 12 `/api/mobile/v1/**` routes present in the route manifest |
+| Targeted `eslint` on all 30 PR-touched `.ts`/`.tsx`/`.mjs` files | 0 | 0 errors, 0 warnings |
+| `pnpm run build` (with the project's connected dev env vars) | 0 | `✓ Compiled successfully`, `Finalizing page optimization`; all 12 `/api/mobile/v1/**` routes present in the route manifest |
 | `pnpm run test:mobile-auth` (dev DB, opted in) | 0 | 24 passed, 0 failed |
 | `pnpm run test:mobile-feed` (dev DB, opted in) | 0 | 19 passed, 0 failed |
 | `pnpm run test:mobile-entities` (dev DB, opted in) | 0 | 3 passed, 0 failed |
-| `pnpm run test:mobile` (full chain, dev DB, opted in) | 0 | 88 passed, 0 failed total |
+| `pnpm run test:mobile` (full chain, dev DB, opted in) | 0 | 89 passed, 0 failed total (32 + 11 + 24 + 19 + 3) |
+
+The repo-wide `tsc --noEmit` (569 pre-existing errors, one landing on an unchanged
+context line in `components/sidebar.tsx` — see above) and repo-wide `pnpm run lint`
+(893 pre-existing problems, none in any PR-touched file) rows from the prior revision
+of this table were not rerun for this revision, since this revision's changes are
+confined to `lib/services/__tests__/test-db-preflight.ts`,
+`test-db-preflight.test.ts`, and a comment-only fix in `mobile-feed.test.ts` — none of
+which affect app-code type errors or the pre-existing `scripts/` lint backlog. All
+three of those files do pass targeted ESLint with zero errors/warnings, confirmed
+fresh against this revision's actual head commit (included in the row above).
 
 The DB-backed rows ran with `MOBILE_DB_TESTS_ALLOWED=true` set for that invocation only,
 against the project's connected Neon development database, with `VERCEL_ENV`/`NODE_ENV`
@@ -390,3 +397,11 @@ logging from its concurrent-follow test (see the `MAX_SERIALIZATION_RETRIES` com
 call also appears during `pnpm run build`'s static generation of `/news` — that query
 lives in files this pass never touched and the build still completed successfully end
 to end.
+
+This revision also fixed a ~5-second-per-invocation process-exit delay in
+`assertRealDatabaseOrExit()`: the reachability check's `setTimeout` was never cleared
+after a successful query, keeping the event loop alive needlessly. All three DB-backed
+suites plus the preflight-guard unit suite now complete and exit within ~11 seconds
+combined (measured with `time pnpm run test:mobile`), versus what would otherwise be
+at least ~15 seconds of pure timer overhead alone (5s × 3 DB-backed invocations) on
+top of actual test time.

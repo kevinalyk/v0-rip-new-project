@@ -23,7 +23,11 @@ function isSerializationFailure(error: unknown): boolean {
 }
 
 // Matches the documented retry count in docs/mobile-api.md — keep these in sync.
-const MAX_SERIALIZATION_RETRIES = 3
+// This was previously reduced to 3 to "match the docs," but that reintroduced
+// intermittent P2034 failures under heavy N-way contention (e.g. six concurrent
+// follows landing at once). 8 is the tested/proven budget — do not lower it
+// without re-running the concurrent follow test repeatedly under load.
+const MAX_SERIALIZATION_RETRIES = 8
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))

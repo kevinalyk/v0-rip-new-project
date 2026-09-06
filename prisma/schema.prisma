@@ -1254,7 +1254,11 @@ model MobileRefreshToken {
                               // rotation can never extend a session past 30 days from login.
   lastUsedAt       DateTime?
   revokedAt        DateTime? // Set when rotated (superseded), logged out, or revoked for replay
-  revokedReason    String?   // "rotated" | "logout" | "replay_detected" | "password_reset_required" | "password_changed"
+  revokedReason    String?   // "rotated" | "logout" | "replay_detected" | "password_reset_required" | "password_changed" | "schema_upgrade"
+  // "schema_upgrade" is set once, by the migration that added issuedPasswordFingerprint,
+  // on every row that predates that column — the migration cannot know which password was
+  // current when an older row was issued, so it revokes rather than risk blessing a stale
+  // token with the wrong fingerprint. See that migration's SQL comments.
   issuedPasswordFingerprint String // sha256(password hash) at issuance/rotation time — compared
   // against the user's *current* password hash on every requireMobileAuth call and every
   // rotateMobileSession call, so a real password change permanently invalidates this row

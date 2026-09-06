@@ -16,12 +16,25 @@
 -- issued before it.
 
 -- Backfill: no rows are expected to exist outside of this dev database at migration
--- time, but for safety, seed any existing row with a fingerprint computed from its
--- owning user's *current* password so it does not spuriously break until next rotation.
+-- time, but for correctness this must fail closed. The migration has no way to know
+-- which password was current when an older row was actually issued or rotated — only
+-- the user's *current* password hash is available here. Backfilling the current
+-- fingerprint into a pre-existing row would therefore silently "bless" it: if that
+-- row's refresh token predates a password change made *after* it was issued but
+-- *before* this migration runs, it would incorrectly pass the fingerprint check on
+-- its next use instead of being invalidated by that password change like every other
+-- session was.
+--
+-- So every row that predates this column is deliberately revoked here, on top of
+-- being backfilled — legitimate active sessions must re-authenticate once. This is a
+-- one-time, intentional sign-out of all existing mobile sessions when this migration
+-- is deployed; it does not affect sessions created after deployment.
 ALTER TABLE "MobileRefreshToken" ADD COLUMN "issuedPasswordFingerprint" TEXT;
 
 UPDATE "MobileRefreshToken" t
-SET "issuedPasswordFingerprint" = substring(encode(sha256(convert_to(COALESCE(u."password", ''), 'UTF8')), 'hex') from 1 for 32)
+SET "issuedPasswordFingerprint" = substring(encode(sha256(convert_to(COALESCE(u."password", ''), 'UTF8')), 'hex') from 1 for 32),
+    "revokedAt" = COALESCE(t."revokedAt", now()),
+    "revokedReason" = COALESCE(t."revokedReason", 'schema_upgrade')
 FROM "User" u
 WHERE u.id = t."userId" AND t."issuedPasswordFingerprint" IS NULL;
 

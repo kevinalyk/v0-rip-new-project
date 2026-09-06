@@ -74,6 +74,16 @@ Nothing in either of those was modified.
     completed, or a plain profile password update — permanently ends every mobile
     session issued before it, with no dependency on `firstLogin` still being `true`
     at the moment a stale token is used.
+  - **Migration note**: the migration that added this column
+    (`20260906010000_add_mobile_refresh_password_fingerprint`) cannot know which
+    password was current when a pre-existing refresh-token row was actually issued —
+    only the user's *current* password hash is available at migration time. Backfilling
+    that current fingerprint into an old row would risk blessing a token that predates
+    a password change made before the migration ran. To fail closed, the migration
+    both backfills the column *and* revokes every row that predates it
+    (`revokedReason: "schema_upgrade"`), so **deploying this migration intentionally
+    signs out every existing mobile session once**; sessions created after deployment
+    are unaffected.
 - **Rate limiting**: `MobileAuthAttempt` (Postgres, not in-memory) keys attempts by
   `HMAC-SHA256(MOBILE_JWT_SECRET, "ip:" + ip)` and
   `HMAC-SHA256(MOBILE_JWT_SECRET, "email:" + normalizedEmail)` — raw IP/email/
@@ -154,7 +164,10 @@ and is safe under concurrent calls (double-taps, multiple devices):
 - The existence check, count, and insert run inside one `Serializable` Prisma
   transaction, so two concurrent transactions that would otherwise both read
   "count = limit - 1" and both insert (exceeding the limit) instead conflict — one
-  is aborted with a serialization failure and retried (up to 3 times).
+  is aborted with a serialization failure and retried with jittered backoff (up to
+  8 times). This budget was tested under heavy N-way contention (e.g. six
+  concurrent follows landing at once) — do not lower it to match documentation
+  elsewhere without re-running that test repeatedly first.
 - Following an entity that's already followed is idempotent: a duplicate unique-
   constraint violation (from a race that still slips through) is caught and treated
   as success, never a 500.

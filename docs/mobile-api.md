@@ -12,11 +12,13 @@ Nothing in either of those was modified.
 
 - **Access token**: short-lived JWT (15 min), HS256, signed with `MOBILE_JWT_SECRET`
   (required env var, no fallback — `lib/mobile-auth.ts` throws as soon as it's needed
-  if unset). Claims: `sub` (userId), `typ: "access"`, `iss: "inbox-gop-mobile"`,
-  `aud: "inbox-gop-ios"`, `iat`, `exp`. No role, clientId, email, or name is embedded —
-  every authenticated request reloads the user + client from Postgres
-  (`requireMobileAuth`) before any authorization decision is made, so claims can't go
-  stale and there's no PII sitting in a token a device might retain.
+  if unset). Claims: `sub` (userId), `typ: "access"`, `pwf` (password fingerprint —
+  see below), `iss: "inbox-gop-mobile"`, `aud: "inbox-gop-ios"`, `iat`, `exp`. No role,
+  clientId, email, or name is embedded — every authenticated request reloads the user
+  + client from Postgres (`requireMobileAuth`) before any authorization decision is
+  made, so claims can't go stale and there's no PII sitting in a token a device might
+  retain. `pwf` is not PII either — it's a one-way fingerprint of the password hash,
+  used only to detect a subsequent password change (see below).
 - **Refresh token**: opaque random 256-bit token. Only its SHA-256 hash is ever
   persisted (`MobileRefreshToken.refreshTokenHash`); the raw value is returned to the
   client exactly once, at issuance/rotation.
@@ -50,6 +52,28 @@ Nothing in either of those was modified.
   The mobile client should route the user to a web-based reset flow
   (`/reset-password` or `/set-password`) in all three cases; this pass does not add
   a mobile-native self-service reset.
+
+  **This `firstLogin` suspension is temporary by design and is not the mechanism that
+  permanently revokes a session** — `firstLogin` is cleared back to `false` as soon as
+  the user completes the reset, and by itself would let a pre-reset access token
+  (still inside its 15-minute TTL) or an unused pre-reset refresh-token family become
+  usable again at that point. Permanent invalidation is instead handled by the
+  password fingerprint below, which stays mismatched forever once the password hash
+  actually changes:
+  - Every `MobileRefreshToken` row stores `issuedPasswordFingerprint` — a one-way
+    fingerprint (`sha256(password hash).slice(0, 32)`) of the password hash that was
+    current at issuance/rotation — and every access token carries the same value as
+    its `pwf` claim.
+  - `requireMobileAuth` compares the access token's `pwf` claim against the user's
+    *current* password hash on every request; a mismatch returns `401
+    SESSION_REVOKED` immediately, regardless of `firstLogin`.
+  - `rotateMobileSession` runs the same comparison against the refresh row's
+    `issuedPasswordFingerprint`; a mismatch revokes the entire token family
+    (`revokedReason: "password_changed"`) and returns `401 REFRESH_TOKEN_REUSED`.
+  - Together, any real password change — self-service reset, admin-forced reset once
+    completed, or a plain profile password update — permanently ends every mobile
+    session issued before it, with no dependency on `firstLogin` still being `true`
+    at the moment a stale token is used.
 - **Rate limiting**: `MobileAuthAttempt` (Postgres, not in-memory) keys attempts by
   `HMAC-SHA256(MOBILE_JWT_SECRET, "ip:" + ip)` and
   `HMAC-SHA256(MOBILE_JWT_SECRET, "email:" + normalizedEmail)` — raw IP/email/
@@ -139,7 +163,7 @@ and is safe under concurrent calls (double-taps, multiple devices):
 
 All mobile API errors: `{ "error": { "code": "SOME_CODE", "message": "..." } }`
 with an appropriate HTTP status. Codes used across the namespace: `MISSING_TOKEN`,
-`INVALID_TOKEN`, `TOKEN_EXPIRED`, `USER_NOT_FOUND`, `CLIENT_NOT_FOUND`,
+`INVALID_TOKEN`, `TOKEN_EXPIRED`, `SESSION_REVOKED`, `USER_NOT_FOUND`, `CLIENT_NOT_FOUND`,
 `CLIENT_INACTIVE`, `PASSWORD_RESET_REQUIRED`, `INVALID_REFRESH_TOKEN`,
 `REFRESH_TOKEN_REUSED`, `REFRESH_TOKEN_EXPIRED`, `TOO_MANY_ATTEMPTS`,
 `INVALID_CREDENTIALS`, `INVALID_BODY`, `INVALID_CURSOR`, `NO_CLIENT_CONTEXT`,
@@ -248,3 +272,25 @@ if it doesn't exist, `403 FORBIDDEN` if it belongs to someone else.
 - `MOBILE_JWT_SECRET` — signs/verifies mobile access tokens and keys the rate-limit
   HMAC. Distinct from the web app's `JWT_SECRET` so a leak of one cannot be used to
   forge the other.
+
+## Known repo-wide issues (not introduced by, and out of scope for, this pass)
+
+- **`pnpm run build` fails on a clean install** with `ERR_PACKAGE_PATH_NOT_EXPORTED`
+  from `zod/package.json` (no `./v4` export), imported by `@ai-sdk/provider-utils`
+  via the `eve` package's dependency chain (`next.config.mjs` calls `withEve(...)`
+  unconditionally). This reproduces identically on the pre-mobile-pass code once
+  actually installed clean — it is a pre-existing conflict between `eve`'s pinned
+  AI SDK version (which expects zod v4) and this project's zod v3 pin (`zod@^3.24.1`,
+  used throughout `lib/*-classifier.ts` and `lib/ci-entity-utils.ts` via
+  `generateObject`/`generateText`), not something this pass touched or can safely
+  resolve — bumping to zod v4 is a separate, wider migration. `pnpm run lint` and
+  `pnpm run test:mobile*` are unaffected since neither loads `next.config.mjs`.
+- `pnpm run lint` (unscoped, whole repo) fails with ~14,800 pre-existing errors, almost
+  entirely `@typescript-eslint/no-require-imports` from legacy `.js` files under
+  `scripts/` that predate this pass by a wide margin and are unrelated to the mobile
+  API. Every file this pass touched or added — `lib/mobile-auth.ts`,
+  `lib/services/{feed,entity,alert,user}-service.ts`, `lib/services/authz.ts`, all
+  `app/api/mobile/v1/**/route.ts` files, the `lib/services/__tests__/*.ts` scripts,
+  and `components/sidebar.tsx`/`components/app-layout.tsx` — lints clean in isolation:
+  `pnpm exec eslint <path>` against that exact file list reports zero errors and zero
+  warnings.

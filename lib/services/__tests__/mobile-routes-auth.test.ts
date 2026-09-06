@@ -20,7 +20,12 @@ const MOBILE_API_ROOT = join(process.cwd(), "app/api/mobile/v1")
 // withMobileAuth.
 const PUBLIC_ROUTES = new Set(["auth/login/route.ts", "auth/refresh/route.ts"])
 
-const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const
+// Includes HEAD and OPTIONS: Next.js route handlers can export either as a real
+// handler (HEAD to serve a cheaper response than GET; OPTIONS for a custom CORS/
+// preflight policy), and either would otherwise bypass withMobileAuth exactly like an
+// unwrapped GET/POST would — this test previously only checked the "data" verbs and
+// would have missed an exported HEAD/OPTIONS handler that forgot the wrapper.
+const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const
 
 let passed = 0
 let failed = 0

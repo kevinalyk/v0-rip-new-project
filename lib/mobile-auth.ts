@@ -13,6 +13,18 @@
  * - Refresh tokens are opaque random values; only their SHA-256 hash is ever persisted.
  *   Rotation is atomic (conditional update inside a transaction) and reuse of an
  *   already-rotated/revoked token revokes the entire token family (replay defense).
+ * - Every access token and refresh-token row carries a fingerprint of the password
+ *   hash that was current at issuance (see `passwordFingerprint`). Both access-token
+ *   verification (requireMobileAuth) and refresh rotation compare that fingerprint
+ *   against the user's *current* password hash on every request, so a real password
+ *   change (which — in every web flow in this codebase — always updates the password
+ *   column, whether or not `firstLogin` is also toggled) permanently invalidates every
+ *   mobile session issued before it. This does not depend on `firstLogin` still being
+ *   `true` at the moment of use: `firstLogin` is transient and gets cleared again once
+ *   the user completes the reset, so a check against `firstLogin` alone would let a
+ *   pre-reset access token (still within its 15-minute TTL) or an unused refresh-token
+ *   family work again the moment the flag flips back to `false`. The password
+ *   fingerprint has no such window — it stays permanently mismatched.
  * - Rate limiting is Postgres-backed (MobileAuthAttempt) — no in-memory store, since
  *   this runs across many serverless instances — and only stores salted/HMAC'd keys.
  */
@@ -58,8 +70,18 @@ export class MobileAuthError extends Error {
 export interface MobileTokenClaims {
   sub: string // userId
   typ: "access"
+  pwf: string // password fingerprint at issuance — see passwordFingerprint() below
   iat: number
   exp: number
+}
+
+/**
+ * Short, non-reversible fingerprint of a user's current password hash. Used only to
+ * detect "the password has changed since this token/refresh-row was issued" — never
+ * to compare passwords to each other or to derive/verify a password itself.
+ */
+export function passwordFingerprint(passwordHash: string): string {
+  return createHash("sha256").update(passwordHash || "").digest("hex").slice(0, 32)
 }
 
 export interface MobileAuthContext {
@@ -80,9 +102,12 @@ export interface MobileAuthContext {
 
 // ── Access tokens ──────────────────────────────────────────────────────────
 
-export async function createMobileAccessToken(userId: string): Promise<{ token: string; expiresIn: number }> {
+export async function createMobileAccessToken(
+  userId: string,
+  currentPasswordFingerprint: string,
+): Promise<{ token: string; expiresIn: number }> {
   const secretKey = getMobileJwtSecret()
-  const token = await new SignJWT({ typ: "access" })
+  const token = await new SignJWT({ typ: "access", pwf: currentPasswordFingerprint })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuer(ISSUER)
     .setAudience(AUDIENCE)
@@ -101,7 +126,13 @@ export async function verifyMobileAccessToken(token: string): Promise<MobileToke
       issuer: ISSUER,
       audience: AUDIENCE,
     })
-    if (payload.typ !== "access" || typeof payload.sub !== "string" || !payload.sub) {
+    if (
+      payload.typ !== "access" ||
+      typeof payload.sub !== "string" ||
+      !payload.sub ||
+      typeof payload.pwf !== "string" ||
+      !payload.pwf
+    ) {
       throw new MobileAuthError(401, "INVALID_TOKEN", "Invalid access token")
     }
     return payload as unknown as MobileTokenClaims
@@ -146,6 +177,19 @@ export async function requireMobileAuth(request: Request): Promise<MobileAuthCon
 
   if (!user) {
     throw new MobileAuthError(401, "USER_NOT_FOUND", "User no longer exists")
+  }
+
+  if (passwordFingerprint(user.password) !== claims.pwf) {
+    // The password has changed since this access token was issued — permanently
+    // revoke it regardless of the current firstLogin value (see file header). This
+    // is the check that makes password resets actually terminate pre-reset mobile
+    // sessions, rather than relying on firstLogin, which is transient and gets
+    // cleared again as soon as the user completes the reset.
+    throw new MobileAuthError(
+      401,
+      "SESSION_REVOKED",
+      "This session was revoked because the account password changed. Please sign in again.",
+    )
   }
 
   if (user.clientId && !user.client) {
@@ -253,6 +297,12 @@ export async function issueMobileSession(
   deviceId?: string | null,
   deviceName?: string | null,
 ): Promise<MobileSession> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { password: true } })
+  if (!user) {
+    throw new MobileAuthError(401, "USER_NOT_FOUND", "User no longer exists")
+  }
+  const fingerprint = passwordFingerprint(user.password)
+
   const rawRefreshToken = generateRefreshToken()
   const tokenFamilyId = generateTokenFamilyId()
   const now = Date.now()
@@ -268,10 +318,14 @@ export async function issueMobileSession(
       // Fixed at family creation — every descendant token from rotation copies this
       // value unchanged, so the family can never live longer than 30 days from login.
       absoluteExpiresAt: new Date(now + REFRESH_SESSION_ABSOLUTE_TTL_MS),
+      // Fingerprint of the password hash at issuance — compared against the current
+      // password hash on every rotation so a password change permanently invalidates
+      // this family, even if it's never used again before the change happens.
+      issuedPasswordFingerprint: fingerprint,
     },
   })
 
-  const { token: accessToken, expiresIn } = await createMobileAccessToken(userId)
+  const { token: accessToken, expiresIn } = await createMobileAccessToken(userId, fingerprint)
   return { accessToken, refreshToken: rawRefreshToken, expiresIn }
 }
 
@@ -312,11 +366,26 @@ export async function rotateMobileSession(rawRefreshToken: string): Promise<Mobi
   // Enforce administrator-forced password resets on refresh, not just on new logins —
   // otherwise a device that already has a refresh token could keep itself signed in
   // indefinitely by refreshing instead of ever hitting the login/firstLogin check again.
-  const user = await prisma.user.findUnique({ where: { id: existing.userId }, select: { firstLogin: true } })
+  const user = await prisma.user.findUnique({
+    where: { id: existing.userId },
+    select: { firstLogin: true, password: true },
+  })
   if (!user) {
     await revokeMobileFamily(existing.tokenFamilyId, "replay_detected")
     throw new MobileAuthError(401, "INVALID_REFRESH_TOKEN", "Invalid refresh token")
   }
+
+  // The password has changed since this family was created or last rotated (a real
+  // reset — self-service or admin-forced — always changes the password hash in this
+  // codebase). This is checked unconditionally, not just while firstLogin happens to
+  // still be true: if the user completes their reset (clearing firstLogin) before this
+  // family is ever used again, firstLogin alone would no longer catch it, but the
+  // password hash never matches the original fingerprint again, so this always does.
+  if (passwordFingerprint(user.password) !== existing.issuedPasswordFingerprint) {
+    await revokeMobileFamily(existing.tokenFamilyId, "password_changed")
+    throw new MobileAuthError(401, "REFRESH_TOKEN_REUSED", "Invalid refresh token")
+  }
+
   if (user.firstLogin) {
     await revokeMobileFamily(existing.tokenFamilyId, "password_reset_required")
     throw new MobileAuthError(
@@ -352,6 +421,10 @@ export async function rotateMobileSession(rawRefreshToken: string): Promise<Mobi
         expiresAt: nextExpiresAt,
         // Copied unchanged from the token being rotated — never extended.
         absoluteExpiresAt: existing.absoluteExpiresAt,
+        // Copied unchanged — still fingerprints the password at original issuance,
+        // not at this rotation (both are identical here since the mismatch case above
+        // already returned before reaching this transaction).
+        issuedPasswordFingerprint: existing.issuedPasswordFingerprint,
       },
     })
 
@@ -362,7 +435,10 @@ export async function rotateMobileSession(rawRefreshToken: string): Promise<Mobi
     throw new MobileAuthError(401, "INVALID_REFRESH_TOKEN", "Invalid refresh token")
   }
 
-  const { token: accessToken, expiresIn } = await createMobileAccessToken(existing.userId)
+  const { token: accessToken, expiresIn } = await createMobileAccessToken(
+    existing.userId,
+    existing.issuedPasswordFingerprint,
+  )
   return { accessToken, refreshToken: rawNextRefreshToken, expiresIn }
 }
 
@@ -377,7 +453,7 @@ export async function revokeMobileSession(rawRefreshToken: string): Promise<void
 
 export async function revokeMobileFamily(
   tokenFamilyId: string,
-  reason: "replay_detected" | "logout" | "password_reset_required",
+  reason: "replay_detected" | "logout" | "password_reset_required" | "password_changed",
 ): Promise<void> {
   await prisma.mobileRefreshToken.updateMany({
     where: { tokenFamilyId, revokedAt: null },
@@ -389,8 +465,14 @@ export async function revokeMobileFamily(
 
 function hmacKey(scope: string, value: string): string {
   // Keyed by MOBILE_JWT_SECRET so the stored `key` is not just a plain SHA-256 of a
-  // guessable identifier (IP/email) — it requires the server secret to reproduce.
-  const secret = process.env.MOBILE_JWT_SECRET || ""
+  // guessable identifier (IP/email) — it requires the server secret to reproduce. No
+  // fallback, ever, matching getMobileJwtSecret() — a missing secret must fail loudly
+  // here too rather than silently hashing with an empty (guessable, shared-across-all-
+  // deployments) key.
+  const secret = process.env.MOBILE_JWT_SECRET
+  if (!secret) {
+    throw new Error("MOBILE_JWT_SECRET is not set. The mobile API cannot compute rate-limit keys without it.")
+  }
   return createHmac("sha256", secret).update(`${scope}:${value}`).digest("hex")
 }
 

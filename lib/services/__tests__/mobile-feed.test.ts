@@ -8,11 +8,14 @@
  * own Client/CiEntity/CompetitiveInsightCampaign/SmsQueue/EntityTag/CiEntitySubscription
  * fixtures, id-prefixed with MOBILE_FEED_TEST_. Do not point DATABASE_URL at production.
  *
- * Run with: npx tsx lib/services/__tests__/mobile-feed.test.ts
+ * Run with: pnpm run test:mobile-feed (which passes --env-file=.env.development.local
+ * to tsx) or `npx tsx --env-file=.env.development.local lib/services/__tests__/mobile-feed.test.ts`
+ * directly. The `--env-file` flag is required, not optional: under ESM, every static
+ * `import` below is hoisted above any top-level statement in this file, so a
+ * `dotenv.config()` call placed here in source order would run too late — `lib/prisma.ts`
+ * (imported below) would already have read `process.env.DATABASE_URL` at its own
+ * module-evaluation time and silently fallen back to its localhost mock default.
  */
-import { config as loadEnv } from "dotenv"
-loadEnv({ path: ".env.development.local" })
-
 import prisma from "@/lib/prisma"
 import { MobileAuthError } from "@/lib/mobile-auth"
 import { decodeCursor, getFeedItemById, getFeedPage } from "@/lib/services/feed-service"

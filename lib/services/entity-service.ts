@@ -22,7 +22,8 @@ function isSerializationFailure(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034"
 }
 
-const MAX_SERIALIZATION_RETRIES = 8
+// Matches the documented retry count in docs/mobile-api.md — keep these in sync.
+const MAX_SERIALIZATION_RETRIES = 3
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))

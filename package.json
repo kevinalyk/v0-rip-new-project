@@ -8,9 +8,9 @@
     "lint": "eslint .",
     "seed": "tsx prisma/seed.ts",
     "start": "next start",
-    "test:mobile-auth": "tsx lib/services/__tests__/mobile-auth.test.ts",
-    "test:mobile-feed": "tsx lib/services/__tests__/mobile-feed.test.ts",
-    "test:mobile-entities": "tsx lib/services/__tests__/mobile-entities.test.ts",
+    "test:mobile-auth": "tsx --env-file=.env.development.local lib/services/__tests__/mobile-auth.test.ts",
+    "test:mobile-feed": "tsx --env-file=.env.development.local lib/services/__tests__/mobile-feed.test.ts",
+    "test:mobile-entities": "tsx --env-file=.env.development.local lib/services/__tests__/mobile-entities.test.ts",
     "test:mobile-routes-auth": "tsx lib/services/__tests__/mobile-routes-auth.test.ts",
     "test:mobile": "pnpm run test:mobile-routes-auth && pnpm run test:mobile-auth && pnpm run test:mobile-feed && pnpm run test:mobile-entities"
   },
@@ -107,7 +107,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.7",
+    "@eslint/eslintrc": "^3.3.3",
     "@tailwindcss/postcss": "^4.1.9",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.7",

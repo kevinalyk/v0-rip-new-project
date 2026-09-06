@@ -8,12 +8,16 @@
  * created — including any leftovers from a previous crashed run — in a finally block.
  * Do not point DATABASE_URL at a production database when running this.
  *
- * Run with: npx tsx lib/services/__tests__/mobile-auth.test.ts
- * (loads .env.development.local itself; see bottom of file)
+ * Run with: pnpm run test:mobile-auth (which passes --env-file=.env.development.local
+ * to tsx) or `npx tsx --env-file=.env.development.local lib/services/__tests__/mobile-auth.test.ts`
+ * directly. The `--env-file` flag is required, not optional: under ESM, every static
+ * `import` below is hoisted above any top-level statement in this file — including a
+ * `dotenv.config()` call placed here in source order — so `lib/prisma.ts` (imported
+ * below) would already read `process.env.DATABASE_URL` at its own module-evaluation
+ * time, before dotenv ever ran, and silently fall back to its localhost mock default.
+ * `--env-file` populates `process.env` before Node resolves the module graph at all,
+ * which is why it's passed as a flag rather than called as a function in this file.
  */
-import { config as loadEnv } from "dotenv"
-loadEnv({ path: ".env.development.local" })
-
 import { SignJWT } from "jose"
 import { createHash } from "crypto"
 import prisma from "@/lib/prisma"
@@ -26,6 +30,7 @@ import {
   revokeMobileSession,
   checkMobileRateLimit,
   rateLimitKeyForIp,
+  passwordFingerprint,
   MobileAuthError,
 } from "@/lib/mobile-auth"
 import { getFeedItemById } from "@/lib/services/feed-service"
@@ -63,9 +68,19 @@ async function expectMobileError(fn: () => Promise<unknown>, expectedCode: strin
   }
 }
 
+// The rate-limit test below hashes its identifier through hmacKey (via rateLimitKeyForIp),
+// so the resulting `key` column value is an HMAC digest, not something that starts with
+// PREFIX — a `key: { startsWith: PREFIX }` cleanup filter (as used elsewhere in this file
+// for plain, unhashed identifiers) would never match it, leaking the row across runs and
+// making the "allows up to the limit then blocks" assertion depend on whatever count a
+// previous run left behind. We compute the exact key(s) up front and delete by exact match
+// instead.
+const RATE_LIMIT_TEST_IP = `${PREFIX}198.51.100.7`
+
 async function cleanup() {
   await prisma.mobileRefreshToken.deleteMany({ where: { user: { email: { startsWith: PREFIX } } } })
   await prisma.mobileAuthAttempt.deleteMany({ where: { key: { startsWith: PREFIX } } })
+  await prisma.mobileAuthAttempt.deleteMany({ where: { key: rateLimitKeyForIp(RATE_LIMIT_TEST_IP) } })
   await prisma.user.deleteMany({ where: { email: { startsWith: PREFIX } } })
   await prisma.client.deleteMany({ where: { id: { startsWith: PREFIX } } })
 }
@@ -97,7 +112,7 @@ async function main() {
 
   // ── Access token issuance + verification ──────────────────────────────────
   await test("createMobileAccessToken + verifyMobileAccessToken round-trip", async () => {
-    const { token, expiresIn } = await createMobileAccessToken(userA.id)
+    const { token, expiresIn } = await createMobileAccessToken(userA.id, passwordFingerprint("hashed"))
     assert(expiresIn === 15 * 60, "access token TTL should be 15 minutes")
     const claims = await verifyMobileAccessToken(token)
     assert(claims.sub === userA.id, "subject should match")
@@ -118,7 +133,7 @@ async function main() {
   // ── Wrong issuer / audience / typ / secret ────────────────────────────────
   await test("verifyMobileAccessToken rejects wrong issuer", async () => {
     const secretKey = new TextEncoder().encode(process.env.MOBILE_JWT_SECRET!)
-    const badToken = await new SignJWT({ typ: "access" })
+    const badToken = await new SignJWT({ typ: "access", pwf: passwordFingerprint("hashed") })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuer("wrong-issuer")
       .setAudience("inbox-gop-ios")
@@ -130,7 +145,7 @@ async function main() {
   })
   await test("verifyMobileAccessToken rejects wrong audience", async () => {
     const secretKey = new TextEncoder().encode(process.env.MOBILE_JWT_SECRET!)
-    const badToken = await new SignJWT({ typ: "access" })
+    const badToken = await new SignJWT({ typ: "access", pwf: passwordFingerprint("hashed") })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuer("inbox-gop-mobile")
       .setAudience("wrong-audience")
@@ -142,7 +157,7 @@ async function main() {
   })
   await test("verifyMobileAccessToken rejects wrong typ claim", async () => {
     const secretKey = new TextEncoder().encode(process.env.MOBILE_JWT_SECRET!)
-    const badToken = await new SignJWT({ typ: "refresh" })
+    const badToken = await new SignJWT({ typ: "refresh", pwf: passwordFingerprint("hashed") })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuer("inbox-gop-mobile")
       .setAudience("inbox-gop-ios")
@@ -154,7 +169,7 @@ async function main() {
   })
   await test("verifyMobileAccessToken rejects token signed with wrong secret", async () => {
     const wrongSecretKey = new TextEncoder().encode("definitely-not-the-real-secret")
-    const badToken = await new SignJWT({ typ: "access" })
+    const badToken = await new SignJWT({ typ: "access", pwf: passwordFingerprint("hashed") })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuer("inbox-gop-mobile")
       .setAudience("inbox-gop-ios")
@@ -168,7 +183,7 @@ async function main() {
   // ── Expired access token ───────────────────────────────────────────────────
   await test("verifyMobileAccessToken rejects expired access token", async () => {
     const secretKey = new TextEncoder().encode(process.env.MOBILE_JWT_SECRET!)
-    const expiredToken = await new SignJWT({ typ: "access" })
+    const expiredToken = await new SignJWT({ typ: "access", pwf: passwordFingerprint("hashed") })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuer("inbox-gop-mobile")
       .setAudience("inbox-gop-ios")
@@ -181,18 +196,30 @@ async function main() {
 
   // ── requireMobileAuth reloads from Postgres / inactive & missing user/client ─
   await test("requireMobileAuth rejects token for a deleted user", async () => {
-    const { token } = await createMobileAccessToken("nonexistent-user-id")
+    const { token } = await createMobileAccessToken("nonexistent-user-id", passwordFingerprint("hashed"))
     await expectMobileError(() => requireMobileAuth(new Request("http://x", { headers: { Authorization: `Bearer ${token}` } })), "USER_NOT_FOUND")
   })
   await test("requireMobileAuth rejects a user whose client is inactive", async () => {
-    const { token } = await createMobileAccessToken(userInactiveClient.id)
+    const { token } = await createMobileAccessToken(userInactiveClient.id, passwordFingerprint("hashed"))
     await expectMobileError(() => requireMobileAuth(new Request("http://x", { headers: { Authorization: `Bearer ${token}` } })), "CLIENT_INACTIVE")
   })
   await test("requireMobileAuth succeeds and reloads current role/client for a valid user", async () => {
-    const { token } = await createMobileAccessToken(userA.id)
+    const { token } = await createMobileAccessToken(userA.id, passwordFingerprint("hashed"))
     const ctx = await requireMobileAuth(new Request("http://x", { headers: { Authorization: `Bearer ${token}` } }))
     assert(ctx.userId === userA.id, "userId should match")
     assert(ctx.clientId === clientA.id, "clientId should be reloaded from Postgres")
+  })
+  await test("requireMobileAuth rejects an access token whose password fingerprint is stale", async () => {
+    // Token issued against the OLD password hash ("hashed") — simulate userA having
+    // since changed their password directly (not via issueMobileSession/rotation).
+    await prisma.user.update({ where: { id: userA.id }, data: { password: "a-new-hashed-password" } })
+    const { token } = await createMobileAccessToken(userA.id, passwordFingerprint("hashed"))
+    await expectMobileError(
+      () => requireMobileAuth(new Request("http://x", { headers: { Authorization: `Bearer ${token}` } })),
+      "SESSION_REVOKED",
+    )
+    // Restore for subsequent tests that assume the original fixture password.
+    await prisma.user.update({ where: { id: userA.id }, data: { password: "hashed" } })
   })
 
   // ── Refresh rotation, replay, concurrency, logout ─────────────────────────
@@ -236,7 +263,7 @@ async function main() {
 
   // ── Administrator-forced password reset (firstLogin) ─────────────────────
   await test("requireMobileAuth blocks a session whose account was flipped to firstLogin mid-session", async () => {
-    const { token } = await createMobileAccessToken(userForcedReset.id)
+    const { token } = await createMobileAccessToken(userForcedReset.id, passwordFingerprint("hashed"))
     // Sanity check: works before the forced reset.
     await requireMobileAuth(new Request("http://x", { headers: { Authorization: `Bearer ${token}` } }))
     await prisma.user.update({ where: { id: userForcedReset.id }, data: { firstLogin: true } })
@@ -255,6 +282,31 @@ async function main() {
     // same refresh token must not come back to life.
     await prisma.user.update({ where: { id: userForcedReset.id }, data: { firstLogin: false } })
     await expectMobileError(() => rotateMobileSession(session.refreshToken), "REFRESH_TOKEN_REUSED")
+  })
+
+  // ── Password change permanently revokes prior sessions, independent of firstLogin ─
+  // This is the fix for the finding that a forced reset only suspended sessions while
+  // firstLogin stayed true: an old, unused refresh-token family became usable again the
+  // moment firstLogin flipped back to false. issuedPasswordFingerprint has no such
+  // window — it never matches again once the password hash actually changes.
+  await test("rotateMobileSession rejects a refresh token issued before a real password change, even once firstLogin is false again", async () => {
+    const userChangingPassword = await prisma.user.create({
+      data: { email: `${PREFIX}user_pw_change@example.com`, password: "old-hashed-password", clientId: clientA.id, firstLogin: false },
+    })
+    const session = await issueMobileSession(userChangingPassword.id)
+
+    // Simulate a real password change (e.g. self-service reset, admin force-reset that
+    // also gets completed, or a plain profile password update) that never touches
+    // firstLogin at all, or touches it only transiently.
+    await prisma.user.update({ where: { id: userChangingPassword.id }, data: { password: "new-hashed-password" } })
+
+    await expectMobileError(() => rotateMobileSession(session.refreshToken), "REFRESH_TOKEN_REUSED")
+    // And the family stays dead — it's not just this one rotation attempt that fails.
+    const stillDead = await prisma.mobileRefreshToken.findUnique({
+      where: { refreshTokenHash: createHash("sha256").update(session.refreshToken).digest("hex") },
+    })
+    assert(stillDead?.revokedAt != null, "the pre-password-change refresh row should be revoked")
+    assert(stillDead?.revokedReason === "password_changed", "revocation reason should be password_changed")
   })
 
   // ── Absolute (non-extendable) refresh-session expiry ──────────────────────
@@ -299,7 +351,7 @@ async function main() {
 
   // ── Rate limiting ──────────────────────────────────────────────────────────
   await test("checkMobileRateLimit allows up to the limit then blocks", async () => {
-    const key = rateLimitKeyForIp(`${PREFIX}198.51.100.7`)
+    const key = rateLimitKeyForIp(RATE_LIMIT_TEST_IP)
     const results: boolean[] = []
     for (let i = 0; i < 6; i++) {
       results.push(await checkMobileRateLimit(key, 5))

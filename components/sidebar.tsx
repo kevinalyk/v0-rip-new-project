@@ -23,7 +23,6 @@ import {
   Lightbulb,
   CreditCard,
   Plug,
-  Wrench,
   Building2,
   ChevronDown,
   ChevronUp,
@@ -71,12 +70,22 @@ interface SidebarProps {
   className?: string
 }
 
+// Paths that are not client-scoped — don't overwrite the selected client slug. Hoisted
+// to module scope (rather than redeclared as a new array literal on every render
+// inside the component) so it's referentially stable and can be safely listed as an
+// effect dependency below without causing those effects to re-run on every render.
+const NON_CLIENT_PATHS = ["news", "login", "share", "directory", "digest", "about", "privacy", "terms", "lookup"]
+
 export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNavigate, className }: SidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
-  const { domains, selectedDomain, setSelectedDomain, loading: domainsLoading } = useDomain()
+  // Only `selectedDomain` is used here, for the non-super-admin client-slug fallback
+  // below — the rest of useDomain()'s return value is intentionally not needed by
+  // this component, so it's left out of the destructure entirely rather than bound
+  // to unused local names.
+  const { selectedDomain } = useDomain()
   const [userRole, setUserRole] = useState<string | null>(null)
   const [authLoaded, setAuthLoaded] = useState(false)
   const [clients, setClients] = useState<Client[]>([])
@@ -139,9 +148,6 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
     }
     fetchClients()
   }, [userRole])
-
-  // Paths that are not client-scoped — don't overwrite the selected client slug
-  const NON_CLIENT_PATHS = ["news", "login", "share", "directory", "digest", "about", "privacy", "terms", "lookup"]
 
   useEffect(() => {
     const pathParts = pathname.split("/").filter(Boolean)
@@ -737,13 +743,27 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
         </div>
       </div>
 
-      <div className="p-4 mt-auto border-t border-sidebar-border">
+      {/* Safe-area inset is added ON TOP of the normal p-4 padding (not a replacement
+          for it) via an explicit calc() on padding-bottom only — same reasoning as the
+          mobile header's paddingTop in components/app-layout.tsx. The standalone
+          `.pb-safe` utility in globals.css sets padding-bottom outright, which would
+          otherwise clobber p-4's padding-bottom entirely once both target the same
+          property. Without this, the Logout/theme/etc. buttons in this touch-driven
+          mobile drawer sit flush against an iPhone's home-indicator safe area. */}
+      <div
+        className="p-4 mt-auto border-t border-sidebar-border"
+        style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
+      >
         <div className="space-y-1">
+          {/* min-h-11 (44px) covers these controls in the touch-driven mobile drawer
+              (components/app-layout.tsx) — same reasoning as NavSection/NavItem above;
+              md:min-h-0 lets the default size="sm" (32px) govern the denser desktop
+              sidebar unchanged. */}
           <Button
             variant="ghost"
             size="sm"
             className={cn(
-              "w-full justify-start gap-3 px-3",
+              "w-full justify-start gap-3 px-3 min-h-11 md:min-h-0",
               pathname.startsWith("/news") && "bg-rip-red/10 text-rip-red hover:bg-rip-red/20 hover:text-rip-red",
               collapsed && "justify-center",
             )}
@@ -755,7 +775,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
           <Button
             variant="ghost"
             size="sm"
-            className={cn("w-full justify-start gap-3 px-3", collapsed && "justify-center")}
+            className={cn("w-full justify-start gap-3 px-3 min-h-11 md:min-h-0", collapsed && "justify-center")}
             onClick={() => window.open("https://directory.gop", "_blank")}
           >
             <ExternalLink size={20} />
@@ -765,7 +785,10 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
             <Button
               variant="ghost"
               size="sm"
-              className={cn("w-full justify-start gap-3 px-3 text-muted-foreground", collapsed && "justify-center")}
+              className={cn(
+                "w-full justify-start gap-3 px-3 min-h-11 md:min-h-0 text-muted-foreground",
+                collapsed && "justify-center",
+              )}
               onClick={() => setReportProblemOpen(true)}
             >
               <AlertCircle size={20} />
@@ -776,7 +799,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
             <Button
               variant="ghost"
               size="sm"
-              className={cn("w-full justify-start gap-3 px-3", collapsed && "justify-center")}
+              className={cn("w-full justify-start gap-3 px-3 min-h-11 md:min-h-0", collapsed && "justify-center")}
               onClick={toggleTheme}
             >
               {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
@@ -787,7 +810,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
             variant="ghost"
             size="sm"
             className={cn(
-              "w-full justify-start gap-3 px-3 text-rip-red hover:text-rip-red hover:bg-rip-red/10",
+              "w-full justify-start gap-3 px-3 min-h-11 md:min-h-0 text-rip-red hover:text-rip-red hover:bg-rip-red/10",
               collapsed && "justify-center",
             )}
             onClick={handleLogout}

@@ -78,16 +78,28 @@ async function getDateFloor(clientId: string, plan: SubscriptionPlan): Promise<D
   return new Date(Date.now() - minDays * 24 * 60 * 60 * 1000)
 }
 
+/**
+ * The data_broker exclusion is a hard access-model rule (see file header) and must
+ * never be overridable by a caller-supplied filter — including `entityType` itself.
+ * This is expressed as its own AND clause rather than assigned into the same `type`
+ * key that `entityType` also targets: assigning both to `where.type` let the second
+ * assignment (`entityType`) silently clobber the first (the exclusion), so passing
+ * `entityType=data_broker` bypassed the exclusion entirely and returned data_broker
+ * campaigns through the shared feed. Expressing both as separate AND conditions means
+ * `entityType=data_broker` now combines `{ not: "data_broker" } AND { equals:
+ * "data_broker" }` — a contradiction that correctly yields zero rows instead of
+ * exposing them.
+ */
 function entityAttributeWhere(filters: FeedFilters): Record<string, unknown> {
-  const where: Record<string, unknown> = { type: { not: "data_broker" } }
-  if (filters.party) where.party = { equals: filters.party, mode: "insensitive" }
-  if (filters.state) where.state = { equals: filters.state, mode: "insensitive" }
-  if (filters.entityType) where.type = { equals: filters.entityType, mode: "insensitive" }
+  const conditions: Record<string, unknown>[] = [{ type: { not: "data_broker" } }]
+  if (filters.party) conditions.push({ party: { equals: filters.party, mode: "insensitive" } })
+  if (filters.state) conditions.push({ state: { equals: filters.state, mode: "insensitive" } })
+  if (filters.entityType) conditions.push({ type: { equals: filters.entityType, mode: "insensitive" } })
   if (filters.office) {
     const office = OFFICES.find((o) => o.value === filters.office)
-    if (office) where.office = { contains: office.match, mode: "insensitive" }
+    if (office) conditions.push({ office: { contains: office.match, mode: "insensitive" } })
   }
-  return where
+  return { AND: conditions }
 }
 
 /**

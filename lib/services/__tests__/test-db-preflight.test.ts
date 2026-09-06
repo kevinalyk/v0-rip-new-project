@@ -42,6 +42,13 @@ const VALID_ENV: PreflightEnv = {
   DATABASE_URL: "postgresql://user:pass@some-real-host:5432/testdb",
 }
 
+/** Returns a copy of VALID_ENV with `key` entirely absent (not just set to undefined). */
+function withoutKey(key: keyof PreflightEnv): PreflightEnv {
+  const copy: PreflightEnv = { ...VALID_ENV }
+  delete copy[key]
+  return copy
+}
+
 /** Records exit calls instead of terminating the process, and short-circuits like the real `process.exit` would. */
 class ExitSignal extends Error {
   constructor(public code: number) {
@@ -91,8 +98,7 @@ async function run(
 
 async function main() {
   await test("rejects when MOBILE_DB_TESTS_ALLOWED is missing", async () => {
-    const { MOBILE_DB_TESTS_ALLOWED, ...rest } = VALID_ENV
-    const { exitCalls, messages } = await run(rest)
+    const { exitCalls, messages } = await run(withoutKey("MOBILE_DB_TESTS_ALLOWED"))
     assert(exitCalls.length === 1 && exitCalls[0] === 1, "must exit(1) exactly once")
     assert(
       messages.some((m) => m.includes("MOBILE_DB_TESTS_ALLOWED")),
@@ -120,8 +126,7 @@ async function main() {
   })
 
   await test("rejects when DATABASE_URL is missing", async () => {
-    const { DATABASE_URL, ...rest } = VALID_ENV
-    const { exitCalls, messages } = await run(rest)
+    const { exitCalls, messages } = await run(withoutKey("DATABASE_URL"))
     assert(exitCalls.length === 1 && exitCalls[0] === 1, "must exit(1) exactly once")
     assert(messages.some((m) => m.includes("DATABASE_URL is not set")), "error message must mention DATABASE_URL")
   })

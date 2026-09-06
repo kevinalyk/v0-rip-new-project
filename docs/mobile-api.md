@@ -344,3 +344,49 @@ environment, and if neither source provides them, execution still reaches
   running ESLint scoped to only the files this pass touched or added — do not treat
   either number as "zero warnings" or "clean" unless the linked verification output
   actually says so for that exact command.
+- The repo-wide `tsc --noEmit` check also fails, almost entirely in files this pass
+  never touched (`lib/email-checker.ts`, `lib/campaign-detector.ts`,
+  `lib/seed-email-utils.ts`, various `app/api/admin/**` routes, etc.). One error does
+  land in a file this pass modified — `components/sidebar.tsx(225,52): error TS2339:
+  Property 'client' does not exist on type 'Domain'` — but that line
+  (`selectedDomain?.client?.slug`) is unchanged, unmoved context in this pass's diff
+  against `main` (verify with `git diff origin/main...HEAD -- components/sidebar.tsx`);
+  this pass did not introduce it and did not touch the `Domain` type.
+
+## Final verification
+
+Ran against a clean checkout of this PR's head commit, Node 24.16.0, pnpm 10.34.3.
+Exact counts and exit codes from the most recent run (do not restate these as "clean"
+or "passing" if a future run's exit code or counts differ from what's recorded here):
+
+| Command | Exit code | Result |
+| --- | --- | --- |
+| `node --version` / `pnpm --version` | 0 | `v24.16.0` / `10.34.3` |
+| `pnpm install --frozen-lockfile` | 0 | resolves `zod@3.25.76` |
+| `git diff --check origin/main...HEAD` | 0 | clean |
+| `npx prisma generate` | 0 | client generated |
+| `npx prisma validate` | 0 | schema valid |
+| `pnpm run test:mobile-db-preflight` (no DB, no env file) | 0 | 10 passed, 0 failed |
+| `pnpm run test:mobile-routes-auth` (no DB) | 0 | 32 passed, 0 failed |
+| Targeted `eslint` on all 29 PR-touched `.ts`/`.tsx`/`.mjs` files | 0 | 0 errors, 0 warnings |
+| Repo-wide `tsc --noEmit` | 2 | 569 errors — all pre-existing except one in `components/sidebar.tsx` (see above), which predates this pass |
+| Repo-wide `pnpm run lint` | 1 | 893 problems (844 errors, 49 warnings) — none in any PR-touched file (verified: no PR-touched path appears as an error/warning file header in the lint output) |
+| `pnpm run build` (with the project's connected dev env vars) | 0 | `✓ Compiled successfully`, all 273 static pages generated, `Finalizing page optimization`; all 12 `/api/mobile/v1/**` routes present in the route manifest |
+| `pnpm run test:mobile-auth` (dev DB, opted in) | 0 | 24 passed, 0 failed |
+| `pnpm run test:mobile-feed` (dev DB, opted in) | 0 | 19 passed, 0 failed |
+| `pnpm run test:mobile-entities` (dev DB, opted in) | 0 | 3 passed, 0 failed |
+| `pnpm run test:mobile` (full chain, dev DB, opted in) | 0 | 88 passed, 0 failed total |
+
+The DB-backed rows ran with `MOBILE_DB_TESTS_ALLOWED=true` set for that invocation only,
+against the project's connected Neon development database, with `VERCEL_ENV`/`NODE_ENV`
+unset (not `production`). `prisma migrate status` before and after every DB-backed run
+reported "Database schema is up to date" against the same 25 already-applied
+migrations — no migration was created or applied during this verification pass. The
+`prisma:error ... write conflict or a deadlock ... Please retry your transaction` lines
+interleaved in the `test:mobile-entities` output are the expected retry-under-contention
+logging from its concurrent-follow test (see the `MAX_SERIALIZATION_RETRIES` comment in
+`lib/services/entity-service.ts`); every retry resolved and the suite still ended at
+"3 passed, 0 failed". A single unrelated `prisma:error` for an `announcement.findMany()`
+call also appears during `pnpm run build`'s static generation of `/news` — that query
+lives in files this pass never touched and the build still completed successfully end
+to end.

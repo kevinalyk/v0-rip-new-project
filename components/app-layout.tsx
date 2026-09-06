@@ -68,8 +68,15 @@ function AppLayout({ children, clientSlug, isAdminView = false, defaultCollapsed
           collapsed ? "md:pl-16" : "md:pl-64"
         }`}
       >
-        {/* Mobile top bar */}
-        <header className="flex md:hidden items-center gap-3 px-4 py-3 pt-safe border-b border-border bg-background sticky top-0 z-30">
+        {/* Mobile top bar. Safe-area inset is added ON TOP of the normal py-3 padding
+            (not a replacement for it) via an explicit calc() — the standalone
+            `.pt-safe` utility in globals.css sets `padding-top` outright, which would
+            otherwise clobber py-3's padding-top entirely once both classes target the
+            same property. */}
+        <header
+          className="flex md:hidden items-center gap-3 px-4 pb-3 border-b border-border bg-background sticky top-0 z-30"
+          style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top, 0px))" }}
+        >
           <Logo collapsed={false} variant="icon" />
           <div className="flex-1 flex items-center justify-center min-w-0">
             <span className="text-foreground font-bold text-xl tracking-tight">Inbox.GOP</span>

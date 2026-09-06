@@ -1248,16 +1248,20 @@ model MobileRefreshToken {
                               // token in a family revokes the whole family (replay detection).
   deviceId         String?   // Client-supplied installation/device identifier
   deviceName       String?
-  expiresAt        DateTime  // now + 30d at issuance/rotation
+  expiresAt        DateTime  // this token's own sliding expiry (now + 30d at issuance/rotation)
+  absoluteExpiresAt DateTime // fixed at family creation (issueMobileSession) = now + 30d and copied
+                              // unchanged on every rotation — caps the whole family's lifetime so
+                              // rotation can never extend a session past 30 days from login.
   lastUsedAt       DateTime?
   revokedAt        DateTime? // Set when rotated (superseded), logged out, or revoked for replay
-  revokedReason    String?   // "rotated" | "logout" | "replay_detected"
+  revokedReason    String?   // "rotated" | "logout" | "replay_detected" | "password_reset_required"
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
   @@index([userId])
   @@index([tokenFamilyId])
   @@index([expiresAt])
+  @@index([absoluteExpiresAt])
 }
 
 model MobileAuthAttempt {

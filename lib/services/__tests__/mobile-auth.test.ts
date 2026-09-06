@@ -15,6 +15,7 @@ import { config as loadEnv } from "dotenv"
 loadEnv({ path: ".env.development.local" })
 
 import { SignJWT } from "jose"
+import { createHash } from "crypto"
 import prisma from "@/lib/prisma"
 import {
   createMobileAccessToken,
@@ -92,6 +93,9 @@ async function main() {
   })
   const userInactiveClient = await prisma.user.create({
     data: { email: `${PREFIX}user_inactive@example.com`, password: "hashed", clientId: clientBInactive.id, firstLogin: false },
+  })
+  const userForcedReset = await prisma.user.create({
+    data: { email: `${PREFIX}user_forced_reset@example.com`, password: "hashed", clientId: clientA.id, firstLogin: false },
   })
 
   // ── Access token issuance + verification ──────────────────────────────────
@@ -229,6 +233,62 @@ async function main() {
     await prisma.mobileRefreshToken.updateMany({
       where: { userId: userA.id, revokedAt: null },
       data: { expiresAt: new Date(Date.now() - 1000) },
+    })
+    await expectMobileError(() => rotateMobileSession(session.refreshToken), "REFRESH_TOKEN_EXPIRED")
+  })
+
+  // ── Administrator-forced password reset (firstLogin) ─────────────────────
+  await test("requireMobileAuth blocks a session whose account was flipped to firstLogin mid-session", async () => {
+    const { token } = await createMobileAccessToken(userForcedReset.id)
+    // Sanity check: works before the forced reset.
+    await requireMobileAuth(new Request("http://x", { headers: { Authorization: `Bearer ${token}` } }))
+    await prisma.user.update({ where: { id: userForcedReset.id }, data: { firstLogin: true } })
+    await expectMobileError(
+      () => requireMobileAuth(new Request("http://x", { headers: { Authorization: `Bearer ${token}` } })),
+      "PASSWORD_RESET_REQUIRED",
+    )
+    await prisma.user.update({ where: { id: userForcedReset.id }, data: { firstLogin: false } })
+  })
+
+  await test("rotateMobileSession blocks and revokes the family once firstLogin is forced", async () => {
+    const session = await issueMobileSession(userForcedReset.id)
+    await prisma.user.update({ where: { id: userForcedReset.id }, data: { firstLogin: true } })
+    await expectMobileError(() => rotateMobileSession(session.refreshToken), "PASSWORD_RESET_REQUIRED")
+    // The family should now be revoked entirely — even after the flag is cleared, this
+    // same refresh token must not come back to life.
+    await prisma.user.update({ where: { id: userForcedReset.id }, data: { firstLogin: false } })
+    await expectMobileError(() => rotateMobileSession(session.refreshToken), "REFRESH_TOKEN_REUSED")
+  })
+
+  // ── Absolute (non-extendable) refresh-session expiry ──────────────────────
+  await test("rotation cannot extend a refresh session past its absolute 30-day expiry", async () => {
+    const session = await issueMobileSession(userA.id)
+    // Simulate the family having been created 29 days ago, one day short of its cap.
+    const almostExpired = new Date(Date.now() + 24 * 60 * 60 * 1000) // 1 day from now
+    await prisma.mobileRefreshToken.updateMany({
+      where: { userId: userA.id, revokedAt: null },
+      data: { absoluteExpiresAt: almostExpired },
+    })
+    const rotated = await rotateMobileSession(session.refreshToken)
+    const updated = await prisma.mobileRefreshToken.findUnique({
+      where: { refreshTokenHash: createHash("sha256").update(rotated.refreshToken).digest("hex") },
+    })
+    assert(updated !== null, "rotated token should exist")
+    assert(
+      updated!.expiresAt.getTime() <= almostExpired.getTime(),
+      "rotated token's sliding expiry must not exceed the family's absolute cap",
+    )
+    assert(
+      updated!.absoluteExpiresAt.getTime() === almostExpired.getTime(),
+      "absoluteExpiresAt must be copied unchanged by rotation",
+    )
+  })
+
+  await test("rotateMobileSession rejects a session past its absolute 30-day expiry", async () => {
+    const session = await issueMobileSession(userA.id)
+    await prisma.mobileRefreshToken.updateMany({
+      where: { userId: userA.id, revokedAt: null },
+      data: { absoluteExpiresAt: new Date(Date.now() - 1000) },
     })
     await expectMobileError(() => rotateMobileSession(session.refreshToken), "REFRESH_TOKEN_EXPIRED")
   })

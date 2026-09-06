@@ -25,7 +25,8 @@ import type { Prisma } from "@prisma/client"
 const ISSUER = "inbox-gop-mobile"
 const AUDIENCE = "inbox-gop-ios"
 const ACCESS_TOKEN_TTL_SECONDS = 15 * 60 // 15 minutes
-const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
+const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000 // each token's own sliding expiry
+const REFRESH_SESSION_ABSOLUTE_TTL_MS = 30 * 24 * 60 * 60 * 1000 // hard cap on the whole family, from login
 const RATE_LIMIT_WINDOW_MS = 60 * 1000 // 1 minute
 const RATE_LIMIT_CLEANUP_SAMPLE_RATE = 0.05 // ~5% of rate-limited requests also sweep old rows
 const RATE_LIMIT_RETENTION_MS = 60 * 60 * 1000 // rows older than 1h are eligible for cleanup
@@ -156,6 +157,17 @@ export async function requireMobileAuth(request: Request): Promise<MobileAuthCon
     throw new MobileAuthError(403, "CLIENT_INACTIVE", "Client account is inactive")
   }
 
+  if (user.firstLogin) {
+    // An administrator can force this at any time (e.g. a password reset), even mid-session —
+    // requireMobileAuth reloads the user on every request, so this takes effect on the very
+    // next authenticated call, not just at the next login/refresh.
+    throw new MobileAuthError(
+      403,
+      "PASSWORD_RESET_REQUIRED",
+      "This account must complete a password reset on the web app before continuing to use the mobile app.",
+    )
+  }
+
   return {
     userId: user.id,
     role: user.role,
@@ -243,6 +255,7 @@ export async function issueMobileSession(
 ): Promise<MobileSession> {
   const rawRefreshToken = generateRefreshToken()
   const tokenFamilyId = generateTokenFamilyId()
+  const now = Date.now()
 
   await prisma.mobileRefreshToken.create({
     data: {
@@ -251,7 +264,10 @@ export async function issueMobileSession(
       tokenFamilyId,
       deviceId: deviceId || null,
       deviceName: deviceName || null,
-      expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+      expiresAt: new Date(now + REFRESH_TOKEN_TTL_MS),
+      // Fixed at family creation — every descendant token from rotation copies this
+      // value unchanged, so the family can never live longer than 30 days from login.
+      absoluteExpiresAt: new Date(now + REFRESH_SESSION_ABSOLUTE_TTL_MS),
     },
   })
 
@@ -287,7 +303,32 @@ export async function rotateMobileSession(rawRefreshToken: string): Promise<Mobi
     throw new MobileAuthError(401, "REFRESH_TOKEN_EXPIRED", "Refresh token expired")
   }
 
+  if (existing.absoluteExpiresAt < new Date()) {
+    // The family has reached its 30-day hard cap from login — no amount of rotation
+    // can extend it. The caller must sign in again.
+    throw new MobileAuthError(401, "REFRESH_TOKEN_EXPIRED", "Session has reached its maximum lifetime")
+  }
+
+  // Enforce administrator-forced password resets on refresh, not just on new logins —
+  // otherwise a device that already has a refresh token could keep itself signed in
+  // indefinitely by refreshing instead of ever hitting the login/firstLogin check again.
+  const user = await prisma.user.findUnique({ where: { id: existing.userId }, select: { firstLogin: true } })
+  if (!user) {
+    await revokeMobileFamily(existing.tokenFamilyId, "replay_detected")
+    throw new MobileAuthError(401, "INVALID_REFRESH_TOKEN", "Invalid refresh token")
+  }
+  if (user.firstLogin) {
+    await revokeMobileFamily(existing.tokenFamilyId, "password_reset_required")
+    throw new MobileAuthError(
+      403,
+      "PASSWORD_RESET_REQUIRED",
+      "This account must complete a password reset on the web app before continuing to use the mobile app.",
+    )
+  }
+
   const rawNextRefreshToken = generateRefreshToken()
+  // Sliding per-token expiry, but never past the family's fixed absolute cap.
+  const nextExpiresAt = new Date(Math.min(Date.now() + REFRESH_TOKEN_TTL_MS, existing.absoluteExpiresAt.getTime()))
 
   const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const revoked = await tx.mobileRefreshToken.updateMany({
@@ -308,7 +349,9 @@ export async function rotateMobileSession(rawRefreshToken: string): Promise<Mobi
         tokenFamilyId: existing.tokenFamilyId,
         deviceId: existing.deviceId,
         deviceName: existing.deviceName,
-        expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+        expiresAt: nextExpiresAt,
+        // Copied unchanged from the token being rotated — never extended.
+        absoluteExpiresAt: existing.absoluteExpiresAt,
       },
     })
 
@@ -332,7 +375,10 @@ export async function revokeMobileSession(rawRefreshToken: string): Promise<void
   })
 }
 
-export async function revokeMobileFamily(tokenFamilyId: string, reason: "replay_detected" | "logout"): Promise<void> {
+export async function revokeMobileFamily(
+  tokenFamilyId: string,
+  reason: "replay_detected" | "logout" | "password_reset_required",
+): Promise<void> {
   await prisma.mobileRefreshToken.updateMany({
     where: { tokenFamilyId, revokedAt: null },
     data: { revokedAt: new Date(), revokedReason: reason },

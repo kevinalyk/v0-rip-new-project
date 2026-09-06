@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma"
 import { getCIHistoryDays, type SubscriptionPlan } from "@/lib/subscription-utils"
 import { OFFICES } from "@/lib/campaign-filter-options"
+import { MobileAuthError } from "@/lib/mobile-auth"
 
 export interface FeedFilters {
   search?: string
@@ -36,15 +37,29 @@ function encodeCursor(item: { dateReceived: string; id: string }): string {
   return Buffer.from(JSON.stringify(item)).toString("base64url")
 }
 
+/**
+ * Returns null when no cursor was supplied at all. Throws a 400 MobileAuthError when a
+ * cursor WAS supplied but doesn't decode to a well-formed { dateReceived, id } pair — a
+ * malformed cursor must be rejected outright, not silently treated as "start from the
+ * beginning" (which could mask client bugs or be used to probe pagination behavior).
+ */
 export function decodeCursor(raw: string | null | undefined): FeedCursor | null {
   if (!raw) return null
   try {
     const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf-8"))
-    if (typeof parsed?.dateReceived === "string" && typeof parsed?.id === "string") return parsed
-    return null
+    if (
+      parsed &&
+      typeof parsed.dateReceived === "string" &&
+      !Number.isNaN(new Date(parsed.dateReceived).getTime()) &&
+      typeof parsed.id === "string" &&
+      parsed.id.length > 0
+    ) {
+      return { dateReceived: parsed.dateReceived, id: parsed.id }
+    }
   } catch {
-    return null
+    // fall through to the shared invalid-cursor error below
   }
+  throw new MobileAuthError(400, "INVALID_CURSOR", "The provided cursor is malformed")
 }
 
 /**
@@ -63,36 +78,62 @@ async function getDateFloor(clientId: string, plan: SubscriptionPlan): Promise<D
   return new Date(Date.now() - minDays * 24 * 60 * 60 * 1000)
 }
 
-async function getEntityIdsForClient(clientId: string, subscriptionsOnly: boolean, filters: FeedFilters) {
-  const entityWhere: any = {}
-  if (filters.party) entityWhere.party = filters.party
-  if (filters.state) entityWhere.state = filters.state
-  if (filters.entityType) entityWhere.type = filters.entityType
+function entityAttributeWhere(filters: FeedFilters): Record<string, unknown> {
+  const where: Record<string, unknown> = { type: { not: "data_broker" } }
+  if (filters.party) where.party = { equals: filters.party, mode: "insensitive" }
+  if (filters.state) where.state = { equals: filters.state, mode: "insensitive" }
+  if (filters.entityType) where.type = { equals: filters.entityType, mode: "insensitive" }
   if (filters.office) {
     const office = OFFICES.find((o) => o.value === filters.office)
-    if (office) entityWhere.office = { contains: office.match, mode: "insensitive" }
+    if (office) where.office = { contains: office.match, mode: "insensitive" }
   }
-
-  if (subscriptionsOnly) {
-    const subs = await prisma.ciEntitySubscription.findMany({
-      where: { clientId, entity: Object.keys(entityWhere).length ? entityWhere : undefined },
-      select: { entityId: true },
-    })
-    return subs.map((s: (typeof subs)[number]) => s.entityId)
-  }
-
-  if (Object.keys(entityWhere).length === 0) return null // no entity-level filtering needed
-
-  const entities = await prisma.ciEntity.findMany({ where: entityWhere, select: { id: true } })
-  return entities.map((e: (typeof entities)[number]) => e.id)
+  return where
 }
 
 /**
- * Cursor-paginated feed for the mobile app. Enforces client isolation, hidden/deleted
- * flags, and plan/data-retention limits identically to the web feed
- * (app/api/competitive-insights/route.ts), but exposes cursor pagination instead of
- * page/limit at the boundary. Ordering is a stable compound key (dateReceived DESC,
- * id DESC) so concurrent inserts cannot duplicate or skip rows across pages.
+ * Resolves the tag and subscriptionsOnly filters — both are per-client join tables
+ * (EntityTag, CiEntitySubscription), not entity attributes, so they can't be expressed
+ * as a plain `entity: {...}` relation filter. Returns null when neither filter is
+ * active (no restriction), or the intersection of whichever filters ARE active
+ * (mirrors the web feed's `entityIdSets` intersection logic). An empty array is a
+ * valid, meaningful result — e.g. following nothing while `subscriptionsOnly=true`
+ * must return zero items, not the full unrestricted feed.
+ */
+async function resolveEntityIdRestriction(clientId: string, filters: FeedFilters): Promise<string[] | null> {
+  const sets: string[][] = []
+
+  if (filters.subscriptionsOnly) {
+    const subs = await prisma.ciEntitySubscription.findMany({ where: { clientId }, select: { entityId: true } })
+    sets.push(subs.map((s: (typeof subs)[number]) => s.entityId))
+  }
+
+  if (filters.tag) {
+    const tagged = await prisma.entityTag.findMany({
+      where: { clientId, tagName: filters.tag },
+      select: { entityId: true },
+    })
+    sets.push(tagged.map((t: (typeof tagged)[number]) => t.entityId))
+  }
+
+  if (sets.length === 0) return null
+  if (sets.length === 1) return sets[0]
+  return sets[0].filter((id) => sets.every((set) => set.includes(id)))
+}
+
+/**
+ * Cursor-paginated feed for the mobile app. Matches the access model of the existing
+ * web Competitive Insights feed (app/api/competitive-insights/route.ts) exactly:
+ * only campaigns/messages assigned to a tracked, non-data-broker entity are visible
+ * (`entityId IS NOT NULL`) — there is no `clientId`-based branch here at all, so a
+ * client's own *unassigned* personal captures (and, by construction, every other
+ * client's) are never exposed through this shared feed. Personal records remain
+ * reachable only via getFeedItemById's clientId-owned branch (single-item detail).
+ *
+ * Every filter is combined with an explicit top-level `AND: [...]` array rather than
+ * spreading multiple `{ OR: [...] }` fragments into the same object — the latter is
+ * what silently dropped the access-scope clause in the original implementation
+ * whenever a search or cursor condition was also present (each spread `OR` key
+ * clobbers the previous one; only the last one applied).
  */
 export async function getFeedPage(
   clientId: string,
@@ -101,55 +142,85 @@ export async function getFeedPage(
   cursor: FeedCursor | null,
 ): Promise<{ items: FeedItem[]; nextCursor: string | null; hasMore: boolean }> {
   const dateFloor = await getDateFloor(clientId, plan)
-  const entityIds = await getEntityIdsForClient(clientId, filters.subscriptionsOnly ?? false, filters)
+  const entityIdRestriction = await resolveEntityIdRestriction(clientId, filters)
 
-  const cursorWhere = cursor
+  // A tag/subscriptionsOnly filter that resolves to zero entities means the feed is
+  // empty by definition — short-circuit instead of running a query that Prisma would
+  // (correctly) also turn up empty, and skip it for both message types.
+  if (entityIdRestriction !== null && entityIdRestriction.length === 0) {
+    return { items: [], nextCursor: null, hasMore: false }
+  }
+
+  const entityWhere = entityAttributeWhere(filters)
+
+  const searchWhereEmail = filters.search
+    ? {
+        OR: [
+          { subject: { contains: filters.search, mode: "insensitive" as const } },
+          { senderName: { contains: filters.search, mode: "insensitive" as const } },
+          { senderEmail: { contains: filters.search, mode: "insensitive" as const } },
+        ],
+      }
+    : null
+
+  const searchWhereSms = filters.search
+    ? {
+        OR: [
+          { message: { contains: filters.search, mode: "insensitive" as const } },
+          { phoneNumber: { contains: filters.search } },
+        ],
+      }
+    : null
+
+  const emailCursorWhere = cursor
     ? {
         OR: [
           { dateReceived: { lt: new Date(cursor.dateReceived) } },
           { dateReceived: new Date(cursor.dateReceived), id: { lt: cursor.id } },
         ],
       }
-    : {}
+    : null
 
-  const dateWhere = dateFloor ? { dateReceived: { gte: dateFloor } } : {}
-
-  const searchWhere = filters.search
+  const smsCursorWhere = cursor
     ? {
         OR: [
-          { subject: { contains: filters.search, mode: "insensitive" as const } },
-          { senderName: { contains: filters.search, mode: "insensitive" as const } },
+          { createdAt: { lt: new Date(cursor.dateReceived) } },
+          { createdAt: new Date(cursor.dateReceived), id: { lt: cursor.id } },
         ],
       }
-    : {}
+    : null
 
+  // Prisma's nested filter types don't compose well with conditionally-included AND
+  // branches; matches the `any` typing already used for this shape throughout the
+  // rest of the codebase (e.g. app/api/competitive-insights/route.ts).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const emailWhere: any = {
-    isHidden: false,
-    isDeleted: false,
-    OR: [{ entityId: entityIds ? { in: entityIds } : undefined }, { clientId }],
-    ...dateWhere,
-    ...cursorWhere,
-    ...searchWhere,
+    AND: [
+      { isHidden: false },
+      { isDeleted: false },
+      { entityId: { not: null } },
+      { entity: entityWhere },
+      entityIdRestriction ? { entityId: { in: entityIdRestriction } } : {},
+      dateFloor ? { dateReceived: { gte: dateFloor } } : {},
+      emailCursorWhere ?? {},
+      searchWhereEmail ?? {},
+    ],
   }
-  // Remove the `entityId: undefined` no-op branch when there's no entity filter.
-  if (!entityIds) emailWhere.OR = [{ clientId }]
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see emailWhere above.
   const smsWhere: any = {
-    isHidden: false,
-    isDeleted: false,
-    processed: true,
-    OR: [{ entityId: entityIds ? { in: entityIds } : undefined }, { clientId }],
-    ...(dateFloor ? { createdAt: { gte: dateFloor } } : {}),
-    ...(cursor
-      ? {
-          OR: [
-            { createdAt: { lt: new Date(cursor.dateReceived) } },
-            { createdAt: new Date(cursor.dateReceived), id: { lt: cursor.id } },
-          ],
-        }
-      : {}),
+    AND: [
+      { isHidden: false },
+      { isDeleted: false },
+      { processed: true },
+      { entityId: { not: null } },
+      { entity: entityWhere },
+      entityIdRestriction ? { entityId: { in: entityIdRestriction } } : {},
+      dateFloor ? { createdAt: { gte: dateFloor } } : {},
+      smsCursorWhere ?? {},
+      searchWhereSms ?? {},
+    ],
   }
-  if (!entityIds) smsWhere.OR = [{ clientId }]
 
   const includeEmail = filters.messageType !== "sms"
   const includeSms = filters.messageType !== "email"
@@ -208,24 +279,29 @@ export async function getFeedPage(
 
 export async function getFeedItemById(
   clientId: string,
+  plan: SubscriptionPlan,
   id: string,
   type: "email" | "sms",
-): Promise<FeedItem & { emailContent?: string | null; emailPreview?: string | null; ctaLinks?: unknown[] } | null> {
+): Promise<
+  (FeedItem & { emailContent?: string | null; emailPreview?: string | null; ctaLinks?: unknown[] }) | null
+> {
+  const dateFloor = await getDateFloor(clientId, plan)
+
   if (type === "email") {
     const campaign = await prisma.competitiveInsightCampaign.findUnique({
       where: { id },
       include: { entity: { select: { id: true, name: true, type: true, party: true, state: true } } },
     })
     if (!campaign || campaign.isDeleted || campaign.isHidden) return null
-    // Client isolation: must be reachable either via the client's own personal
-    // subscription or via a followed entity.
-    const accessible =
-      campaign.clientId === clientId ||
-      (campaign.entityId &&
-        (await prisma.ciEntitySubscription.findUnique({
-          where: { clientId_entityId: { clientId, entityId: campaign.entityId } },
-        })))
-    if (!accessible) return null
+    if (dateFloor && campaign.dateReceived < dateFloor) return null
+
+    // Same access model as the feed listing: any campaign assigned to a tracked,
+    // non-data-broker entity is shared (visible to any client), OR it's one of the
+    // caller's own personal (unassigned) captures. Never another client's personal
+    // record.
+    const isShared = campaign.entityId !== null && campaign.entity?.type !== "data_broker"
+    const isOwnPersonal = campaign.clientId === clientId
+    if (!isShared && !isOwnPersonal) return null
 
     return {
       id: campaign.id,
@@ -248,13 +324,14 @@ export async function getFeedItemById(
     include: { entity: { select: { id: true, name: true, type: true, party: true, state: true } } },
   })
   if (!sms || sms.isDeleted || sms.isHidden) return null
-  const accessible =
-    sms.clientId === clientId ||
-    (sms.entityId &&
-      (await prisma.ciEntitySubscription.findUnique({
-        where: { clientId_entityId: { clientId, entityId: sms.entityId } },
-      })))
-  if (!accessible) return null
+  // Unprocessed SMS has no reliable extracted content/sender yet — treat it the same
+  // as "not found" rather than exposing a half-parsed row.
+  if (!sms.processed) return null
+  if (dateFloor && sms.createdAt < dateFloor) return null
+
+  const isShared = sms.entityId !== null && sms.entity?.type !== "data_broker"
+  const isOwnPersonal = sms.clientId === clientId
+  if (!isShared && !isOwnPersonal) return null
 
   return {
     id: sms.id,

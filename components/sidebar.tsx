@@ -269,7 +269,15 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
           <div className="flex-1 flex justify-center">
             <Logo collapsed={collapsed} variant="icon" />
           </div>
-          <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className="h-8 w-8">
+          {/* h-11/w-11 (44px) on mobile — this Sidebar also renders as the touch-driven
+              mobile drawer (see components/app-layout.tsx) — falling back to the
+              denser 32px desktop size at md+. */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setCollapsed(!collapsed)}
+            className="h-11 w-11 md:h-8 md:w-8"
+          >
             {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </Button>
         </div>
@@ -342,7 +350,12 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
           <div className="flex-1 flex justify-center">
             <Logo collapsed={collapsed} variant="icon" />
           </div>
-          <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className="h-8 w-8">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setCollapsed(!collapsed)}
+            className="h-11 w-11 md:h-8 md:w-8"
+          >
             {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </Button>
         </div>
@@ -801,15 +814,18 @@ interface NavSectionProps {
 
 function NavSection({ icon, label, collapsed, expanded, onToggle }: NavSectionProps) {
   return (
-    <Button
-      variant="ghost"
-      className={cn(
-        "relative w-full justify-start gap-3 px-3 font-medium",
-        expanded && "bg-rip-red/10 text-rip-red hover:bg-rip-red/15 hover:text-rip-red",
-        collapsed && "justify-center",
-      )}
-      onClick={onToggle}
-    >
+  <Button
+  variant="ghost"
+  className={cn(
+  // min-h-11 (44px) covers this control in the touch-driven mobile drawer
+  // (components/app-layout.tsx); md:min-h-0 lets the default h-9 govern the
+  // denser desktop sidebar unchanged.
+  "relative w-full justify-start gap-3 px-3 font-medium min-h-11 md:min-h-0",
+  expanded && "bg-rip-red/10 text-rip-red hover:bg-rip-red/15 hover:text-rip-red",
+  collapsed && "justify-center",
+  )}
+  onClick={onToggle}
+  >
       {expanded && (
         <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-rip-red" aria-hidden="true" />
       )}
@@ -834,16 +850,17 @@ interface NavItemProps {
 
 function NavItem({ icon, label, active, collapsed, onClick }: NavItemProps) {
   return (
-    <Button
-      variant={active ? "secondary" : "ghost"}
-      size="sm"
-      className={cn(
-        "relative w-full justify-start gap-3 px-3",
-        active && "bg-rip-red/10 hover:bg-rip-red/15 text-rip-red hover:text-rip-red",
-        collapsed && "justify-center",
-      )}
-      onClick={onClick}
-    >
+  <Button
+  variant={active ? "secondary" : "ghost"}
+  size="sm"
+  className={cn(
+  // Same mobile-drawer touch-target reasoning as NavSection above.
+  "relative w-full justify-start gap-3 px-3 min-h-11 md:min-h-0",
+  active && "bg-rip-red/10 hover:bg-rip-red/15 text-rip-red hover:text-rip-red",
+  collapsed && "justify-center",
+  )}
+  onClick={onClick}
+  >
       {active && (
         <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-rip-red" aria-hidden="true" />
       )}

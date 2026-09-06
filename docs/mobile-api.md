@@ -6,21 +6,26 @@ client. Entirely separate from:
 - The browser cookie session (`lib/auth.ts`, `JWT_SECRET`) used by the Next.js web app.
 - The developer API-key namespace (`lib/api-auth.ts`, `ApiKey` model, `/api/v1/*`).
 
-Nothing in either of those was modified. This document covers auth, error shapes,
-and every endpoint added in this pass.
+Nothing in either of those was modified.
 
 ## Auth model
 
 - **Access token**: short-lived JWT (15 min), HS256, signed with `MOBILE_JWT_SECRET`
-  (required env var, no fallback — the module throws at import time if unset).
-  Claims: `sub` (userId), `typ: "access"`, `iss: "inbox-gop-mobile"`,
-  `aud: "inbox-gop-mobile-app"`, `iat`, `exp`. No role, clientId, email, or name is
-  embedded — every authenticated request reloads the user + client from Postgres
-  (`requireMobileAuth`) before any authorization decision is made, so claims can't
-  go stale and there's no PII sitting in a token a device might retain.
-- **Refresh token**: opaque random 256-bit token, 30-day expiry. Only its SHA-256
-  hash is ever persisted (`MobileRefreshToken.refreshTokenHash`); the raw value is
-  returned to the client exactly once, at issuance/rotation.
+  (required env var, no fallback — `lib/mobile-auth.ts` throws as soon as it's needed
+  if unset). Claims: `sub` (userId), `typ: "access"`, `iss: "inbox-gop-mobile"`,
+  `aud: "inbox-gop-ios"`, `iat`, `exp`. No role, clientId, email, or name is embedded —
+  every authenticated request reloads the user + client from Postgres
+  (`requireMobileAuth`) before any authorization decision is made, so claims can't go
+  stale and there's no PII sitting in a token a device might retain.
+- **Refresh token**: opaque random 256-bit token. Only its SHA-256 hash is ever
+  persisted (`MobileRefreshToken.refreshTokenHash`); the raw value is returned to the
+  client exactly once, at issuance/rotation.
+  - `expiresAt` is each individual token's own sliding expiry.
+  - `absoluteExpiresAt` is fixed once, at login (`issueMobileSession`), to
+    `now + 30 days`, and is copied **unchanged** by every subsequent rotation. This
+    is a true hard cap: no matter how often a device refreshes, the whole session
+    (token family) cannot outlive 30 days from the original login. Rotation always
+    sets the new token's `expiresAt` to `min(now + 30d, absoluteExpiresAt)`.
 - **Rotation**: every refresh call invalidates the presented token and mints a new
   one in the same family (`tokenFamilyId`). Rotation is atomic — a conditional
   `updateMany` inside a `$transaction` ensures that of two concurrent refresh calls
@@ -28,97 +33,207 @@ and every endpoint added in this pass.
   (revoked) token is treated as replay: the entire token family is revoked
   immediately, logging out every descendant session derived from that original
   login.
-- **Rate limiting**: `MobileAuthAttempt` (Postgres, not in-memory) keyes attempts by
-  `sha256(MOBILE_JWT_SECRET + ":ip:" + ip)` and `sha256(MOBILE_JWT_SECRET + ":email:" + normalizedEmail)`
-  — raw IP/email/password/token are never stored. Login and refresh return the same
-  generic `RATE_LIMITED` error regardless of whether the identifier exists, and old
-  rows are opportunistically deleted on a sampled fraction of requests so the table
-  self-trims without a cron job.
-- **`firstLogin` / forced password reset**: mirrors the web app's behavior. If the
-  user record requires a password reset, mobile `login` returns
-  `403 PASSWORD_RESET_REQUIRED` and issues no tokens. The client should route the
-  user to a web-based reset flow (`/reset-password` or `/set-password`); this pass
-  does not add a mobile-native self-service reset.
-- **Caching**: every auth response sets `Cache-Control: no-store`.
+- **`firstLogin` / forced password reset**: enforced at three points, not just
+  login, so an administrator forcing a reset takes effect immediately rather than
+  only at the account's next fresh login:
+  1. `POST /auth/login` refuses to issue a session at all (`403
+     PASSWORD_RESET_REQUIRED`) if the account's `firstLogin` flag is set.
+  2. `requireMobileAuth` — called on every authenticated request — reloads the user
+     and rejects with the same `403 PASSWORD_RESET_REQUIRED` if `firstLogin` was
+     flipped to `true` after the access token was issued (an access token can
+     otherwise stay valid for up to 15 more minutes).
+  3. `rotateMobileSession` checks the same flag before minting a new token pair; if
+     set, it revokes the entire refresh-token family (so the device can't just keep
+     refreshing its way around the block) and returns `403
+     PASSWORD_RESET_REQUIRED`.
+
+  The mobile client should route the user to a web-based reset flow
+  (`/reset-password` or `/set-password`) in all three cases; this pass does not add
+  a mobile-native self-service reset.
+- **Rate limiting**: `MobileAuthAttempt` (Postgres, not in-memory) keys attempts by
+  `HMAC-SHA256(MOBILE_JWT_SECRET, "ip:" + ip)` and
+  `HMAC-SHA256(MOBILE_JWT_SECRET, "email:" + normalizedEmail)` — raw IP/email/
+  password/token are never stored. Login and refresh both return `429
+  TOO_MANY_ATTEMPTS` regardless of whether the identifier exists or which limit
+  tripped, and old rows are opportunistically deleted on a sampled fraction of
+  requests so the table self-trims without a cron job.
+- **Caching**: every mobile API response sets `Cache-Control: no-store`.
 
 ## Middleware defense-in-depth
 
 `middleware.ts` allow-lists exactly two public paths:
 `/api/mobile/v1/auth/login` and `/api/mobile/v1/auth/refresh`. Every other
 `/api/mobile/v1/*` request must carry a syntactically valid
-`Authorization: Bearer <token>` header just to pass middleware — full
-cryptographic verification and the Postgres reload still happen inside the route
-handler via `withMobileAuth`/`requireMobileAuth`. This means a route handler that
-forgets to call `withMobileAuth` still can't be reached without *some* bearer
-header, though it would not be properly protected — `withMobileAuth` remains the
-real authorization boundary.
+`Authorization: Bearer <token>` header just to pass middleware — full cryptographic
+verification and the Postgres reload still happen inside the route handler via
+`withMobileAuth`/`requireMobileAuth`, which remains the real authorization boundary.
+
+This is backed by an automated static-analysis test —
+`lib/services/__tests__/mobile-routes-auth.test.ts`
+(`pnpm run test:mobile-routes-auth`) — that inspects every `app/api/mobile/v1/**
+/route.ts` file and fails if any exported HTTP method handler other than the two
+public routes is not directly assigned `withMobileAuth(...)`, or if a route exports
+a raw, unwrapped handler function. A route that forgot to wrap itself in
+`withMobileAuth` fails CI instead of shipping silently.
 
 No existing middleware branch (cookie session pages, `/api/v1` API-key routes,
 `clientSlug` redirects, cron/webhook paths) was changed.
 
+## Access model for feed data (Competitive Insights)
+
+The mobile feed intentionally mirrors the existing web Competitive Insights feed
+(`app/api/competitive-insights/route.ts`) rather than inventing a separate model:
+
+- **Listing** (`GET /feed`) only ever returns campaigns/messages assigned to a
+  tracked, non-`data_broker` entity (`entityId IS NOT NULL`, `entity.type !=
+  "data_broker"`), plus `isHidden: false` / `isDeleted: false` (and `processed:
+  true` for SMS). There is **no `clientId`-based branch in the listing query at
+  all** — this is what guarantees a client's own *and* every other client's
+  unassigned personal captures (`source: "personal"`, no `entityId`) can never
+  appear in the shared feed, by construction rather than by a runtime check that
+  could be bypassed by a filter combination.
+- **Detail view** (`GET /feed/[id]`) additionally allows a client to view its own
+  personal captures directly by ID (`campaign.clientId === callerClientId`), for
+  the existing personal-email/personal-numbers features — but never another
+  client's.
+- Both apply the client's effective retention window: `min(plan CI history days,
+  Client.dataRetentionDays)`. This is enforced identically on listing and on direct
+  by-ID access, so an item outside the retention window can't be reached just by
+  guessing its ID.
+- `tag` and `subscriptionsOnly` are resolved to entity-ID sets (via `EntityTag` and
+  `CiEntitySubscription`, both scoped to the caller's `clientId`) and intersected
+  when both are supplied. An empty resulting set (e.g. `subscriptionsOnly=true` for
+  a client following nothing) short-circuits to an empty feed — it is never treated
+  as "no restriction."
+- Every filter — access scope, entity attributes (`party`/`state`/`office`/
+  `entityType`), date-retention floor, cursor, and `search` — is combined via an
+  explicit top-level `AND: [...]` array. This matters: spreading multiple
+  `{ OR: [...] }` fragments into the same object (the original implementation) is
+  broken, because each spread `OR` key silently overwrites the previous one — only
+  the last one applied actually took effect, which could drop the access-scope
+  clause entirely whenever a search or cursor was also present.
+
+## Cursor pagination
+
+Cursor pagination orders by `(dateReceived DESC, id DESC)` — a stable compound key
+so concurrent inserts can't cause duplicate or skipped rows across pages.
+`decodeCursor` (`lib/services/feed-service.ts`) returns `null` when no cursor was
+supplied, but **throws `400 INVALID_CURSOR`** when a cursor value was supplied and
+doesn't decode to a well-formed `{ dateReceived, id }` pair — a malformed cursor is
+rejected outright rather than silently treated as "start from the beginning."
+
+## Follow limits and concurrency
+
+`POST /entities/[id]/follow` enforces the client's subscription-plan follow limit
+and is safe under concurrent calls (double-taps, multiple devices):
+
+- The existence check, count, and insert run inside one `Serializable` Prisma
+  transaction, so two concurrent transactions that would otherwise both read
+  "count = limit - 1" and both insert (exceeding the limit) instead conflict — one
+  is aborted with a serialization failure and retried (up to 3 times).
+- Following an entity that's already followed is idempotent: a duplicate unique-
+  constraint violation (from a race that still slips through) is caught and treated
+  as success, never a 500.
+
 ## Error shape
 
 All mobile API errors: `{ "error": { "code": "SOME_CODE", "message": "..." } }`
-with an appropriate HTTP status. Codes used: `MISSING_TOKEN`, `INVALID_TOKEN`,
-`TOKEN_EXPIRED`, `INVALID_REFRESH_TOKEN`, `REFRESH_TOKEN_REUSED`,
-`REFRESH_TOKEN_EXPIRED`, `RATE_LIMITED`, `INVALID_CREDENTIALS`,
-`PASSWORD_RESET_REQUIRED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_ERROR`.
+with an appropriate HTTP status. Codes used across the namespace: `MISSING_TOKEN`,
+`INVALID_TOKEN`, `TOKEN_EXPIRED`, `USER_NOT_FOUND`, `CLIENT_NOT_FOUND`,
+`CLIENT_INACTIVE`, `PASSWORD_RESET_REQUIRED`, `INVALID_REFRESH_TOKEN`,
+`REFRESH_TOKEN_REUSED`, `REFRESH_TOKEN_EXPIRED`, `TOO_MANY_ATTEMPTS`,
+`INVALID_CREDENTIALS`, `INVALID_BODY`, `INVALID_CURSOR`, `NO_CLIENT_CONTEXT`,
+`FORBIDDEN`, `CI_NOT_ENABLED`, `SUBSCRIPTION_INACTIVE`, `ENTITY_NOT_FOUND`,
+`FOLLOW_LIMIT_REACHED`, `NOT_FOUND`, `ALERT_NOT_FOUND`, `INTERNAL_ERROR`.
 
 ## Endpoints
 
 ### `POST /api/mobile/v1/auth/login` (public)
 Body: `{ email, password, deviceId?, deviceName? }`.
-On success: `{ accessToken, refreshToken, expiresIn, user: { id, email, name, role, clientId } }`.
-`PASSWORD_RESET_REQUIRED` (403) if the account needs a reset. `RATE_LIMITED` (429)
-past the attempt threshold. `INVALID_CREDENTIALS` (401) otherwise on failure —
+On success (`200`): `{ accessToken, refreshToken, expiresIn, tokenType: "Bearer", user: { id, email, firstName, lastName, role } }`.
+`403 PASSWORD_RESET_REQUIRED` if the account needs a reset. `429 TOO_MANY_ATTEMPTS`
+past the attempt threshold. `401 INVALID_CREDENTIALS` otherwise on failure —
 identical whether the email exists or not.
 
 ### `POST /api/mobile/v1/auth/refresh` (public)
-Body: `{ refreshToken }`. Returns a new `{ accessToken, refreshToken, expiresIn }`
-pair. `INVALID_REFRESH_TOKEN` / `REFRESH_TOKEN_REUSED` / `REFRESH_TOKEN_EXPIRED` on
-failure.
+Body: `{ refreshToken }`. On success (`200`): a new
+`{ accessToken, refreshToken, expiresIn, tokenType: "Bearer" }`. `401
+INVALID_REFRESH_TOKEN` / `401 REFRESH_TOKEN_REUSED` / `401 REFRESH_TOKEN_EXPIRED`
+(also returned once the family's absolute 30-day cap is reached) / `403
+PASSWORD_RESET_REQUIRED` on failure.
 
 ### `POST /api/mobile/v1/auth/logout` (bearer)
-Body: `{ refreshToken }`. Revokes that one session. Idempotent — calling it twice,
-or with an already-revoked token, still returns `204`.
+Body: `{ refreshToken }`. Revokes that one session. Response: `200 { success: true
+}`. Idempotent — calling it twice, or with an already-revoked/unknown token, still
+returns the same success response.
 
 ### `GET /api/mobile/v1/auth/me` (bearer)
-Returns the current user's profile (id, email, name, role, clientId, clientName).
+Returns the current user's profile directly (not wrapped in `data`):
+`{ id, email, firstName, lastName, role, firstLogin, client: { id, name, slug, subscriptionPlan, subscriptionStatus, hasCompetitiveInsights, trialExpiresAt } | null }`.
 
 ### `GET /api/mobile/v1/context` (bearer)
-Returns lightweight app-shell context: current user + the client's subscription
-plan limits (follow limits, retention window) via `lib/subscription-utils.ts`.
+Lightweight app-shell bootstrap context: `{ userId, role, firstLogin, client: { id, slug, active, subscriptionPlan, subscriptionStatus, hasCompetitiveInsights } | null }`.
 
 ### `GET /api/mobile/v1/feed` (bearer)
-Cursor-paginated combined feed (emails + SMS) scoped to the caller's `clientId`,
-respecting hidden/deleted flags and the client's data-retention window. Query
-params: `cursor`, `limit` (max 50), `entityId`, `type` (`email`|`sms`), `search`.
-Cursor pagination orders by `(dateReceived DESC, id DESC)` — a stable compound key
-so concurrent inserts can't cause duplicate or skipped rows across pages.
+Cursor-paginated combined feed (emails + SMS). Response:
+`{ data: FeedItem[], pagination: { nextCursor: string | null, hasMore: boolean } }`.
+Query params: `cursor`, `search`, `party`, `state`, `office`, `entityType`,
+`messageType` (`email`|`sms`), `tag`, `subscriptionsOnly` (`"true"`). See "Access
+model" and "Cursor pagination" above for the authorization and pagination rules.
+`400 INVALID_CURSOR` for a malformed `cursor` value.
 
 ### `GET /api/mobile/v1/feed/filters` (bearer)
-Returns the available filter facets (entities, types) for the caller's client,
-via `lib/campaign-filter-options.ts`.
+Static filter facets for building the mobile filter UI:
+`{ states: string[], parties: { value, label }[], offices: { value, label, match }[] }`
+(from `lib/campaign-filter-options.ts`).
 
-### `GET /api/mobile/v1/feed/[id]` (bearer)
-Single feed item detail. 404s (not 403) if the item exists but belongs to a
-different client, to avoid confirming existence across tenants.
+### `GET /api/mobile/v1/feed/[id]?type=email|sms` (bearer)
+Single campaign/message detail: `{ data: FeedItem & { emailContent, emailPreview, ctaLinks } }`.
+`404 NOT_FOUND` if the item doesn't exist, is hidden/deleted, is outside the
+client's retention window, is unprocessed SMS, or isn't accessible to the caller
+(not shared and not the caller's own personal record) — the same `404` in every
+case, to avoid confirming existence across tenants.
 
 ### `GET /api/mobile/v1/entities/followed` (bearer)
-Entities (CiEntity) the caller's client currently follows.
+Entities (`CiEntity`) the caller's client currently follows: `{ data: CiEntity[] }`.
 
-### `POST /api/mobile/v1/entities/[id]/follow` / `DELETE .../follow` (bearer)
-Follow/unfollow a `CiEntity`. Enforces the client's subscription-plan follow limit
-on `POST` (`FORBIDDEN` with a plan-limit message if exceeded) and client isolation
-on both.
+### `POST /api/mobile/v1/entities/[id]/follow` (bearer)
+Follows a `CiEntity`, enforcing the plan follow limit (concurrency-safe — see
+above). Response: `{ following: true, alreadyFollowing: boolean }`.
+`404 ENTITY_NOT_FOUND` if the entity doesn't exist. `403 FOLLOW_LIMIT_REACHED` if
+the plan's follow limit is already reached and this isn't a repeat follow.
 
-### `GET /api/mobile/v1/alerts` / `POST /api/mobile/v1/alerts` (bearer)
-List/create `CampaignAlertSubscription` rows for the caller, scoped to their
-client's visible campaigns.
+### `DELETE /api/mobile/v1/entities/[id]/follow` (bearer)
+Unfollows a `CiEntity`. Response: `{ following: false }`. Idempotent.
+
+### `GET /api/mobile/v1/alerts` (bearer)
+Lists `CampaignAlertSubscription` rows for the caller: `{ data: CampaignAlertSubscription[] }`.
+
+### `POST /api/mobile/v1/alerts` (bearer)
+Body: `{ name, party?, state?, office? }` (at least one of `party`/`state`/`office`
+required). Response (`201`): `{ data: CampaignAlertSubscription }`.
+`400 INVALID_BODY` if `name` is missing or all three criteria are missing.
 
 ### `DELETE /api/mobile/v1/alerts/[id]` (bearer)
-Deletes an alert the caller owns. `404` if it belongs to someone else or another
-client.
+Deletes an alert the caller owns. Response: `{ ok: true }`. `404 ALERT_NOT_FOUND`
+if it doesn't exist, `403 FORBIDDEN` if it belongs to someone else.
+
+## Tests
+
+- `pnpm run test:mobile-routes-auth` — static analysis proving every non-public
+  route uses `withMobileAuth`.
+- `pnpm run test:mobile-auth` — token issuance/verification, header validation,
+  issuer/audience/typ/secret checks, expiry, `requireMobileAuth`'s Postgres reload
+  and inactive-client/forced-reset handling, refresh rotation + replay + concurrency
+  + absolute expiry, logout, rate limiting, cross-client item access.
+- `pnpm run test:mobile-feed` — feed access scope (shared vs. personal vs.
+  data-broker), `subscriptionsOnly`/`tag` filters (including the empty-result case),
+  search (email + SMS), unprocessed-SMS exclusion, retention-window enforcement on
+  both listing and detail, malformed-cursor rejection, and second-page cursor
+  pagination correctness.
+- `pnpm run test:mobile-entities` — follow idempotency and follow-limit enforcement
+  under concurrency.
+- `pnpm run test:mobile` — runs all of the above in sequence.
 
 ## What was intentionally not changed
 
@@ -130,5 +245,6 @@ client.
 
 ## Required environment variable
 
-- `MOBILE_JWT_SECRET` — signs/verifies mobile access tokens. Distinct from the web
-  app's `JWT_SECRET` so a leak of one cannot be used to forge the other.
+- `MOBILE_JWT_SECRET` — signs/verifies mobile access tokens and keys the rate-limit
+  HMAC. Distinct from the web app's `JWT_SECRET` so a leak of one cannot be used to
+  forge the other.

@@ -7,15 +7,23 @@
  *
  * IMPORTANT: hits whatever database DATABASE_URL points to; creates and tears down its
  * own Client/CiEntity/CiEntitySubscription fixtures, id-prefixed with
- * MOBILE_ENTITY_TEST_. Do not point DATABASE_URL at production.
+ * MOBILE_ENTITY_TEST_. Do not point DATABASE_URL at production. The
+ * assertRealDatabaseOrExit() preflight in main() also requires MOBILE_DB_TESTS_ALLOWED=true
+ * (and hard-rejects VERCEL_ENV/NODE_ENV=production even if it is) — see test-db-preflight.ts.
  *
  * Run with: pnpm run test:mobile-entities (which passes
- * --env-file=.env.development.local to tsx) or
- * `npx tsx --env-file=.env.development.local lib/services/__tests__/mobile-entities.test.ts`
- * directly. The `--env-file` flag is required, not optional: under ESM, every static
- * `import` below is hoisted above any top-level statement in this file, so a
- * `dotenv.config()` call placed here in source order would run too late — `lib/prisma.ts`
- * (imported below) would already have read `process.env.DATABASE_URL` at its own
+ * --env-file-if-exists=.env.development.local to tsx) or
+ * `npx tsx --env-file-if-exists=.env.development.local lib/services/__tests__/mobile-entities.test.ts`
+ * directly, with MOBILE_DB_TESTS_ALLOWED=true and DATABASE_URL also set in the
+ * environment. `--env-file-if-exists` (rather than `--env-file`) is used so that a
+ * missing .env.development.local doesn't make Node itself abort before any test code
+ * loads — DATABASE_URL/MOBILE_DB_TESTS_ALLOWED can then also be supplied directly via
+ * the shell environment (e.g. in CI), and if neither source provides them, execution
+ * still reaches assertRealDatabaseOrExit() and fails closed with a clear message
+ * instead of a raw Node startup error. Either way, under ESM, every static `import`
+ * below is hoisted above any top-level statement in this file, so a `dotenv.config()`
+ * call placed here in source order would run too late — `lib/prisma.ts` (imported
+ * below) would already have read `process.env.DATABASE_URL` at its own
  * module-evaluation time and silently fallen back to its localhost mock default.
  */
 import prisma from "@/lib/prisma"
@@ -52,7 +60,7 @@ async function cleanup() {
 async function main() {
   await assertRealDatabaseOrExit()
   await cleanup()
-  
+
   // "paid" plan → ciFollowLimit: 3 (see lib/subscription-utils.ts).
   const client = await prisma.client.create({
     data: {

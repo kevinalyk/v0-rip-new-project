@@ -12,11 +12,12 @@
     "lint": "eslint .",
     "seed": "tsx prisma/seed.ts",
     "start": "next start",
-    "test:mobile-auth": "tsx --env-file=.env.development.local lib/services/__tests__/mobile-auth.test.ts",
-    "test:mobile-feed": "tsx --env-file=.env.development.local lib/services/__tests__/mobile-feed.test.ts",
-    "test:mobile-entities": "tsx --env-file=.env.development.local lib/services/__tests__/mobile-entities.test.ts",
+    "test:mobile-db-preflight": "tsx lib/services/__tests__/test-db-preflight.test.ts",
+    "test:mobile-auth": "tsx --env-file-if-exists=.env.development.local lib/services/__tests__/mobile-auth.test.ts",
+    "test:mobile-feed": "tsx --env-file-if-exists=.env.development.local lib/services/__tests__/mobile-feed.test.ts",
+    "test:mobile-entities": "tsx --env-file-if-exists=.env.development.local lib/services/__tests__/mobile-entities.test.ts",
     "test:mobile-routes-auth": "tsx lib/services/__tests__/mobile-routes-auth.test.ts",
-    "test:mobile": "pnpm run test:mobile-routes-auth && pnpm run test:mobile-auth && pnpm run test:mobile-feed && pnpm run test:mobile-entities"
+    "test:mobile": "pnpm run test:mobile-routes-auth && pnpm run test:mobile-db-preflight && pnpm run test:mobile-auth && pnpm run test:mobile-feed && pnpm run test:mobile-entities"
   },
   "dependencies": {
     "@ai-sdk/openai": "3.0.26",

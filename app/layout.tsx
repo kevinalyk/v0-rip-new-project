@@ -47,7 +47,6 @@ export default function RootLayout({
       <head>
         <meta name="google-adsense-account" content="ca-pub-5715074898343065" />
         {/* Plain script tag required — Next.js <Script> adds data-nscript which AdSense rejects */}
-        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
         <script
           async
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5715074898343065"

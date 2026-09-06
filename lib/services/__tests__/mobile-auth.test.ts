@@ -6,17 +6,26 @@
  * IMPORTANT: this hits whatever database DATABASE_URL points to. It creates its own
  * Client/User fixtures (id-prefixed with MOBILE_TEST_) and deletes everything it
  * created — including any leftovers from a previous crashed run — in a finally block.
- * Do not point DATABASE_URL at a production database when running this.
+ * Do not point DATABASE_URL at a production database when running this. The
+ * assertRealDatabaseOrExit() preflight in main() also requires MOBILE_DB_TESTS_ALLOWED=true
+ * to be set (and hard-rejects VERCEL_ENV/NODE_ENV=production even if it is) — see
+ * test-db-preflight.ts for the full fail-closed guard this depends on.
  *
- * Run with: pnpm run test:mobile-auth (which passes --env-file=.env.development.local
- * to tsx) or `npx tsx --env-file=.env.development.local lib/services/__tests__/mobile-auth.test.ts`
- * directly. The `--env-file` flag is required, not optional: under ESM, every static
- * `import` below is hoisted above any top-level statement in this file — including a
+ * Run with: pnpm run test:mobile-auth (which passes --env-file-if-exists=.env.development.local
+ * to tsx) or `npx tsx --env-file-if-exists=.env.development.local lib/services/__tests__/mobile-auth.test.ts`
+ * directly, with MOBILE_DB_TESTS_ALLOWED=true and DATABASE_URL also set in the
+ * environment. `--env-file-if-exists` (rather than `--env-file`) is used so that a
+ * missing .env.development.local doesn't make Node itself abort before any test code
+ * loads — DATABASE_URL/MOBILE_DB_TESTS_ALLOWED can then also be supplied directly via
+ * the shell environment (e.g. in CI), and if neither source provides them, execution
+ * still reaches assertRealDatabaseOrExit() and fails closed with a clear message
+ * instead of a raw Node startup error. Either way, under ESM, every static `import`
+ * below is hoisted above any top-level statement in this file — including a
  * `dotenv.config()` call placed here in source order — so `lib/prisma.ts` (imported
  * below) would already read `process.env.DATABASE_URL` at its own module-evaluation
  * time, before dotenv ever ran, and silently fall back to its localhost mock default.
- * `--env-file` populates `process.env` before Node resolves the module graph at all,
- * which is why it's passed as a flag rather than called as a function in this file.
+ * The `--env-file*` flag populates `process.env` before Node resolves the module graph
+ * at all, which is why it's passed as a flag rather than called as a function here.
  */
 import { SignJWT } from "jose"
 import { createHash } from "crypto"

@@ -258,7 +258,12 @@ if it doesn't exist, `403 FORBIDDEN` if it belongs to someone else.
 ## Tests
 
 - `pnpm run test:mobile-routes-auth` — static analysis proving every non-public
-  route uses `withMobileAuth`.
+  route uses `withMobileAuth`. Does not touch a database.
+- `pnpm run test:mobile-db-preflight` — isolated unit tests for the
+  `assertRealDatabaseOrExit()` fail-closed guard (see below) itself, with every
+  dependency it touches injected. Does not touch a database, does not require
+  `DATABASE_URL` or `MOBILE_DB_TESTS_ALLOWED`, and does not invoke the real
+  `process.exit`.
 - `pnpm run test:mobile-auth` — token issuance/verification, header validation,
   issuer/audience/typ/secret checks, expiry, `requireMobileAuth`'s Postgres reload
   and inactive-client/forced-reset handling, refresh rotation + replay + concurrency
@@ -270,7 +275,41 @@ if it doesn't exist, `403 FORBIDDEN` if it belongs to someone else.
   pagination correctness.
 - `pnpm run test:mobile-entities` — follow idempotency and follow-limit enforcement
   under concurrency.
-- `pnpm run test:mobile` — runs all of the above in sequence.
+- `pnpm run test:mobile` — runs all of the above in sequence (preflight guard tests
+  first, then the three database-backed suites), so a broken guard is caught before
+  any suite that depends on it runs.
+
+### Database-backed tests require an explicit opt-in
+
+`test:mobile-auth`, `test:mobile-feed`, and `test:mobile-entities` create and delete
+real rows in whatever database `DATABASE_URL` points to. Each one calls
+`assertRealDatabaseOrExit()` (`lib/services/__tests__/test-db-preflight.ts`) at the top
+of its `main()`, before any query, `cleanup()`, or fixture creation, and that guard now
+requires **all** of the following or it exits the process with code `1`:
+
+- `MOBILE_DB_TESTS_ALLOWED=true` — exactly that string, on every invocation. This is a
+  deliberate, per-run safety latch, not a setting to leave on. **Never set it in a
+  production environment or persist it in a shared/committed env file.**
+- `VERCEL_ENV` is not `production` and `NODE_ENV` is not `production` — checked
+  independently of the opt-in latch above; setting `MOBILE_DB_TESTS_ALLOWED=true`
+  cannot override either of these.
+- `DATABASE_URL` is set, is not `lib/prisma.ts`'s literal mock connection string, and
+  is actually reachable (`SELECT 1`).
+- The real `@prisma/client` is in use, not `lib/prisma.ts`'s `MockPrismaClient`
+  fallback (which would otherwise make every assertion trivially and silently pass
+  against no real data at all).
+
+**These database-backed tests must never be run against a production database.** The
+guard above rejects `VERCEL_ENV`/`NODE_ENV=production` regardless of the opt-in, but
+that is a backstop, not a substitute for pointing `DATABASE_URL` at a
+development/test database in the first place.
+
+The three DB-backed scripts run with `--env-file-if-exists=.env.development.local`
+(not `--env-file=...`), so a missing env file doesn't make Node itself abort before
+the test code — and therefore the preflight guard — ever loads; `DATABASE_URL` and
+`MOBILE_DB_TESTS_ALLOWED` can instead be supplied directly via the shell/CI
+environment, and if neither source provides them, execution still reaches
+`assertRealDatabaseOrExit()` and fails closed with a clear message.
 
 ## What was intentionally not changed
 
@@ -288,22 +327,20 @@ if it doesn't exist, `403 FORBIDDEN` if it belongs to someone else.
 
 ## Known repo-wide issues (not introduced by, and out of scope for, this pass)
 
-- **`pnpm run build` fails on a clean install** with `ERR_PACKAGE_PATH_NOT_EXPORTED`
-  from `zod/package.json` (no `./v4` export), imported by `@ai-sdk/provider-utils`
-  via the `eve` package's dependency chain (`next.config.mjs` calls `withEve(...)`
-  unconditionally). This reproduces identically on the pre-mobile-pass code once
-  actually installed clean — it is a pre-existing conflict between `eve`'s pinned
-  AI SDK version (which expects zod v4) and this project's zod v3 pin (`zod@^3.24.1`,
-  used throughout `lib/*-classifier.ts` and `lib/ci-entity-utils.ts` via
-  `generateObject`/`generateText`), not something this pass touched or can safely
-  resolve — bumping to zod v4 is a separate, wider migration. `pnpm run lint` and
-  `pnpm run test:mobile*` are unaffected since neither loads `next.config.mjs`.
-- `pnpm run lint` (unscoped, whole repo) fails with ~14,800 pre-existing errors, almost
-  entirely `@typescript-eslint/no-require-imports` from legacy `.js` files under
-  `scripts/` that predate this pass by a wide margin and are unrelated to the mobile
-  API. Every file this pass touched or added — `lib/mobile-auth.ts`,
-  `lib/services/{feed,entity,alert,user}-service.ts`, `lib/services/authz.ts`, all
-  `app/api/mobile/v1/**/route.ts` files, the `lib/services/__tests__/*.ts` scripts,
-  and `components/sidebar.tsx`/`components/app-layout.tsx` — lints clean in isolation:
-  `pnpm exec eslint <path>` against that exact file list reports zero errors and zero
-  warnings.
+- The previous revision of this document claimed `pnpm run build` failed on a clean
+  install with `ERR_PACKAGE_PATH_NOT_EXPORTED` from `zod/package.json`, due to a
+  version conflict between `eve`'s AI SDK dependency chain (which expected zod v4)
+  and this project's zod v3 pin. That conflict is resolved as of this revision: `zod`
+  is pinned to `^3.25.76` (up from `^3.24.1`), which satisfies `@ai-sdk/provider-utils`'s
+  `./v4` subpath export without a wider zod v4 migration. `pnpm run build` now
+  completes end to end — see "Final verification" below for the exact command and
+  result from the most recent run. Do not reintroduce a zod version below `^3.25.76`
+  without re-running a clean `pnpm run build` first.
+- `pnpm run lint` (unscoped, whole repo) reports a large number of pre-existing errors
+  and warnings, almost entirely `@typescript-eslint/no-require-imports` from legacy
+  `.js` files under `scripts/` that predate this pass by a wide margin and are
+  unrelated to the mobile API. See "Final verification" below for the exact
+  repo-wide count from the most recent run, and for the separate, itemized result of
+  running ESLint scoped to only the files this pass touched or added — do not treat
+  either number as "zero warnings" or "clean" unless the linked verification output
+  actually says so for that exact command.

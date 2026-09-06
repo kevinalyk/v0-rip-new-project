@@ -206,8 +206,10 @@ async function main() {
     const rotated = await rotateMobileSession(session.refreshToken)
     // Replaying the original (already-rotated) token should fail and burn the family...
     await expectMobileError(() => rotateMobileSession(session.refreshToken), "REFRESH_TOKEN_REUSED")
-    // ...which means even the legitimately-rotated descendant token is now unusable.
-    await expectMobileError(() => rotateMobileSession(rotated.refreshToken), "INVALID_REFRESH_TOKEN")
+    // ...which means even the legitimately-rotated descendant token is now unusable: the whole
+    // family (including this token) was marked revoked, so it also reads as a replay, not a
+    // plain "not found" — this is the correct, more specific signal for family revocation.
+    await expectMobileError(() => rotateMobileSession(rotated.refreshToken), "REFRESH_TOKEN_REUSED")
   })
 
   await test("concurrent refresh attempts on the same token: exactly one wins", async () => {

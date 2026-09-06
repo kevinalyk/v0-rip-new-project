@@ -156,6 +156,30 @@ async function main() {
     assert(messages.some((m) => m.includes("could not reach the database")), "error message must mention reachability")
   })
 
+  // Regression test: the reachability catch branch previously logged the raw thrown
+  // error (including its .message), and a real database driver error can embed the
+  // full connection string — including credentials — directly in that message. This
+  // exercises the queryRaw failure path specifically (distinct from the "never prints
+  // DATABASE_URL" test below, which never reaches queryRaw at all for its scenarios)
+  // with a realistic driver-style error message containing a complete fake Postgres
+  // URL and fake credentials, and asserts neither ever appears in any logged message.
+  await test("never leaks a connection string embedded in a queryRaw failure's error message", async () => {
+    const fakeUser = "svc_user_fake"
+    const fakePassword = "s3cr3t-fake-password"
+    const fakeUrl = `postgresql://${fakeUser}:${fakePassword}@internal-db-host.example:5432/proddb`
+    const { exitCalls, messages } = await run(VALID_ENV, {
+      queryRaw: async () => {
+        throw new Error(`Connection terminated unexpectedly while connecting to ${fakeUrl}`)
+      },
+    })
+    assert(exitCalls.length === 1 && exitCalls[0] === 1, "must exit(1) exactly once")
+    assert(messages.some((m) => m.includes("could not reach the database")), "error message must mention reachability")
+    assert(
+      !messages.some((m) => m.includes(fakeUrl) || m.includes(fakeUser) || m.includes(fakePassword)),
+      "rejection messages must never leak the connection string or credentials from a queryRaw failure",
+    )
+  })
+
   await test("allows an explicitly-opted-in, non-production, reachable configuration through", async () => {
     const { exitCalls, completedWithoutExit } = await run(VALID_ENV)
     assert(exitCalls.length === 0, "must not call exit at all")

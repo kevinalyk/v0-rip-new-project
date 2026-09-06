@@ -310,7 +310,7 @@ async function main() {
       }
     })
 
-    // ── Malformed cursor ──────────────────────────────────────────��─────────────
+    // ── Malformed cursor ────────────────────────────────────────────────────────
     await test("decodeCursor returns null when no cursor is supplied", async () => {
       assert(decodeCursor(null) === null, "no cursor should decode to null")
       assert(decodeCursor(undefined) === null, "no cursor should decode to null")

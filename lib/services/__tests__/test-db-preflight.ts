@@ -147,18 +147,50 @@ export async function assertRealDatabaseOrExit(overrides: PreflightOverrides = {
 
   // 5. Reachability. The only check that actually queries the database, and only
   // reached once every check above has passed.
+  //
+  // The failure branch below deliberately never logs the raw error object or its
+  // `.message`. A database driver error can and does embed the connection string it
+  // was trying to reach — including embedded credentials — directly in its message
+  // (e.g. node-postgres includes the full connection string in some connect-time
+  // errors). Logging that would defeat every other safeguard in this file, which all
+  // exist specifically to keep DATABASE_URL out of process output. Only a short,
+  // safely allow-listed error `code` (e.g. "ECONNREFUSED", "ETIMEDOUT") is surfaced,
+  // and only if it matches a strict allow-list pattern that cannot itself contain a
+  // credential or connection string.
+  let timer: ReturnType<typeof setTimeout> | undefined
   try {
     await Promise.race([
       queryRaw(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("timed out after 5s")), REACHABILITY_TIMEOUT_MS)),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("timed out after 5s")), REACHABILITY_TIMEOUT_MS)
+      }),
     ])
   } catch (error) {
+    const code = extractSafeErrorCode(error)
     log(
       "\nPreflight check failed: could not reach the database at DATABASE_URL.\n" +
-        (error instanceof Error ? error.message : String(error)) +
-        "\n",
+        (code ? `Error code: ${code}\n` : "") +
+        "Check that the database is running and DATABASE_URL is correct.\n",
     )
     exit(1)
     return
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
   }
+}
+
+/**
+ * Extracts a short, safe-to-log error code from an unknown thrown value, or undefined
+ * if none is present or it doesn't match the allow-list pattern. Deliberately never
+ * returns `.message` or the error itself — only a `.code`-like property, and only if
+ * it is short, uppercase/underscore/digit-only (e.g. "ECONNREFUSED", "ETIMEDOUT",
+ * "28P01"), which structurally cannot contain a URL, hostname, or credential.
+ */
+function extractSafeErrorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) return undefined
+  const code = (error as { code?: unknown }).code
+  if (typeof code !== "string") return undefined
+  if (code.length > 32) return undefined
+  if (!/^[A-Z0-9_]+$/.test(code)) return undefined
+  return code
 }

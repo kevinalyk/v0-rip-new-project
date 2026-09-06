@@ -20,6 +20,7 @@
 import { SignJWT, jwtVerify, errors as joseErrors } from "jose"
 import { randomBytes, createHash, createHmac } from "crypto"
 import prisma from "@/lib/prisma"
+import type { Prisma } from "@prisma/client"
 
 const ISSUER = "inbox-gop-mobile"
 const AUDIENCE = "inbox-gop-ios"
@@ -288,7 +289,7 @@ export async function rotateMobileSession(rawRefreshToken: string): Promise<Mobi
 
   const rawNextRefreshToken = generateRefreshToken()
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const revoked = await tx.mobileRefreshToken.updateMany({
       where: { id: existing.id, revokedAt: null },
       data: { revokedAt: new Date(), revokedReason: "rotated", lastUsedAt: new Date() },
@@ -372,7 +373,7 @@ export async function checkMobileRateLimit(key: string, limit: number): Promise<
   if (Math.random() < RATE_LIMIT_CLEANUP_SAMPLE_RATE) {
     prisma.mobileAuthAttempt
       .deleteMany({ where: { windowStart: { lt: new Date(Date.now() - RATE_LIMIT_RETENTION_MS) } } })
-      .catch((err) => console.error("[mobile-auth] rate limit cleanup failed:", err))
+      .catch((err: unknown) => console.error("[mobile-auth] rate limit cleanup failed:", err))
   }
 
   return row.count <= limit

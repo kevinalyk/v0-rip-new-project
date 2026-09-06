@@ -78,13 +78,13 @@ async function getEntityIdsForClient(clientId: string, subscriptionsOnly: boolea
       where: { clientId, entity: Object.keys(entityWhere).length ? entityWhere : undefined },
       select: { entityId: true },
     })
-    return subs.map((s) => s.entityId)
+    return subs.map((s: (typeof subs)[number]) => s.entityId)
   }
 
   if (Object.keys(entityWhere).length === 0) return null // no entity-level filtering needed
 
   const entities = await prisma.ciEntity.findMany({ where: entityWhere, select: { id: true } })
-  return entities.map((e) => e.id)
+  return entities.map((e: (typeof entities)[number]) => e.id)
 }
 
 /**
@@ -174,7 +174,7 @@ export async function getFeedPage(
   ])
 
   const merged: FeedItem[] = [
-    ...emailRows.map((c) => ({
+    ...emailRows.map((c: (typeof emailRows)[number]) => ({
       id: c.id,
       type: "email" as const,
       senderName: c.senderName,
@@ -185,7 +185,7 @@ export async function getFeedPage(
       entityId: c.entityId,
       entity: c.entity,
     })),
-    ...smsRows.map((s) => ({
+    ...smsRows.map((s: (typeof smsRows)[number]) => ({
       id: s.id,
       type: "sms" as const,
       senderName: s.phoneNumber || "Unknown",

@@ -72,7 +72,7 @@ export async function POST(request: Request) {
 
   const session = await issueMobileSession(user.id, deviceId, deviceName)
 
-  prisma.user.update({ where: { id: user.id }, data: { lastActive: new Date() } }).catch((err) => {
+  prisma.user.update({ where: { id: user.id }, data: { lastActive: new Date() } }).catch((err: unknown) => {
     console.error("[mobile-auth] Failed to update lastActive:", err)
   })
 

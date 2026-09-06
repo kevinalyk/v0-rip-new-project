@@ -5,9 +5,10 @@
   "scripts": {
     "build": "prisma generate && next build",
     "dev": "next dev",
-    "lint": "next lint",
+    "lint": "eslint .",
     "seed": "tsx prisma/seed.ts",
-    "start": "next start"
+    "start": "next start",
+    "test:mobile-auth": "tsx lib/services/__tests__/mobile-auth.test.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "3.0.26",

@@ -8,7 +8,7 @@ export async function listFollowedEntities(clientId: string) {
     include: { entity: true },
     orderBy: { createdAt: "desc" },
   })
-  return subs.map((s) => s.entity)
+  return subs.map((s: (typeof subs)[number]) => s.entity)
 }
 
 export async function followEntity(clientId: string, plan: SubscriptionPlan, entityId: string) {

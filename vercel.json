@@ -1,7 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build",
-  "installCommand": "npm install && npx prisma generate",
   "crons": [
     {
       "path": "/api/cron/detect-competitive-insights?providers=gmail",

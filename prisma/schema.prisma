@@ -38,7 +38,8 @@ model User {
   campaignAlerts CampaignAlertSubscription[]
   slackIntegrationsConnected SlackIntegration[] // Slack integrations this user (as Owner/Admin) completed setup for
   slackChannelsConnected     SlackChannel[] // Additional (paid, add-on) Slack bot channels this user completed setup for
-}
+  mobileRefreshTokens MobileRefreshToken[] // Mobile app refresh-token sessions (see lib/mobile-auth.ts)
+  }
 
 model Domain {
   id                String    @id @default(cuid())
@@ -1231,4 +1232,56 @@ model AutomationSetting {
   ciAssignmentEnabled   Boolean  @default(true) // Global kill switch for the Claude CI assignment MCP tools
   updatedAt             DateTime @updatedAt
   updatedBy             String?
+}
+
+// ─── Mobile API (app/api/mobile/v1) ────────────────────────────────────────────
+// Entirely separate from the browser cookie session (lib/auth.ts) and the
+// developer API-key namespace (lib/api-auth.ts, ApiKey model). See
+// lib/mobile-auth.ts and docs/mobile-api.md.
+
+model MobileRefreshToken {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String    @unique // SHA-256 hex of the raw refresh token — raw value is never stored
+  tokenFamilyId    String    // Shared by every token descended from one login; reuse of a revoked
+                              // token in a family revokes the whole family (replay detection).
+  deviceId         String?   // Client-supplied installation/device identifier
+  deviceName       String?
+  expiresAt        DateTime  // this token's own sliding expiry (now + 30d at issuance/rotation)
+  absoluteExpiresAt DateTime // fixed at family creation (issueMobileSession) = now + 30d and copied
+                              // unchanged on every rotation — caps the whole family's lifetime so
+                              // rotation can never extend a session past 30 days from login.
+  lastUsedAt       DateTime?
+  revokedAt        DateTime? // Set when rotated (superseded), logged out, or revoked for replay
+  revokedReason    String?   // "rotated" | "logout" | "replay_detected" | "password_reset_required" | "password_changed" | "schema_upgrade"
+  // "schema_upgrade" is set once, by the migration that added issuedPasswordFingerprint,
+  // on every row that predates that column — the migration cannot know which password was
+  // current when an older row was issued, so it revokes rather than risk blessing a stale
+  // token with the wrong fingerprint. See that migration's SQL comments.
+  issuedPasswordFingerprint String // sha256(password hash) at issuance/rotation time — compared
+  // against the user's *current* password hash on every requireMobileAuth call and every
+  // rotateMobileSession call, so a real password change permanently invalidates this row
+  // (and the whole family, via revokeMobileFamily) even if firstLogin has since been cleared
+  // again and even if this row is never used again before the change happens.
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([tokenFamilyId])
+  @@index([expiresAt])
+  @@index([absoluteExpiresAt])
+}
+
+model MobileAuthAttempt {
+  id          String   @id @default(cuid())
+  // Server-keyed hash of the rate-limit identifier (e.g. HMAC(secret, "ip:"+ip) or
+  // HMAC(secret, "email:"+normalizedEmail)) — never the raw IP, email, password, or token.
+  key         String
+  windowStart DateTime // Start of the fixed rate-limit window this row counts
+  count       Int      @default(1)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([key, windowStart])
+  @@index([windowStart])
 }

@@ -218,3 +218,24 @@
   height: 16px;
   fill: currentColor;
 }
+
+/* iOS/PWA safe-area utilities. env(safe-area-inset-*) is 0 on non-notched devices
+   and in desktop browsers, so these are no-ops there — no extra padding on desktop.
+   These SET padding-top/bottom/left/right outright, so only use them on an element
+   that has no other padding on that same side — otherwise they overwrite it instead
+   of adding to it. To combine safe-area inset with existing padding on the same
+   side, use an inline calc() instead, e.g.
+   style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top, 0px))" }}
+   (see components/app-layout.tsx's mobile header for a real example). */
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+.pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}

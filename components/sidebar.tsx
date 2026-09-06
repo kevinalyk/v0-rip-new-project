@@ -23,7 +23,6 @@ import {
   Lightbulb,
   CreditCard,
   Plug,
-  Wrench,
   Building2,
   ChevronDown,
   ChevronUp,
@@ -71,12 +70,22 @@ interface SidebarProps {
   className?: string
 }
 
+// Paths that are not client-scoped — don't overwrite the selected client slug. Hoisted
+// to module scope (rather than redeclared as a new array literal on every render
+// inside the component) so it's referentially stable and can be safely listed as an
+// effect dependency below without causing those effects to re-run on every render.
+const NON_CLIENT_PATHS = ["news", "login", "share", "directory", "digest", "about", "privacy", "terms", "lookup"]
+
 export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNavigate, className }: SidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
-  const { domains, selectedDomain, setSelectedDomain, loading: domainsLoading } = useDomain()
+  // Only `selectedDomain` is used here, for the non-super-admin client-slug fallback
+  // below — the rest of useDomain()'s return value is intentionally not needed by
+  // this component, so it's left out of the destructure entirely rather than bound
+  // to unused local names.
+  const { selectedDomain } = useDomain()
   const [userRole, setUserRole] = useState<string | null>(null)
   const [authLoaded, setAuthLoaded] = useState(false)
   const [clients, setClients] = useState<Client[]>([])
@@ -139,9 +148,6 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
     }
     fetchClients()
   }, [userRole])
-
-  // Paths that are not client-scoped — don't overwrite the selected client slug
-  const NON_CLIENT_PATHS = ["news", "login", "share", "directory", "digest", "about", "privacy", "terms", "lookup"]
 
   useEffect(() => {
     const pathParts = pathname.split("/").filter(Boolean)
@@ -269,19 +275,35 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
           <div className="flex-1 flex justify-center">
             <Logo collapsed={collapsed} variant="icon" />
           </div>
-          <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className="h-8 w-8">
+          {/* h-11/w-11 (44px) on mobile — this Sidebar also renders as the touch-driven
+              mobile drawer (see components/app-layout.tsx) — falling back to the
+              denser 32px desktop size at md+. */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setCollapsed(!collapsed)}
+            className="h-11 w-11 md:h-8 md:w-8"
+          >
             {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </Button>
         </div>
 
-        <div className="p-4 mt-auto">
+        {/* Safe-area inset added on top of p-4 (not a replacement) via calc() on
+            padding-bottom only, and min-h-11 (44px) on each button below — same
+            reasoning as the authenticated sidebar's bottom section further down
+            this file. This block also renders in the touch-driven mobile drawer
+            (components/app-layout.tsx) for signed-out visitors on public pages. */}
+        <div
+          className="p-4 mt-auto"
+          style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
+        >
           <Separator className="mb-4 bg-sidebar-border" />
           <div className="space-y-1">
             <Button
               variant="ghost"
               size="sm"
               className={cn(
-                "w-full justify-start gap-3 px-3",
+                "w-full justify-start gap-3 px-3 min-h-11 md:min-h-0",
                 pathname.startsWith("/news") && "bg-rip-red/10 text-rip-red hover:bg-rip-red/20 hover:text-rip-red",
                 collapsed && "justify-center",
               )}
@@ -293,7 +315,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
             <Button
               variant="ghost"
               size="sm"
-              className={cn("w-full justify-start gap-3 px-3", collapsed && "justify-center")}
+              className={cn("w-full justify-start gap-3 px-3 min-h-11 md:min-h-0", collapsed && "justify-center")}
               onClick={() => window.open("https://directory.gop", "_blank")}
             >
               <ExternalLink size={20} />
@@ -303,7 +325,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
               <Button
                 variant="ghost"
                 size="sm"
-                className={cn("w-full justify-start gap-3 px-3", collapsed && "justify-center")}
+                className={cn("w-full justify-start gap-3 px-3 min-h-11 md:min-h-0", collapsed && "justify-center")}
                 onClick={toggleTheme}
               >
                 {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
@@ -314,7 +336,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
               variant="ghost"
               size="sm"
               className={cn(
-                "w-full justify-start gap-3 px-3 text-rip-red hover:text-rip-red hover:bg-rip-red/10",
+                "w-full justify-start gap-3 px-3 min-h-11 md:min-h-0 text-rip-red hover:text-rip-red hover:bg-rip-red/10",
                 collapsed && "justify-center",
               )}
               onClick={() => navigate("/login")}
@@ -342,7 +364,12 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
           <div className="flex-1 flex justify-center">
             <Logo collapsed={collapsed} variant="icon" />
           </div>
-          <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className="h-8 w-8">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setCollapsed(!collapsed)}
+            className="h-11 w-11 md:h-8 md:w-8"
+          >
             {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </Button>
         </div>
@@ -724,13 +751,27 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
         </div>
       </div>
 
-      <div className="p-4 mt-auto border-t border-sidebar-border">
+      {/* Safe-area inset is added ON TOP of the normal p-4 padding (not a replacement
+          for it) via an explicit calc() on padding-bottom only — same reasoning as the
+          mobile header's paddingTop in components/app-layout.tsx. The standalone
+          `.pb-safe` utility in globals.css sets padding-bottom outright, which would
+          otherwise clobber p-4's padding-bottom entirely once both target the same
+          property. Without this, the Logout/theme/etc. buttons in this touch-driven
+          mobile drawer sit flush against an iPhone's home-indicator safe area. */}
+      <div
+        className="p-4 mt-auto border-t border-sidebar-border"
+        style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
+      >
         <div className="space-y-1">
+          {/* min-h-11 (44px) covers these controls in the touch-driven mobile drawer
+              (components/app-layout.tsx) — same reasoning as NavSection/NavItem above;
+              md:min-h-0 lets the default size="sm" (32px) govern the denser desktop
+              sidebar unchanged. */}
           <Button
             variant="ghost"
             size="sm"
             className={cn(
-              "w-full justify-start gap-3 px-3",
+              "w-full justify-start gap-3 px-3 min-h-11 md:min-h-0",
               pathname.startsWith("/news") && "bg-rip-red/10 text-rip-red hover:bg-rip-red/20 hover:text-rip-red",
               collapsed && "justify-center",
             )}
@@ -742,7 +783,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
           <Button
             variant="ghost"
             size="sm"
-            className={cn("w-full justify-start gap-3 px-3", collapsed && "justify-center")}
+            className={cn("w-full justify-start gap-3 px-3 min-h-11 md:min-h-0", collapsed && "justify-center")}
             onClick={() => window.open("https://directory.gop", "_blank")}
           >
             <ExternalLink size={20} />
@@ -752,7 +793,10 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
             <Button
               variant="ghost"
               size="sm"
-              className={cn("w-full justify-start gap-3 px-3 text-muted-foreground", collapsed && "justify-center")}
+              className={cn(
+                "w-full justify-start gap-3 px-3 min-h-11 md:min-h-0 text-muted-foreground",
+                collapsed && "justify-center",
+              )}
               onClick={() => setReportProblemOpen(true)}
             >
               <AlertCircle size={20} />
@@ -763,7 +807,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
             <Button
               variant="ghost"
               size="sm"
-              className={cn("w-full justify-start gap-3 px-3", collapsed && "justify-center")}
+              className={cn("w-full justify-start gap-3 px-3 min-h-11 md:min-h-0", collapsed && "justify-center")}
               onClick={toggleTheme}
             >
               {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
@@ -774,7 +818,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
             variant="ghost"
             size="sm"
             className={cn(
-              "w-full justify-start gap-3 px-3 text-rip-red hover:text-rip-red hover:bg-rip-red/10",
+              "w-full justify-start gap-3 px-3 min-h-11 md:min-h-0 text-rip-red hover:text-rip-red hover:bg-rip-red/10",
               collapsed && "justify-center",
             )}
             onClick={handleLogout}
@@ -801,15 +845,18 @@ interface NavSectionProps {
 
 function NavSection({ icon, label, collapsed, expanded, onToggle }: NavSectionProps) {
   return (
-    <Button
-      variant="ghost"
-      className={cn(
-        "relative w-full justify-start gap-3 px-3 font-medium",
-        expanded && "bg-rip-red/10 text-rip-red hover:bg-rip-red/15 hover:text-rip-red",
-        collapsed && "justify-center",
-      )}
-      onClick={onToggle}
-    >
+  <Button
+  variant="ghost"
+  className={cn(
+  // min-h-11 (44px) covers this control in the touch-driven mobile drawer
+  // (components/app-layout.tsx); md:min-h-0 lets the default h-9 govern the
+  // denser desktop sidebar unchanged.
+  "relative w-full justify-start gap-3 px-3 font-medium min-h-11 md:min-h-0",
+  expanded && "bg-rip-red/10 text-rip-red hover:bg-rip-red/15 hover:text-rip-red",
+  collapsed && "justify-center",
+  )}
+  onClick={onToggle}
+  >
       {expanded && (
         <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-rip-red" aria-hidden="true" />
       )}
@@ -834,16 +881,17 @@ interface NavItemProps {
 
 function NavItem({ icon, label, active, collapsed, onClick }: NavItemProps) {
   return (
-    <Button
-      variant={active ? "secondary" : "ghost"}
-      size="sm"
-      className={cn(
-        "relative w-full justify-start gap-3 px-3",
-        active && "bg-rip-red/10 hover:bg-rip-red/15 text-rip-red hover:text-rip-red",
-        collapsed && "justify-center",
-      )}
-      onClick={onClick}
-    >
+  <Button
+  variant={active ? "secondary" : "ghost"}
+  size="sm"
+  className={cn(
+  // Same mobile-drawer touch-target reasoning as NavSection above.
+  "relative w-full justify-start gap-3 px-3 min-h-11 md:min-h-0",
+  active && "bg-rip-red/10 hover:bg-rip-red/15 text-rip-red hover:text-rip-red",
+  collapsed && "justify-center",
+  )}
+  onClick={onClick}
+  >
       {active && (
         <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-rip-red" aria-hidden="true" />
       )}

@@ -288,14 +288,22 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
           </Button>
         </div>
 
-        <div className="p-4 mt-auto">
+        {/* Safe-area inset added on top of p-4 (not a replacement) via calc() on
+            padding-bottom only, and min-h-11 (44px) on each button below — same
+            reasoning as the authenticated sidebar's bottom section further down
+            this file. This block also renders in the touch-driven mobile drawer
+            (components/app-layout.tsx) for signed-out visitors on public pages. */}
+        <div
+          className="p-4 mt-auto"
+          style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
+        >
           <Separator className="mb-4 bg-sidebar-border" />
           <div className="space-y-1">
             <Button
               variant="ghost"
               size="sm"
               className={cn(
-                "w-full justify-start gap-3 px-3",
+                "w-full justify-start gap-3 px-3 min-h-11 md:min-h-0",
                 pathname.startsWith("/news") && "bg-rip-red/10 text-rip-red hover:bg-rip-red/20 hover:text-rip-red",
                 collapsed && "justify-center",
               )}
@@ -307,7 +315,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
             <Button
               variant="ghost"
               size="sm"
-              className={cn("w-full justify-start gap-3 px-3", collapsed && "justify-center")}
+              className={cn("w-full justify-start gap-3 px-3 min-h-11 md:min-h-0", collapsed && "justify-center")}
               onClick={() => window.open("https://directory.gop", "_blank")}
             >
               <ExternalLink size={20} />
@@ -317,7 +325,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
               <Button
                 variant="ghost"
                 size="sm"
-                className={cn("w-full justify-start gap-3 px-3", collapsed && "justify-center")}
+                className={cn("w-full justify-start gap-3 px-3 min-h-11 md:min-h-0", collapsed && "justify-center")}
                 onClick={toggleTheme}
               >
                 {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
@@ -328,7 +336,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
               variant="ghost"
               size="sm"
               className={cn(
-                "w-full justify-start gap-3 px-3 text-rip-red hover:text-rip-red hover:bg-rip-red/10",
+                "w-full justify-start gap-3 px-3 min-h-11 md:min-h-0 text-rip-red hover:text-rip-red hover:bg-rip-red/10",
                 collapsed && "justify-center",
               )}
               onClick={() => navigate("/login")}

@@ -34,6 +34,7 @@ import {
   MobileAuthError,
 } from "@/lib/mobile-auth"
 import { getFeedItemById } from "@/lib/services/feed-service"
+import { assertRealDatabaseOrExit } from "@/lib/services/__tests__/test-db-preflight"
 
 const PREFIX = "MOBILE_TEST_"
 let passed = 0
@@ -86,6 +87,7 @@ async function cleanup() {
 }
 
 async function main() {
+  await assertRealDatabaseOrExit()
   await cleanup() // clear any leftovers from a previously interrupted run
 
   const clientA = await prisma.client.create({

@@ -20,6 +20,7 @@ import prisma from "@/lib/prisma"
 import { MobileAuthError } from "@/lib/mobile-auth"
 import { decodeCursor, getFeedItemById, getFeedPage } from "@/lib/services/feed-service"
 import type { SubscriptionPlan } from "@/lib/subscription-utils"
+import { assertRealDatabaseOrExit } from "@/lib/services/__tests__/test-db-preflight"
 
 const PREFIX = "MOBILE_FEED_TEST_"
 // "all" (Professional) has unlimited CI history — used throughout so retention-window
@@ -69,8 +70,9 @@ async function cleanup() {
 }
 
 async function main() {
+  await assertRealDatabaseOrExit()
   await cleanup()
-
+  
   const clientA = await prisma.client.create({
     data: { id: `${PREFIX}client_a`, name: `${PREFIX}Client A`, slug: `${PREFIX.toLowerCase()}client-a`, active: true, subscriptionPlan: PLAN, dataRetentionDays: 90 },
   })
@@ -148,6 +150,18 @@ async function main() {
     await test("feed listing excludes campaigns assigned to a data_broker entity", async () => {
       const { items } = await getFeedPage(clientA.id, PLAN, {}, null)
       assert(!items.some((i) => i.id === dataBrokerCampaign.id), "data_broker campaigns must be excluded")
+    })
+
+    // Regression test for the entityType=data_broker exclusion bypass: entityAttributeWhere
+    // used to assign both the hard data_broker exclusion and the caller-supplied entityType
+    // filter onto the same `where.type` key, so the second assignment silently clobbered the
+    // first. Passing entityType=data_broker then returned data_broker campaigns through the
+    // shared feed instead of the intended zero rows. See the entityAttributeWhere comment in
+    // lib/services/feed-service.ts for the fix (separate AND conditions).
+    await test("feed listing does not leak data_broker campaigns via entityType=data_broker filter", async () => {
+      const { items } = await getFeedPage(clientA.id, PLAN, { entityType: "data_broker" }, null)
+      assert(!items.some((i) => i.id === dataBrokerCampaign.id), "entityType=data_broker must not bypass the exclusion")
+      assert(items.length === 0, "entityType=data_broker should yield zero rows given the contradiction with the exclusion")
     })
 
     await test("getFeedItemById: a client's own personal capture is visible to itself only", async () => {

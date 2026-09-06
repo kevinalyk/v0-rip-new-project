@@ -21,6 +21,7 @@
 import prisma from "@/lib/prisma"
 import { MobileAuthError } from "@/lib/mobile-auth"
 import { followEntity, unfollowEntity } from "@/lib/services/entity-service"
+import { assertRealDatabaseOrExit } from "@/lib/services/__tests__/test-db-preflight"
 
 const PREFIX = "MOBILE_ENTITY_TEST_"
 let passed = 0
@@ -49,8 +50,9 @@ async function cleanup() {
 }
 
 async function main() {
+  await assertRealDatabaseOrExit()
   await cleanup()
-
+  
   // "paid" plan → ciFollowLimit: 3 (see lib/subscription-utils.ts).
   const client = await prisma.client.create({
     data: {

@@ -1,15 +1,53 @@
 import prisma from "@/lib/prisma"
 import { getCIHistoryDays, type SubscriptionPlan } from "@/lib/subscription-utils"
-import { OFFICES } from "@/lib/campaign-filter-options"
 import { MobileAuthError } from "@/lib/mobile-auth"
+import { getEntityMappings } from "@/lib/ci-mapping-cache"
+
+export const MOBILE_ENTITY_TYPES = [
+  { value: "politician", label: "Politicians" },
+  { value: "pac", label: "PACs" },
+  { value: "organization", label: "Organizations" },
+] as const
+
+export const MOBILE_MESSAGE_FILTERS = [
+  { value: "email", label: "Email" },
+  { value: "sms", label: "SMS" },
+  { value: "third_party", label: "Third Party" },
+  { value: "house_file", label: "House File" },
+] as const
+
+export const MOBILE_DONATION_PLATFORMS = [
+  { value: "winred", label: "WinRed" },
+  { value: "actblue", label: "ActBlue" },
+  { value: "anedot", label: "Anedot" },
+  { value: "psq", label: "PSQ" },
+  { value: "ngpvan", label: "NGPVAN" },
+  { value: "substack", label: "Substack" },
+] as const
+
+export type MobileDonationPlatform = (typeof MOBILE_DONATION_PLATFORMS)[number]["value"]
+
+type MobileFeedEntityOption = {
+  id: string
+  name: string
+  type: string
+  party: string | null
+  state: string | null
+  isFollowing: boolean
+}
 
 export interface FeedFilters {
   search?: string
+  entityIds?: string[]
   party?: string
   state?: string
-  office?: string
   entityType?: string
   messageType?: "email" | "sms"
+  thirdParty?: boolean
+  houseFileOnly?: boolean
+  donationPlatform?: MobileDonationPlatform
+  fromDate?: Date
+  toDate?: Date
   tag?: string
   subscriptionsOnly?: boolean
 }
@@ -92,13 +130,23 @@ async function getDateFloor(clientId: string, plan: SubscriptionPlan): Promise<D
  */
 function entityAttributeWhere(filters: FeedFilters): Record<string, unknown> {
   const conditions: Record<string, unknown>[] = [{ type: { not: "data_broker" } }]
-  if (filters.party) conditions.push({ party: { equals: filters.party, mode: "insensitive" } })
+  if (filters.party) {
+    const party = filters.party.toLowerCase()
+    if (party === "independent" || party === "third party") {
+      conditions.push({
+        OR: [
+          { party: { equals: "independent", mode: "insensitive" } },
+          { party: { equals: "third party", mode: "insensitive" } },
+          { party: { equals: "ind", mode: "insensitive" } },
+          { party: { equals: "i", mode: "insensitive" } },
+        ],
+      })
+    } else {
+      conditions.push({ party: { equals: filters.party, mode: "insensitive" } })
+    }
+  }
   if (filters.state) conditions.push({ state: { equals: filters.state, mode: "insensitive" } })
   if (filters.entityType) conditions.push({ type: { equals: filters.entityType, mode: "insensitive" } })
-  if (filters.office) {
-    const office = OFFICES.find((o) => o.value === filters.office)
-    if (office) conditions.push({ office: { contains: office.match, mode: "insensitive" } })
-  }
   return { AND: conditions }
 }
 
@@ -113,6 +161,8 @@ function entityAttributeWhere(filters: FeedFilters): Record<string, unknown> {
  */
 async function resolveEntityIdRestriction(clientId: string, filters: FeedFilters): Promise<string[] | null> {
   const sets: string[][] = []
+
+  if (filters.entityIds?.length) sets.push([...new Set(filters.entityIds)])
 
   if (filters.subscriptionsOnly) {
     const subs = await prisma.ciEntitySubscription.findMany({ where: { clientId }, select: { entityId: true } })
@@ -130,6 +180,130 @@ async function resolveEntityIdRestriction(clientId: string, filters: FeedFilters
   if (sets.length === 0) return null
   if (sets.length === 1) return sets[0]
   return sets[0].filter((id) => sets.every((set) => set.includes(id)))
+}
+
+function getDateBounds(dateFloor: Date | null, filters: FeedFilters): { gte?: Date; lte?: Date } | null {
+  const lowerBounds = [dateFloor, filters.fromDate].filter((date): date is Date => Boolean(date))
+  const gte = lowerBounds.length
+    ? new Date(Math.max(...lowerBounds.map((date) => date.getTime())))
+    : undefined
+  const lte = filters.toDate
+
+  if (!gte && !lte) return null
+  return { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) }
+}
+
+const PLATFORM_DOMAINS: Record<MobileDonationPlatform, string[]> = {
+  winred: ["winred.com"],
+  actblue: ["actblue.com"],
+  anedot: ["anedot.com"],
+  psq: ["psqimpact.com", "politicalsurveyquestions.com", "psqsurveys.com"],
+  ngpvan: ["ngpvan.com"],
+  substack: ["substack.com"],
+}
+
+function emailPlatformWhere(platform: MobileDonationPlatform | undefined): Record<string, unknown> | null {
+  if (!platform) return null
+  if (platform === "substack") {
+    return { senderEmail: { endsWith: "@substack.com", mode: "insensitive" } }
+  }
+  return {
+    OR: [
+      { donationPlatform: { equals: platform, mode: "insensitive" } },
+      // Older rows sometimes stored the CTA array as a JSON string before the
+      // normalized donationPlatform column was backfilled. Keep those rows visible
+      // so mobile and web filters agree on historical results.
+      ...PLATFORM_DOMAINS[platform].map((domain) => ({ ctaLinks: { string_contains: domain } })),
+    ],
+  }
+}
+
+function smsPlatformWhere(platform: MobileDonationPlatform | undefined): Record<string, unknown> | null {
+  if (!platform) return null
+  return {
+    OR: PLATFORM_DOMAINS[platform].map((domain) => ({ ctaLinks: { contains: domain, mode: "insensitive" } })),
+  }
+}
+
+type OwnershipWhere = {
+  email: Record<string, unknown> | null
+  sms: Record<string, unknown> | null
+}
+
+async function resolveOwnershipWhere(filters: FeedFilters): Promise<OwnershipWhere> {
+  // Third Party and House File are an exhaustive pair in the web UI. Selecting both
+  // means "either classification," just like selecting both Email and SMS.
+  if (filters.thirdParty === filters.houseFileOnly) return { email: null, sms: null }
+
+  const expectedThirdParty = filters.thirdParty === true
+  const { mappingsByEntity, phonesByEntity } = await getEntityMappings()
+
+  // isThirdParty is frozen for every newly assigned record. Rows that predate that
+  // column are null, so classify only that legacy subset with the same mappings used
+  // by the web feed. This keeps the common path indexed without making older House
+  // File and Third Party messages disappear from mobile results.
+  const [legacyEmails, legacySms] = await Promise.all([
+    prisma.competitiveInsightCampaign.findMany({
+      where: { isThirdParty: null, entityId: { not: null }, entity: { type: { not: "data_broker" } } },
+      select: { id: true, entityId: true, senderEmail: true },
+    }),
+    prisma.smsQueue.findMany({
+      where: { isThirdParty: null, entityId: { not: null }, entity: { type: { not: "data_broker" } } },
+      select: { id: true, entityId: true, phoneNumber: true },
+    }),
+  ])
+
+  const legacyEmailIds = legacyEmails
+    .filter((campaign) => {
+      const mappings = campaign.entityId ? mappingsByEntity[campaign.entityId] : undefined
+      if (!mappings) return expectedThirdParty === false
+      const email = campaign.senderEmail.toLowerCase()
+      const domain = email.split("@")[1]
+      const isThirdParty = !mappings.emails.has(email) && (!domain || !mappings.domains.has(domain))
+      return isThirdParty === expectedThirdParty
+    })
+    .map((campaign) => campaign.id)
+
+  const legacySmsIds = legacySms
+    .filter((message) => {
+      const phones = message.entityId ? phonesByEntity[message.entityId] : undefined
+      const isThirdParty = phones ? !phones.has(message.phoneNumber ?? "") : false
+      return isThirdParty === expectedThirdParty
+    })
+    .map((message) => message.id)
+
+  const includeLegacy = (ids: string[]): Record<string, unknown> => ({
+    OR: [
+      { isThirdParty: expectedThirdParty },
+      { AND: [{ isThirdParty: null }, { id: { in: ids } }] },
+    ],
+  })
+
+  return { email: includeLegacy(legacyEmailIds), sms: includeLegacy(legacySmsIds) }
+}
+
+export async function listMobileFeedEntities(clientId: string) {
+  const [entities, subscriptions] = await Promise.all([
+    prisma.ciEntity.findMany({
+      where: { type: { not: "data_broker" } },
+      select: { id: true, name: true, type: true, party: true, state: true },
+      orderBy: { name: "asc" },
+      take: 10000,
+    }),
+    prisma.ciEntitySubscription.findMany({ where: { clientId }, select: { entityId: true } }),
+  ])
+  const followedIds = new Set<string>(
+    subscriptions.map((subscription: { entityId: string }) => subscription.entityId),
+  )
+  return entities
+    .map((entity: Omit<MobileFeedEntityOption, "isFollowing">) => ({
+      ...entity,
+      isFollowing: followedIds.has(entity.id),
+    }))
+    .sort(
+      (a: MobileFeedEntityOption, b: MobileFeedEntityOption) =>
+        Number(b.isFollowing) - Number(a.isFollowing) || a.name.localeCompare(b.name),
+    )
 }
 
 /**
@@ -153,8 +327,12 @@ export async function getFeedPage(
   filters: FeedFilters,
   cursor: FeedCursor | null,
 ): Promise<{ items: FeedItem[]; nextCursor: string | null; hasMore: boolean }> {
-  const dateFloor = await getDateFloor(clientId, plan)
-  const entityIdRestriction = await resolveEntityIdRestriction(clientId, filters)
+  const [dateFloor, entityIdRestriction, ownershipFilters] = await Promise.all([
+    getDateFloor(clientId, plan),
+    resolveEntityIdRestriction(clientId, filters),
+    resolveOwnershipWhere(filters),
+  ])
+  const dateBounds = getDateBounds(dateFloor, filters)
 
   // A tag/subscriptionsOnly filter that resolves to zero entities means the feed is
   // empty by definition — short-circuit instead of running a query that Prisma would
@@ -164,6 +342,8 @@ export async function getFeedPage(
   }
 
   const entityWhere = entityAttributeWhere(filters)
+  const emailPlatformFilter = emailPlatformWhere(filters.donationPlatform)
+  const smsPlatformFilter = smsPlatformWhere(filters.donationPlatform)
 
   const searchWhereEmail = filters.search
     ? {
@@ -171,6 +351,7 @@ export async function getFeedPage(
           { subject: { contains: filters.search, mode: "insensitive" as const } },
           { senderName: { contains: filters.search, mode: "insensitive" as const } },
           { senderEmail: { contains: filters.search, mode: "insensitive" as const } },
+          { emailContent: { contains: filters.search, mode: "insensitive" as const } },
         ],
       }
     : null
@@ -180,6 +361,7 @@ export async function getFeedPage(
         OR: [
           { message: { contains: filters.search, mode: "insensitive" as const } },
           { phoneNumber: { contains: filters.search } },
+          { toNumber: { contains: filters.search } },
         ],
       }
     : null
@@ -213,7 +395,9 @@ export async function getFeedPage(
       { entityId: { not: null } },
       { entity: entityWhere },
       entityIdRestriction ? { entityId: { in: entityIdRestriction } } : {},
-      dateFloor ? { dateReceived: { gte: dateFloor } } : {},
+      dateBounds ? { dateReceived: dateBounds } : {},
+      ownershipFilters.email ?? {},
+      emailPlatformFilter ?? {},
       emailCursorWhere ?? {},
       searchWhereEmail ?? {},
     ],
@@ -228,7 +412,9 @@ export async function getFeedPage(
       { entityId: { not: null } },
       { entity: entityWhere },
       entityIdRestriction ? { entityId: { in: entityIdRestriction } } : {},
-      dateFloor ? { createdAt: { gte: dateFloor } } : {},
+      dateBounds ? { createdAt: dateBounds } : {},
+      ownershipFilters.sms ?? {},
+      smsPlatformFilter ?? {},
       smsCursorWhere ?? {},
       searchWhereSms ?? {},
     ],

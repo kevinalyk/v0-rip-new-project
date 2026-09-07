@@ -139,8 +139,10 @@ The mobile feed intentionally mirrors the existing web Competitive Insights feed
   when both are supplied. An empty resulting set (e.g. `subscriptionsOnly=true` for
   a client following nothing) short-circuits to an empty feed — it is never treated
   as "no restriction."
-- Every filter — access scope, entity attributes (`party`/`state`/`office`/
-  `entityType`), date-retention floor, cursor, and `search` — is combined via an
+- Every filter — access scope, selected entity IDs, entity attributes
+  (`party`/`state`/`entityType`), Third Party/House File classification, donation
+  platform, caller-supplied date range, date-retention floor, cursor, and `search`
+  — is combined via an
   explicit top-level `AND: [...]` array. This matters: spreading multiple
   `{ OR: [...] }` fragments into the same object (the original implementation) is
   broken, because each spread `OR` key silently overwrites the previous one — only
@@ -179,7 +181,7 @@ with an appropriate HTTP status. Codes used across the namespace: `MISSING_TOKEN
 `INVALID_TOKEN`, `TOKEN_EXPIRED`, `SESSION_REVOKED`, `USER_NOT_FOUND`, `CLIENT_NOT_FOUND`,
 `CLIENT_INACTIVE`, `PASSWORD_RESET_REQUIRED`, `INVALID_REFRESH_TOKEN`,
 `REFRESH_TOKEN_REUSED`, `REFRESH_TOKEN_EXPIRED`, `TOO_MANY_ATTEMPTS`,
-`INVALID_CREDENTIALS`, `INVALID_BODY`, `INVALID_CURSOR`, `NO_CLIENT_CONTEXT`,
+`INVALID_CREDENTIALS`, `INVALID_BODY`, `INVALID_CURSOR`, `INVALID_FILTER`, `NO_CLIENT_CONTEXT`,
 `FORBIDDEN`, `CI_NOT_ENABLED`, `SUBSCRIPTION_INACTIVE`, `ENTITY_NOT_FOUND`,
 `FOLLOW_LIMIT_REACHED`, `NOT_FOUND`, `ALERT_NOT_FOUND`, `INTERNAL_ERROR`.
 
@@ -214,15 +216,25 @@ Lightweight app-shell bootstrap context: `{ userId, role, firstLogin, client: { 
 ### `GET /api/mobile/v1/feed` (bearer)
 Cursor-paginated combined feed (emails + SMS). Response:
 `{ data: FeedItem[], pagination: { nextCursor: string | null, hasMore: boolean } }`.
-Query params: `cursor`, `search`, `party`, `state`, `office`, `entityType`,
-`messageType` (`email`|`sms`), `tag`, `subscriptionsOnly` (`"true"`). See "Access
-model" and "Cursor pagination" above for the authorization and pagination rules.
-`400 INVALID_CURSOR` for a malformed `cursor` value.
+Query params mirror the web CI feed except for Office, which is intentionally not a
+feed filter: `cursor`, `search`, repeatable `entityId` (up to 100), `party`, `state`,
+`entityType`, `messageType` (`email`|`sms`), `thirdParty` (`"true"`),
+`houseFileOnly` (`"true"`), `donationPlatform`, `fromDate`, `toDate`, `tag`, and
+`subscriptionsOnly` (`"true"`). Selecting both Email and SMS sends no
+`messageType` restriction; selecting both Third Party and House File likewise sends
+no classification restriction. Caller-supplied dates can narrow the client's
+retention window but can never widen it. See "Access model" and "Cursor pagination"
+above for authorization and pagination rules. `400 INVALID_CURSOR` rejects a
+malformed cursor; `400 INVALID_FILTER` rejects unsupported message/platform values,
+invalid or reversed dates, and more than 100 selected entities.
 
 ### `GET /api/mobile/v1/feed/filters` (bearer)
-Static filter facets for building the mobile filter UI:
-`{ states: string[], parties: { value, label }[], offices: { value, label, match }[] }`
-(from `lib/campaign-filter-options.ts`).
+Filter facets for building the mobile filter UI:
+`{ states, parties, offices, entityTypes, messageFilters, donationPlatforms, entities }`.
+`entities` contains `{ id, name, type, party, state, isFollowing }[]`, ordered with
+the caller's followed entities first and then alphabetically, for the searchable
+multi-entity picker. `offices` remains in this metadata response only because the
+alert-creation form uses it; the feed does not accept or expose an Office filter.
 
 ### `GET /api/mobile/v1/feed/[id]?type=email|sms` (bearer)
 Single campaign/message detail: `{ data: FeedItem & { emailContent, emailPreview, ctaLinks } }`.
@@ -264,20 +276,24 @@ if it doesn't exist, `403 FORBIDDEN` if it belongs to someone else.
   dependency it touches injected. Does not touch a database, does not require
   `DATABASE_URL` or `MOBILE_DB_TESTS_ALLOWED`, and does not invoke the real
   `process.exit`.
+- `pnpm run test:mobile-feed-params` — isolated, non-database tests for repeatable
+  entity IDs, all supported web-parity query parameters, date normalization, and
+  fail-closed rejection of invalid filter values.
 - `pnpm run test:mobile-auth` — token issuance/verification, header validation,
   issuer/audience/typ/secret checks, expiry, `requireMobileAuth`'s Postgres reload
   and inactive-client/forced-reset handling, refresh rotation + replay + concurrency
   + absolute expiry, logout, rate limiting, cross-client item access.
 - `pnpm run test:mobile-feed` — feed access scope (shared vs. personal vs.
-  data-broker), `subscriptionsOnly`/`tag` filters (including the empty-result case),
-  search (email + SMS), unprocessed-SMS exclusion, retention-window enforcement on
-  both listing and detail, malformed-cursor rejection, and second-page cursor
-  pagination correctness.
+  data-broker), selected-entity/party/state/entity-type/Third Party/House File/
+  donation-platform/date-range filters, `subscriptionsOnly`/`tag` intersection
+  (including the empty-result case), search (email + SMS), unprocessed-SMS
+  exclusion, retention-window enforcement on both listing and detail,
+  malformed-cursor rejection, and second-page cursor pagination correctness.
 - `pnpm run test:mobile-entities` — follow idempotency and follow-limit enforcement
   under concurrency.
-- `pnpm run test:mobile` — runs all of the above in sequence (preflight guard tests
-  first, then the three database-backed suites), so a broken guard is caught before
-  any suite that depends on it runs.
+- `pnpm run test:mobile` — runs all of the above in sequence (route/auth, preflight,
+  and filter-parameter tests first, then the three database-backed suites), so a
+  broken guard is caught before any suite that depends on it runs.
 
 ### Database-backed tests require an explicit opt-in
 

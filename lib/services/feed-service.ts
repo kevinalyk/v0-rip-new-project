@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client"
+import { nanoid } from "nanoid"
 
 import prisma from "@/lib/prisma"
 import { getCIHistoryDays, type SubscriptionPlan } from "@/lib/subscription-utils"
@@ -68,10 +69,26 @@ export interface FeedItem {
   dateReceived: string
   inboxRate: number
   entityId: string | null
-  entity: { id: string; name: string; type: string; party: string | null; state: string | null } | null
+  entity: {
+    id: string
+    name: string
+    type: string
+    party: string | null
+    state: string | null
+    imageUrl: string | null
+  } | null
 }
 
 const PAGE_SIZE = 25
+
+const mobileFeedEntitySelect = {
+  id: true,
+  name: true,
+  type: true,
+  party: true,
+  state: true,
+  imageUrl: true,
+} satisfies Prisma.CiEntitySelect
 
 function encodeCursor(item: { dateReceived: string; id: string }): string {
   return Buffer.from(JSON.stringify(item)).toString("base64url")
@@ -463,7 +480,7 @@ export async function getFeedPage(
     includeEmail
       ? prisma.competitiveInsightCampaign.findMany({
           where: emailWhere,
-          include: { entity: { select: { id: true, name: true, type: true, party: true, state: true } } },
+          include: { entity: { select: mobileFeedEntitySelect } },
           orderBy: [{ dateReceived: "desc" }, { id: "desc" }],
           take: PAGE_SIZE + 1,
         })
@@ -471,7 +488,7 @@ export async function getFeedPage(
     includeSms
       ? prisma.smsQueue.findMany({
           where: smsWhere,
-          include: { entity: { select: { id: true, name: true, type: true, party: true, state: true } } },
+          include: { entity: { select: mobileFeedEntitySelect } },
           orderBy: [{ createdAt: "desc" }, { id: "desc" }],
           take: PAGE_SIZE + 1,
         })
@@ -524,7 +541,7 @@ export async function getFeedItemById(
   if (type === "email") {
     const campaign = await prisma.competitiveInsightCampaign.findUnique({
       where: { id },
-      include: { entity: { select: { id: true, name: true, type: true, party: true, state: true } } },
+      include: { entity: { select: mobileFeedEntitySelect } },
     })
     if (!campaign || campaign.isDeleted || campaign.isHidden) return null
     if (dateFloor && campaign.dateReceived < dateFloor) return null
@@ -555,7 +572,7 @@ export async function getFeedItemById(
 
   const sms = await prisma.smsQueue.findUnique({
     where: { id },
-    include: { entity: { select: { id: true, name: true, type: true, party: true, state: true } } },
+    include: { entity: { select: mobileFeedEntitySelect } },
   })
   if (!sms || sms.isDeleted || sms.isHidden) return null
   // Unprocessed SMS has no reliable extracted content/sender yet — treat it the same
@@ -580,5 +597,63 @@ export async function getFeedItemById(
     emailContent: sms.message,
     emailPreview: sms.message,
     ctaLinks: sms.ctaLinks ? JSON.parse(sms.ctaLinks) : [],
+  }
+}
+
+export async function createFeedShareLink(
+  clientId: string,
+  plan: SubscriptionPlan,
+  id: string,
+  type: "email" | "sms",
+  requestOrigin: string,
+): Promise<{ shareToken: string; shareUrl: string } | null> {
+  // Reuse the detail access path so sharing inherits the exact same tenant,
+  // hidden/deleted, data-broker, processed-SMS, and retention-window rules.
+  const accessibleItem = await getFeedItemById(clientId, plan, id, type)
+  if (!accessibleItem) return null
+
+  const candidateToken = nanoid(16)
+  let shareToken: string | null
+
+  if (type === "sms") {
+    await prisma.smsQueue.updateMany({
+      where: { id, shareToken: null },
+      data: {
+        shareToken: candidateToken,
+        shareTokenCreatedAt: new Date(),
+        shareTokenSource: "Mobile App",
+      },
+    })
+    const shared = await prisma.smsQueue.update({
+      where: { id },
+      data: { shareCount: { increment: 1 } },
+      select: { shareToken: true },
+    })
+    shareToken = shared.shareToken
+  } else {
+    await prisma.competitiveInsightCampaign.updateMany({
+      where: { id, shareToken: null },
+      data: {
+        shareToken: candidateToken,
+        shareTokenCreatedAt: new Date(),
+        shareTokenSource: "Mobile App",
+      },
+    })
+    const shared = await prisma.competitiveInsightCampaign.update({
+      where: { id },
+      data: { shareCount: { increment: 1 } },
+      select: { shareToken: true },
+    })
+    shareToken = shared.shareToken
+  }
+
+  if (!shareToken) {
+    throw new Error("A feed item share token could not be created")
+  }
+
+  const origin = new URL(requestOrigin).origin
+  return {
+    shareToken,
+    shareUrl: new URL(`/share/${encodeURIComponent(shareToken)}`, origin).toString(),
   }
 }

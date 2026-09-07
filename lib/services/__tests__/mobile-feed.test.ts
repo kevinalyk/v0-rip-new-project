@@ -27,6 +27,7 @@
 import prisma from "@/lib/prisma"
 import { MobileAuthError } from "@/lib/mobile-auth"
 import { decodeCursor, getFeedItemById, getFeedPage } from "@/lib/services/feed-service"
+import { invalidateEntityMappingCache } from "@/lib/ci-mapping-cache"
 import type { SubscriptionPlan } from "@/lib/subscription-utils"
 import { assertRealDatabaseOrExit } from "@/lib/services/__tests__/test-db-preflight"
 
@@ -243,6 +244,281 @@ async function main() {
       assert(items.some((i) => i.id === sharedCampaign.id), "search should match the campaign subject")
       const { items: noMatch } = await getFeedPage(clientA.id, PLAN, { search: "nonexistent-search-term-xyz" }, null)
       assert(noMatch.length === 0, "an unmatched search term should return nothing")
+    })
+
+    // ── Web-parity feed filters ───────────────────────────────────────────────
+    const independentEntity = await prisma.ciEntity.create({
+      data: { name: `${PREFIX}Independent Entity`, type: "organization", party: "third party", state: "CO" },
+    })
+    const independentCampaign = await prisma.competitiveInsightCampaign.create({
+      data: {
+        entityId: independentEntity.id,
+        senderName: `${PREFIX}independent_sender`,
+        senderEmail: "independent@example.com",
+        subject: `${PREFIX}Independent campaign`,
+        dateReceived: new Date(),
+        inboxRate: 100,
+      },
+    })
+    const otherFilterCampaign = await prisma.competitiveInsightCampaign.create({
+      data: {
+        entityId: otherEntity.id,
+        senderName: `${PREFIX}other_filter_sender`,
+        senderEmail: "other-filter@example.com",
+        subject: `${PREFIX}Other filter campaign`,
+        dateReceived: new Date(),
+        inboxRate: 100,
+      },
+    })
+
+    await test("repeatable entity selection restricts results to the selected entity IDs", async () => {
+      const { items } = await getFeedPage(
+        clientA.id,
+        PLAN,
+        { entityIds: [independentEntity.id], search: PREFIX },
+        null,
+      )
+      assert(items.some((item) => item.id === independentCampaign.id), "selected entity should appear")
+      assert(!items.some((item) => item.id === otherFilterCampaign.id), "unselected entity should not appear")
+    })
+
+    await test("party, state, and entity-type filters match the web feed semantics", async () => {
+      const { items } = await getFeedPage(
+        clientA.id,
+        PLAN,
+        { party: "independent", state: "CO", entityType: "organization", search: PREFIX },
+        null,
+      )
+      assert(items.some((item) => item.id === independentCampaign.id), "third-party DB values should match Independent")
+      assert(!items.some((item) => item.id === otherFilterCampaign.id), "nonmatching entity attributes should be excluded")
+    })
+
+    const thirdPartyCampaign = await prisma.competitiveInsightCampaign.create({
+      data: {
+        entityId: entity.id,
+        senderName: `${PREFIX}third_party_sender`,
+        senderEmail: "third-party@example.com",
+        subject: `${PREFIX}Ownership third party`,
+        dateReceived: new Date(),
+        inboxRate: 100,
+        isThirdParty: true,
+      },
+    })
+    const houseFileCampaign = await prisma.competitiveInsightCampaign.create({
+      data: {
+        entityId: entity.id,
+        senderName: `${PREFIX}house_file_sender`,
+        senderEmail: "house-file@example.com",
+        subject: `${PREFIX}Ownership house file`,
+        dateReceived: new Date(),
+        inboxRate: 100,
+        isThirdParty: false,
+      },
+    })
+    await prisma.ciEntityMapping.create({
+      data: {
+        entityId: entity.id,
+        senderEmail: "legacy-house@example.com",
+        senderPhone: "+15550001111",
+      },
+    })
+    invalidateEntityMappingCache()
+    const legacyHouseCampaign = await prisma.competitiveInsightCampaign.create({
+      data: {
+        entityId: entity.id,
+        senderName: `${PREFIX}legacy_house_sender`,
+        senderEmail: "legacy-house@example.com",
+        subject: `${PREFIX}Ownership legacy house file`,
+        dateReceived: new Date(),
+        inboxRate: 100,
+        isThirdParty: null,
+      },
+    })
+    const legacyThirdPartyCampaign = await prisma.competitiveInsightCampaign.create({
+      data: {
+        entityId: entity.id,
+        senderName: `${PREFIX}legacy_third_party_sender`,
+        senderEmail: "legacy-third-party@example.com",
+        subject: `${PREFIX}Ownership legacy third party`,
+        dateReceived: new Date(),
+        inboxRate: 100,
+        isThirdParty: null,
+      },
+    })
+    const legacyHouseSms = await prisma.smsQueue.create({
+      data: {
+        entityId: entity.id,
+        rawData: "raw",
+        processed: true,
+        phoneNumber: "+15550001111",
+        message: `${PREFIX}Ownership legacy house SMS`,
+        isThirdParty: null,
+      },
+    })
+    const legacyThirdPartySms = await prisma.smsQueue.create({
+      data: {
+        entityId: entity.id,
+        rawData: "raw",
+        processed: true,
+        phoneNumber: "+15550002222",
+        message: `${PREFIX}Ownership legacy third-party SMS`,
+        isThirdParty: null,
+      },
+    })
+
+    await test("Third Party and House File filters work independently and together", async () => {
+      const thirdParty = await getFeedPage(clientA.id, PLAN, { search: `${PREFIX}Ownership`, thirdParty: true }, null)
+      assert(thirdParty.items.some((item) => item.id === thirdPartyCampaign.id), "third-party item should appear")
+      assert(thirdParty.items.some((item) => item.id === legacyThirdPartyCampaign.id), "legacy third-party item should appear")
+      assert(thirdParty.items.some((item) => item.id === legacyThirdPartySms.id), "legacy third-party SMS should appear")
+      assert(!thirdParty.items.some((item) => item.id === houseFileCampaign.id), "house-file item should be excluded")
+      assert(!thirdParty.items.some((item) => item.id === legacyHouseCampaign.id), "legacy house-file item should be excluded")
+      assert(!thirdParty.items.some((item) => item.id === legacyHouseSms.id), "legacy house-file SMS should be excluded")
+
+      const houseFile = await getFeedPage(clientA.id, PLAN, { search: `${PREFIX}Ownership`, houseFileOnly: true }, null)
+      assert(houseFile.items.some((item) => item.id === houseFileCampaign.id), "house-file item should appear")
+      assert(houseFile.items.some((item) => item.id === legacyHouseCampaign.id), "legacy house-file item should appear")
+      assert(houseFile.items.some((item) => item.id === legacyHouseSms.id), "legacy house-file SMS should appear")
+      assert(!houseFile.items.some((item) => item.id === thirdPartyCampaign.id), "third-party item should be excluded")
+      assert(!houseFile.items.some((item) => item.id === legacyThirdPartyCampaign.id), "legacy third-party item should be excluded")
+      assert(!houseFile.items.some((item) => item.id === legacyThirdPartySms.id), "legacy third-party SMS should be excluded")
+
+      const both = await getFeedPage(
+        clientA.id,
+        PLAN,
+        { search: `${PREFIX}Ownership`, thirdParty: true, houseFileOnly: true },
+        null,
+      )
+      assert(both.items.some((item) => item.id === houseFileCampaign.id), "both selections should include house-file")
+      assert(both.items.some((item) => item.id === thirdPartyCampaign.id), "both selections should include third-party")
+    })
+
+    const winRedCampaign = await prisma.competitiveInsightCampaign.create({
+      data: {
+        entityId: entity.id,
+        senderName: `${PREFIX}winred_sender`,
+        senderEmail: "winred-filter@example.com",
+        subject: `${PREFIX}Platform campaign`,
+        dateReceived: new Date(),
+        inboxRate: 100,
+        donationPlatform: "winred",
+      },
+    })
+    const actBlueCampaign = await prisma.competitiveInsightCampaign.create({
+      data: {
+        entityId: entity.id,
+        senderName: `${PREFIX}actblue_sender`,
+        senderEmail: "actblue-filter@example.com",
+        subject: `${PREFIX}Platform campaign other`,
+        dateReceived: new Date(),
+        inboxRate: 100,
+        donationPlatform: "actblue",
+      },
+    })
+    const legacyAnedotCampaign = await prisma.competitiveInsightCampaign.create({
+      data: {
+        entityId: entity.id,
+        senderName: `${PREFIX}legacy_anedot_sender`,
+        senderEmail: "legacy-anedot@example.com",
+        subject: `${PREFIX}Legacy Anedot platform`,
+        dateReceived: new Date(),
+        inboxRate: 100,
+        donationPlatform: null,
+        ctaLinks: ["https://secure.anedot.com/give/mobile-feed-test"],
+      },
+    })
+    const legacyNgpVanCampaign = await prisma.competitiveInsightCampaign.create({
+      data: {
+        entityId: entity.id,
+        senderName: `${PREFIX}legacy_ngpvan_sender`,
+        senderEmail: "legacy-ngpvan@example.com",
+        subject: `${PREFIX}Legacy NGPVAN platform`,
+        dateReceived: new Date(),
+        inboxRate: 100,
+        donationPlatform: null,
+        ctaLinks: [{ finalUrl: "https://click.ngpvan.com/k/mobile-feed-test" }],
+      },
+    })
+    const legacyWinRedSms = await prisma.smsQueue.create({
+      data: {
+        entityId: entity.id,
+        rawData: "raw",
+        processed: true,
+        phoneNumber: "+15550003333",
+        message: `${PREFIX}Legacy WinRed SMS platform`,
+        ctaLinks: JSON.stringify(["https://secure.winred.com/mobile-feed-test"]),
+      },
+    })
+
+    await test("donation-platform filter uses the campaign's normalized platform", async () => {
+      const { items } = await getFeedPage(
+        clientA.id,
+        PLAN,
+        { search: `${PREFIX}Platform`, donationPlatform: "winred" },
+        null,
+      )
+      assert(items.some((item) => item.id === winRedCampaign.id), "matching platform should appear")
+      assert(!items.some((item) => item.id === actBlueCampaign.id), "nonmatching platform should be excluded")
+    })
+
+    await test("donation-platform filter matches legacy email JSON arrays and SMS text", async () => {
+      const anedot = await getFeedPage(
+        clientA.id,
+        PLAN,
+        { search: `${PREFIX}Legacy Anedot`, donationPlatform: "anedot" },
+        null,
+      )
+      assert(anedot.items.some((item) => item.id === legacyAnedotCampaign.id), "string-array CTA should match")
+
+      const ngpvan = await getFeedPage(
+        clientA.id,
+        PLAN,
+        { search: `${PREFIX}Legacy NGPVAN`, donationPlatform: "ngpvan" },
+        null,
+      )
+      assert(ngpvan.items.some((item) => item.id === legacyNgpVanCampaign.id), "object-array CTA should match")
+
+      const winredSms = await getFeedPage(
+        clientA.id,
+        PLAN,
+        { search: `${PREFIX}Legacy WinRed SMS`, donationPlatform: "winred", messageType: "sms" },
+        null,
+      )
+      assert(winredSms.items.some((item) => item.id === legacyWinRedSms.id), "SMS CTA text should still match")
+    })
+
+    const datedAt = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000)
+    const datedCampaign = await prisma.competitiveInsightCampaign.create({
+      data: {
+        entityId: entity.id,
+        senderName: `${PREFIX}dated_sender`,
+        senderEmail: "dated-filter@example.com",
+        subject: `${PREFIX}Dated campaign`,
+        dateReceived: datedAt,
+        inboxRate: 100,
+      },
+    })
+
+    await test("custom date range is combined with, and cannot widen, the retention floor", async () => {
+      const inside = await getFeedPage(
+        clientA.id,
+        PLAN,
+        {
+          search: `${PREFIX}Dated`,
+          fromDate: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
+          toDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+        },
+        null,
+      )
+      assert(inside.items.some((item) => item.id === datedCampaign.id), "item inside the chosen range should appear")
+
+      const outside = await getFeedPage(
+        clientA.id,
+        PLAN,
+        { search: `${PREFIX}Dated`, fromDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
+        null,
+      )
+      assert(!outside.items.some((item) => item.id === datedCampaign.id), "item outside the chosen range should be excluded")
     })
 
     const smsCampaign = await prisma.smsQueue.create({

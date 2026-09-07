@@ -1,3 +1,5 @@
+import { Prisma } from "@prisma/client"
+
 import prisma from "@/lib/prisma"
 import { getCIHistoryDays, type SubscriptionPlan } from "@/lib/subscription-utils"
 import { MobileAuthError } from "@/lib/mobile-auth"
@@ -202,18 +204,38 @@ const PLATFORM_DOMAINS: Record<MobileDonationPlatform, string[]> = {
   substack: ["substack.com"],
 }
 
-function emailPlatformWhere(platform: MobileDonationPlatform | undefined): Record<string, unknown> | null {
+async function resolveEmailPlatformWhere(
+  platform: MobileDonationPlatform | undefined,
+): Promise<Record<string, unknown> | null> {
   if (!platform) return null
   if (platform === "substack") {
     return { senderEmail: { endsWith: "@substack.com", mode: "insensitive" } }
   }
+
+  const domainPredicates = PLATFORM_DOMAINS[platform].map(
+    (domain) => Prisma.sql`LOWER(campaign."ctaLinks"::text) LIKE ${`%${domain.toLowerCase()}%`}`,
+  )
+  const legacyRows = (await prisma.$queryRaw(
+    Prisma.sql`
+      SELECT campaign."id"
+      FROM "CompetitiveInsightCampaign" AS campaign
+      WHERE campaign."donationPlatform" IS NULL
+        AND campaign."ctaLinks" IS NOT NULL
+        AND campaign."isDeleted" = false
+        AND campaign."isHidden" = false
+        AND campaign."entityId" IS NOT NULL
+        AND (${Prisma.join(domainPredicates, " OR ")})
+    `,
+  )) as Array<{ id: string }>
+
   return {
     OR: [
       { donationPlatform: { equals: platform, mode: "insensitive" } },
-      // Older rows sometimes stored the CTA array as a JSON string before the
-      // normalized donationPlatform column was backfilled. Keep those rows visible
-      // so mobile and web filters agree on historical results.
-      ...PLATFORM_DOMAINS[platform].map((domain) => ({ ctaLinks: { string_contains: domain } })),
+      // The Json column contains arrays of strings or link objects. Prisma's
+      // string_contains only checks a scalar JSON string, so resolve legacy rows
+      // with a parameterized JSON-text search and feed their IDs back into the
+      // normal scoped Prisma query.
+      { id: { in: legacyRows.map((row) => row.id) } },
     ],
   }
 }
@@ -354,7 +376,9 @@ export async function getFeedPage(
   }
 
   const entityWhere = entityAttributeWhere(filters)
-  const emailPlatformFilter = emailPlatformWhere(filters.donationPlatform)
+  const emailPlatformFilter = filters.messageType === "sms"
+    ? null
+    : await resolveEmailPlatformWhere(filters.donationPlatform)
   const smsPlatformFilter = smsPlatformWhere(filters.donationPlatform)
 
   const searchWhereEmail = filters.search

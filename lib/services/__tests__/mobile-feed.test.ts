@@ -415,6 +415,40 @@ async function main() {
         donationPlatform: "actblue",
       },
     })
+    const legacyAnedotCampaign = await prisma.competitiveInsightCampaign.create({
+      data: {
+        entityId: entity.id,
+        senderName: `${PREFIX}legacy_anedot_sender`,
+        senderEmail: "legacy-anedot@example.com",
+        subject: `${PREFIX}Legacy Anedot platform`,
+        dateReceived: new Date(),
+        inboxRate: 100,
+        donationPlatform: null,
+        ctaLinks: ["https://secure.anedot.com/give/mobile-feed-test"],
+      },
+    })
+    const legacyNgpVanCampaign = await prisma.competitiveInsightCampaign.create({
+      data: {
+        entityId: entity.id,
+        senderName: `${PREFIX}legacy_ngpvan_sender`,
+        senderEmail: "legacy-ngpvan@example.com",
+        subject: `${PREFIX}Legacy NGPVAN platform`,
+        dateReceived: new Date(),
+        inboxRate: 100,
+        donationPlatform: null,
+        ctaLinks: [{ finalUrl: "https://click.ngpvan.com/k/mobile-feed-test" }],
+      },
+    })
+    const legacyWinRedSms = await prisma.smsQueue.create({
+      data: {
+        entityId: entity.id,
+        rawData: "raw",
+        processed: true,
+        phoneNumber: "+15550003333",
+        message: `${PREFIX}Legacy WinRed SMS platform`,
+        ctaLinks: JSON.stringify(["https://secure.winred.com/mobile-feed-test"]),
+      },
+    })
 
     await test("donation-platform filter uses the campaign's normalized platform", async () => {
       const { items } = await getFeedPage(
@@ -425,6 +459,32 @@ async function main() {
       )
       assert(items.some((item) => item.id === winRedCampaign.id), "matching platform should appear")
       assert(!items.some((item) => item.id === actBlueCampaign.id), "nonmatching platform should be excluded")
+    })
+
+    await test("donation-platform filter matches legacy email JSON arrays and SMS text", async () => {
+      const anedot = await getFeedPage(
+        clientA.id,
+        PLAN,
+        { search: `${PREFIX}Legacy Anedot`, donationPlatform: "anedot" },
+        null,
+      )
+      assert(anedot.items.some((item) => item.id === legacyAnedotCampaign.id), "string-array CTA should match")
+
+      const ngpvan = await getFeedPage(
+        clientA.id,
+        PLAN,
+        { search: `${PREFIX}Legacy NGPVAN`, donationPlatform: "ngpvan" },
+        null,
+      )
+      assert(ngpvan.items.some((item) => item.id === legacyNgpVanCampaign.id), "object-array CTA should match")
+
+      const winredSms = await getFeedPage(
+        clientA.id,
+        PLAN,
+        { search: `${PREFIX}Legacy WinRed SMS`, donationPlatform: "winred", messageType: "sms" },
+        null,
+      )
+      assert(winredSms.items.some((item) => item.id === legacyWinRedSms.id), "SMS CTA text should still match")
     })
 
     const datedAt = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000)

@@ -285,7 +285,8 @@ if it doesn't exist, `403 FORBIDDEN` if it belongs to someone else.
   + absolute expiry, logout, rate limiting, cross-client item access.
 - `pnpm run test:mobile-feed` — feed access scope (shared vs. personal vs.
   data-broker), selected-entity/party/state/entity-type/Third Party/House File/
-  donation-platform/date-range filters, `subscriptionsOnly`/`tag` intersection
+  donation-platform/date-range filters (including normalized platforms and legacy
+  email JSON-array/SMS-text CTA links), `subscriptionsOnly`/`tag` intersection
   (including the empty-result case), search (email + SMS), unprocessed-SMS
   exclusion, retention-window enforcement on both listing and detail,
   malformed-cursor rejection, and second-page cursor pagination correctness.

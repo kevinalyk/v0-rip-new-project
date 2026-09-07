@@ -2,8 +2,28 @@
 set -uo pipefail
 cd /vercel/share/v0-project
 DEPLOY="https://v0-rip-new-project-j3b6wekdk-kevinalyk-gmailcoms-projects.vercel.app"
-TOKEN_A=$(cat /tmp/token_a.txt)
-TOKEN_B=$(cat /tmp/token_b.txt)
+
+login() {
+  local email="$1" tok=""
+  for attempt in 1 2 3 4 5; do
+    resp=$(vercel curl "/api/mobile/v1/auth/login" --deployment "$DEPLOY" -- --silent --request POST --header "Content-Type: application/json" --data "{\"email\":\"$email\",\"password\":\"SmokeTest123!Aa\"}")
+    tok=$(echo "$resp" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{console.log(JSON.parse(d).accessToken||'')}catch(e){console.log('')}})")
+    if [ -n "$tok" ]; then echo "$tok"; return 0; fi
+    sleep 3
+  done
+  echo "LOGIN FAILED for $email: $resp" >&2
+  return 1
+}
+
+echo "Logging in fresh (mobile access tokens are 15m TTL)..."
+TOKEN_A=$(login "mobile_feed_filter_smoke_test_user_a@example.invalid")
+sleep 2
+TOKEN_B=$(login "mobile_feed_filter_smoke_test_user_b@example.invalid")
+if [ -z "$TOKEN_A" ] || [ -z "$TOKEN_B" ]; then
+  echo "LOGIN FAILED, aborting"
+  exit 1
+fi
+echo "Login OK, tokens acquired."
 E_REP="MOBILE_FEED_FILTER_SMOKE_TEST_entity_rep"
 E_DEM="MOBILE_FEED_FILTER_SMOKE_TEST_entity_dem"
 E_IND="MOBILE_FEED_FILTER_SMOKE_TEST_entity_ind"
@@ -15,11 +35,11 @@ E_BROKER="MOBILE_FEED_FILTER_SMOKE_TEST_entity_broker"
 call() {
   local label="$1" token="$2" path="$3"
   local out status attempt
-  for attempt in $(seq 1 20); do
+  for attempt in 1 2 3; do
     out=$(vercel curl "$path" --deployment "$DEPLOY" -- --silent --write-out "\n__STATUS__%{http_code}" --header "Authorization: Bearer $token" 2>/tmp/curl_err.log)
     status=$(echo "$out" | grep -o '__STATUS__[0-9]*' | tail -1 | sed 's/__STATUS__//')
     if [ -n "$status" ]; then break; fi
-    sleep 6
+    sleep 2
   done
   body=$(echo "$out" | sed 's/__STATUS__[0-9]*$//' | grep -v '^__STATUS__')
   echo "### $label -> HTTP $status"

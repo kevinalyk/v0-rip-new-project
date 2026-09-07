@@ -26,7 +26,7 @@
  */
 import prisma from "@/lib/prisma"
 import { MobileAuthError } from "@/lib/mobile-auth"
-import { decodeCursor, getFeedItemById, getFeedPage } from "@/lib/services/feed-service"
+import { createFeedShareLink, decodeCursor, getFeedItemById, getFeedPage } from "@/lib/services/feed-service"
 import { invalidateEntityMappingCache } from "@/lib/ci-mapping-cache"
 import type { SubscriptionPlan } from "@/lib/subscription-utils"
 import { assertRealDatabaseOrExit } from "@/lib/services/__tests__/test-db-preflight"
@@ -100,7 +100,13 @@ async function main() {
   })
 
   const entity = await prisma.ciEntity.create({
-    data: { name: `${PREFIX}Shared Entity`, type: "politician", party: "republican", state: "TX" },
+    data: {
+      name: `${PREFIX}Shared Entity`,
+      type: "politician",
+      party: "republican",
+      state: "TX",
+      imageUrl: "https://example.com/mobile-feed-test-entity.jpg",
+    },
   })
   const otherEntity = await prisma.ciEntity.create({
     data: { name: `${PREFIX}Other Entity`, type: "pac", party: "democrat", state: "CA" },
@@ -146,6 +152,10 @@ async function main() {
     await test("feed listing includes shared (entity-assigned) campaigns for any client", async () => {
       const { items } = await getFeedPage(clientB.id, PLAN, {}, null)
       assert(items.some((i) => i.id === sharedCampaign.id), "shared campaign should appear for a non-owning client")
+      assert(
+        items.find((i) => i.id === sharedCampaign.id)?.entity?.imageUrl === entity.imageUrl,
+        "feed entity should include its profile image URL",
+      )
     })
 
     await test("feed listing never includes a client's own personal (unassigned) capture", async () => {
@@ -183,6 +193,32 @@ async function main() {
     await test("getFeedItemById: shared campaigns are visible to any client", async () => {
       const view = await getFeedItemById(clientB.id, PLAN, sharedCampaign.id, "email")
       assert(view !== null, "shared campaign should be visible to any client")
+      assert(view.entity?.imageUrl === entity.imageUrl, "detail entity should include its profile image URL")
+    })
+
+    await test("createFeedShareLink reuses a stable token and enforces detail access", async () => {
+      const first = await createFeedShareLink(clientB.id, PLAN, sharedCampaign.id, "email", "https://preview.example.com")
+      assert(first !== null, "a shared campaign should be shareable")
+      assert(first.shareUrl === `https://preview.example.com/share/${first.shareToken}`, "share URL should use the API request origin")
+
+      const second = await createFeedShareLink(clientB.id, PLAN, sharedCampaign.id, "email", "https://preview.example.com")
+      assert(second?.shareToken === first.shareToken, "repeat shares should reuse the existing public token")
+
+      const stored = await prisma.competitiveInsightCampaign.findUnique({
+        where: { id: sharedCampaign.id },
+        select: { shareToken: true, shareCount: true, shareTokenSource: true },
+      })
+      assert(stored?.shareToken === first.shareToken, "the returned token should be persisted")
+      assert(stored?.shareCount === 2, "each requested share should increment the share count atomically")
+      assert(stored?.shareTokenSource === "Mobile App", "new mobile share tokens should record their source")
+
+      const forbidden = await createFeedShareLink(clientB.id, PLAN, personalCampaignA.id, "email", "https://preview.example.com")
+      assert(forbidden === null, "another client's personal campaign must not be shareable")
+      const untouchedPersonal = await prisma.competitiveInsightCampaign.findUnique({
+        where: { id: personalCampaignA.id },
+        select: { shareToken: true, shareCount: true },
+      })
+      assert(!untouchedPersonal?.shareToken && untouchedPersonal?.shareCount === 0, "denied shares must not mutate the campaign")
     })
 
     await test("getFeedItemById: a data_broker-assigned campaign is not visible to a non-owning client", async () => {
@@ -559,6 +595,18 @@ async function main() {
     await test("getFeedItemById returns processed SMS detail", async () => {
       const view = await getFeedItemById(clientA.id, PLAN, smsCampaign.id, "sms")
       assert(view !== null, "processed SMS should be viewable")
+    })
+
+    await test("createFeedShareLink supports processed SMS", async () => {
+      const shared = await createFeedShareLink(clientA.id, PLAN, smsCampaign.id, "sms", "https://preview.example.com")
+      assert(shared !== null, "processed SMS should be shareable")
+      const stored = await prisma.smsQueue.findUnique({
+        where: { id: smsCampaign.id },
+        select: { shareToken: true, shareCount: true, shareTokenSource: true },
+      })
+      assert(stored?.shareToken === shared.shareToken, "SMS share token should be persisted")
+      assert(stored?.shareCount === 1, "SMS share count should increment")
+      assert(stored?.shareTokenSource === "Mobile App", "SMS share token source should identify mobile")
     })
 
     // ── Retention / plan history bypass attempts ───────────────────────────────

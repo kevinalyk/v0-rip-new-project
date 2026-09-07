@@ -238,10 +238,19 @@ alert-creation form uses it; the feed does not accept or expose an Office filter
 
 ### `GET /api/mobile/v1/feed/[id]?type=email|sms` (bearer)
 Single campaign/message detail: `{ data: FeedItem & { emailContent, emailPreview, ctaLinks } }`.
+The nested entity on feed list/detail items includes its `imageUrl` so native clients
+can render the same profile image used by the web directory and followed-entities UI.
 `404 NOT_FOUND` if the item doesn't exist, is hidden/deleted, is outside the
 client's retention window, is unprocessed SMS, or isn't accessible to the caller
 (not shared and not the caller's own personal record) — the same `404` in every
 case, to avoid confirming existence across tenants.
+
+### `POST /api/mobile/v1/feed/[id]/share?type=email|sms` (bearer)
+Creates or reuses the message's existing public share token, atomically increments
+its share count, and returns `{ shareToken, shareUrl }`. Authorization deliberately
+reuses the feed-detail access path, including tenant ownership, hidden/deleted,
+data-broker, processed-SMS, and retention-window checks. An inaccessible item returns
+the same `404 NOT_FOUND` response as feed detail and is not mutated.
 
 ### `GET /api/mobile/v1/entities/followed` (bearer)
 Entities (`CiEntity`) the caller's client currently follows: `{ data: CiEntity[] }`.

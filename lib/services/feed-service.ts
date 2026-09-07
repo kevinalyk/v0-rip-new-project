@@ -230,6 +230,18 @@ type OwnershipWhere = {
   sms: Record<string, unknown> | null
 }
 
+type LegacyEmailOwnershipCandidate = {
+  id: string
+  entityId: string | null
+  senderEmail: string
+}
+
+type LegacySmsOwnershipCandidate = {
+  id: string
+  entityId: string | null
+  phoneNumber: string | null
+}
+
 async function resolveOwnershipWhere(filters: FeedFilters): Promise<OwnershipWhere> {
   // Third Party and House File are an exhaustive pair in the web UI. Selecting both
   // means "either classification," just like selecting both Email and SMS.
@@ -254,7 +266,7 @@ async function resolveOwnershipWhere(filters: FeedFilters): Promise<OwnershipWhe
   ])
 
   const legacyEmailIds = legacyEmails
-    .filter((campaign) => {
+    .filter((campaign: LegacyEmailOwnershipCandidate) => {
       const mappings = campaign.entityId ? mappingsByEntity[campaign.entityId] : undefined
       if (!mappings) return expectedThirdParty === false
       const email = campaign.senderEmail.toLowerCase()
@@ -262,15 +274,15 @@ async function resolveOwnershipWhere(filters: FeedFilters): Promise<OwnershipWhe
       const isThirdParty = !mappings.emails.has(email) && (!domain || !mappings.domains.has(domain))
       return isThirdParty === expectedThirdParty
     })
-    .map((campaign) => campaign.id)
+    .map((campaign: LegacyEmailOwnershipCandidate) => campaign.id)
 
   const legacySmsIds = legacySms
-    .filter((message) => {
+    .filter((message: LegacySmsOwnershipCandidate) => {
       const phones = message.entityId ? phonesByEntity[message.entityId] : undefined
       const isThirdParty = phones ? !phones.has(message.phoneNumber ?? "") : false
       return isThirdParty === expectedThirdParty
     })
-    .map((message) => message.id)
+    .map((message: LegacySmsOwnershipCandidate) => message.id)
 
   const includeLegacy = (ids: string[]): Record<string, unknown> => ({
     OR: [

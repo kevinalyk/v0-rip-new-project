@@ -134,6 +134,18 @@ The mobile feed intentionally mirrors the existing web Competitive Insights feed
   Client.dataRetentionDays)`. This is enforced identically on listing and on direct
   by-ID access, so an item outside the retention window can't be reached just by
   guessing its ID.
+- Mobile plan capabilities are derived on the server from `PLAN_LIMITS`; the native
+  client never maintains a second plan matrix. Starter (`free`) receives three hours
+  of feed history, zero followed entities, and no feed search/filter access. Basic
+  (`paid`) receives 72 hours, three followed entities, and search/filter access.
+  Professional (`all`), Advanced (`basic_inboxing`), and Enterprise receive full
+  history, unlimited follows, and search/filter access. Unknown plan strings fail
+  closed instead of inheriting a paid capability.
+- Starter may paginate the unfiltered feed, but any substantive search/filter passed
+  to `getFeedPage` is rejected before database work with `403
+  FEED_FILTERS_NOT_AVAILABLE`. This service-level check prevents a future route or
+  caller from bypassing the restriction. The filter-metadata endpoint applies the
+  same entitlement check.
 - `tag` and `subscriptionsOnly` are resolved to entity-ID sets (via `EntityTag` and
   `CiEntitySubscription`, both scoped to the caller's `clientId`) and intersected
   when both are supplied. An empty resulting set (e.g. `subscriptionsOnly=true` for
@@ -182,7 +194,8 @@ with an appropriate HTTP status. Codes used across the namespace: `MISSING_TOKEN
 `CLIENT_INACTIVE`, `PASSWORD_RESET_REQUIRED`, `INVALID_REFRESH_TOKEN`,
 `REFRESH_TOKEN_REUSED`, `REFRESH_TOKEN_EXPIRED`, `TOO_MANY_ATTEMPTS`,
 `INVALID_CREDENTIALS`, `INVALID_BODY`, `INVALID_CURSOR`, `INVALID_FILTER`, `NO_CLIENT_CONTEXT`,
-`FORBIDDEN`, `CI_NOT_ENABLED`, `SUBSCRIPTION_INACTIVE`, `ENTITY_NOT_FOUND`,
+`FORBIDDEN`, `CI_NOT_ENABLED`, `SUBSCRIPTION_INACTIVE`,
+`UNSUPPORTED_SUBSCRIPTION_PLAN`, `FEED_FILTERS_NOT_AVAILABLE`, `ENTITY_NOT_FOUND`,
 `FOLLOW_LIMIT_REACHED`, `NOT_FOUND`, `ALERT_NOT_FOUND`, `INTERNAL_ERROR`.
 
 ## Endpoints
@@ -208,10 +221,18 @@ returns the same success response.
 
 ### `GET /api/mobile/v1/auth/me` (bearer)
 Returns the current user's profile directly (not wrapped in `data`):
-`{ id, email, firstName, lastName, role, firstLogin, client: { id, name, slug, subscriptionPlan, subscriptionStatus, hasCompetitiveInsights, trialExpiresAt } | null }`.
+`{ id, email, firstName, lastName, role, firstLogin, client: { id, name, slug, subscriptionPlan, subscriptionStatus, hasCompetitiveInsights, trialExpiresAt, entitlements } | null }`.
+`entitlements` is `{ canSearchAndFilterFeed, feedHistoryHours,
+followedEntityLimit }`; `null` history/follow limits mean unlimited.
+Deploy this API revision before distributing a native build that consumes these
+fields. New native clients deliberately fall back to Starter restrictions when the
+capability object is absent or malformed; older native clients ignore the additive
+response field.
 
 ### `GET /api/mobile/v1/context` (bearer)
-Lightweight app-shell bootstrap context: `{ userId, role, firstLogin, client: { id, slug, active, subscriptionPlan, subscriptionStatus, hasCompetitiveInsights } | null }`.
+Lightweight app-shell bootstrap context: `{ userId, role, firstLogin, client: { id,
+slug, active, subscriptionPlan, subscriptionStatus, hasCompetitiveInsights,
+entitlements } | null }`.
 
 ### `GET /api/mobile/v1/feed` (bearer)
 Cursor-paginated combined feed (emails + SMS). Response:
@@ -227,14 +248,20 @@ retention window but can never widen it. See "Access model" and "Cursor paginati
 above for authorization and pagination rules. `400 INVALID_CURSOR` rejects a
 malformed cursor; `400 INVALID_FILTER` rejects unsupported message/platform values,
 invalid or reversed dates, and more than 100 selected entities.
+Starter accounts may send `cursor` for normal pagination but receive `403
+FEED_FILTERS_NOT_AVAILABLE` for any active feed filter, including search.
 
 ### `GET /api/mobile/v1/feed/filters` (bearer)
 Filter facets for building the mobile filter UI:
 `{ states, parties, offices, entityTypes, messageFilters, donationPlatforms, entities }`.
 `entities` contains `{ id, name, type, party, state, isFollowing }[]`, ordered with
 the caller's followed entities first and then alphabetically, for the searchable
-multi-entity picker. `offices` remains in this metadata response only because the
-alert-creation form uses it; the feed does not accept or expose an Office filter.
+multi-entity picker. `offices` is retained for backwards compatibility with older
+mobile alert forms; the feed does not accept or expose an Office filter. New clients
+load alert criteria from `/alerts/options` instead.
+Starter accounts receive `403 FEED_FILTERS_NOT_AVAILABLE`; native clients should use
+the entitlements returned by `/auth/me` and avoid requesting this endpoint when the
+capability is false.
 
 ### `GET /api/mobile/v1/feed/[id]?type=email|sms` (bearer)
 Single campaign/message detail: `{ data: FeedItem & { emailContent, emailPreview, ctaLinks } }`.
@@ -267,6 +294,11 @@ Unfollows a `CiEntity`. Response: `{ following: false }`. Idempotent.
 ### `GET /api/mobile/v1/alerts` (bearer)
 Lists `CampaignAlertSubscription` rows for the caller: `{ data: CampaignAlertSubscription[] }`.
 
+### `GET /api/mobile/v1/alerts/options` (bearer)
+Returns `{ states, parties, offices }` for the alert-creation form. This endpoint is
+deliberately separate from `/feed/filters`: feed search/filter entitlement does not
+implicitly restrict campaign alerts.
+
 ### `POST /api/mobile/v1/alerts` (bearer)
 Body: `{ name, party?, state?, office? }` (at least one of `party`/`state`/`office`
 required). Response (`201`): `{ data: CampaignAlertSubscription }`.
@@ -285,6 +317,10 @@ if it doesn't exist, `403 FORBIDDEN` if it belongs to someone else.
   dependency it touches injected. Does not touch a database, does not require
   `DATABASE_URL` or `MOBILE_DB_TESTS_ALLOWED`, and does not invoke the real
   `process.exit`.
+- `pnpm run test:mobile-entitlements` — isolated, non-database coverage of every
+  supported plan's mobile capability mapping, unknown-plan fail-closed behavior,
+  detection of every feed-filter dimension, Starter rejection, paid access, and the
+  filter-metadata authorization guard.
 - `pnpm run test:mobile-feed-params` — isolated, non-database tests for repeatable
   entity IDs, all supported web-parity query parameters, date normalization, and
   fail-closed rejection of invalid filter values.
@@ -302,8 +338,8 @@ if it doesn't exist, `403 FORBIDDEN` if it belongs to someone else.
 - `pnpm run test:mobile-entities` — follow idempotency and follow-limit enforcement
   under concurrency.
 - `pnpm run test:mobile` — runs all of the above in sequence (route/auth, preflight,
-  and filter-parameter tests first, then the three database-backed suites), so a
-  broken guard is caught before any suite that depends on it runs.
+  entitlement, and filter-parameter tests first, then the three database-backed
+  suites), so a broken guard is caught before any suite that depends on it runs.
 
 ### Database-backed tests require an explicit opt-in
 
@@ -365,69 +401,41 @@ environment, and if neither source provides them, execution still reaches
 - `pnpm run lint` (unscoped, whole repo) reports a large number of pre-existing errors
   and warnings, almost entirely `@typescript-eslint/no-require-imports` from legacy
   `.js` files under `scripts/` that predate this pass by a wide margin and are
-  unrelated to the mobile API. See "Final verification" below for the exact
-  repo-wide count from the most recent run, and for the separate, itemized result of
-  running ESLint scoped to only the files this pass touched or added — do not treat
-  either number as "zero warnings" or "clean" unless the linked verification output
-  actually says so for that exact command.
+  unrelated to the mobile API. The current entitlement revision therefore uses a
+  targeted ESLint check for every file it changes; see "Current branch verification"
+  below.
 - The repo-wide `tsc --noEmit` check also fails, almost entirely in files this pass
   never touched (`lib/email-checker.ts`, `lib/campaign-detector.ts`,
   `lib/seed-email-utils.ts`, various `app/api/admin/**` routes, etc.). One error does
-  land in a file this pass modified — `components/sidebar.tsx(225,52): error TS2339:
-  Property 'client' does not exist on type 'Domain'` — but that line
+  land in `components/sidebar.tsx(225,52): error TS2339: Property 'client' does not
+  exist on type 'Domain'` — but that line
   (`selectedDomain?.client?.slug`) is unchanged, unmoved context in this pass's diff
-  against `main` (verify with `git diff origin/main...HEAD -- components/sidebar.tsx`);
-  this pass did not introduce it and did not touch the `Domain` type.
+  against `main`; this entitlement revision does not modify the sidebar or `Domain`
+  type.
 
-## Final verification
+## Current branch verification
 
-Ran against a clean checkout of this PR's head commit, Node 24.16.0, pnpm 10.34.3.
-Exact counts and exit codes from the most recent run (do not restate these as "clean"
-or "passing" if a future run's exit code or counts differ from what's recorded here):
+Local, database-independent checks for the entitlement revision produced these
+results. This checkout intentionally has no real project `.env` file or database
+credentials.
 
 | Command | Exit code | Result |
 | --- | --- | --- |
-| `node --version` / `pnpm --version` | 0 | `v24.16.0` / `10.34.3` |
-| `pnpm install --frozen-lockfile` | 0 | resolves `zod@3.25.76` |
-| `npx prisma generate` / `npx prisma validate` | 0 / 0 | client generated, schema valid |
-| `git diff --check origin/main...HEAD` | 0 | clean |
-| `pnpm run test:mobile-db-preflight` (no DB, no env file) | 0 | 11 passed, 0 failed |
-| `pnpm run test:mobile-routes-auth` (no DB) | 0 | 32 passed, 0 failed |
-| Targeted `eslint` on all 30 PR-touched `.ts`/`.tsx`/`.mjs` files | 0 | 0 errors, 0 warnings |
-| `pnpm run build` (with the project's connected dev env vars) | 0 | `✓ Compiled successfully`, `Finalizing page optimization`; all 12 `/api/mobile/v1/**` routes present in the route manifest |
-| `pnpm run test:mobile-auth` (dev DB, opted in) | 0 | 24 passed, 0 failed |
-| `pnpm run test:mobile-feed` (dev DB, opted in) | 0 | 19 passed, 0 failed |
-| `pnpm run test:mobile-entities` (dev DB, opted in) | 0 | 3 passed, 0 failed |
-| `pnpm run test:mobile` (full chain, dev DB, opted in) | 0 | 89 passed, 0 failed total (32 + 11 + 24 + 19 + 3) |
+| Prisma generate | 0 | client generated |
+| Prisma validate with a syntactically valid, non-connecting placeholder URL | 0 | schema valid; no database query made |
+| `git diff --check` | 0 | clean |
+| `test:mobile-db-preflight` | 0 | 11 passed, 0 failed |
+| `test:mobile-routes-auth` | 0 | 38 passed, 0 failed (includes `/alerts/options`) |
+| `test:mobile-entitlements` | 0 | 7 passed, 0 failed |
+| `test:mobile-feed-params` | 0 | 5 passed, 0 failed |
+| Targeted ESLint on every changed route/service/test file | 0 | no errors or warnings |
+| Next production build | 1 | application compilation passed; page-data collection then stopped because this checkout has no real `DATABASE_URL`/Neon environment |
 
-The repo-wide `tsc --noEmit` (569 pre-existing errors, one landing on an unchanged
-context line in `components/sidebar.tsx` — see above) and repo-wide `pnpm run lint`
-(893 pre-existing problems, none in any PR-touched file) rows from the prior revision
-of this table were not rerun for this revision, since this revision's changes are
-confined to `lib/services/__tests__/test-db-preflight.ts`,
-`test-db-preflight.test.ts`, and a comment-only fix in `mobile-feed.test.ts` — none of
-which affect app-code type errors or the pre-existing `scripts/` lint backlog. All
-three of those files do pass targeted ESLint with zero errors/warnings, confirmed
-fresh against this revision's actual head commit (included in the row above).
-
-The DB-backed rows ran with `MOBILE_DB_TESTS_ALLOWED=true` set for that invocation only,
-against the project's connected Neon development database, with `VERCEL_ENV`/`NODE_ENV`
-unset (not `production`). `prisma migrate status` before and after every DB-backed run
-reported "Database schema is up to date" against the same 25 already-applied
-migrations — no migration was created or applied during this verification pass. The
-`prisma:error ... write conflict or a deadlock ... Please retry your transaction` lines
-interleaved in the `test:mobile-entities` output are the expected retry-under-contention
-logging from its concurrent-follow test (see the `MAX_SERIALIZATION_RETRIES` comment in
-`lib/services/entity-service.ts`); every retry resolved and the suite still ended at
-"3 passed, 0 failed". A single unrelated `prisma:error` for an `announcement.findMany()`
-call also appears during `pnpm run build`'s static generation of `/news` — that query
-lives in files this pass never touched and the build still completed successfully end
-to end.
-
-This revision also fixed a ~5-second-per-invocation process-exit delay in
-`assertRealDatabaseOrExit()`: the reachability check's `setTimeout` was never cleared
-after a successful query, keeping the event loop alive needlessly. All three DB-backed
-suites plus the preflight-guard unit suite now complete and exit within ~11 seconds
-combined (measured with `time pnpm run test:mobile`), versus what would otherwise be
-at least ~15 seconds of pure timer overhead alone (5s × 3 DB-backed invocations) on
-top of actual test time.
+The database-backed mobile suites were deliberately **not** run locally. They must
+be run by the release audit only after confirming the connection is the isolated
+Preview database and setting `MOBILE_DB_TESTS_ALLOWED=true` for that invocation.
+That audit must cover Starter history/detail enforcement, rejection of every filter,
+paid-plan behavior, plan changes during an active session, follow limits, alert
+options, fixture cleanup, and a full production build with the connected Preview
+environment. It must not merge, deploy to Production, apply a migration, or persist
+the database-test opt-in. This revision contains no Prisma schema or migration change.

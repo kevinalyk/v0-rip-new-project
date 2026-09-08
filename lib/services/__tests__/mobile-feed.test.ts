@@ -57,7 +57,7 @@ function assert(condition: unknown, message: string): asserts condition {
 
 async function expectMobileError(fn: () => unknown, expectedCode: string) {
   try {
-    fn()
+    await fn()
     throw new Error(`Expected MobileAuthError(${expectedCode}) but no error was thrown`)
   } catch (error) {
     if (error instanceof MobileAuthError) {
@@ -96,6 +96,16 @@ async function main() {
       active: true,
       subscriptionPlan: PLAN,
       dataRetentionDays: 1, // stricter than the "all" plan's unlimited CI history
+    },
+  })
+  const clientStarter = await prisma.client.create({
+    data: {
+      id: `${PREFIX}client_starter`,
+      name: `${PREFIX}Client Starter`,
+      slug: `${PREFIX.toLowerCase()}client-starter`,
+      active: true,
+      subscriptionPlan: "free",
+      dataRetentionDays: 90,
     },
   })
 
@@ -631,6 +641,47 @@ async function main() {
         assert(view === null, "retention rules must also apply to direct detail-view access, not just listing")
       } finally {
         await prisma.competitiveInsightCampaign.delete({ where: { id: oldCampaign.id } })
+      }
+    })
+
+    await test("Starter receives only the latest three hours and cannot bypass the limit with filters", async () => {
+      const recentCampaign = await prisma.competitiveInsightCampaign.create({
+        data: {
+          entityId: entity.id,
+          senderName: `${PREFIX}starter_recent`,
+          senderEmail: "starter-recent@example.com",
+          subject: "Starter campaign inside three hours",
+          dateReceived: new Date(Date.now() - 60 * 60 * 1000),
+          inboxRate: 100,
+        },
+      })
+      const oldCampaign = await prisma.competitiveInsightCampaign.create({
+        data: {
+          entityId: entity.id,
+          senderName: `${PREFIX}starter_old`,
+          senderEmail: "starter-old@example.com",
+          subject: "Starter campaign outside three hours",
+          dateReceived: new Date(Date.now() - 4 * 60 * 60 * 1000),
+          inboxRate: 100,
+        },
+      })
+
+      try {
+        const { items } = await getFeedPage(clientStarter.id, "free", {}, null)
+        assert(items.some((item) => item.id === recentCampaign.id), "Starter should see a campaign from one hour ago")
+        assert(!items.some((item) => item.id === oldCampaign.id), "Starter must not see a campaign from four hours ago")
+
+        const oldDetail = await getFeedItemById(clientStarter.id, "free", oldCampaign.id, "email")
+        assert(oldDetail === null, "Starter must not reach an older item directly by ID")
+
+        await expectMobileError(
+          () => getFeedPage(clientStarter.id, "free", { fromDate: new Date(0) }, null),
+          "FEED_FILTERS_NOT_AVAILABLE",
+        )
+      } finally {
+        await prisma.competitiveInsightCampaign.deleteMany({
+          where: { id: { in: [recentCampaign.id, oldCampaign.id] } },
+        })
       }
     })
 

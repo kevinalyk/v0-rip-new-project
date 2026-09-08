@@ -33,6 +33,10 @@ import { SignJWT, jwtVerify, errors as joseErrors } from "jose"
 import { randomBytes, createHash, createHmac } from "crypto"
 import prisma from "@/lib/prisma"
 import type { Prisma } from "@prisma/client"
+import {
+  getMobileClientEntitlements,
+  type MobileClientEntitlements,
+} from "@/lib/services/mobile-entitlements"
 
 const ISSUER = "inbox-gop-mobile"
 const AUDIENCE = "inbox-gop-ios"
@@ -97,6 +101,7 @@ export interface MobileAuthContext {
     subscriptionPlan: string
     subscriptionStatus: string
     hasCompetitiveInsights: boolean
+    entitlements: MobileClientEntitlements
   } | null
 }
 
@@ -226,6 +231,7 @@ export async function requireMobileAuth(request: Request): Promise<MobileAuthCon
           subscriptionPlan: user.client.subscriptionPlan,
           subscriptionStatus: user.client.subscriptionStatus,
           hasCompetitiveInsights: user.client.hasCompetitiveInsights,
+          entitlements: getMobileClientEntitlements(user.client.subscriptionPlan),
         }
       : null,
   }

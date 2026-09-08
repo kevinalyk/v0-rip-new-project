@@ -1,5 +1,9 @@
 import type { MobileAuthContext } from "@/lib/mobile-auth"
 import { MobileAuthError } from "@/lib/mobile-auth"
+import {
+  getMobileClientEntitlements,
+  isSupportedSubscriptionPlan,
+} from "@/lib/services/mobile-entitlements"
 import { hasCompetitiveInsightsAccess, type SubscriptionPlan, type SubscriptionStatus } from "@/lib/subscription-utils"
 
 /**
@@ -11,7 +15,10 @@ export function requireClientContext(ctx: MobileAuthContext): { clientId: string
   if (!ctx.clientId || !ctx.client) {
     throw new MobileAuthError(403, "NO_CLIENT_CONTEXT", "This account is not associated with a client")
   }
-  return { clientId: ctx.clientId, plan: ctx.client.subscriptionPlan as SubscriptionPlan }
+  if (!isSupportedSubscriptionPlan(ctx.client.subscriptionPlan)) {
+    throw new MobileAuthError(403, "UNSUPPORTED_SUBSCRIPTION_PLAN", "This account's subscription plan is not supported")
+  }
+  return { clientId: ctx.clientId, plan: ctx.client.subscriptionPlan }
 }
 
 /** Client isolation guard: throws 403 if a loaded resource's clientId doesn't match the caller's. */
@@ -43,4 +50,22 @@ export function requireCompetitiveInsights(ctx: MobileAuthContext): void {
   if (!hasAccess) {
     throw new MobileAuthError(403, "SUBSCRIPTION_INACTIVE", "Client subscription is not active")
   }
+}
+
+/**
+ * Search/filter metadata is a paid CI capability. Feed data access itself remains
+ * available to Starter accounts within their plan's three-hour history window.
+ */
+export function requireFeedSearchAndFilters(
+  ctx: MobileAuthContext,
+): { clientId: string; plan: SubscriptionPlan } {
+  const clientContext = requireClientContext(ctx)
+  if (!getMobileClientEntitlements(clientContext.plan).canSearchAndFilterFeed) {
+    throw new MobileAuthError(
+      403,
+      "FEED_FILTERS_NOT_AVAILABLE",
+      "Search and filters are not available on your current plan",
+    )
+  }
+  return clientContext
 }

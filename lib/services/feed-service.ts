@@ -294,11 +294,32 @@ async function resolveEmailPlatformWhere(
   }
 }
 
-function smsPlatformWhere(platform: MobileDonationPlatform | undefined): Record<string, unknown> | null {
+async function resolveSmsPlatformWhere(
+  platform: MobileDonationPlatform | undefined,
+): Promise<Record<string, unknown> | null> {
   if (!platform) return null
-  return {
-    OR: PLATFORM_DOMAINS[platform].map((domain) => ({ ctaLinks: { contains: domain, mode: "insensitive" } })),
-  }
+
+  const domainPredicates = PLATFORM_DOMAINS[platform].map(
+    (domain) => Prisma.sql`LOWER(message."ctaLinks"::text) LIKE ${`%${domain.toLowerCase()}%`}`,
+  )
+  const matchingRows = (await prisma.$queryRaw(
+    Prisma.sql`
+      SELECT message."id"
+      FROM "SmsQueue" AS message
+      WHERE message."ctaLinks" IS NOT NULL
+        AND message."processed" = true
+        AND message."isDeleted" = false
+        AND message."isHidden" = false
+        AND message."entityId" IS NOT NULL
+        AND (${Prisma.join(domainPredicates, " OR ")})
+    `,
+  )) as Array<{ id: string }>
+
+  // Some long-lived databases still have SmsQueue.ctaLinks as jsonb while clean
+  // databases follow Prisma's Text declaration. Prisma's String `contains` emits
+  // ILIKE and fails against jsonb (Postgres 42883). Casting to text in the
+  // parameterized lookup supports both shapes without changing either database.
+  return { id: { in: matchingRows.map((row) => row.id) } }
 }
 
 type OwnershipWhere = {
@@ -432,10 +453,14 @@ export async function getFeedPage(
   }
 
   const entityWhere = entityAttributeWhere(filters)
-  const emailPlatformFilter = filters.messageType === "sms"
-    ? null
-    : await resolveEmailPlatformWhere(filters.donationPlatform)
-  const smsPlatformFilter = smsPlatformWhere(filters.donationPlatform)
+  const [emailPlatformFilter, smsPlatformFilter] = await Promise.all([
+    filters.messageType === "sms"
+      ? Promise.resolve(null)
+      : resolveEmailPlatformWhere(filters.donationPlatform),
+    filters.messageType === "email"
+      ? Promise.resolve(null)
+      : resolveSmsPlatformWhere(filters.donationPlatform),
+  ])
 
   const searchWhereEmail = filters.search
     ? {

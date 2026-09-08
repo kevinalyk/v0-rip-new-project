@@ -507,7 +507,7 @@ async function main() {
       assert(!items.some((item) => item.id === actBlueCampaign.id), "nonmatching platform should be excluded")
     })
 
-    await test("donation-platform filter matches legacy email JSON arrays and SMS text", async () => {
+    await test("donation-platform filter matches legacy email JSON arrays and text-or-jsonb SMS storage", async () => {
       const anedot = await getFeedPage(
         clientA.id,
         PLAN,

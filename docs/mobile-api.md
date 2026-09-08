@@ -401,69 +401,41 @@ environment, and if neither source provides them, execution still reaches
 - `pnpm run lint` (unscoped, whole repo) reports a large number of pre-existing errors
   and warnings, almost entirely `@typescript-eslint/no-require-imports` from legacy
   `.js` files under `scripts/` that predate this pass by a wide margin and are
-  unrelated to the mobile API. See "Final verification" below for the exact
-  repo-wide count from the most recent run, and for the separate, itemized result of
-  running ESLint scoped to only the files this pass touched or added — do not treat
-  either number as "zero warnings" or "clean" unless the linked verification output
-  actually says so for that exact command.
+  unrelated to the mobile API. The current entitlement revision therefore uses a
+  targeted ESLint check for every file it changes; see "Current branch verification"
+  below.
 - The repo-wide `tsc --noEmit` check also fails, almost entirely in files this pass
   never touched (`lib/email-checker.ts`, `lib/campaign-detector.ts`,
   `lib/seed-email-utils.ts`, various `app/api/admin/**` routes, etc.). One error does
-  land in a file this pass modified — `components/sidebar.tsx(225,52): error TS2339:
-  Property 'client' does not exist on type 'Domain'` — but that line
+  land in `components/sidebar.tsx(225,52): error TS2339: Property 'client' does not
+  exist on type 'Domain'` — but that line
   (`selectedDomain?.client?.slug`) is unchanged, unmoved context in this pass's diff
-  against `main` (verify with `git diff origin/main...HEAD -- components/sidebar.tsx`);
-  this pass did not introduce it and did not touch the `Domain` type.
+  against `main`; this entitlement revision does not modify the sidebar or `Domain`
+  type.
 
-## Final verification
+## Current branch verification
 
-Ran against a clean checkout of this PR's head commit, Node 24.16.0, pnpm 10.34.3.
-Exact counts and exit codes from the most recent run (do not restate these as "clean"
-or "passing" if a future run's exit code or counts differ from what's recorded here):
+Local, database-independent checks for the entitlement revision produced these
+results. This checkout intentionally has no real project `.env` file or database
+credentials.
 
 | Command | Exit code | Result |
 | --- | --- | --- |
-| `node --version` / `pnpm --version` | 0 | `v24.16.0` / `10.34.3` |
-| `pnpm install --frozen-lockfile` | 0 | resolves `zod@3.25.76` |
-| `npx prisma generate` / `npx prisma validate` | 0 / 0 | client generated, schema valid |
-| `git diff --check origin/main...HEAD` | 0 | clean |
-| `pnpm run test:mobile-db-preflight` (no DB, no env file) | 0 | 11 passed, 0 failed |
-| `pnpm run test:mobile-routes-auth` (no DB) | 0 | 32 passed, 0 failed |
-| Targeted `eslint` on all 30 PR-touched `.ts`/`.tsx`/`.mjs` files | 0 | 0 errors, 0 warnings |
-| `pnpm run build` (with the project's connected dev env vars) | 0 | `✓ Compiled successfully`, `Finalizing page optimization`; all 12 `/api/mobile/v1/**` routes present in the route manifest |
-| `pnpm run test:mobile-auth` (dev DB, opted in) | 0 | 24 passed, 0 failed |
-| `pnpm run test:mobile-feed` (dev DB, opted in) | 0 | 19 passed, 0 failed |
-| `pnpm run test:mobile-entities` (dev DB, opted in) | 0 | 3 passed, 0 failed |
-| `pnpm run test:mobile` (full chain, dev DB, opted in) | 0 | 89 passed, 0 failed total (32 + 11 + 24 + 19 + 3) |
+| Prisma generate | 0 | client generated |
+| Prisma validate with a syntactically valid, non-connecting placeholder URL | 0 | schema valid; no database query made |
+| `git diff --check` | 0 | clean |
+| `test:mobile-db-preflight` | 0 | 11 passed, 0 failed |
+| `test:mobile-routes-auth` | 0 | 38 passed, 0 failed (includes `/alerts/options`) |
+| `test:mobile-entitlements` | 0 | 7 passed, 0 failed |
+| `test:mobile-feed-params` | 0 | 5 passed, 0 failed |
+| Targeted ESLint on every changed route/service/test file | 0 | no errors or warnings |
+| Next production build | 1 | application compilation passed; page-data collection then stopped because this checkout has no real `DATABASE_URL`/Neon environment |
 
-The repo-wide `tsc --noEmit` (569 pre-existing errors, one landing on an unchanged
-context line in `components/sidebar.tsx` — see above) and repo-wide `pnpm run lint`
-(893 pre-existing problems, none in any PR-touched file) rows from the prior revision
-of this table were not rerun for this revision, since this revision's changes are
-confined to `lib/services/__tests__/test-db-preflight.ts`,
-`test-db-preflight.test.ts`, and a comment-only fix in `mobile-feed.test.ts` — none of
-which affect app-code type errors or the pre-existing `scripts/` lint backlog. All
-three of those files do pass targeted ESLint with zero errors/warnings, confirmed
-fresh against this revision's actual head commit (included in the row above).
-
-The DB-backed rows ran with `MOBILE_DB_TESTS_ALLOWED=true` set for that invocation only,
-against the project's connected Neon development database, with `VERCEL_ENV`/`NODE_ENV`
-unset (not `production`). `prisma migrate status` before and after every DB-backed run
-reported "Database schema is up to date" against the same 25 already-applied
-migrations — no migration was created or applied during this verification pass. The
-`prisma:error ... write conflict or a deadlock ... Please retry your transaction` lines
-interleaved in the `test:mobile-entities` output are the expected retry-under-contention
-logging from its concurrent-follow test (see the `MAX_SERIALIZATION_RETRIES` comment in
-`lib/services/entity-service.ts`); every retry resolved and the suite still ended at
-"3 passed, 0 failed". A single unrelated `prisma:error` for an `announcement.findMany()`
-call also appears during `pnpm run build`'s static generation of `/news` — that query
-lives in files this pass never touched and the build still completed successfully end
-to end.
-
-This revision also fixed a ~5-second-per-invocation process-exit delay in
-`assertRealDatabaseOrExit()`: the reachability check's `setTimeout` was never cleared
-after a successful query, keeping the event loop alive needlessly. All three DB-backed
-suites plus the preflight-guard unit suite now complete and exit within ~11 seconds
-combined (measured with `time pnpm run test:mobile`), versus what would otherwise be
-at least ~15 seconds of pure timer overhead alone (5s × 3 DB-backed invocations) on
-top of actual test time.
+The database-backed mobile suites were deliberately **not** run locally. They must
+be run by the release audit only after confirming the connection is the isolated
+Preview database and setting `MOBILE_DB_TESTS_ALLOWED=true` for that invocation.
+That audit must cover Starter history/detail enforcement, rejection of every filter,
+paid-plan behavior, plan changes during an active session, follow limits, alert
+options, fixture cleanup, and a full production build with the connected Preview
+environment. It must not merge, deploy to Production, apply a migration, or persist
+the database-test opt-in. This revision contains no Prisma schema or migration change.

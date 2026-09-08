@@ -69,3 +69,15 @@ export function requireFeedSearchAndFilters(
   }
   return clientContext
 }
+
+/** Mobile CI alerts are available to every active paid plan, with no count limit. */
+export function requireMobileAlerts(
+  ctx: MobileAuthContext,
+): { clientId: string; plan: SubscriptionPlan } {
+  requireCompetitiveInsights(ctx)
+  const clientContext = requireClientContext(ctx)
+  if (!getMobileClientEntitlements(clientContext.plan).canUseAlerts) {
+    throw new MobileAuthError(403, "ALERTS_NOT_AVAILABLE", "Push alerts are available on paid plans")
+  }
+  return clientContext
+}

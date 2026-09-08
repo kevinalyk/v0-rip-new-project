@@ -1,11 +1,13 @@
 import { withMobileAuth, mobileError, mobileJson } from "@/lib/mobile-auth"
 import { MobileAuthError } from "@/lib/mobile-auth"
 import { deleteAlert } from "@/lib/services/alert-service"
+import { requireMobileAlerts } from "@/lib/services/authz"
 
 type Params = { params: Promise<{ id: string }> }
 
 // DELETE /api/mobile/v1/alerts/:id — delete an alert (must belong to the current user).
 export const DELETE = withMobileAuth<Params>(async (_request, ctx, { params }) => {
+  requireMobileAlerts(ctx)
   const { id } = await params
   try {
     await deleteAlert(ctx.userId, id)

@@ -2,6 +2,7 @@ import { PLAN_LIMITS, type SubscriptionPlan } from "@/lib/subscription-utils"
 
 export interface MobileClientEntitlements {
   canSearchAndFilterFeed: boolean
+  canUseAlerts: boolean
   feedHistoryHours: number | null
   followedEntityLimit: number | null
 }
@@ -24,6 +25,7 @@ export function getMobileClientEntitlements(plan: string): MobileClientEntitleme
 
   return {
     canSearchAndFilterFeed: limits.canSearchCI,
+    canUseAlerts: isSupportedSubscriptionPlan(plan) && plan !== "free",
     feedHistoryHours: limits.ciHistoryDays === null ? null : limits.ciHistoryDays * 24,
     followedEntityLimit: limits.ciFollowLimit,
   }

@@ -136,8 +136,9 @@ The mobile feed intentionally mirrors the existing web Competitive Insights feed
   guessing its ID.
 - Mobile plan capabilities are derived on the server from `PLAN_LIMITS`; the native
   client never maintains a second plan matrix. Starter (`free`) receives three hours
-  of feed history, zero followed entities, and no feed search/filter access. Basic
-  (`paid`) receives 72 hours, three followed entities, and search/filter access.
+  of feed history, zero followed entities, no feed search/filter access, and no
+  mobile alerts. Basic (`paid`) receives 72 hours, three followed entities,
+  search/filter access, and unlimited mobile alerts.
   Professional (`all`), Advanced (`basic_inboxing`), and Enterprise receive full
   history, unlimited follows, and search/filter access. Unknown plan strings fail
   closed instead of inheriting a paid capability.
@@ -195,7 +196,8 @@ with an appropriate HTTP status. Codes used across the namespace: `MISSING_TOKEN
 `REFRESH_TOKEN_REUSED`, `REFRESH_TOKEN_EXPIRED`, `TOO_MANY_ATTEMPTS`,
 `INVALID_CREDENTIALS`, `INVALID_BODY`, `INVALID_CURSOR`, `INVALID_FILTER`, `NO_CLIENT_CONTEXT`,
 `FORBIDDEN`, `CI_NOT_ENABLED`, `SUBSCRIPTION_INACTIVE`,
-`UNSUPPORTED_SUBSCRIPTION_PLAN`, `FEED_FILTERS_NOT_AVAILABLE`, `ENTITY_NOT_FOUND`,
+`UNSUPPORTED_SUBSCRIPTION_PLAN`, `FEED_FILTERS_NOT_AVAILABLE`, `ALERTS_NOT_AVAILABLE`,
+`ENTITY_NOT_FOUND`,
 `FOLLOW_LIMIT_REACHED`, `NOT_FOUND`, `ALERT_NOT_FOUND`, `INTERNAL_ERROR`.
 
 ## Endpoints
@@ -222,7 +224,7 @@ returns the same success response.
 ### `GET /api/mobile/v1/auth/me` (bearer)
 Returns the current user's profile directly (not wrapped in `data`):
 `{ id, email, firstName, lastName, role, firstLogin, client: { id, name, slug, subscriptionPlan, subscriptionStatus, hasCompetitiveInsights, trialExpiresAt, entitlements } | null }`.
-`entitlements` is `{ canSearchAndFilterFeed, feedHistoryHours,
+`entitlements` is `{ canSearchAndFilterFeed, canUseAlerts, feedHistoryHours,
 followedEntityLimit }`; `null` history/follow limits mean unlimited.
 Deploy this API revision before distributing a native build that consumes these
 fields. New native clients deliberately fall back to Starter restrictions when the
@@ -253,11 +255,10 @@ FEED_FILTERS_NOT_AVAILABLE` for any active feed filter, including search.
 
 ### `GET /api/mobile/v1/feed/filters` (bearer)
 Filter facets for building the mobile filter UI:
-`{ states, parties, offices, entityTypes, messageFilters, donationPlatforms, entities }`.
+`{ states, parties, entityTypes, messageFilters, donationPlatforms, entities }`.
 `entities` contains `{ id, name, type, party, state, isFollowing }[]`, ordered with
 the caller's followed entities first and then alphabetically, for the searchable
-multi-entity picker. `offices` is retained for backwards compatibility with older
-mobile alert forms; the feed does not accept or expose an Office filter. New clients
+multi-entity picker. The feed does not accept or expose an Office filter. New clients
 load alert criteria from `/alerts/options` instead.
 Starter accounts receive `403 FEED_FILTERS_NOT_AVAILABLE`; native clients should use
 the entitlements returned by `/auth/me` and avoid requesting this endpoint when the
@@ -292,21 +293,60 @@ the plan's follow limit is already reached and this isn't a repeat follow.
 Unfollows a `CiEntity`. Response: `{ following: false }`. Idempotent.
 
 ### `GET /api/mobile/v1/alerts` (bearer)
-Lists `CampaignAlertSubscription` rows for the caller: `{ data: CampaignAlertSubscription[] }`.
+Paid CI plans only. Lists the caller's mobile CI-message alerts, isolated from the
+legacy web campaign-launch alerts: `{ data: CampaignAlertSubscription[] }`.
+Free plans receive `403 ALERTS_NOT_AVAILABLE`.
 
 ### `GET /api/mobile/v1/alerts/options` (bearer)
-Returns `{ states, parties, offices }` for the alert-creation form. This endpoint is
-deliberately separate from `/feed/filters`: feed search/filter entitlement does not
-implicitly restrict campaign alerts.
+Paid CI plans only. Returns `{ states, parties, entityTypes, messageTypes,
+ownershipTypes, donationPlatforms, entities, tags }` for the native alert builder.
+The choices mirror meaningful future-message filters from the CI feed; date filters
+are omitted because an alert watches messages that have not arrived yet.
 
 ### `POST /api/mobile/v1/alerts` (bearer)
-Body: `{ name, party?, state?, office? }` (at least one of `party`/`state`/`office`
-required). Response (`201`): `{ data: CampaignAlertSubscription }`.
-`400 INVALID_BODY` if `name` is missing or all three criteria are missing.
+Paid CI plans only; alert count is unlimited. Body: `{ name, search?, entityIds?,
+party?, state?, entityType?, messageTypes?, ownershipTypes?, donationPlatform?,
+subscriptionsOnly?, tag? }`. Empty message/ownership arrays mean either value, and
+an alert with only a name watches every new eligible CI message. Criteria are ANDed.
+Response (`201`): `{ data: CampaignAlertSubscription }`. Unsupported values,
+data-broker entities, or tags outside the caller's client are rejected with `400
+INVALID_BODY`.
 
 ### `DELETE /api/mobile/v1/alerts/[id]` (bearer)
 Deletes an alert the caller owns. Response: `{ ok: true }`. `404 ALERT_NOT_FOUND`
 if it doesn't exist, `403 FORBIDDEN` if it belongs to someone else.
+
+### `POST /api/mobile/v1/push-token` (bearer)
+Paid CI plans only. Registers or refreshes this installation's Expo push token:
+`{ expoPushToken, deviceId, platform: "ios" }`. A token can belong to only one user;
+signing into the same installation as another account safely moves the token.
+
+### `DELETE /api/mobile/v1/push-token` (bearer)
+Body: `{ deviceId }`. Removes the current user's token for that installation. This
+route remains available after a downgrade so sign-out cleanup can still succeed.
+
+## Mobile push delivery
+
+New, non-duplicate email and SMS ingestion invokes the same server-side matcher.
+Before sending, it rechecks that the alert owner still has an active client, CI
+access, a supported paid plan, and an enabled device token. Matching supports
+keyword, entity, party, state, entity type, Email/SMS, House File/Third Party,
+donation platform, followed-only, and client-scoped entity-tag criteria.
+Data-broker messages never produce a notification.
+
+At most one push is sent to a user for a message, even if several of their alerts
+match. `MobileAlertDelivery` provides a unique `(userId, sourceType, sourceId)`
+deduplication boundary, while `MobilePushToken` stores installation tokens separately
+from refresh-token sessions. Immediate `DeviceNotRegistered` responses disable the
+invalid token. Notification payloads contain only the feed item ID and message type;
+tapping a notification opens the authenticated native message detail screen, where
+the normal feed authorization and retention rules run again.
+
+This feature requires the `20260908170000_add_mobile_ci_push_alerts` migration before
+the new backend routes are deployed. The migration has paired rollback SQL, but the
+rollback drops alert/token/delivery data and must never run automatically. A new
+native EAS/TestFlight build is also required because `expo-notifications` adds native
+iOS configuration; remote push cannot be validated in the iOS Simulator.
 
 ## Tests
 
@@ -321,6 +361,9 @@ if it doesn't exist, `403 FORBIDDEN` if it belongs to someone else.
   supported plan's mobile capability mapping, unknown-plan fail-closed behavior,
   detection of every feed-filter dimension, Starter rejection, paid access, and the
   filter-metadata authorization guard.
+- `pnpm run test:mobile-alerts` — isolated, non-database coverage of CI alert
+  matching, AND semantics, Independent aliases, keyword matching, followed/tag
+  requirements, and legacy null ownership classification.
 - `pnpm run test:mobile-feed-params` — isolated, non-database tests for repeatable
   entity IDs, all supported web-parity query parameters, date normalization, and
   fail-closed rejection of invalid filter values.
@@ -401,9 +444,8 @@ environment, and if neither source provides them, execution still reaches
 - `pnpm run lint` (unscoped, whole repo) reports a large number of pre-existing errors
   and warnings, almost entirely `@typescript-eslint/no-require-imports` from legacy
   `.js` files under `scripts/` that predate this pass by a wide margin and are
-  unrelated to the mobile API. The current entitlement revision therefore uses a
-  targeted ESLint check for every file it changes; see "Current branch verification"
-  below.
+  unrelated to the mobile API. Release verification therefore uses a targeted
+  ESLint check for every file changed by the mobile revision.
 - The repo-wide `tsc --noEmit` check also fails, almost entirely in files this pass
   never touched (`lib/email-checker.ts`, `lib/campaign-detector.ts`,
   `lib/seed-email-utils.ts`, various `app/api/admin/**` routes, etc.). One error does
@@ -413,29 +455,14 @@ environment, and if neither source provides them, execution still reaches
   against `main`; this entitlement revision does not modify the sidebar or `Domain`
   type.
 
-## Current branch verification
+## Verification expectations for the alerts revision
 
-Local, database-independent checks for the entitlement revision produced these
-results. This checkout intentionally has no real project `.env` file or database
-credentials.
-
-| Command | Exit code | Result |
-| --- | --- | --- |
-| Prisma generate | 0 | client generated |
-| Prisma validate with a syntactically valid, non-connecting placeholder URL | 0 | schema valid; no database query made |
-| `git diff --check` | 0 | clean |
-| `test:mobile-db-preflight` | 0 | 11 passed, 0 failed |
-| `test:mobile-routes-auth` | 0 | 38 passed, 0 failed (includes `/alerts/options`) |
-| `test:mobile-entitlements` | 0 | 7 passed, 0 failed |
-| `test:mobile-feed-params` | 0 | 5 passed, 0 failed |
-| Targeted ESLint on every changed route/service/test file | 0 | no errors or warnings |
-| Next production build | 1 | application compilation passed; page-data collection then stopped because this checkout has no real `DATABASE_URL`/Neon environment |
-
-The database-backed mobile suites were deliberately **not** run locally. They must
-be run by the release audit only after confirming the connection is the isolated
-Preview database and setting `MOBILE_DB_TESTS_ALLOWED=true` for that invocation.
-That audit must cover Starter history/detail enforcement, rejection of every filter,
-paid-plan behavior, plan changes during an active session, follow limits, alert
-options, fixture cleanup, and a full production build with the connected Preview
-environment. It must not merge, deploy to Production, apply a migration, or persist
-the database-test opt-in. This revision contains no Prisma schema or migration change.
+Before deployment, review and apply the new migration to the isolated Preview
+database only, then run the full mobile suite with the database-test safety latch.
+The release audit must cover paid/free/unknown-plan alert authorization, alert CRUD
+and client/user isolation, every matcher dimension, duplicate-delivery prevention,
+push-token reassignment and sign-out removal, email/SMS ingestion failure isolation,
+fixture cleanup, and a full production build using Preview environment variables.
+It must also send a real push to an internal TestFlight device and confirm that
+tapping it opens the correct email/SMS detail. Do not merge or touch Production until
+that audit is complete and the migration status is separately confirmed.

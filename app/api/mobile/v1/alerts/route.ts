@@ -1,16 +1,19 @@
 import { withMobileAuth, mobileError, mobileJson } from "@/lib/mobile-auth"
 import { MobileAuthError } from "@/lib/mobile-auth"
 import { createAlert, listAlerts } from "@/lib/services/alert-service"
+import { requireMobileAlerts } from "@/lib/services/authz"
 
 // GET /api/mobile/v1/alerts — list campaign alerts for the current user.
 export const GET = withMobileAuth(async (_request, ctx) => {
-  const alerts = await listAlerts(ctx.userId)
+  const { clientId } = requireMobileAlerts(ctx)
+  const alerts = await listAlerts(ctx.userId, clientId)
   return mobileJson({ data: alerts })
 })
 
 // POST /api/mobile/v1/alerts — create a campaign alert.
 export const POST = withMobileAuth(async (request, ctx) => {
-  let body: { name?: string; party?: string; state?: string; office?: string }
+  const { clientId } = requireMobileAlerts(ctx)
+  let body: Parameters<typeof createAlert>[2]
   try {
     body = await request.json()
   } catch {
@@ -18,7 +21,7 @@ export const POST = withMobileAuth(async (request, ctx) => {
   }
 
   try {
-    const alert = await createAlert(ctx.userId, body)
+    const alert = await createAlert(ctx.userId, clientId, body)
     return mobileJson({ data: alert }, { status: 201 })
   } catch (error) {
     if (error instanceof MobileAuthError) return mobileError(error.status, error.code, error.message)

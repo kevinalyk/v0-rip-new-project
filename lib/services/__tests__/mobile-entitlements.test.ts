@@ -3,7 +3,7 @@ import test from "node:test"
 
 import type { MobileAuthContext } from "@/lib/mobile-auth"
 import { MobileAuthError } from "@/lib/mobile-auth"
-import { requireClientContext, requireFeedSearchAndFilters } from "@/lib/services/authz"
+import { requireClientContext, requireFeedSearchAndFilters, requireMobileAlerts } from "@/lib/services/authz"
 import {
   assertMobileFeedFiltersAllowed,
   getFeedPage,
@@ -19,26 +19,31 @@ import type { SubscriptionPlan } from "@/lib/subscription-utils"
 const EXPECTED_ENTITLEMENTS: Record<SubscriptionPlan, MobileClientEntitlements> = {
   free: {
     canSearchAndFilterFeed: false,
+    canUseAlerts: false,
     feedHistoryHours: 3,
     followedEntityLimit: 0,
   },
   paid: {
     canSearchAndFilterFeed: true,
+    canUseAlerts: true,
     feedHistoryHours: 72,
     followedEntityLimit: 3,
   },
   all: {
     canSearchAndFilterFeed: true,
+    canUseAlerts: true,
     feedHistoryHours: null,
     followedEntityLimit: null,
   },
   basic_inboxing: {
     canSearchAndFilterFeed: true,
+    canUseAlerts: true,
     feedHistoryHours: null,
     followedEntityLimit: null,
   },
   enterprise: {
     canSearchAndFilterFeed: true,
+    canUseAlerts: true,
     feedHistoryHours: null,
     followedEntityLimit: null,
   },
@@ -76,6 +81,18 @@ test("unknown plans fail closed to Starter entitlements", () => {
     (error: unknown) =>
       error instanceof MobileAuthError && error.code === "UNSUPPORTED_SUBSCRIPTION_PLAN",
   )
+})
+
+test("mobile alerts are paid-only and enforced by the API authorization layer", () => {
+  assert.throws(
+    () => requireMobileAlerts(authContext("free")),
+    (error: unknown) =>
+      error instanceof MobileAuthError &&
+      error.status === 403 &&
+      error.code === "ALERTS_NOT_AVAILABLE",
+  )
+  assert.deepEqual(requireMobileAlerts(authContext("paid")), { clientId: "client-1", plan: "paid" })
+  assert.deepEqual(requireMobileAlerts(authContext("enterprise")), { clientId: "client-1", plan: "enterprise" })
 })
 
 test("detects every supported feed filter while ignoring empty filter state", () => {

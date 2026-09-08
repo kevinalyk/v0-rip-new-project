@@ -7,6 +7,8 @@ import { isPhoneThirdParty } from "@/lib/ci-mapping-cache"
 import { extractSmsCtaLinks } from "@/lib/sms-link-extractor"
 import { getRedactedNames, applyRedaction } from "@/lib/redaction-utils"
 import { notifyFollowersOfNewMessage } from "@/lib/slack-alerts"
+import { notifyMobileAlertsForMessage } from "@/lib/services/mobile-alert-delivery-service"
+import { detectDonationPlatform } from "@/lib/detect-donation-platform"
 import { nanoid } from "nanoid"
 
 // Verify FullStack webhook signature (if they provide one)
@@ -237,6 +239,25 @@ export async function POST(request: Request) {
         select: { name: true, party: true, state: true, type: true },
       })
       if (entity) {
+        try {
+          await notifyMobileAlertsForMessage({
+            id: result.id,
+            type: "sms",
+            senderName: actualSender,
+            subject: redactedMessage.slice(0, 100) || "SMS message",
+            preview: redactedMessage,
+            entityId: entityAssignment.entityId,
+            entityName: entity.name,
+            entityParty: entity.party,
+            entityState: entity.state,
+            entityType: entity.type,
+            isThirdParty,
+            donationPlatform: ctaLinks.length > 0 ? detectDonationPlatform(ctaLinks) : null,
+          })
+        } catch (pushError) {
+          console.error("[FullStack SMS] Error sending mobile alert:", pushError)
+        }
+
         const shareToken = nanoid(16)
         await prisma.smsQueue.update({
           where: { id: result.id },
@@ -249,7 +270,7 @@ export async function POST(request: Request) {
           entityParty: entity.party,
           entityState: entity.state,
           entityType: entity.type,
-          isThirdParty,
+          isThirdParty: isThirdParty === true,
           phoneNumber: actualSender,
           message: redactedMessage,
           shareToken,

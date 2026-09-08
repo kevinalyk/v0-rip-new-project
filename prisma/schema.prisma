@@ -39,6 +39,8 @@ model User {
   slackIntegrationsConnected SlackIntegration[] // Slack integrations this user (as Owner/Admin) completed setup for
   slackChannelsConnected     SlackChannel[] // Additional (paid, add-on) Slack bot channels this user completed setup for
   mobileRefreshTokens MobileRefreshToken[] // Mobile app refresh-token sessions (see lib/mobile-auth.ts)
+  mobilePushTokens MobilePushToken[]
+  mobileAlertDeliveries MobileAlertDelivery[]
   }
 
 model Domain {
@@ -1112,18 +1114,66 @@ model LookupSearch {
 // ─── Campaign Launch Alerts ───────────────────────────────────────────────────
 
 model CampaignAlertSubscription {
-  id        String   @id @default(cuid())
-  userId    String
-  name      String   // User-given label, e.g. "Republican Senate in Alabama"
-  party     String?  // "republican" | "democrat" | "independent" | null = any
-  state     String?  // two-letter code, null = any
-  office    String?  // "house" | "senate" | "president" | null = any
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String   @id @default(cuid())
+  userId           String
+  name             String   // User-given label, e.g. "Republican Senate in Alabama"
+  party            String?  // "republican" | "democrat" | "independent" | null = any
+  state            String?  // two-letter code, null = any
+  office           String?  // Legacy campaign-launch alert field
+  kind             String   @default("campaign_launch") // "campaign_launch" | "ci_message"
+  clientId         String?
+  search           String?
+  entityIds        String[] @default([])
+  entityType       String?
+  messageTypes     String[] @default([]) // "email" | "sms"; empty = either
+  ownershipTypes   String[] @default([]) // "house_file" | "third_party"; empty = either
+  donationPlatform String?
+  subscriptionsOnly Boolean @default(false)
+  tag              String?
+  enabled          Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([kind, enabled])
+  @@index([kind, clientId, enabled])
+}
+
+model MobilePushToken {
+  id            String   @id @default(cuid())
+  userId        String
+  expoPushToken String   @unique
+  deviceId      String
+  platform      String   @default("ios")
+  enabled       Boolean  @default(true)
+  lastSeenAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
+  @@index([userId, enabled])
+}
+
+model MobileAlertDelivery {
+  id              String   @id @default(cuid())
+  userId          String
+  sourceType      String   // "email" | "sms"
+  sourceId        String
+  status          String   @default("pending") // "pending" | "sent" | "failed"
+  expoTicketIds   String[] @default([])
+  matchedAlertIds String[] @default([])
+  error           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sourceType, sourceId])
+  @@index([status, createdAt])
 }
 
 // ─── Spam Test ────────────────────────────────────────────────────────────────

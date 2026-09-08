@@ -10,6 +10,7 @@ import { detectDonationPlatform } from "@/lib/detect-donation-platform"
 import { computeBodyFingerprint } from "@/lib/body-fingerprint"
 import { classifyMessageTypes } from "@/lib/message-classifier"
 import { notifyFollowersOfNewMessage } from "@/lib/slack-alerts"
+import { notifyMobileAlertsForMessage } from "@/lib/services/mobile-alert-delivery-service"
 import { isSenderThirdParty } from "@/lib/ci-mapping-cache"
 import { nanoid } from "nanoid"
 
@@ -1704,6 +1705,25 @@ export async function processCompetitiveInsights(
               select: { name: true, party: true, state: true, type: true },
             })
             if (entity) {
+              try {
+                await notifyMobileAlertsForMessage({
+                  id: newCampaign.id,
+                  type: "email",
+                  senderName: redactedSenderName,
+                  subject: redactedSubject,
+                  preview: redactedEmailPreview || "",
+                  entityId,
+                  entityName: entity.name,
+                  entityParty: entity.party,
+                  entityState: entity.state,
+                  entityType: entity.type,
+                  isThirdParty,
+                  donationPlatform: ctaLinks.length > 0 ? detectDonationPlatform(ctaLinks) : null,
+                })
+              } catch (pushError) {
+                console.error("[v0] Error sending mobile alert for new campaign:", pushError)
+              }
+
               const shareToken = nanoid(16)
               await prisma.competitiveInsightCampaign.update({
                 where: { id: newCampaign.id },
@@ -1716,7 +1736,7 @@ export async function processCompetitiveInsights(
                 entityParty: entity.party,
                 entityState: entity.state,
                 entityType: entity.type,
-                isThirdParty,
+                isThirdParty: isThirdParty === true,
                 senderName: redactedSenderName,
                 senderEmail,
                 subject: redactedSubject,

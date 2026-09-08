@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma"
 import { getCIHistoryDays, type SubscriptionPlan } from "@/lib/subscription-utils"
 import { MobileAuthError } from "@/lib/mobile-auth"
 import { getEntityMappings } from "@/lib/ci-mapping-cache"
+import { getMobileClientEntitlements } from "@/lib/services/mobile-entitlements"
 
 export const MOBILE_ENTITY_TYPES = [
   { value: "politician", label: "Politicians" },
@@ -58,6 +59,42 @@ export interface FeedFilters {
 export interface FeedCursor {
   dateReceived: string // ISO timestamp
   id: string
+}
+
+export function hasActiveMobileFeedFilters(filters: FeedFilters): boolean {
+  return Boolean(
+    filters.search?.trim() ||
+      filters.entityIds?.length ||
+      filters.party ||
+      filters.state ||
+      filters.entityType ||
+      filters.messageType ||
+      filters.thirdParty ||
+      filters.houseFileOnly ||
+      filters.donationPlatform ||
+      filters.fromDate ||
+      filters.toDate ||
+      filters.tag ||
+      filters.subscriptionsOnly,
+  )
+}
+
+/**
+ * This check lives at the service boundary as well as in the filter-metadata route,
+ * so future callers cannot bypass the plan restriction by invoking getFeedPage
+ * directly with filters. It intentionally runs before any database work.
+ */
+export function assertMobileFeedFiltersAllowed(plan: SubscriptionPlan, filters: FeedFilters): void {
+  if (
+    hasActiveMobileFeedFilters(filters) &&
+    !getMobileClientEntitlements(plan).canSearchAndFilterFeed
+  ) {
+    throw new MobileAuthError(
+      403,
+      "FEED_FILTERS_NOT_AVAILABLE",
+      "Search and filters are not available on your current plan",
+    )
+  }
 }
 
 export interface FeedItem {
@@ -378,6 +415,8 @@ export async function getFeedPage(
   filters: FeedFilters,
   cursor: FeedCursor | null,
 ): Promise<{ items: FeedItem[]; nextCursor: string | null; hasMore: boolean }> {
+  assertMobileFeedFiltersAllowed(plan, filters)
+
   const [dateFloor, entityIdRestriction, ownershipFilters] = await Promise.all([
     getDateFloor(clientId, plan),
     resolveEntityIdRestriction(clientId, filters),

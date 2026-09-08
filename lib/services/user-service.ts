@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma"
+import { getMobileClientEntitlements } from "@/lib/services/mobile-entitlements"
 
 /**
  * Shared user-profile shape for the mobile API. Deliberately mirrors (but does not
@@ -39,6 +40,11 @@ export async function getMobileUserProfile(userId: string) {
     lastName: user.lastName,
     role: user.role,
     firstLogin: user.firstLogin,
-    client: user.client,
+    client: user.client
+      ? {
+          ...user.client,
+          entitlements: getMobileClientEntitlements(user.client.subscriptionPlan),
+        }
+      : null,
   }
 }

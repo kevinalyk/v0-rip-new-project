@@ -134,6 +134,18 @@ The mobile feed intentionally mirrors the existing web Competitive Insights feed
   Client.dataRetentionDays)`. This is enforced identically on listing and on direct
   by-ID access, so an item outside the retention window can't be reached just by
   guessing its ID.
+- Mobile plan capabilities are derived on the server from `PLAN_LIMITS`; the native
+  client never maintains a second plan matrix. Starter (`free`) receives three hours
+  of feed history, zero followed entities, and no feed search/filter access. Basic
+  (`paid`) receives 72 hours, three followed entities, and search/filter access.
+  Professional (`all`), Advanced (`basic_inboxing`), and Enterprise receive full
+  history, unlimited follows, and search/filter access. Unknown plan strings fail
+  closed instead of inheriting a paid capability.
+- Starter may paginate the unfiltered feed, but any substantive search/filter passed
+  to `getFeedPage` is rejected before database work with `403
+  FEED_FILTERS_NOT_AVAILABLE`. This service-level check prevents a future route or
+  caller from bypassing the restriction. The filter-metadata endpoint applies the
+  same entitlement check.
 - `tag` and `subscriptionsOnly` are resolved to entity-ID sets (via `EntityTag` and
   `CiEntitySubscription`, both scoped to the caller's `clientId`) and intersected
   when both are supplied. An empty resulting set (e.g. `subscriptionsOnly=true` for
@@ -182,7 +194,8 @@ with an appropriate HTTP status. Codes used across the namespace: `MISSING_TOKEN
 `CLIENT_INACTIVE`, `PASSWORD_RESET_REQUIRED`, `INVALID_REFRESH_TOKEN`,
 `REFRESH_TOKEN_REUSED`, `REFRESH_TOKEN_EXPIRED`, `TOO_MANY_ATTEMPTS`,
 `INVALID_CREDENTIALS`, `INVALID_BODY`, `INVALID_CURSOR`, `INVALID_FILTER`, `NO_CLIENT_CONTEXT`,
-`FORBIDDEN`, `CI_NOT_ENABLED`, `SUBSCRIPTION_INACTIVE`, `ENTITY_NOT_FOUND`,
+`FORBIDDEN`, `CI_NOT_ENABLED`, `SUBSCRIPTION_INACTIVE`,
+`UNSUPPORTED_SUBSCRIPTION_PLAN`, `FEED_FILTERS_NOT_AVAILABLE`, `ENTITY_NOT_FOUND`,
 `FOLLOW_LIMIT_REACHED`, `NOT_FOUND`, `ALERT_NOT_FOUND`, `INTERNAL_ERROR`.
 
 ## Endpoints
@@ -208,10 +221,18 @@ returns the same success response.
 
 ### `GET /api/mobile/v1/auth/me` (bearer)
 Returns the current user's profile directly (not wrapped in `data`):
-`{ id, email, firstName, lastName, role, firstLogin, client: { id, name, slug, subscriptionPlan, subscriptionStatus, hasCompetitiveInsights, trialExpiresAt } | null }`.
+`{ id, email, firstName, lastName, role, firstLogin, client: { id, name, slug, subscriptionPlan, subscriptionStatus, hasCompetitiveInsights, trialExpiresAt, entitlements } | null }`.
+`entitlements` is `{ canSearchAndFilterFeed, feedHistoryHours,
+followedEntityLimit }`; `null` history/follow limits mean unlimited.
+Deploy this API revision before distributing a native build that consumes these
+fields. New native clients deliberately fall back to Starter restrictions when the
+capability object is absent or malformed; older native clients ignore the additive
+response field.
 
 ### `GET /api/mobile/v1/context` (bearer)
-Lightweight app-shell bootstrap context: `{ userId, role, firstLogin, client: { id, slug, active, subscriptionPlan, subscriptionStatus, hasCompetitiveInsights } | null }`.
+Lightweight app-shell bootstrap context: `{ userId, role, firstLogin, client: { id,
+slug, active, subscriptionPlan, subscriptionStatus, hasCompetitiveInsights,
+entitlements } | null }`.
 
 ### `GET /api/mobile/v1/feed` (bearer)
 Cursor-paginated combined feed (emails + SMS). Response:
@@ -227,14 +248,20 @@ retention window but can never widen it. See "Access model" and "Cursor paginati
 above for authorization and pagination rules. `400 INVALID_CURSOR` rejects a
 malformed cursor; `400 INVALID_FILTER` rejects unsupported message/platform values,
 invalid or reversed dates, and more than 100 selected entities.
+Starter accounts may send `cursor` for normal pagination but receive `403
+FEED_FILTERS_NOT_AVAILABLE` for any active feed filter, including search.
 
 ### `GET /api/mobile/v1/feed/filters` (bearer)
 Filter facets for building the mobile filter UI:
 `{ states, parties, offices, entityTypes, messageFilters, donationPlatforms, entities }`.
 `entities` contains `{ id, name, type, party, state, isFollowing }[]`, ordered with
 the caller's followed entities first and then alphabetically, for the searchable
-multi-entity picker. `offices` remains in this metadata response only because the
-alert-creation form uses it; the feed does not accept or expose an Office filter.
+multi-entity picker. `offices` is retained for backwards compatibility with older
+mobile alert forms; the feed does not accept or expose an Office filter. New clients
+load alert criteria from `/alerts/options` instead.
+Starter accounts receive `403 FEED_FILTERS_NOT_AVAILABLE`; native clients should use
+the entitlements returned by `/auth/me` and avoid requesting this endpoint when the
+capability is false.
 
 ### `GET /api/mobile/v1/feed/[id]?type=email|sms` (bearer)
 Single campaign/message detail: `{ data: FeedItem & { emailContent, emailPreview, ctaLinks } }`.
@@ -267,6 +294,11 @@ Unfollows a `CiEntity`. Response: `{ following: false }`. Idempotent.
 ### `GET /api/mobile/v1/alerts` (bearer)
 Lists `CampaignAlertSubscription` rows for the caller: `{ data: CampaignAlertSubscription[] }`.
 
+### `GET /api/mobile/v1/alerts/options` (bearer)
+Returns `{ states, parties, offices }` for the alert-creation form. This endpoint is
+deliberately separate from `/feed/filters`: feed search/filter entitlement does not
+implicitly restrict campaign alerts.
+
 ### `POST /api/mobile/v1/alerts` (bearer)
 Body: `{ name, party?, state?, office? }` (at least one of `party`/`state`/`office`
 required). Response (`201`): `{ data: CampaignAlertSubscription }`.
@@ -285,6 +317,10 @@ if it doesn't exist, `403 FORBIDDEN` if it belongs to someone else.
   dependency it touches injected. Does not touch a database, does not require
   `DATABASE_URL` or `MOBILE_DB_TESTS_ALLOWED`, and does not invoke the real
   `process.exit`.
+- `pnpm run test:mobile-entitlements` — isolated, non-database coverage of every
+  supported plan's mobile capability mapping, unknown-plan fail-closed behavior,
+  detection of every feed-filter dimension, Starter rejection, paid access, and the
+  filter-metadata authorization guard.
 - `pnpm run test:mobile-feed-params` — isolated, non-database tests for repeatable
   entity IDs, all supported web-parity query parameters, date normalization, and
   fail-closed rejection of invalid filter values.
@@ -302,8 +338,8 @@ if it doesn't exist, `403 FORBIDDEN` if it belongs to someone else.
 - `pnpm run test:mobile-entities` — follow idempotency and follow-limit enforcement
   under concurrency.
 - `pnpm run test:mobile` — runs all of the above in sequence (route/auth, preflight,
-  and filter-parameter tests first, then the three database-backed suites), so a
-  broken guard is caught before any suite that depends on it runs.
+  entitlement, and filter-parameter tests first, then the three database-backed
+  suites), so a broken guard is caught before any suite that depends on it runs.
 
 ### Database-backed tests require an explicit opt-in
 

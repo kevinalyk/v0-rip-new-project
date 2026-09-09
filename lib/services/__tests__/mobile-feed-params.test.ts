@@ -3,6 +3,7 @@ import test from "node:test"
 
 import { parseMobileFeedFilters } from "@/app/api/mobile/v1/feed/route"
 import { MobileAuthError } from "@/lib/mobile-auth"
+import { normalizeMobileCtaLinks } from "@/lib/services/feed-service"
 
 function expectInvalid(params: URLSearchParams) {
   assert.throws(
@@ -59,4 +60,13 @@ test("rejects more than 100 selected entities", () => {
   const params = new URLSearchParams()
   for (let index = 0; index < 101; index++) params.append("entityId", `entity-${index}`)
   expectInvalid(params)
+})
+
+test("normalizes direct and JSON-string CTA arrays without throwing on malformed data", () => {
+  const links = [{ url: "https://wrapped.example.com", finalUrl: "https://example.com/final" }]
+
+  assert.deepEqual(normalizeMobileCtaLinks(links), links)
+  assert.deepEqual(normalizeMobileCtaLinks(JSON.stringify(links)), links)
+  assert.deepEqual(normalizeMobileCtaLinks("not-json"), [])
+  assert.deepEqual(normalizeMobileCtaLinks({ links }), [])
 })

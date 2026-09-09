@@ -28,6 +28,7 @@
  */
 import prisma from "@/lib/prisma"
 import { MobileAuthError } from "@/lib/mobile-auth"
+import { getDirectoryEntity, listDirectoryEntities } from "@/lib/services/directory-service"
 import { followEntity, unfollowEntity } from "@/lib/services/entity-service"
 import { assertRealDatabaseOrExit } from "@/lib/services/__tests__/test-db-preflight"
 
@@ -52,6 +53,8 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 async function cleanup() {
+  await prisma.competitiveInsightCampaign.deleteMany({ where: { subject: { startsWith: PREFIX } } })
+  await prisma.smsQueue.deleteMany({ where: { rawData: { startsWith: PREFIX } } })
   await prisma.ciEntitySubscription.deleteMany({ where: { clientId: { startsWith: PREFIX } } })
   await prisma.ciEntity.deleteMany({ where: { name: { startsWith: PREFIX } } })
   await prisma.client.deleteMany({ where: { id: { startsWith: PREFIX } } })
@@ -119,6 +122,82 @@ async function main() {
 
       const finalCount = await prisma.ciEntitySubscription.count({ where: { clientId: client.id } })
       assert(finalCount === entities.length, `expected all ${entities.length} follows to succeed, got ${finalCount}`)
+
+      await prisma.ciEntitySubscription.deleteMany({ where: { clientId: client.id } })
+    })
+
+    await test("Directory list filters entities and scopes following status to the caller", async () => {
+      const directoryEntity = await prisma.ciEntity.create({
+        data: {
+          name: `${PREFIX}Directory Candidate`,
+          type: "candidate",
+          party: "republican",
+          state: "MO",
+          imageUrl: "https://example.com/candidate.png",
+          office: "Candidate, U.S. House Missouri District 1",
+        },
+      })
+      await prisma.ciEntity.create({
+        data: { name: `${PREFIX}Directory Hidden Broker`, type: "data_broker", party: "republican", state: "MO" },
+      })
+      const otherClient = await prisma.client.create({
+        data: {
+          id: `${PREFIX}other-client`,
+          name: `${PREFIX}Other Client`,
+          slug: `${PREFIX.toLowerCase()}other-client`,
+          active: true,
+          subscriptionPlan: "all",
+        },
+      })
+      await prisma.ciEntitySubscription.create({ data: { clientId: otherClient.id, entityId: directoryEntity.id } })
+
+      const beforeFollow = await listDirectoryEntities(
+        client.id,
+        { search: "Directory", party: "republican", state: "MO", entityType: "candidate" },
+        null,
+      )
+      assert(beforeFollow.entities.length === 1, `expected one matching candidate, got ${beforeFollow.entities.length}`)
+      assert(beforeFollow.entities[0].id === directoryEntity.id, "expected the candidate result")
+      assert(beforeFollow.entities[0].isFollowing === false, "another client's follow must not leak")
+
+      await followEntity(client.id, "all", directoryEntity.id)
+      const afterFollow = await listDirectoryEntities(client.id, { search: "Directory" }, null)
+      assert(afterFollow.entities.some((entity) => entity.id === directoryEntity.id && entity.isFollowing), "caller's follow should be present")
+      assert(!afterFollow.entities.some((entity) => entity.type === "data_broker"), "data brokers must never appear")
+    })
+
+    await test("Directory profile returns retention-aware recent email and SMS activity", async () => {
+      const directoryEntity = await prisma.ciEntity.findUnique({ where: { name: `${PREFIX}Directory Candidate` } })
+      assert(directoryEntity, "directory fixture should exist")
+
+      const now = new Date()
+      await prisma.competitiveInsightCampaign.create({
+        data: {
+          senderName: `${PREFIX}Sender`,
+          senderEmail: `${PREFIX.toLowerCase()}directory@example.com`,
+          subject: `${PREFIX}Directory Email`,
+          dateReceived: now,
+          entityId: directoryEntity.id,
+          messageTypes: [],
+          subjectPatterns: [],
+        },
+      })
+      await prisma.smsQueue.create({
+        data: {
+          rawData: `${PREFIX}Directory SMS`,
+          processed: true,
+          phoneNumber: "+15555550123",
+          message: `${PREFIX}Directory text message`,
+          entityId: directoryEntity.id,
+        },
+      })
+
+      const profile = await getDirectoryEntity(client.id, "all", directoryEntity.id)
+      assert(profile.id === directoryEntity.id, "expected requested profile")
+      assert(profile.imageUrl === "https://example.com/candidate.png", "expected profile image")
+      assert(profile.recentMessages.some((message) => message.type === "email"), "expected recent email")
+      assert(profile.recentMessages.some((message) => message.type === "sms"), "expected recent SMS")
+      assert(profile.isFollowing, "expected caller-specific following state")
     })
   } finally {
     await cleanup()

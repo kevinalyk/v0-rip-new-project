@@ -160,7 +160,7 @@ export function decodeCursor(raw: string | null | undefined): FeedCursor | null 
  * Computes the data-retention-aware date floor for a client: the more restrictive of
  * the plan's CI history window and the client's own dataRetentionDays.
  */
-async function getDateFloor(clientId: string, plan: SubscriptionPlan): Promise<Date | null> {
+export async function getMobileFeedDateFloor(clientId: string, plan: SubscriptionPlan): Promise<Date | null> {
   const client = await prisma.client.findUnique({ where: { id: clientId }, select: { dataRetentionDays: true } })
   const planDays = getCIHistoryDays(plan)
   const retentionDays = client?.dataRetentionDays ?? null
@@ -439,7 +439,7 @@ export async function getFeedPage(
   assertMobileFeedFiltersAllowed(plan, filters)
 
   const [dateFloor, entityIdRestriction, ownershipFilters] = await Promise.all([
-    getDateFloor(clientId, plan),
+    getMobileFeedDateFloor(clientId, plan),
     resolveEntityIdRestriction(clientId, filters),
     resolveOwnershipWhere(filters),
   ])
@@ -600,7 +600,7 @@ export async function getFeedItemById(
 ): Promise<
   (FeedItem & { emailContent?: string | null; emailPreview?: string | null; ctaLinks?: unknown[] }) | null
 > {
-  const dateFloor = await getDateFloor(clientId, plan)
+  const dateFloor = await getMobileFeedDateFloor(clientId, plan)
 
   if (type === "email") {
     const campaign = await prisma.competitiveInsightCampaign.findUnique({

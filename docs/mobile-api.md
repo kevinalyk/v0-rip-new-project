@@ -283,6 +283,23 @@ the same `404 NOT_FOUND` response as feed detail and is not mutated.
 ### `GET /api/mobile/v1/entities/followed` (bearer)
 Entities (`CiEntity`) the caller's client currently follows: `{ data: CiEntity[] }`.
 
+### `GET /api/mobile/v1/entities` (bearer)
+Cursor-paginated mobile Directory. Supports `search`, `party`, `state`,
+`entityType`, and `cursor`, and returns entity photos, office/description,
+communication counts, and caller-specific `isFollowing` state. Data brokers are
+always excluded. Directory browsing and filtering are available to Starter users;
+the paid-only search/filter restriction applies to the CI feed, not this public-style
+entity directory.
+
+### `GET /api/mobile/v1/entities/options` (bearer)
+Returns `{ states, parties, entityTypes }` for the Directory filter controls.
+
+### `GET /api/mobile/v1/entities/[id]` (bearer)
+Returns a Directory profile with biography, office, image, sender identifiers,
+communication counts, `isFollowing`, and the ten newest messages available inside
+the caller's plan/data-retention window. Data-broker profiles return
+`404 ENTITY_NOT_FOUND`.
+
 ### `POST /api/mobile/v1/entities/[id]/follow` (bearer)
 Follows a `CiEntity`, enforcing the plan follow limit (concurrency-safe — see
 above). Response: `{ following: true, alreadyFollowing: boolean }`.

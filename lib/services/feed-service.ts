@@ -116,6 +116,23 @@ export interface FeedItem {
   } | null
 }
 
+/**
+ * CompetitiveInsightCampaign.ctaLinks is a Json column, but older ingestion
+ * paths stored a JSON-encoded array as a scalar string. Normalize both shapes
+ * at the mobile API boundary so clients receive one stable array contract.
+ */
+export function normalizeMobileCtaLinks(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  if (typeof value !== "string") return []
+
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
 const PAGE_SIZE = 25
 
 const mobileFeedEntitySelect = {
@@ -630,7 +647,7 @@ export async function getFeedItemById(
       entity: campaign.entity,
       emailContent: campaign.emailContent,
       emailPreview: campaign.emailPreview,
-      ctaLinks: Array.isArray(campaign.ctaLinks) ? (campaign.ctaLinks as unknown[]) : [],
+      ctaLinks: normalizeMobileCtaLinks(campaign.ctaLinks),
     }
   }
 
@@ -660,7 +677,7 @@ export async function getFeedItemById(
     entity: sms.entity,
     emailContent: sms.message,
     emailPreview: sms.message,
-    ctaLinks: sms.ctaLinks ? JSON.parse(sms.ctaLinks) : [],
+    ctaLinks: normalizeMobileCtaLinks(sms.ctaLinks),
   }
 }
 

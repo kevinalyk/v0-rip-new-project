@@ -206,6 +206,35 @@ async function main() {
       assert(view.entity?.imageUrl === entity.imageUrl, "detail entity should include its profile image URL")
     })
 
+    await test("getFeedItemById normalizes JSON-string email CTA links and preserves finalUrl", async () => {
+      const campaign = await prisma.competitiveInsightCampaign.create({
+        data: {
+          entityId: entity.id,
+          senderName: `${PREFIX}cta_sender`,
+          senderEmail: "cta-links@example.com",
+          subject: `${PREFIX}CTA detail`,
+          dateReceived: new Date(),
+          inboxRate: 100,
+          ctaLinks: JSON.stringify([
+            {
+              url: "https://wrapped.example.com/click/123",
+              finalUrl: "https://example.com/final-destination",
+              text: "Read more",
+            },
+          ]),
+        },
+      })
+
+      const view = await getFeedItemById(clientA.id, PLAN, campaign.id, "email")
+      assert(view !== null, "campaign should be visible")
+      assert(Array.isArray(view.ctaLinks), "CTA links should be returned as an array")
+      assert(view.ctaLinks.length === 1, "one CTA link should be returned")
+      const link = view.ctaLinks[0] as Record<string, unknown>
+      assert(link.url === "https://wrapped.example.com/click/123", "the captured URL should be preserved")
+      assert(link.finalUrl === "https://example.com/final-destination", "the final URL should be preserved")
+      assert(link.text === "Read more", "the CTA text should be preserved")
+    })
+
     await test("createFeedShareLink reuses a stable token and enforces detail access", async () => {
       const first = await createFeedShareLink(clientB.id, PLAN, sharedCampaign.id, "email", "https://preview.example.com")
       assert(first !== null, "a shared campaign should be shareable")

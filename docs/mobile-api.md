@@ -342,6 +342,20 @@ signing into the same installation as another account safely moves the token.
 Body: `{ deviceId }`. Removes the current user's token for that installation. This
 route remains available after a downgrade so sign-out cleanup can still succeed.
 
+### `GET /api/mobile/v1/news` (bearer)
+Cursor-paginated Inbox.GOP product announcements, newest first. Response:
+`{ data: AnnouncementSummary[], pagination: { nextCursor, hasMore } }`, where each
+summary contains the stable `id` and `slug`, `title`, plain-text `excerpt`, optional
+`imageUrl`, `publishedAt`, and `updatedAt`. The stable identifiers are suitable for a
+future push-notification payload; opening the app still re-fetches the announcement
+through the authenticated API.
+
+### `GET /api/mobile/v1/news/[slug]` (bearer)
+Returns `{ data: AnnouncementDetail }` with all summary fields plus the rich HTML
+`body`. Native clients must sanitize that HTML before rendering it and allow only
+safe `http`/`https` links to leave the app. `404 ANNOUNCEMENT_NOT_FOUND` is returned
+for an unknown slug.
+
 ## Mobile push delivery
 
 New, non-duplicate email and SMS ingestion invokes the same server-side matcher.
@@ -384,6 +398,8 @@ iOS configuration; remote push cannot be validated in the iOS Simulator.
 - `pnpm run test:mobile-feed-params` — isolated, non-database tests for repeatable
   entity IDs, all supported web-parity query parameters, date normalization, and
   fail-closed rejection of invalid filter values.
+- `pnpm run test:mobile-announcements` — isolated, non-database coverage for safe
+  announcement excerpt generation and cursor validation/round-tripping.
 - `pnpm run test:mobile-auth` — token issuance/verification, header validation,
   issuer/audience/typ/secret checks, expiry, `requireMobileAuth`'s Postgres reload
   and inactive-client/forced-reset handling, refresh rotation + replay + concurrency

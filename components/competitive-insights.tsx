@@ -1930,6 +1930,7 @@ export function CompetitiveInsights({
                     <SelectItem value="politician">Politicians</SelectItem>
                     <SelectItem value="pac">PACs</SelectItem>
                     <SelectItem value="organization">Organizations</SelectItem>
+                    <SelectItem value="nonprofit">Nonprofits</SelectItem>
                   </SelectContent>
                 </Select>
 

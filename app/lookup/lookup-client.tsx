@@ -387,6 +387,8 @@ function EntityCard({ entity }: { entity: Entity }) {
       ? "PAC"
       : entity.type === "organization"
       ? "Organization"
+      : entity.type === "nonprofit"
+      ? "Nonprofit"
       : entity.type
 
   return (
@@ -442,7 +444,7 @@ function EntityCard({ entity }: { entity: Entity }) {
   )
 }
 
-// ─── Results section ──���────────────────────────────────��������────────────────────────
+// ─── Results section ──���──────────────────────────��─────��������────────────────────────
 
 function SearchResults({
   query,

@@ -692,6 +692,8 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
         return <Users className="h-4 w-4" />
       case "organization":
         return <Building2 className="h-4 w-4" />
+      case "nonprofit":
+        return <Building2 className="h-4 w-4" />
       case "data_broker":
         return <Database className="h-4 w-4" />
       default:
@@ -946,6 +948,8 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
         return "bg-amber-700 text-white hover:bg-amber-800"
       case "organization":
         return "bg-emerald-700 text-white hover:bg-emerald-800"
+      case "nonprofit":
+        return "bg-cyan-700 text-white hover:bg-cyan-800"
       case "data_broker":
         return "bg-teal-700 text-white hover:bg-teal-800"
       default:

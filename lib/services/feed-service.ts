@@ -11,6 +11,8 @@ export const MOBILE_ENTITY_TYPES = [
   { value: "politician", label: "Politicians" },
   { value: "pac", label: "PACs" },
   { value: "organization", label: "Organizations" },
+  { value: "nonprofit", label: "Nonprofits" },
+  { value: "state_party", label: "State Parties" },
 ] as const
 
 export const MOBILE_MESSAGE_FILTERS = [

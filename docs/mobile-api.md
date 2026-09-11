@@ -256,6 +256,8 @@ FEED_FILTERS_NOT_AVAILABLE` for any active feed filter, including search.
 ### `GET /api/mobile/v1/feed/filters` (bearer)
 Filter facets for building the mobile filter UI:
 `{ states, parties, entityTypes, messageFilters, donationPlatforms, entities }`.
+`entityTypes` includes politicians, PACs, organizations, nonprofits, and state
+parties, matching the web CI feed.
 `entities` contains `{ id, name, type, party, state, isFollowing }[]`, ordered with
 the caller's followed entities first and then alphabetically, for the searchable
 multi-entity picker. The feed does not accept or expose an Office filter. New clients
@@ -293,6 +295,8 @@ entity directory.
 
 ### `GET /api/mobile/v1/entities/options` (bearer)
 Returns `{ states, parties, entityTypes }` for the Directory filter controls.
+Directory entity types include candidates, politicians, PACs, organizations,
+nonprofits, JFCs, and state parties.
 
 ### `GET /api/mobile/v1/entities/[id]` (bearer)
 Returns a Directory profile with biography, office, image, sender identifiers,

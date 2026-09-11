@@ -2,7 +2,11 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { MobileAuthError } from "@/lib/mobile-auth"
-import { validateMobilePushTokenInput } from "@/lib/services/mobile-push-token-service"
+import {
+  validateMobileDeviceId,
+  validateMobilePushTokenInput,
+  validateFollowingPushPreference,
+} from "@/lib/services/mobile-push-token-service"
 
 test("accepts and trims an iOS Expo push token and installation ID", () => {
   assert.deepEqual(validateMobilePushTokenInput({
@@ -36,6 +40,27 @@ test("fails closed unless the caller explicitly declares iOS", () => {
         platform,
       }),
       (error: unknown) => error instanceof MobileAuthError && error.code === "INVALID_PLATFORM",
+    )
+  }
+})
+
+test("validates and normalizes device IDs used by preference routes", () => {
+  assert.equal(validateMobileDeviceId(" device-1 "), "device-1")
+  for (const deviceId of [undefined, "", " ", "x".repeat(101)]) {
+    assert.throws(
+      () => validateMobileDeviceId(deviceId),
+      (error: unknown) => error instanceof MobileAuthError && error.code === "INVALID_DEVICE",
+    )
+  }
+})
+
+test("following notification preference accepts only explicit booleans", () => {
+  assert.equal(validateFollowingPushPreference(true), true)
+  assert.equal(validateFollowingPushPreference(false), false)
+  for (const value of [undefined, null, "true", 1]) {
+    assert.throws(
+      () => validateFollowingPushPreference(value),
+      (error: unknown) => error instanceof MobileAuthError && error.code === "INVALID_PREFERENCE",
     )
   }
 })

@@ -333,10 +333,23 @@ INVALID_BODY`.
 Deletes an alert the caller owns. Response: `{ ok: true }`. `404 ALERT_NOT_FOUND`
 if it doesn't exist, `403 FORBIDDEN` if it belongs to someone else.
 
+### `GET /api/mobile/v1/push-token?deviceId=...` (bearer)
+Returns this installation's followed-entity notification preference as
+`{ data: { registered, enabled, lastSeenAt } }`. This preference is available to
+every authenticated CI user; it is intentionally separate from paid custom alerts.
+
 ### `POST /api/mobile/v1/push-token` (bearer)
-Paid CI plans only. Registers or refreshes this installation's Expo push token:
-`{ expoPushToken, deviceId, platform: "ios" }`. A token can belong to only one user;
-signing into the same installation as another account safely moves the token.
+Registers or refreshes this installation's Expo push token:
+`{ expoPushToken, deviceId, platform: "ios", followingEnabled? }`. A token can belong
+to only one user; signing into the same installation as another account safely moves
+the token. Setting `followingEnabled: true` opts this installation into one push
+whenever a new email or SMS from any entity followed by the user's client is ingested.
+Existing tokens default to false, so deployment never silently opts in a user.
+
+### `PATCH /api/mobile/v1/push-token` (bearer)
+`{ deviceId, followingEnabled }` changes the followed-entity preference for an
+already-registered installation. A missing installation returns
+`404 PUSH_TOKEN_NOT_FOUND`; the app must register its Expo token first.
 
 ### `DELETE /api/mobile/v1/push-token` (bearer)
 Body: `{ deviceId }`. Removes the current user's token for that installation. This
@@ -358,11 +371,13 @@ for an unknown slug.
 
 ## Mobile push delivery
 
-New, non-duplicate email and SMS ingestion invokes the same server-side matcher.
-Before sending, it rechecks that the alert owner still has an active client, CI
+New, non-duplicate email and SMS ingestion invokes one server-side delivery service.
+For custom alerts, it rechecks that the alert owner still has an active client, CI
 access, a supported paid plan, and an enabled device token. Matching supports
 keyword, entity, party, state, entity type, Email/SMS, House File/Third Party,
 donation platform, followed-only, and client-scoped entity-tag criteria.
+The universal Following preference is available across plans and selects recipients
+from the client-level followed-entity list plus each device's explicit opt-in.
 Data-broker messages never produce a notification.
 
 At most one push is sent to a user for a message, even if several of their alerts
@@ -373,11 +388,23 @@ invalid token. Notification payloads contain only the feed item ID and message t
 tapping a notification opens the authenticated native message detail screen, where
 the normal feed authorization and retention rules run again.
 
+The same deduplication covers followed-entity notifications and custom-alert matches,
+so a user who qualifies through both paths still receives only one push. Shared seed
+messages may notify every opted-in client following the entity. Personal captures are
+restricted to the source client before recipient selection, matching mobile feed
+authorization and preventing cross-client notification leakage.
+
 This feature requires the `20260908170000_add_mobile_ci_push_alerts` migration before
 the new backend routes are deployed. The migration has paired rollback SQL, but the
 rollback drops alert/token/delivery data and must never run automatically. A new
 native EAS/TestFlight build is also required because `expo-notifications` adds native
 iOS configuration; remote push cannot be validated in the iOS Simulator.
+
+Followed-entity notification preferences additionally require
+`20260911120000_add_following_push_preference`. The migration adds a fail-closed
+`followingEnabled=false` column to existing push-token rows and includes paired
+rollback SQL. Apply it through the normal reviewed migration process before deploying
+the API or building the native release.
 
 ## Tests
 

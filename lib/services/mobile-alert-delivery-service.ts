@@ -16,6 +16,8 @@ export type MobileAlertCandidate = {
   entityType: string
   isThirdParty: boolean | null
   donationPlatform: string | null
+  /** Non-null for a client's private capture; null for the shared seed feed. */
+  sourceClientId: string | null
 }
 
 type MatchableAlert = {
@@ -38,6 +40,7 @@ type MobileAlertRecord = Prisma.CampaignAlertSubscriptionGetPayload<{
         client: {
           select: {
             id: true
+            active: true
             subscriptionPlan: true
             subscriptionStatus: true
             hasCompetitiveInsights: true
@@ -48,6 +51,20 @@ type MobileAlertRecord = Prisma.CampaignAlertSubscriptionGetPayload<{
     }
   }
 }>
+
+type PushTokenRecord = {
+  id: string
+  expoPushToken: string
+}
+
+type PushRecipient = {
+  tokens: Map<string, PushTokenRecord>
+  matchedAlertIds: Set<string>
+}
+
+export function candidateIsVisibleToClient(candidate: MobileAlertCandidate, clientId: string): boolean {
+  return candidate.sourceClientId === null || candidate.sourceClientId === clientId
+}
 
 function normalizedParty(value: string | null): string {
   const party = value?.trim().toLowerCase() || ""
@@ -128,6 +145,7 @@ export async function notifyMobileAlertsForMessage(candidate: MobileAlertCandida
           client: {
             select: {
               id: true,
+              active: true,
               subscriptionPlan: true,
               subscriptionStatus: true,
               hasCompetitiveInsights: true,
@@ -138,7 +156,6 @@ export async function notifyMobileAlertsForMessage(candidate: MobileAlertCandida
       },
     },
   }) as MobileAlertRecord[]
-  if (!alerts.length) return
 
   const clientIds = [...new Set(alerts.map((alert) => alert.clientId).filter((id): id is string => Boolean(id)))]
   const [subscriptions, entityTags] = await Promise.all([
@@ -159,16 +176,28 @@ export async function notifyMobileAlertsForMessage(candidate: MobileAlertCandida
     tagsByClient.set(clientId, tags)
   }
 
-  const matchesByUser = new Map<string, typeof alerts>()
+  const recipients = new Map<string, PushRecipient>()
+  const addRecipient = (userId: string, tokens: PushTokenRecord[], alertId?: string) => {
+    const recipient = recipients.get(userId) || {
+      tokens: new Map<string, PushTokenRecord>(),
+      matchedAlertIds: new Set<string>(),
+    }
+    for (const token of tokens) recipient.tokens.set(token.id, token)
+    if (alertId) recipient.matchedAlertIds.add(alertId)
+    recipients.set(userId, recipient)
+  }
+
   for (const alert of alerts) {
     const client = alert.user.client
     if (
       !client ||
       alert.clientId !== client.id ||
+      !client.active ||
       client.subscriptionStatus !== "active" ||
       !client.hasCompetitiveInsights ||
       !getMobileClientEntitlements(client.subscriptionPlan).canUseAlerts ||
-      alert.user.mobilePushTokens.length === 0
+      alert.user.mobilePushTokens.length === 0 ||
+      !candidateIsVisibleToClient(candidate, client.id)
     ) continue
 
     if (matchesMobileAlert(
@@ -177,14 +206,55 @@ export async function notifyMobileAlertsForMessage(candidate: MobileAlertCandida
       followingClients.has(client.id),
       tagsByClient.get(client.id) || new Set(),
     )) {
-      const userMatches = matchesByUser.get(alert.userId) || []
-      userMatches.push(alert)
-      matchesByUser.set(alert.userId, userMatches)
+      addRecipient(alert.userId, alert.user.mobilePushTokens, alert.id)
     }
   }
 
-  const prepared: { deliveryId: string; tokens: MobileAlertRecord["user"]["mobilePushTokens"] }[] = []
-  for (const [userId, matches] of matchesByUser) {
+  // The Following switch is intentionally independent from paid custom alerts.
+  // Every user whose active client follows this entity may opt in on each iPhone.
+  const followed = await prisma.ciEntitySubscription.findMany({
+    where: {
+      entityId: candidate.entityId,
+      ...(candidate.sourceClientId ? { clientId: candidate.sourceClientId } : {}),
+    },
+    select: { clientId: true },
+  }) as { clientId: string }[]
+  const followedClientIds = [...new Set(followed.map(({ clientId }) => clientId))]
+  if (followedClientIds.length) {
+    const clients = await prisma.client.findMany({
+      where: {
+        id: { in: followedClientIds },
+        active: true,
+        hasCompetitiveInsights: true,
+        OR: [
+          { subscriptionStatus: "active" },
+          { subscriptionPlan: "free" },
+        ],
+      },
+      select: {
+        id: true,
+        users: {
+          where: { firstLogin: false },
+          select: {
+            id: true,
+            mobilePushTokens: {
+              where: { enabled: true, followingEnabled: true },
+              select: { id: true, expoPushToken: true },
+            },
+          },
+        },
+      },
+    })
+    for (const client of clients) {
+      if (!candidateIsVisibleToClient(candidate, client.id)) continue
+      for (const user of client.users) {
+        if (user.mobilePushTokens.length) addRecipient(user.id, user.mobilePushTokens)
+      }
+    }
+  }
+
+  const prepared: { deliveryId: string; tokens: PushTokenRecord[] }[] = []
+  for (const [userId, recipient] of recipients) {
     let delivery: { id: string }
     try {
       delivery = await prisma.mobileAlertDelivery.create({
@@ -192,7 +262,7 @@ export async function notifyMobileAlertsForMessage(candidate: MobileAlertCandida
           userId,
           sourceType: candidate.type,
           sourceId: candidate.id,
-          matchedAlertIds: matches.map(({ id }) => id),
+          matchedAlertIds: [...recipient.matchedAlertIds],
         },
         select: { id: true },
       })
@@ -201,7 +271,7 @@ export async function notifyMobileAlertsForMessage(candidate: MobileAlertCandida
       throw error
     }
 
-    prepared.push({ deliveryId: delivery.id, tokens: matches[0].user.mobilePushTokens.slice(0, 100) })
+    prepared.push({ deliveryId: delivery.id, tokens: [...recipient.tokens.values()].slice(0, 100) })
   }
 
   type PushJob = {
@@ -216,7 +286,7 @@ export async function notifyMobileAlertsForMessage(candidate: MobileAlertCandida
       message: {
         to: expoPushToken,
         sound: "default",
-        title: candidate.entityName,
+        title: `${candidate.entityName} sent ${candidate.type === "email" ? "an email" : "an SMS"}`,
         body: candidate.type === "email" ? candidate.subject : candidate.preview.slice(0, 180),
         data: { feedItemId: candidate.id, messageType: candidate.type },
       },

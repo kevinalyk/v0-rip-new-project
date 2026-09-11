@@ -1142,15 +1142,16 @@ model CampaignAlertSubscription {
 }
 
 model MobilePushToken {
-  id            String   @id @default(cuid())
-  userId        String
-  expoPushToken String   @unique
-  deviceId      String
-  platform      String   @default("ios")
-  enabled       Boolean  @default(true)
-  lastSeenAt    DateTime @default(now())
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id               String   @id @default(cuid())
+  userId           String
+  expoPushToken    String   @unique
+  deviceId         String
+  platform         String   @default("ios")
+  enabled          Boolean  @default(true)
+  followingEnabled Boolean @default(false)
+  lastSeenAt       DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

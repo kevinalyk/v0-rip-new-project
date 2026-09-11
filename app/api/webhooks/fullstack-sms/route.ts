@@ -253,6 +253,7 @@ export async function POST(request: Request) {
             entityType: entity.type,
             isThirdParty,
             donationPlatform: ctaLinks.length > 0 ? detectDonationPlatform(ctaLinks) : null,
+            sourceClientId: personalPhoneAssignment?.clientId || null,
           })
         } catch (pushError) {
           console.error("[FullStack SMS] Error sending mobile alert:", pushError)

@@ -97,6 +97,8 @@ export function SlackMessageFilters({ values, onChange, disabled }: SlackMessage
             <SelectItem value="politician">Politicians</SelectItem>
             <SelectItem value="pac">PACs</SelectItem>
             <SelectItem value="organization">Organizations</SelectItem>
+            <SelectItem value="nonprofit">Nonprofits</SelectItem>
+            <SelectItem value="state_party">State Parties</SelectItem>
           </SelectContent>
         </Select>
       </div>

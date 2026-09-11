@@ -403,6 +403,7 @@ function EntitySeoContent({
       case "committee": return "committee"
       case "organization": return "organization"
       case "nonprofit": return "nonprofit"
+      case "state_party": return "state party"
       default: return "political entity"
     }
   })()

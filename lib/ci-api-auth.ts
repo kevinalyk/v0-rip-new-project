@@ -76,7 +76,14 @@ export const CI_ASSIGNMENT_ALL_SCOPES: CiScope[] = [
 export const CI_API_LIMITS = {
   MAX_BATCH_SIZE: 100, // max message IDs per assign_messages_to_entity call
   MAX_ASSIGNMENTS_PER_HOUR: 500,
-  MAX_NEW_ENTITIES_PER_DAY: 20,
+  // No cap on new entities - there are legitimately hundreds of distinct
+  // candidates/committees/PACs/orgs to onboard, and an artificial daily cap
+  // just stalls Claude mid-backlog for no safety benefit (creating an entity
+  // is a low-risk, easily-reversible action, unlike assigning/deleting
+  // messages). Set to Infinity rather than removing the check so the
+  // count/comparison code path stays intact if we ever want to reintroduce
+  // a (much higher) guardrail.
+  MAX_NEW_ENTITIES_PER_DAY: Number.POSITIVE_INFINITY,
   MAX_ENTITY_UPDATES_PER_DAY: 50,
   MAX_DELETES_PER_HOUR: 300, // max message IDs soft-deleted per hour via delete_messages
 }

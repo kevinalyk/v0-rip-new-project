@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import {
+  candidateIsVisibleToClient,
   matchesMobileAlert,
   type MobileAlertCandidate,
 } from "@/lib/services/mobile-alert-delivery-service"
@@ -19,6 +20,7 @@ const candidate: MobileAlertCandidate = {
   entityType: "politician",
   isThirdParty: false,
   donationPlatform: "winred",
+  sourceClientId: null,
 }
 
 const emptyAlert = {
@@ -69,4 +71,12 @@ test("normalizes Independent party aliases and performs case-insensitive matchin
 test("classifies null ownership as house file to preserve legacy feed behavior", () => {
   const legacy = { ...candidate, isThirdParty: null }
   assert.equal(matchesMobileAlert({ ...emptyAlert, ownershipTypes: ["house_file"] }, legacy, false, new Set()), true)
+})
+
+test("shared messages are visible to followers while private captures stay client-scoped", () => {
+  assert.equal(candidateIsVisibleToClient(candidate, "client-a"), true)
+
+  const privateCandidate = { ...candidate, sourceClientId: "client-a" }
+  assert.equal(candidateIsVisibleToClient(privateCandidate, "client-a"), true)
+  assert.equal(candidateIsVisibleToClient(privateCandidate, "client-b"), false)
 })

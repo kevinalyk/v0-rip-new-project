@@ -1719,6 +1719,7 @@ export async function processCompetitiveInsights(
                   entityType: entity.type,
                   isThirdParty,
                   donationPlatform: ctaLinks.length > 0 ? detectDonationPlatform(ctaLinks) : null,
+                  sourceClientId: clientId || null,
                 })
               } catch (pushError) {
                 console.error("[v0] Error sending mobile alert for new campaign:", pushError)

@@ -1,8 +1,18 @@
 import { MobileAuthError, mobileError, mobileJson, withMobileAuth } from "@/lib/mobile-auth"
-import { requireMobileAlerts } from "@/lib/services/authz"
-import { registerMobilePushToken, unregisterMobilePushToken } from "@/lib/services/mobile-push-token-service"
+import { requireCompetitiveInsights } from "@/lib/services/authz"
+import {
+  getFollowingPushPreference,
+  registerMobilePushToken,
+  setFollowingPushPreference,
+  unregisterMobilePushToken,
+} from "@/lib/services/mobile-push-token-service"
 
-type PushTokenBody = { expoPushToken?: string; deviceId?: string; platform?: string }
+type PushTokenBody = {
+  expoPushToken?: string
+  deviceId?: string
+  platform?: string
+  followingEnabled?: boolean
+}
 
 async function readBody(request: Request): Promise<PushTokenBody> {
   try {
@@ -12,10 +22,34 @@ async function readBody(request: Request): Promise<PushTokenBody> {
   }
 }
 
+export const GET = withMobileAuth(async (request, ctx) => {
+  requireCompetitiveInsights(ctx)
+  try {
+    const deviceId = new URL(request.url).searchParams.get("deviceId") || undefined
+    return mobileJson({ data: await getFollowingPushPreference(ctx.userId, deviceId) })
+  } catch (error) {
+    if (error instanceof MobileAuthError) return mobileError(error.status, error.code, error.message)
+    throw error
+  }
+})
+
 export const POST = withMobileAuth(async (request, ctx) => {
-  requireMobileAlerts(ctx)
+  requireCompetitiveInsights(ctx)
   try {
     return mobileJson({ data: await registerMobilePushToken(ctx.userId, await readBody(request)) })
+  } catch (error) {
+    if (error instanceof MobileAuthError) return mobileError(error.status, error.code, error.message)
+    throw error
+  }
+})
+
+export const PATCH = withMobileAuth(async (request, ctx) => {
+  requireCompetitiveInsights(ctx)
+  try {
+    const { deviceId, followingEnabled } = await readBody(request)
+    return mobileJson({
+      data: await setFollowingPushPreference(ctx.userId, deviceId, followingEnabled),
+    })
   } catch (error) {
     if (error instanceof MobileAuthError) return mobileError(error.status, error.code, error.message)
     throw error

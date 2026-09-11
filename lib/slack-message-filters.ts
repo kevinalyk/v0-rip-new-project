@@ -13,7 +13,7 @@
 export const MESSAGE_TYPE_FILTER_VALUES = ["all", "email", "sms"] as const
 export const HOUSE_FILE_FILTER_VALUES = ["all", "house_file", "third_party"] as const
 export const PARTY_FILTER_VALUES = ["all", "republican", "democrat", "third party"] as const
-export const ENTITY_TYPE_FILTER_VALUES = ["all", "politician", "pac", "organization"] as const
+export const ENTITY_TYPE_FILTER_VALUES = ["all", "politician", "pac", "organization", "nonprofit", "state_party"] as const
 
 export const US_STATES = [
   "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",

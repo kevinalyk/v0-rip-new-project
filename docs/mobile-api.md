@@ -582,4 +582,3 @@ suites plus the preflight-guard unit suite now complete and exit within ~11 seco
 combined (measured with `time pnpm run test:mobile`), versus what would otherwise be
 at least ~15 seconds of pure timer overhead alone (5s × 3 DB-backed invocations) on
 top of actual test time.
->>>>>>> 99f70b3 (Add dvh fallback to login page/loading shell, update mobile-api.md verification log)

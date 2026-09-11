@@ -446,7 +446,7 @@ function EntityCard({ entity }: { entity: Entity }) {
   )
 }
 
-// ─── Results section ──���──────────────────────────��─────��������────────────────────────
+// ─── Results section ──────────────────────────────────────────────────────
 
 function SearchResults({
   query,

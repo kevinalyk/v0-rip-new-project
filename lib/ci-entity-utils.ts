@@ -1399,21 +1399,20 @@ export async function addEntityMapping(entityId: string, emailOrDomain: string) 
   const isPhone = /^\d+$/.test(normalized)
   const isEmail = !isPhone && normalized.includes("@")
   const isUrl = !isPhone && !isEmail && normalized.includes("://")
-  
+
   // For URLs, keep hostname + path (not just the hostname) — shared fundraising
   // platforms like donorbox.org host thousands of unrelated campaign pages
   // under one hostname, so "donorbox.org/children-of-the-usa" must stay
   // distinct from "donorbox.org/some-other-cause" rather than both
   // collapsing down to "donorbox.org".
   const ctaDomainValue = isUrl ? extractCtaDomainKey(normalized) : null
-  const isCta = isUrl || (!isPhone && !isEmail && !normalized.includes("@"))
-  
+
   // For plain domains entered without a protocol treat as ctaDomain if they
   // look like a domain (contain a dot and no @) — only if not a senderDomain.
   // We still support senderDomain for backward compat (no protocol, no @, has dot).
   // Decision: if the user enters something like "fundconservatives.org" (no @, no ://)
   // we store it as senderDomain (existing behavior). Only URLs trigger ctaDomain.
-  
+
   // A bare shared-ESP domain (substack.com, mailchimp.com, etc.) is never a valid
   // sender-domain mapping — that domain is shared by thousands of unrelated senders,
   // so mapping it here would silently route every one of them to this entity. Reject
@@ -1429,7 +1428,7 @@ export async function addEntityMapping(entityId: string, emailOrDomain: string) 
   // email, never the domain.
   const emailDomain = isEmail ? normalized.split("@")[1] : null
   const emailOnSharedEsp = isEmail && isSharedEspDomain(emailDomain)
-  
+
   const whereClause = isPhone
   ? [{ senderPhone: normalized }]
   : isEmail
@@ -1437,16 +1436,16 @@ export async function addEntityMapping(entityId: string, emailOrDomain: string) 
   : isUrl
   ? [{ ctaDomain: ctaDomainValue }]
   : [{ senderDomain: normalized }]
-  
+
   // Check if mapping already exists
   const existingMapping = await prisma.ciEntityMapping.findFirst({
   where: { entityId, OR: whereClause },
   })
-  
+
   if (existingMapping) {
   return { success: false, error: "Mapping already exists" }
   }
-  
+
   // Create the mapping, routing to the correct column based on type
   const mapping = await prisma.ciEntityMapping.create({
   data: {
@@ -1460,7 +1459,7 @@ export async function addEntityMapping(entityId: string, emailOrDomain: string) 
   : { senderDomain: normalized }),
   },
   })
-  
+
   return { success: true, mapping }
   } catch (error: any) {
     console.error("Error adding mapping:", error)

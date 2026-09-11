@@ -147,6 +147,36 @@ Respond ONLY with the JSON object, no other text.`,
   }
 }
 
+// Domains operated by a shared/multi-tenant email service provider (ESP) — one domain,
+// thousands of unrelated senders. A `senderDomain` mapping on one of these silently
+// routes EVERY sender on that platform to whichever entity happened to get mapped
+// first (e.g. jimskovgard@substack.com → senderDomain "substack.com" → every other
+// Substack author's newsletter, including Kirsten Gillibrand's, got misassigned to
+// Jimmy Skovgard). Domain-level mappings on these hosts are never valid — only an
+// exact `senderEmail` match (or, for Substack, the donationIdentifiers.substack
+// handle) can safely identify a specific sender on a shared platform.
+export const SHARED_ESP_DOMAINS = new Set([
+  "substack.com",
+  "mailchimp.com",
+  "mailchimpapp.net",
+  "sendgrid.net",
+  "constantcontact.com",
+  "hubspotemail.net",
+  "mailgun.org",
+  "amazonses.com",
+  "sparkpostmail.com",
+  "actionnetwork.org",
+  "salsalabs.org",
+])
+
+/**
+ * True if `domain` is a shared ESP where a domain-level mapping would match many
+ * unrelated senders rather than one entity's own infrastructure.
+ */
+export function isSharedEspDomain(domain: string | null | undefined): boolean {
+  return !!domain && SHARED_ESP_DOMAINS.has(domain.toLowerCase())
+}
+
 /**
  * Find entity mapping for a given sender email
  * Checks donation identifiers first (most reliable), then exact email match, then domain match
@@ -168,8 +198,11 @@ export async function findEntityForSender(
     })
 
     const domain = senderEmail.split("@")[1]?.toLowerCase()
+    // Never trust a domain-level mapping on a shared ESP (substack.com, mailchimp.com,
+    // etc.) — that domain hosts many unrelated senders, so only an exact senderEmail
+    // match (checked above) is safe. See isSharedEspDomain for why this exists.
     const domainMapping =
-      !emailMapping && domain
+      !emailMapping && domain && !isSharedEspDomain(domain)
         ? await prisma.ciEntityMapping.findFirst({
             where: { senderDomain: domain },
             include: { entity: true },
@@ -1046,11 +1079,18 @@ export async function assignCampaignsToEntity(
       for (const campaign of campaigns) {
         const senderEmail = campaign.senderEmail.toLowerCase()
         const domain = senderEmail.split("@")[1]
+        // A shared ESP domain (substack.com, mailchimp.com, etc.) hosts thousands of
+        // unrelated senders — mapping the whole domain to this entity would silently
+        // reassign every other sender on that platform to it too (this is exactly how
+        // an unrelated Substack author's newsletter once got misassigned to a candidate
+        // who merely also happens to publish on Substack). Only the exact sender email
+        // is safe to map/match here.
+        const sharedEsp = isSharedEspDomain(domain)
 
         // Check if mapping already exists
         const existingMapping = await prisma.ciEntityMapping.findFirst({
           where: {
-            OR: [{ senderEmail }, { senderDomain: domain }],
+            OR: sharedEsp ? [{ senderEmail }] : [{ senderEmail }, { senderDomain: domain }],
           },
         })
 
@@ -1059,7 +1099,7 @@ export async function assignCampaignsToEntity(
             data: {
               entityId,
               senderEmail,
-              senderDomain: domain,
+              senderDomain: sharedEsp ? null : domain,
             },
           })
           // New mapping just changed the classification rules — drop the stale cache
@@ -1069,10 +1109,12 @@ export async function assignCampaignsToEntity(
 
         const matchingWhere = {
           entityId: null, // Only update unassigned campaigns
-          OR: [
-            { senderEmail: senderEmail },
-            { senderEmail: { endsWith: `@${domain}` } }, // Match all emails from this domain
-          ],
+          OR: sharedEsp
+            ? [{ senderEmail: senderEmail }]
+            : [
+                { senderEmail: senderEmail },
+                { senderEmail: { endsWith: `@${domain}` } }, // Match all emails from this domain
+              ],
         }
 
         const additionalCampaigns = await prisma.competitiveInsightCampaign.findMany({
@@ -1315,52 +1357,68 @@ export async function addEntityMapping(entityId: string, emailOrDomain: string) 
     //   email  = contains "@"
     //   url    = contains "://" → extract root domain → ctaDomain
     //   domain = everything else (e.g., "fundconservatives.org")
-    const isPhone = /^\d+$/.test(normalized)
-    const isEmail = !isPhone && normalized.includes("@")
-    const isUrl = !isPhone && !isEmail && normalized.includes("://")
-
-    // For URLs, extract the root domain
-    const ctaDomainValue = isUrl ? extractRootDomain(normalized) : null
-    const isCta = isUrl || (!isPhone && !isEmail && !normalized.includes("@"))
-
-    // For plain domains entered without a protocol treat as ctaDomain if they
-    // look like a domain (contain a dot and no @) — only if not a senderDomain.
-    // We still support senderDomain for backward compat (no protocol, no @, has dot).
-    // Decision: if the user enters something like "fundconservatives.org" (no @, no ://)
-    // we store it as senderDomain (existing behavior). Only URLs trigger ctaDomain.
-
-    const whereClause = isPhone
-      ? [{ senderPhone: normalized }]
-      : isEmail
-      ? [{ senderEmail: normalized }]
-      : isUrl
-      ? [{ ctaDomain: ctaDomainValue }]
-      : [{ senderDomain: normalized }]
-
-    // Check if mapping already exists
-    const existingMapping = await prisma.ciEntityMapping.findFirst({
-      where: { entityId, OR: whereClause },
-    })
-
-    if (existingMapping) {
-      return { success: false, error: "Mapping already exists" }
+  const isPhone = /^\d+$/.test(normalized)
+  const isEmail = !isPhone && normalized.includes("@")
+  const isUrl = !isPhone && !isEmail && normalized.includes("://")
+  
+  // For URLs, extract the root domain
+  const ctaDomainValue = isUrl ? extractRootDomain(normalized) : null
+  const isCta = isUrl || (!isPhone && !isEmail && !normalized.includes("@"))
+  
+  // For plain domains entered without a protocol treat as ctaDomain if they
+  // look like a domain (contain a dot and no @) — only if not a senderDomain.
+  // We still support senderDomain for backward compat (no protocol, no @, has dot).
+  // Decision: if the user enters something like "fundconservatives.org" (no @, no ://)
+  // we store it as senderDomain (existing behavior). Only URLs trigger ctaDomain.
+  
+  // A bare shared-ESP domain (substack.com, mailchimp.com, etc.) is never a valid
+  // sender-domain mapping — that domain is shared by thousands of unrelated senders,
+  // so mapping it here would silently route every one of them to this entity. Reject
+  // outright rather than let it through: use the full sender email instead, or for
+  // Substack the donationIdentifiers.substack handle.
+  if (!isPhone && !isEmail && !isUrl && isSharedEspDomain(normalized)) {
+    return {
+      success: false,
+      error: `"${normalized}" is a shared email platform used by many unrelated senders — mapping the whole domain would misassign everyone else on it. Use the specific full sender email address instead${normalized === "substack.com" ? ", or set the entity's Substack handle in donation identifiers" : ""}.`,
     }
-
-    // Create the mapping, routing to the correct column based on type
-    const mapping = await prisma.ciEntityMapping.create({
-      data: {
-        entityId,
-        ...(isPhone
-          ? { senderPhone: normalized }
-          : isEmail
-          ? { senderEmail: normalized, senderDomain: normalized.split("@")[1] }
-          : isUrl
-          ? { ctaDomain: ctaDomainValue }
-          : { senderDomain: normalized }),
-      },
-    })
-
-    return { success: true, mapping }
+  }
+  // Same rule for a full email address on a shared ESP domain: map only the exact
+  // email, never the domain.
+  const emailDomain = isEmail ? normalized.split("@")[1] : null
+  const emailOnSharedEsp = isEmail && isSharedEspDomain(emailDomain)
+  
+  const whereClause = isPhone
+  ? [{ senderPhone: normalized }]
+  : isEmail
+  ? [{ senderEmail: normalized }]
+  : isUrl
+  ? [{ ctaDomain: ctaDomainValue }]
+  : [{ senderDomain: normalized }]
+  
+  // Check if mapping already exists
+  const existingMapping = await prisma.ciEntityMapping.findFirst({
+  where: { entityId, OR: whereClause },
+  })
+  
+  if (existingMapping) {
+  return { success: false, error: "Mapping already exists" }
+  }
+  
+  // Create the mapping, routing to the correct column based on type
+  const mapping = await prisma.ciEntityMapping.create({
+  data: {
+  entityId,
+  ...(isPhone
+  ? { senderPhone: normalized }
+  : isEmail
+  ? { senderEmail: normalized, senderDomain: emailOnSharedEsp ? null : emailDomain }
+  : isUrl
+  ? { ctaDomain: ctaDomainValue }
+  : { senderDomain: normalized }),
+  },
+  })
+  
+  return { success: true, mapping }
   } catch (error: any) {
     console.error("Error adding mapping:", error)
     return { success: false, error: error.message }

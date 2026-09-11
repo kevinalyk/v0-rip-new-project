@@ -19,6 +19,7 @@ export const MOBILE_DIRECTORY_ENTITY_TYPES = [
   { value: "organization", label: "Organizations" },
   { value: "nonprofit", label: "Nonprofits" },
   { value: "jfc", label: "JFCs" },
+  { value: "state_party", label: "State Parties" },
 ] as const
 
 export interface DirectoryFilters {

@@ -3,7 +3,7 @@ import test from "node:test"
 
 import { parseMobileFeedFilters } from "@/app/api/mobile/v1/feed/route"
 import { MobileAuthError } from "@/lib/mobile-auth"
-import { normalizeMobileCtaLinks } from "@/lib/services/feed-service"
+import { MOBILE_ENTITY_TYPES, normalizeMobileCtaLinks } from "@/lib/services/feed-service"
 
 function expectInvalid(params: URLSearchParams) {
   assert.throws(
@@ -60,6 +60,16 @@ test("rejects more than 100 selected entities", () => {
   const params = new URLSearchParams()
   for (let index = 0; index < 101; index++) params.append("entityId", `entity-${index}`)
   expectInvalid(params)
+})
+
+test("exposes nonprofit and state-party feed filters", () => {
+  assert.deepEqual(
+    MOBILE_ENTITY_TYPES.slice(-2),
+    [
+      { value: "nonprofit", label: "Nonprofits" },
+      { value: "state_party", label: "State Parties" },
+    ],
+  )
 })
 
 test("normalizes direct and JSON-string CTA arrays without throwing on malformed data", () => {

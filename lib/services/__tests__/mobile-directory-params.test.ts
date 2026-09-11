@@ -26,6 +26,15 @@ test("accepts unknown party and state filters", () => {
   })
 })
 
+for (const entityType of ["nonprofit", "state_party"]) {
+  test(`accepts the ${entityType} Directory entity type`, () => {
+    assert.equal(
+      parseDirectoryFilters(new URLSearchParams({ entityType })).entityType,
+      entityType,
+    )
+  })
+}
+
 for (const query of [
   "party=libertarian",
   "state=XX",

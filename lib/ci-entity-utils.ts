@@ -188,11 +188,12 @@ export async function findEntityForSender(
   ctaLinks?: any,
   emailSubject?: string,
   emailBody?: string,
+  db: Pick<PrismaClient, "ciEntityMapping" | "ciEntity"> = prisma,
 ): Promise<EntityAssignment> {
   try {
     const normalizedEmail = senderEmail.toLowerCase()
 
-    const emailMapping = await prisma.ciEntityMapping.findFirst({
+    const emailMapping = await db.ciEntityMapping.findFirst({
       where: { senderEmail: normalizedEmail },
       include: { entity: true },
     })
@@ -203,7 +204,7 @@ export async function findEntityForSender(
     // match (checked above) is safe. See isSharedEspDomain for why this exists.
     const domainMapping =
       !emailMapping && domain && !isSharedEspDomain(domain)
-        ? await prisma.ciEntityMapping.findFirst({
+        ? await db.ciEntityMapping.findFirst({
             where: { senderDomain: domain },
             include: { entity: true },
           })
@@ -218,7 +219,7 @@ export async function findEntityForSender(
     if (!mapping && domain === "substack.com") {
       const localPart = senderEmail.split("@")[0].toLowerCase()
 
-      const allEntities = await prisma.ciEntity.findMany({
+      const allEntities = await db.ciEntity.findMany({
         where: { donationIdentifiers: { not: null } },
         select: { id: true, name: true, donationIdentifiers: true },
       })
@@ -350,36 +351,74 @@ export function extractCtaDomainKey(url: string): string | null {
   }
 }
 
+// Hostnames operated by a shared/multi-tenant CTA hosting platform — one hostname,
+// thousands of unrelated campaign pages. A *bare-hostname* mapping on one of these
+// (e.g. "donorbox.org" with no path) would silently match every campaign hosted on
+// the platform, not just the one it was created for — the same class of bug as
+// SHARED_ESP_DOMAINS above, but for CTA links instead of sender emails. An exact
+// hostname+path mapping (e.g. "donorbox.org/children-of-the-usa") is still specific
+// to one campaign and stays valid; only the *hostname-only fallback* is disabled for
+// these hosts. A candidate's own domain (e.g. "support.johnkennedy.com") is not on
+// this list, so legacy hostname-only mappings created before path support keep
+// matching every page on it.
+export const SHARED_CTA_PLATFORM_HOSTNAMES = new Set([
+  "donorbox.org",
+  "gofundme.com",
+  "classy.org",
+  "fundly.com",
+  "givebutter.com",
+  "networkforgood.com",
+  "mightycause.com",
+])
+
 /**
- * Find entity by matching CTA links against ctaDomain mappings. Tries an
- * exact hostname+path match first (e.g. "donorbox.org/children-of-the-usa"),
- * then falls back to a bare-hostname mapping (e.g. "support.johnkennedy.com")
- * so hostname-only mappings created before path support keep working.
+ * True if `hostname` is a shared, multi-tenant CTA hosting platform where a
+ * bare-hostname mapping would match many unrelated campaigns rather than one.
  */
-export async function findEntityByCtaDomain(ctaLinks: any): Promise<EntityAssignment> {
+export function isSharedCtaPlatformHostname(hostname: string | null | undefined): boolean {
+  return !!hostname && SHARED_CTA_PLATFORM_HOSTNAMES.has(hostname.toLowerCase())
+}
+
+/**
+ * Find entity by matching CTA links against ctaDomain mappings. Tries an exact
+ * hostname+path match first (e.g. "donorbox.org/children-of-the-usa") — this always
+ * runs, even for shared platforms, since it identifies one specific campaign. Only
+ * if no exact match is found does it fall back to a bare-hostname mapping (e.g.
+ * "support.johnkennedy.com"), and that fallback is skipped entirely for hostnames in
+ * SHARED_CTA_PLATFORM_HOSTNAMES so a legacy "donorbox.org" mapping can never match
+ * every campaign on the platform. The `db` param defaults to the module's shared
+ * Prisma client and exists so tests can inject a mock.
+ */
+export async function findEntityByCtaDomain(
+  ctaLinks: any,
+  db: Pick<PrismaClient, "ciEntityMapping"> = prisma,
+): Promise<EntityAssignment> {
   try {
     if (!ctaLinks) return null
 
     const links = Array.isArray(ctaLinks) ? ctaLinks : []
     if (links.length === 0) return null
 
-    // Collect unique hostname+path keys and bare hostnames from all CTA links
+    // Collect unique hostname+path keys from all CTA links, and separately the bare
+    // hostnames that are safe to use as a fallback (i.e. not a shared CTA platform).
     const pathKeys = new Set<string>()
-    const hostnames = new Set<string>()
+    const safeHostnames = new Set<string>()
     for (const link of links) {
       const url = typeof link === "string" ? link : link.finalUrl || link.url
       if (!url) continue
       const key = extractCtaDomainKey(url)
       if (key) pathKeys.add(key)
       const hostname = extractRootDomain(url)
-      if (hostname) hostnames.add(hostname)
+      if (hostname && !isSharedCtaPlatformHostname(hostname)) safeHostnames.add(hostname)
     }
 
-    if (pathKeys.size === 0 && hostnames.size === 0) return null
+    if (pathKeys.size === 0 && safeHostnames.size === 0) return null
 
-    // Prefer an exact hostname+path match over a bare-hostname mapping
+    // Prefer an exact hostname+path match over a bare-hostname mapping. Runs for
+    // every link, including shared platforms — an exact
+    // "donorbox.org/children-of-the-usa" mapping only ever identifies one campaign.
     const exactMapping = pathKeys.size
-      ? await prisma.ciEntityMapping.findFirst({
+      ? await db.ciEntityMapping.findFirst({
           where: { ctaDomain: { in: Array.from(pathKeys) } },
           select: { entityId: true },
         })
@@ -389,9 +428,12 @@ export async function findEntityByCtaDomain(ctaLinks: any): Promise<EntityAssign
       return { entityId: exactMapping.entityId, assignmentMethod: "auto_cta_domain" }
     }
 
-    const hostnameMapping = hostnames.size
-      ? await prisma.ciEntityMapping.findFirst({
-          where: { ctaDomain: { in: Array.from(hostnames) } },
+    // Bare-hostname fallback, restricted to hostnames that are NOT shared CTA
+    // platforms — a legacy "donorbox.org" mapping must never match every campaign
+    // hosted on the platform, only a candidate's own hostname-only mapping.
+    const hostnameMapping = safeHostnames.size
+      ? await db.ciEntityMapping.findFirst({
+          where: { ctaDomain: { in: Array.from(safeHostnames) } },
           select: { entityId: true },
         })
       : null
@@ -1387,7 +1429,11 @@ export async function getEntityMappings(entityId: string) {
 /**
  * Add a new mapping to an entity
  */
-export async function addEntityMapping(entityId: string, emailOrDomain: string) {
+export async function addEntityMapping(
+  entityId: string,
+  emailOrDomain: string,
+  db: Pick<PrismaClient, "ciEntityMapping"> = prisma,
+) {
   try {
     const normalized = emailOrDomain.toLowerCase().trim()
 
@@ -1396,71 +1442,71 @@ export async function addEntityMapping(entityId: string, emailOrDomain: string) 
     //   email  = contains "@"
     //   url    = contains "://" → extract root domain → ctaDomain
     //   domain = everything else (e.g., "fundconservatives.org")
-  const isPhone = /^\d+$/.test(normalized)
-  const isEmail = !isPhone && normalized.includes("@")
-  const isUrl = !isPhone && !isEmail && normalized.includes("://")
+    const isPhone = /^\d+$/.test(normalized)
+    const isEmail = !isPhone && normalized.includes("@")
+    const isUrl = !isPhone && !isEmail && normalized.includes("://")
 
-  // For URLs, keep hostname + path (not just the hostname) — shared fundraising
-  // platforms like donorbox.org host thousands of unrelated campaign pages
-  // under one hostname, so "donorbox.org/children-of-the-usa" must stay
-  // distinct from "donorbox.org/some-other-cause" rather than both
-  // collapsing down to "donorbox.org".
-  const ctaDomainValue = isUrl ? extractCtaDomainKey(normalized) : null
+    // For URLs, keep hostname + path (not just the hostname) — shared fundraising
+    // platforms like donorbox.org host thousands of unrelated campaign pages
+    // under one hostname, so "donorbox.org/children-of-the-usa" must stay
+    // distinct from "donorbox.org/some-other-cause" rather than both
+    // collapsing down to "donorbox.org".
+    const ctaDomainValue = isUrl ? extractCtaDomainKey(normalized) : null
 
-  // For plain domains entered without a protocol treat as ctaDomain if they
-  // look like a domain (contain a dot and no @) — only if not a senderDomain.
-  // We still support senderDomain for backward compat (no protocol, no @, has dot).
-  // Decision: if the user enters something like "fundconservatives.org" (no @, no ://)
-  // we store it as senderDomain (existing behavior). Only URLs trigger ctaDomain.
+    // For plain domains entered without a protocol treat as ctaDomain if they
+    // look like a domain (contain a dot and no @) — only if not a senderDomain.
+    // We still support senderDomain for backward compat (no protocol, no @, has dot).
+    // Decision: if the user enters something like "fundconservatives.org" (no @, no ://)
+    // we store it as senderDomain (existing behavior). Only URLs trigger ctaDomain.
 
-  // A bare shared-ESP domain (substack.com, mailchimp.com, etc.) is never a valid
-  // sender-domain mapping — that domain is shared by thousands of unrelated senders,
-  // so mapping it here would silently route every one of them to this entity. Reject
-  // outright rather than let it through: use the full sender email instead, or for
-  // Substack the donationIdentifiers.substack handle.
-  if (!isPhone && !isEmail && !isUrl && isSharedEspDomain(normalized)) {
-    return {
-      success: false,
-      error: `"${normalized}" is a shared email platform used by many unrelated senders — mapping the whole domain would misassign everyone else on it. Use the specific full sender email address instead${normalized === "substack.com" ? ", or set the entity's Substack handle in donation identifiers" : ""}.`,
+    // A bare shared-ESP domain (substack.com, mailchimp.com, etc.) is never a valid
+    // sender-domain mapping — that domain is shared by thousands of unrelated senders,
+    // so mapping it here would silently route every one of them to this entity. Reject
+    // outright rather than let it through: use the full sender email instead, or for
+    // Substack the donationIdentifiers.substack handle.
+    if (!isPhone && !isEmail && !isUrl && isSharedEspDomain(normalized)) {
+      return {
+        success: false,
+        error: `"${normalized}" is a shared email platform used by many unrelated senders — mapping the whole domain would misassign everyone else on it. Use the specific full sender email address instead${normalized === "substack.com" ? ", or set the entity's Substack handle in donation identifiers" : ""}.`,
+      }
     }
-  }
-  // Same rule for a full email address on a shared ESP domain: map only the exact
-  // email, never the domain.
-  const emailDomain = isEmail ? normalized.split("@")[1] : null
-  const emailOnSharedEsp = isEmail && isSharedEspDomain(emailDomain)
+    // Same rule for a full email address on a shared ESP domain: map only the exact
+    // email, never the domain.
+    const emailDomain = isEmail ? normalized.split("@")[1] : null
+    const emailOnSharedEsp = isEmail && isSharedEspDomain(emailDomain)
 
-  const whereClause = isPhone
-  ? [{ senderPhone: normalized }]
-  : isEmail
-  ? [{ senderEmail: normalized }]
-  : isUrl
-  ? [{ ctaDomain: ctaDomainValue }]
-  : [{ senderDomain: normalized }]
+    const whereClause = isPhone
+      ? [{ senderPhone: normalized }]
+      : isEmail
+        ? [{ senderEmail: normalized }]
+        : isUrl
+          ? [{ ctaDomain: ctaDomainValue }]
+          : [{ senderDomain: normalized }]
 
-  // Check if mapping already exists
-  const existingMapping = await prisma.ciEntityMapping.findFirst({
-  where: { entityId, OR: whereClause },
-  })
+    // Check if mapping already exists
+    const existingMapping = await db.ciEntityMapping.findFirst({
+      where: { entityId, OR: whereClause },
+    })
 
-  if (existingMapping) {
-  return { success: false, error: "Mapping already exists" }
-  }
+    if (existingMapping) {
+      return { success: false, error: "Mapping already exists" }
+    }
 
-  // Create the mapping, routing to the correct column based on type
-  const mapping = await prisma.ciEntityMapping.create({
-  data: {
-  entityId,
-  ...(isPhone
-  ? { senderPhone: normalized }
-  : isEmail
-  ? { senderEmail: normalized, senderDomain: emailOnSharedEsp ? null : emailDomain }
-  : isUrl
-  ? { ctaDomain: ctaDomainValue }
-  : { senderDomain: normalized }),
-  },
-  })
+    // Create the mapping, routing to the correct column based on type
+    const mapping = await db.ciEntityMapping.create({
+      data: {
+        entityId,
+        ...(isPhone
+          ? { senderPhone: normalized }
+          : isEmail
+            ? { senderEmail: normalized, senderDomain: emailOnSharedEsp ? null : emailDomain }
+            : isUrl
+              ? { ctaDomain: ctaDomainValue }
+              : { senderDomain: normalized }),
+      },
+    })
 
-  return { success: true, mapping }
+    return { success: true, mapping }
   } catch (error: any) {
     console.error("Error adding mapping:", error)
     return { success: false, error: error.message }

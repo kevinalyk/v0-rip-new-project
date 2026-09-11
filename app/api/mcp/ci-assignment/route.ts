@@ -245,10 +245,10 @@ const handler = createMcpHandler(
       {
         title: "Create Entity",
         description:
-          'Creates a new CiEntity (politician, PAC, organization, or nonprofit/foundation) when no existing entity matches an unassigned message. Use "nonprofit" for 501(c) foundations and nonprofit advocacy groups (e.g. a legal foundation or a political action coalition\'s foundation arm) rather than forcing them into "organization". Requires a "reasoning" string. Triggers an immediate admin email alert for review since a wrong new entity is the highest-risk mistake on this surface.',
+          'Creates a new CiEntity (politician, PAC, organization, nonprofit/foundation, or state party committee) when no existing entity matches an unassigned message. Use "nonprofit" for 501(c) foundations and nonprofit advocacy groups (e.g. a legal foundation or a political action coalition\'s foundation arm) rather than forcing them into "organization". Use "state_party" for state-level party committees (e.g. the Maine Democratic Party) rather than forcing them into "organization" or "pac". Requires a "reasoning" string. Triggers an immediate admin email alert for review since a wrong new entity is the highest-risk mistake on this surface.',
         inputSchema: {
           name: z.string().min(1),
-          type: z.enum(["politician", "pac", "organization", "nonprofit"]),
+          type: z.enum(["politician", "pac", "organization", "nonprofit", "state_party"]),
           description: z.string().optional(),
           party: z.enum(["republican", "democrat", "independent"]).optional(),
           state: z.string().optional().describe('State abbreviation (e.g. "CA") or "Nationwide"'),

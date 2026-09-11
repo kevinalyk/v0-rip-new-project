@@ -161,6 +161,7 @@ export default function MessageTypesPage() {
                 <SelectItem value="pac">PACs</SelectItem>
                 <SelectItem value="organization">Organizations</SelectItem>
                 <SelectItem value="nonprofit">Nonprofits</SelectItem>
+                <SelectItem value="state_party">State Parties</SelectItem>
               </SelectContent>
             </Select>
 

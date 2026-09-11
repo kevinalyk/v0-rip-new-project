@@ -389,6 +389,8 @@ function EntityCard({ entity }: { entity: Entity }) {
       ? "Organization"
       : entity.type === "nonprofit"
       ? "Nonprofit"
+      : entity.type === "state_party"
+      ? "State Party"
       : entity.type
 
   return (

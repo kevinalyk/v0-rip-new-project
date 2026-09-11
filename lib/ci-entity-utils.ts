@@ -329,7 +329,32 @@ export function extractRootDomain(url: string): string | null {
 }
 
 /**
- * Find entity by matching exact hostnames from CTA links against ctaDomain mappings.
+ * Extract a CTA matching key that includes the path, not just the hostname.
+ * Many fundraising platforms (Donorbox, GoFundMe, etc.) host thousands of
+ * unrelated campaigns on one shared hostname, so "donorbox.org" alone is
+ * useless/dangerous as a mapping — https://donorbox.org/children-of-the-usa
+ * and https://donorbox.org/some-other-cause are entirely different entities.
+ * We keep hostname + pathname (no query/fragment, no trailing slash) so a
+ * mapping like "donorbox.org/children-of-the-usa" only ever matches that
+ * specific campaign page, while a mapping on a candidate's own domain
+ * (e.g. "support.johnkennedy.com", no path) still matches every page on it.
+ */
+export function extractCtaDomainKey(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    const hostname = parsed.hostname.toLowerCase()
+    const path = parsed.pathname.replace(/\/+$/, "")
+    return path ? `${hostname}${path.toLowerCase()}` : hostname
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Find entity by matching CTA links against ctaDomain mappings. Tries an
+ * exact hostname+path match first (e.g. "donorbox.org/children-of-the-usa"),
+ * then falls back to a bare-hostname mapping (e.g. "support.johnkennedy.com")
+ * so hostname-only mappings created before path support keep working.
  */
 export async function findEntityByCtaDomain(ctaLinks: any): Promise<EntityAssignment> {
   try {
@@ -338,27 +363,41 @@ export async function findEntityByCtaDomain(ctaLinks: any): Promise<EntityAssign
     const links = Array.isArray(ctaLinks) ? ctaLinks : []
     if (links.length === 0) return null
 
-    // Collect unique root domains from all CTA links
-    const rootDomains = new Set<string>()
+    // Collect unique hostname+path keys and bare hostnames from all CTA links
+    const pathKeys = new Set<string>()
+    const hostnames = new Set<string>()
     for (const link of links) {
       const url = typeof link === "string" ? link : link.finalUrl || link.url
       if (!url) continue
-      const root = extractRootDomain(url)
-      if (root) rootDomains.add(root)
+      const key = extractCtaDomainKey(url)
+      if (key) pathKeys.add(key)
+      const hostname = extractRootDomain(url)
+      if (hostname) hostnames.add(hostname)
     }
 
-    if (rootDomains.size === 0) return null
+    if (pathKeys.size === 0 && hostnames.size === 0) return null
 
-    // Query for any matching ctaDomain mapping
-    const mapping = await prisma.ciEntityMapping.findFirst({
-      where: {
-        ctaDomain: { in: Array.from(rootDomains) },
-      },
-      select: { entityId: true },
-    })
+    // Prefer an exact hostname+path match over a bare-hostname mapping
+    const exactMapping = pathKeys.size
+      ? await prisma.ciEntityMapping.findFirst({
+          where: { ctaDomain: { in: Array.from(pathKeys) } },
+          select: { entityId: true },
+        })
+      : null
 
-    if (mapping) {
-      return { entityId: mapping.entityId, assignmentMethod: "auto_cta_domain" }
+    if (exactMapping) {
+      return { entityId: exactMapping.entityId, assignmentMethod: "auto_cta_domain" }
+    }
+
+    const hostnameMapping = hostnames.size
+      ? await prisma.ciEntityMapping.findFirst({
+          where: { ctaDomain: { in: Array.from(hostnames) } },
+          select: { entityId: true },
+        })
+      : null
+
+    if (hostnameMapping) {
+      return { entityId: hostnameMapping.entityId, assignmentMethod: "auto_cta_domain" }
     }
 
     return null
@@ -1361,8 +1400,12 @@ export async function addEntityMapping(entityId: string, emailOrDomain: string) 
   const isEmail = !isPhone && normalized.includes("@")
   const isUrl = !isPhone && !isEmail && normalized.includes("://")
   
-  // For URLs, extract the root domain
-  const ctaDomainValue = isUrl ? extractRootDomain(normalized) : null
+  // For URLs, keep hostname + path (not just the hostname) — shared fundraising
+  // platforms like donorbox.org host thousands of unrelated campaign pages
+  // under one hostname, so "donorbox.org/children-of-the-usa" must stay
+  // distinct from "donorbox.org/some-other-cause" rather than both
+  // collapsing down to "donorbox.org".
+  const ctaDomainValue = isUrl ? extractCtaDomainKey(normalized) : null
   const isCta = isUrl || (!isPhone && !isEmail && !normalized.includes("@"))
   
   // For plain domains entered without a protocol treat as ctaDomain if they

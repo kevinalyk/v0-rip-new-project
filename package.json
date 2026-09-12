@@ -18,11 +18,12 @@
     "test:mobile-feed-params": "tsx --test lib/services/__tests__/mobile-feed-params.test.ts",
     "test:mobile-directory-params": "tsx --test lib/services/__tests__/mobile-directory-params.test.ts",
     "test:mobile-announcements": "tsx --test lib/services/__tests__/mobile-announcements.test.ts",
+    "test:mobile-saved-views": "tsx --test lib/services/__tests__/mobile-saved-views.test.ts",
     "test:mobile-auth": "tsx --env-file-if-exists=.env.development.local lib/services/__tests__/mobile-auth.test.ts",
     "test:mobile-feed": "tsx --env-file-if-exists=.env.development.local lib/services/__tests__/mobile-feed.test.ts",
     "test:mobile-entities": "tsx --env-file-if-exists=.env.development.local lib/services/__tests__/mobile-entities.test.ts",
     "test:mobile-routes-auth": "tsx lib/services/__tests__/mobile-routes-auth.test.ts",
-    "test:mobile": "pnpm run test:mobile-routes-auth && pnpm run test:mobile-db-preflight && pnpm run test:mobile-entitlements && pnpm run test:mobile-alerts && pnpm run test:mobile-feed-params && pnpm run test:mobile-directory-params && pnpm run test:mobile-announcements && pnpm run test:mobile-auth && pnpm run test:mobile-feed && pnpm run test:mobile-entities"
+    "test:mobile": "pnpm run test:mobile-routes-auth && pnpm run test:mobile-db-preflight && pnpm run test:mobile-entitlements && pnpm run test:mobile-alerts && pnpm run test:mobile-feed-params && pnpm run test:mobile-directory-params && pnpm run test:mobile-announcements && pnpm run test:mobile-saved-views && pnpm run test:mobile-auth && pnpm run test:mobile-feed && pnpm run test:mobile-entities"
   },
   "dependencies": {
     "@ai-sdk/openai": "3.0.26",

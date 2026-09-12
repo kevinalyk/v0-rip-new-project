@@ -266,6 +266,16 @@ Starter accounts receive `403 FEED_FILTERS_NOT_AVAILABLE`; native clients should
 the entitlements returned by `/auth/me` and avoid requesting this endpoint when the
 capability is false.
 
+### `GET /api/mobile/v1/feed/views` (bearer)
+Returns the caller's organization-wide saved CI views newest first as
+`{ data: { id, name, filters, createdAt, updatedAt }[] }`. The service translates
+the web app's legacy saved-filter representation into current mobile feed query
+fields, including sender names mapped to entity IDs. Missing, stale, or malformed
+filter values fail closed by being omitted. Saved views are client-scoped and, like
+the feed's search and filter controls, require a paid plan; Starter accounts receive
+`403 FEED_FILTERS_NOT_AVAILABLE`. Creation, editing, and deletion remain available
+in the web app; the first mobile release lists and applies existing views.
+
 ### `GET /api/mobile/v1/feed/[id]?type=email|sms` (bearer)
 Single campaign/message detail: `{ data: FeedItem & { emailContent, emailPreview, ctaLinks } }`.
 The nested entity on feed list/detail items includes its `imageUrl` so native clients

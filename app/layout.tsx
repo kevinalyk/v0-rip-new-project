@@ -6,6 +6,7 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "sonner"
 import { DomainProvider } from "@/lib/domain-context"
+import { CookieConsentBanner } from "@/components/cookie-consent-banner"
 
 const hankenGrotesk = Hanken_Grotesk({
   subsets: ["latin"],
@@ -58,6 +59,7 @@ export default function RootLayout({
           <DomainProvider>
             {children}
             <Toaster />
+            <CookieConsentBanner />
           </DomainProvider>
         </ThemeProvider>
 

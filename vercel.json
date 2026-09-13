@@ -3,19 +3,19 @@
   "crons": [
     {
       "path": "/api/cron/detect-competitive-insights?providers=gmail",
-      "schedule": "*/30 * * * *"
+      "schedule": "*/10 * * * *"
     },
     {
       "path": "/api/cron/detect-competitive-insights?providers=yahoo",
-      "schedule": "*/30 * * * *"
+      "schedule": "*/10 * * * *"
     },
     {
       "path": "/api/cron/detect-competitive-insights?providers=outlook,hotmail,live",
-      "schedule": "*/30 * * * *"
+      "schedule": "*/10 * * * *"
     },
     {
       "path": "/api/cron/detect-competitive-insights?providers=aol",
-      "schedule": "*/30 * * * *"
+      "schedule": "*/10 * * * *"
     },
     {
       "path": "/api/cron/detect-campaigns",

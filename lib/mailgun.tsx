@@ -388,7 +388,7 @@ export async function sendWelcomeEmail(params: {
             </p>
             <p style="margin: 0 0 8px 0; font-size: 14px; color: #555; font-weight: 600;">Your free Starter plan gives you access to:</p>
             <ul style="margin: 0 0 20px 0; padding-left: 20px; font-size: 14px; color: #333; line-height: 1.8;">
-              <li>The last 3 hours of email and SMS campaigns across the database</li>
+              <li>The last 1 hour of email and SMS campaigns across the database</li>
               <li>Basic campaign details for each message</li>
             </ul>
             <p style="margin: 0 0 16px 0; font-size: 14px; color: #555;">

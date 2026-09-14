@@ -305,6 +305,13 @@ export default function SignupPage() {
               </p>
             </div>
 
+            <Alert>
+              <AlertDescription className="text-xs">
+                Without a trial code, your account starts on the Free plan, which shows a 1-hour window of feed data
+                delayed by 24 hours (not live). Redeem a trial code above or upgrade anytime for real-time data.
+              </AlertDescription>
+            </Alert>
+
             <div className="space-y-3 pt-2">
               <div className="flex items-start gap-2">
                 <Checkbox

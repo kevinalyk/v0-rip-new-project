@@ -49,9 +49,9 @@ export async function GET(request: NextRequest) {
 
     let dateFilter: any = undefined
     if (client.subscriptionPlan === "free") {
-      const oneDayAgo = new Date()
-      oneDayAgo.setHours(oneDayAgo.getHours() - 24)
-      dateFilter = { gte: oneDayAgo }
+      const oneHourAgo = new Date()
+      oneHourAgo.setHours(oneHourAgo.getHours() - 1)
+      dateFilter = { gte: oneHourAgo }
     } else if (client.subscriptionPlan === "paid") {
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)

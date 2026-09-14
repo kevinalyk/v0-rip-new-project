@@ -24,7 +24,7 @@ export interface ClientWithSubscription {
 
 export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
   free: {
-    ciHistoryDays: 0.125, // Last 3 hours only (3/24 = 0.125 days)
+    ciHistoryDays: 1 / 24, // Last 1 hour only (1/24 days)
     ciFollowLimit: 0, // Cannot follow
     canSearchCI: false, // Free tier cannot search the CI feed
     hasPersonalEmail: false,

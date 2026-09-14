@@ -2,7 +2,12 @@ import { Prisma } from "@prisma/client"
 import { nanoid } from "nanoid"
 
 import prisma from "@/lib/prisma"
-import { getCIHistoryDays, type SubscriptionPlan } from "@/lib/subscription-utils"
+import {
+  FREE_TIER_DELAY_HOURS,
+  FREE_TIER_WINDOW_HOURS,
+  getCIHistoryDays,
+  type SubscriptionPlan,
+} from "@/lib/subscription-utils";
 import { MobileAuthError } from "@/lib/mobile-auth"
 import { getEntityMappings } from "@/lib/ci-mapping-cache"
 import { getMobileClientEntitlements } from "@/lib/services/mobile-entitlements"
@@ -179,16 +184,52 @@ export function decodeCursor(raw: string | null | undefined): FeedCursor | null 
  * Computes the data-retention-aware date floor for a client: the more restrictive of
  * the plan's CI history window and the client's own dataRetentionDays.
  */
-export async function getMobileFeedDateFloor(clientId: string, plan: SubscriptionPlan): Promise<Date | null> {
-  const client = await prisma.client.findUnique({ where: { id: clientId }, select: { dataRetentionDays: true } })
+export interface MobileFeedDateBounds {
+  gte: Date | null
+  lte: Date | null
+}
+
+export function getMobileFeedPlanDateBounds(plan: SubscriptionPlan, now = new Date()): MobileFeedDateBounds {
+  if (plan === "free") {
+    const delayedEnd = new Date(now.getTime() - FREE_TIER_DELAY_HOURS * 60 * 60 * 1000)
+    return {
+      gte: new Date(delayedEnd.getTime() - FREE_TIER_WINDOW_HOURS * 60 * 60 * 1000),
+      lte: delayedEnd,
+    }
+  }
+
   const planDays = getCIHistoryDays(plan)
+  return {
+    gte: planDays === null ? null : new Date(now.getTime() - planDays * 24 * 60 * 60 * 1000),
+    lte: null,
+  }
+}
+
+/**
+ * Combines plan and client retention bounds. Free users receive an exact
+ * one-hour window from now - 25h through now - 24h; the upper bound is just
+ * as important as the lower bound because IDs, cursors, and caller dates must
+ * not expose newer records.
+ */
+export async function getMobileFeedDateBounds(
+  clientId: string,
+  plan: SubscriptionPlan,
+  now = new Date(),
+): Promise<MobileFeedDateBounds> {
+  const client = await prisma.client.findUnique({ where: { id: clientId }, select: { dataRetentionDays: true } })
   const retentionDays = client?.dataRetentionDays ?? null
+  const retentionFloor = retentionDays === null ? null : new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000)
 
-  const days = [planDays, retentionDays].filter((d): d is number => d !== null && d !== undefined)
-  if (days.length === 0) return null
+  const planBounds = getMobileFeedPlanDateBounds(plan, now)
+  const lowerBounds = [planBounds.gte, retentionFloor].filter((date): date is Date => date !== null)
+  return {
+    gte: lowerBounds.length ? new Date(Math.max(...lowerBounds.map((date) => date.getTime()))) : null,
+    lte: planBounds.lte,
+  }
+}
 
-  const minDays = Math.min(...days)
-  return new Date(Date.now() - minDays * 24 * 60 * 60 * 1000)
+export async function getMobileFeedDateFloor(clientId: string, plan: SubscriptionPlan): Promise<Date | null> {
+  return (await getMobileFeedDateBounds(clientId, plan)).gte
 }
 
 /**
@@ -257,12 +298,18 @@ async function resolveEntityIdRestriction(clientId: string, filters: FeedFilters
   return sets[0].filter((id) => sets.every((set) => set.includes(id)))
 }
 
-function getDateBounds(dateFloor: Date | null, filters: FeedFilters): { gte?: Date; lte?: Date } | null {
-  const lowerBounds = [dateFloor, filters.fromDate].filter((date): date is Date => Boolean(date))
+function getDateBounds(
+  dateBounds: MobileFeedDateBounds,
+  filters: FeedFilters,
+): { gte?: Date; lte?: Date } | null {
+  const lowerBounds = [dateBounds.gte, filters.fromDate].filter((date): date is Date => Boolean(date))
   const gte = lowerBounds.length
     ? new Date(Math.max(...lowerBounds.map((date) => date.getTime())))
     : undefined
-  const lte = filters.toDate
+  const upperBounds = [dateBounds.lte, filters.toDate].filter((date): date is Date => Boolean(date))
+  const lte = upperBounds.length
+    ? new Date(Math.min(...upperBounds.map((date) => date.getTime())))
+    : undefined
 
   if (!gte && !lte) return null
   return { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) }
@@ -457,12 +504,12 @@ export async function getFeedPage(
 ): Promise<{ items: FeedItem[]; nextCursor: string | null; hasMore: boolean }> {
   assertMobileFeedFiltersAllowed(plan, filters)
 
-  const [dateFloor, entityIdRestriction, ownershipFilters] = await Promise.all([
-    getMobileFeedDateFloor(clientId, plan),
+  const [dateBounds, entityIdRestriction, ownershipFilters] = await Promise.all([
+    getMobileFeedDateBounds(clientId, plan),
     resolveEntityIdRestriction(clientId, filters),
     resolveOwnershipWhere(filters),
   ])
-  const dateBounds = getDateBounds(dateFloor, filters)
+  const queryDateBounds = getDateBounds(dateBounds, filters)
 
   // A tag/subscriptionsOnly filter that resolves to zero entities means the feed is
   // empty by definition — short-circuit instead of running a query that Prisma would
@@ -531,7 +578,7 @@ export async function getFeedPage(
       { entityId: { not: null } },
       { entity: entityWhere },
       entityIdRestriction ? { entityId: { in: entityIdRestriction } } : {},
-      dateBounds ? { dateReceived: dateBounds } : {},
+      queryDateBounds ? { dateReceived: queryDateBounds } : {},
       ownershipFilters.email ?? {},
       emailPlatformFilter ?? {},
       emailCursorWhere ?? {},
@@ -548,7 +595,7 @@ export async function getFeedPage(
       { entityId: { not: null } },
       { entity: entityWhere },
       entityIdRestriction ? { entityId: { in: entityIdRestriction } } : {},
-      dateBounds ? { createdAt: dateBounds } : {},
+      queryDateBounds ? { createdAt: queryDateBounds } : {},
       ownershipFilters.sms ?? {},
       smsPlatformFilter ?? {},
       smsCursorWhere ?? {},
@@ -619,7 +666,7 @@ export async function getFeedItemById(
 ): Promise<
   (FeedItem & { emailContent?: string | null; emailPreview?: string | null; ctaLinks?: unknown[] }) | null
 > {
-  const dateFloor = await getMobileFeedDateFloor(clientId, plan)
+  const dateBounds = await getMobileFeedDateBounds(clientId, plan)
 
   if (type === "email") {
     const campaign = await prisma.competitiveInsightCampaign.findUnique({
@@ -627,7 +674,8 @@ export async function getFeedItemById(
       include: { entity: { select: mobileFeedEntitySelect } },
     })
     if (!campaign || campaign.isDeleted || campaign.isHidden) return null
-    if (dateFloor && campaign.dateReceived < dateFloor) return null
+    if (dateBounds.gte && campaign.dateReceived < dateBounds.gte) return null
+    if (dateBounds.lte && campaign.dateReceived > dateBounds.lte) return null
 
     // Same access model as the feed listing: any campaign assigned to a tracked,
     // non-data-broker entity is shared (visible to any client), OR it's one of the
@@ -661,7 +709,8 @@ export async function getFeedItemById(
   // Unprocessed SMS has no reliable extracted content/sender yet — treat it the same
   // as "not found" rather than exposing a half-parsed row.
   if (!sms.processed) return null
-  if (dateFloor && sms.createdAt < dateFloor) return null
+  if (dateBounds.gte && sms.createdAt < dateBounds.gte) return null
+  if (dateBounds.lte && sms.createdAt > dateBounds.lte) return null
 
   const isShared = sms.entityId !== null && sms.entity?.type !== "data_broker"
   const isOwnPersonal = sms.clientId === clientId

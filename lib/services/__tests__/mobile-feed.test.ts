@@ -673,14 +673,14 @@ async function main() {
       }
     })
 
-    await test("Starter receives only the latest three hours and cannot bypass the limit with filters", async () => {
+    await test("Starter receives only the delayed one-hour window and cannot bypass it with filters", async () => {
       const recentCampaign = await prisma.competitiveInsightCampaign.create({
         data: {
           entityId: entity.id,
           senderName: `${PREFIX}starter_recent`,
           senderEmail: "starter-recent@example.com",
-          subject: "Starter campaign inside three hours",
-          dateReceived: new Date(Date.now() - 60 * 60 * 1000),
+          subject: "Starter campaign inside delayed window",
+          dateReceived: new Date(Date.now() - 24.5 * 60 * 60 * 1000),
           inboxRate: 100,
         },
       })
@@ -689,16 +689,16 @@ async function main() {
           entityId: entity.id,
           senderName: `${PREFIX}starter_old`,
           senderEmail: "starter-old@example.com",
-          subject: "Starter campaign outside three hours",
-          dateReceived: new Date(Date.now() - 4 * 60 * 60 * 1000),
+          subject: "Starter campaign outside delayed window",
+          dateReceived: new Date(Date.now() - 23.5 * 60 * 60 * 1000),
           inboxRate: 100,
         },
       })
 
       try {
         const { items } = await getFeedPage(clientStarter.id, "free", {}, null)
-        assert(items.some((item) => item.id === recentCampaign.id), "Starter should see a campaign from one hour ago")
-        assert(!items.some((item) => item.id === oldCampaign.id), "Starter must not see a campaign from four hours ago")
+        assert(items.some((item) => item.id === recentCampaign.id), "Starter should see a campaign inside the delayed one-hour window")
+        assert(!items.some((item) => item.id === oldCampaign.id), "Starter must not see newer data outside the delayed window")
 
         const oldDetail = await getFeedItemById(clientStarter.id, "free", oldCampaign.id, "email")
         assert(oldDetail === null, "Starter must not reach an older item directly by ID")

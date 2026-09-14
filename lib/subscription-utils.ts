@@ -22,9 +22,30 @@ export interface ClientWithSubscription {
   emailVolumeLimit: number
 }
 
+// Free tier data delay: free users see a 1-hour window of data that is itself
+// delayed by 24 hours (e.g. right now they see the same 1-hour slot from this
+// time yesterday, not anything from today). This is intentional — it's a
+// meaningful reason to upgrade — and must stay in sync everywhere the free-tier
+// CI feed window is computed (web API routes + mobile entitlements).
+export const FREE_TIER_WINDOW_HOURS = 1
+export const FREE_TIER_DELAY_HOURS = 24
+
+/**
+ * Returns the delayed 1-hour date window free-tier clients are allowed to see
+ * across the competitive insights feed, personal email/numbers, and
+ * subscriptions views. Use this instead of computing the free-tier window
+ * inline so the delay behavior can't drift between routes.
+ */
+export function getFreeTierCIWindow(): { gte: Date; lte: Date } {
+  const now = new Date()
+  const delayedNow = new Date(now.getTime() - FREE_TIER_DELAY_HOURS * 60 * 60 * 1000)
+  const windowStart = new Date(delayedNow.getTime() - FREE_TIER_WINDOW_HOURS * 60 * 60 * 1000)
+  return { gte: windowStart, lte: delayedNow }
+}
+
 export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
   free: {
-    ciHistoryDays: 1 / 24, // Last 1 hour only (1/24 days)
+    ciHistoryDays: 1 / 24, // 1-hour window (1/24 days), delayed 24h — see getFreeTierCIWindow()
     ciFollowLimit: 0, // Cannot follow
     canSearchCI: false, // Free tier cannot search the CI feed
     hasPersonalEmail: false,

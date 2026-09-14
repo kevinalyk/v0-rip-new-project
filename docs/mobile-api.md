@@ -225,7 +225,12 @@ returns the same success response.
 Returns the current user's profile directly (not wrapped in `data`):
 `{ id, email, firstName, lastName, role, firstLogin, client: { id, name, slug, subscriptionPlan, subscriptionStatus, hasCompetitiveInsights, trialExpiresAt, entitlements } | null }`.
 `entitlements` is `{ canSearchAndFilterFeed, canUseAlerts, feedHistoryHours,
-followedEntityLimit }`; `null` history/follow limits mean unlimited.
+feedDelayHours, followedEntityLimit }`; `null` history/follow limits mean
+unlimited. `feedDelayHours` is the number of hours the feed window itself is
+shifted into the past (0 means real-time); Starter is currently the only plan
+with a non-zero delay (24h), so its 1-hour `feedHistoryHours` window shows
+data from this time yesterday, not live data. Native clients must surface
+this delay to Starter users rather than presenting the feed as live.
 Deploy this API revision before distributing a native build that consumes these
 fields. New native clients deliberately fall back to Starter restrictions when the
 capability object is absent or malformed; older native clients ignore the additive

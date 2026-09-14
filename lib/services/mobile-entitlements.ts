@@ -1,9 +1,11 @@
-import { PLAN_LIMITS, type SubscriptionPlan } from "@/lib/subscription-utils"
+import { FREE_TIER_DELAY_HOURS, PLAN_LIMITS, type SubscriptionPlan } from "@/lib/subscription-utils"
 
 export interface MobileClientEntitlements {
   canSearchAndFilterFeed: boolean
   canUseAlerts: boolean
   feedHistoryHours: number | null
+  /** Hours the feed window itself is shifted into the past. 0 means real-time (no delay). */
+  feedDelayHours: number
   followedEntityLimit: number | null
 }
 
@@ -21,12 +23,16 @@ export function isSupportedSubscriptionPlan(plan: string): plan is SubscriptionP
  * introduced plan can never accidentally unlock a mobile feature.
  */
 export function getMobileClientEntitlements(plan: string): MobileClientEntitlements {
-  const limits = isSupportedSubscriptionPlan(plan) ? PLAN_LIMITS[plan] : PLAN_LIMITS.free
+  const resolvedPlan = isSupportedSubscriptionPlan(plan) ? plan : "free"
+  const limits = PLAN_LIMITS[resolvedPlan]
 
   return {
     canSearchAndFilterFeed: limits.canSearchCI,
-    canUseAlerts: isSupportedSubscriptionPlan(plan) && plan !== "free",
+    canUseAlerts: resolvedPlan !== "free",
     feedHistoryHours: limits.ciHistoryDays === null ? null : limits.ciHistoryDays * 24,
+    // Only Starter's feed is delayed today, but this is derived from the plan
+    // rather than hardcoded so a future delayed tier doesn't require a mobile change.
+    feedDelayHours: resolvedPlan === "free" ? FREE_TIER_DELAY_HOURS : 0,
     followedEntityLimit: limits.ciFollowLimit,
   }
 }

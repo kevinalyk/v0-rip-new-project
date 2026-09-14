@@ -1548,8 +1548,9 @@ export function CompetitiveInsights({
             <div className="flex-1">
               <h3 className="text-lg font-semibold text-foreground mb-2">Upgrade to See More</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                You&apos;re currently on the Free/Preview plan and can only see the last 3 hours of data. Upgrade to access full history,
-                follow more entities, and unlock advanced features.
+                You&apos;re currently on the Free/Preview plan and can only see a 1-hour window of data, delayed by
+                24 hours (this isn&apos;t live data). Upgrade to access real-time data, full history, follow more
+                entities, and unlock advanced features.
               </p>
               {/* CHANGE: Using direct style attribute to bypass Tailwind */}
               <Button

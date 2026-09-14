@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { PrismaClient } from "@prisma/client"
 import { cookies } from "next/headers"
 import jwt from "jsonwebtoken"
+import { getFreeTierCIWindow } from "@/lib/subscription-utils"
 
 const prisma = new PrismaClient()
 
@@ -34,10 +35,8 @@ export async function GET(request: NextRequest) {
 
     let dateFilter: any = undefined
     if (client.subscriptionPlan === "free") {
-      // Free: Only last 1 hour
-      const oneHourAgo = new Date()
-      oneHourAgo.setHours(oneHourAgo.getHours() - 1)
-      dateFilter = { gte: oneHourAgo }
+      // Free: 1-hour window, delayed 24 hours
+      dateFilter = getFreeTierCIWindow()
     } else if (client.subscriptionPlan === "paid") {
       // Paid: Only last 30 days
       const thirtyDaysAgo = new Date()

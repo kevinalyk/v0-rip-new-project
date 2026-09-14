@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
 import { normalizeSubject } from "@/lib/campaign-detector"
 import { getEntityMappings } from "@/lib/ci-mapping-cache"
+import { getFreeTierCIWindow } from "@/lib/subscription-utils"
 
 export async function GET(request: NextRequest) {
   try {
@@ -100,9 +101,7 @@ export async function GET(request: NextRequest) {
 
     let dateFilter: any = undefined
     if (client.subscriptionPlan === "free") {
-      const threeHoursAgo = new Date()
-      threeHoursAgo.setHours(threeHoursAgo.getHours() - 3)
-      dateFilter = { gte: threeHoursAgo }
+      dateFilter = getFreeTierCIWindow()
     } else if (client.subscriptionPlan === "paid") {
       const threeDaysAgo = new Date()
       threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)

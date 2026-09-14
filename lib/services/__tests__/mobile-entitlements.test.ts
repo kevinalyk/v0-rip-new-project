@@ -6,6 +6,7 @@ import { MobileAuthError } from "@/lib/mobile-auth"
 import { requireClientContext, requireFeedSearchAndFilters, requireMobileAlerts } from "@/lib/services/authz"
 import {
   assertMobileFeedFiltersAllowed,
+  getMobileFeedPlanDateBounds,
   getFeedPage,
   hasActiveMobileFeedFilters,
   type FeedFilters,
@@ -21,30 +22,35 @@ const EXPECTED_ENTITLEMENTS: Record<SubscriptionPlan, MobileClientEntitlements> 
     canSearchAndFilterFeed: false,
     canUseAlerts: false,
     feedHistoryHours: 1,
+    feedDelayHours: 24,
     followedEntityLimit: 0,
   },
   paid: {
     canSearchAndFilterFeed: true,
     canUseAlerts: true,
     feedHistoryHours: 72,
+    feedDelayHours: 0,
     followedEntityLimit: 3,
   },
   all: {
     canSearchAndFilterFeed: true,
     canUseAlerts: true,
     feedHistoryHours: null,
+    feedDelayHours: 0,
     followedEntityLimit: null,
   },
   basic_inboxing: {
     canSearchAndFilterFeed: true,
     canUseAlerts: true,
     feedHistoryHours: null,
+    feedDelayHours: 0,
     followedEntityLimit: null,
   },
   enterprise: {
     canSearchAndFilterFeed: true,
     canUseAlerts: true,
     feedHistoryHours: null,
+    feedDelayHours: 0,
     followedEntityLimit: null,
   },
 }
@@ -71,6 +77,21 @@ function authContext(plan: string): MobileAuthContext {
 test("publishes the exact mobile entitlement matrix from the shared plan limits", () => {
   for (const [plan, expected] of Object.entries(EXPECTED_ENTITLEMENTS)) {
     assert.deepEqual(getMobileClientEntitlements(plan), expected)
+  }
+})
+
+test("free feed bounds are exactly now minus 25 hours through now minus 24 hours", () => {
+  const now = new Date("2026-09-14T20:30:00.000Z")
+  const bounds = getMobileFeedPlanDateBounds("free", now)
+  assert.equal(bounds.gte?.toISOString(), "2026-09-13T19:30:00.000Z")
+  assert.equal(bounds.lte?.toISOString(), "2026-09-13T20:30:00.000Z")
+})
+
+test("paid feed bounds retain real-time upper-bound behavior", () => {
+  const now = new Date("2026-09-14T20:30:00.000Z")
+  for (const plan of ["paid", "all", "basic_inboxing", "enterprise"] as const) {
+    const bounds = getMobileFeedPlanDateBounds(plan, now)
+    assert.equal(bounds.lte, null)
   }
 })
 

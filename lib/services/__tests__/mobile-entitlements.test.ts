@@ -20,7 +20,7 @@ const EXPECTED_ENTITLEMENTS: Record<SubscriptionPlan, MobileClientEntitlements> 
   free: {
     canSearchAndFilterFeed: false,
     canUseAlerts: false,
-    feedHistoryHours: 3,
+    feedHistoryHours: 1,
     followedEntityLimit: 0,
   },
   paid: {

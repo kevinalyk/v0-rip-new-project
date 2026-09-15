@@ -1464,6 +1464,8 @@ export function CompetitiveInsights({
       setSelectedSender([])
     }
     setSelectedPartyFilter(filterSettings.selectedPartyFilter || "all")
+    setSelectedStateFilter(filterSettings.selectedStateFilter || "all")
+    setSelectedEntityTypeFilter(filterSettings.selectedEntityTypeFilter || "all")
     setSelectedMessageType(filterSettings.selectedMessageType || "all")
     setSelectedDonationPlatform(filterSettings.selectedDonationPlatform || "all")
     setShowThirdParty(filterSettings.showThirdParty || false)
@@ -1484,6 +1486,8 @@ export function CompetitiveInsights({
       searchTerm,
       selectedSender,
       selectedPartyFilter,
+      selectedStateFilter,
+      selectedEntityTypeFilter,
       selectedMessageType,
       selectedDonationPlatform,
       showThirdParty,

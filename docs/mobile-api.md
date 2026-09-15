@@ -278,8 +278,18 @@ the web app's legacy saved-filter representation into current mobile feed query
 fields, including sender names mapped to entity IDs. Missing, stale, or malformed
 filter values fail closed by being omitted. Saved views are client-scoped and, like
 the feed's search and filter controls, require a paid plan; Starter accounts receive
-`403 FEED_FILTERS_NOT_AVAILABLE`. Creation, editing, and deletion remain available
-in the web app; the first mobile release lists and applies existing views.
+`403 FEED_FILTERS_NOT_AVAILABLE`.
+
+### `POST /api/mobile/v1/feed/views` (bearer)
+Creates an organization-wide saved view from the current mobile feed state. The JSON
+body is `{ name, filters }`, where `filters` accepts the same search, entity, party,
+state, entity-type, message, donation-platform, date, and following-only fields as
+the feed. Names are trimmed and limited to 80 characters; entity IDs and enum values
+are validated before the write. The stored representation remains compatible with
+the existing web CI view manager while retaining canonical entity IDs for exact
+mobile restoration. Returns `{ data: SavedFeedView }` with status 201.
+Like listing views, creation requires paid feed search/filter access; Starter accounts
+receive `403 FEED_FILTERS_NOT_AVAILABLE`.
 
 ### `GET /api/mobile/v1/feed/[id]?type=email|sms` (bearer)
 Single campaign/message detail: `{ data: FeedItem & { emailContent, emailPreview, ctaLinks } }`.

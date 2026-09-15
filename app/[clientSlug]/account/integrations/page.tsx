@@ -53,7 +53,7 @@ export default function AccountIntegrationsPage() {
 
   const [loading, setLoading] = useState(true)
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
-  const [subscriptionPlan, setSubscriptionPlan] = useState<"starter" | "professional" | "enterprise" | null>(null)
+  const [subscriptionPlan, setSubscriptionPlan] = useState<"free" | "basic" | "standard" | "all" | null>(null)
   const [loadingSubscription, setLoadingSubscription] = useState(true)
   const [slackStatus, setSlackStatus] = useState<SlackStatus | null>(null)
   const [connecting, setConnecting] = useState(false)
@@ -127,13 +127,13 @@ export default function AccountIntegrationsPage() {
       const response = await fetch(url, { credentials: "include" })
       if (response.ok) {
         const data = await response.json()
-        setSubscriptionPlan(data.client?.subscriptionPlan || (isAdminRoute ? "professional" : "starter"))
+        setSubscriptionPlan(data.client?.subscriptionPlan || (isAdminRoute ? "all" : "free"))
       } else {
-        setSubscriptionPlan(isAdminRoute ? "professional" : "starter")
+        setSubscriptionPlan(isAdminRoute ? "all" : "free")
       }
     } catch (error) {
       console.error("[v0] Error fetching subscription info:", error)
-      setSubscriptionPlan(isAdminRoute ? "professional" : "starter")
+      setSubscriptionPlan(isAdminRoute ? "all" : "free")
     } finally {
       setLoadingSubscription(false)
     }
@@ -504,7 +504,7 @@ export default function AccountIntegrationsPage() {
     )
   }
 
-  const hasIntegrationsAccess = subscriptionPlan === "professional" || subscriptionPlan === "enterprise"
+  const hasIntegrationsAccess = subscriptionPlan === "all"
 
   const isConnected = slackStatus?.status === "connected"
   const isAwaitingChannel = slackStatus?.status === "awaiting_channel"
@@ -553,9 +553,9 @@ export default function AccountIntegrationsPage() {
                   "Post alerts to any channel your team already uses",
                   "Toggle alerting on or off at any time",
                 ]}
-                currentPlan="starter"
-                requiredPlan="professional"
-                targetPlan="professional"
+                currentPlan={subscriptionPlan ?? "free"}
+                requiredPlan="all"
+                targetPlan="all"
               />
             </div>
           ) : (

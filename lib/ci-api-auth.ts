@@ -188,6 +188,7 @@ export async function enforceCiRateLimit(
     | "categorize_messages"
     | "create_entity"
     | "update_entity_identifiers"
+    | "update_entity_type"
     | "delete_messages"
     | "add_entity_mapping"
     | "remove_entity_mapping",
@@ -223,14 +224,18 @@ export async function enforceCiRateLimit(
     }
   }
 
-  if (action === "update_entity_identifiers") {
+  if (action === "update_entity_identifiers" || action === "update_entity_type") {
     const windowStart = new Date(now - 24 * 60 * 60 * 1000)
     const count = await prisma.ciApiActionLog.count({
-      where: { apiKeyId, action: "update_entity_identifiers", createdAt: { gte: windowStart } },
+      where: {
+        apiKeyId,
+        action: { in: ["update_entity_identifiers", "update_entity_type"] },
+        createdAt: { gte: windowStart },
+      },
     })
     if (count >= CI_API_LIMITS.MAX_ENTITY_UPDATES_PER_DAY) {
       throw new CiApiError(
-        `Rate limit exceeded: max ${CI_API_LIMITS.MAX_ENTITY_UPDATES_PER_DAY} entity identifier updates per day`,
+        `Rate limit exceeded: max ${CI_API_LIMITS.MAX_ENTITY_UPDATES_PER_DAY} entity updates per day`,
         429,
       )
     }
@@ -282,6 +287,7 @@ export async function logCiApiAction(params: {
     | "categorize_messages"
     | "create_entity"
     | "update_entity_identifiers"
+    | "update_entity_type"
     | "delete_messages"
     | "add_entity_mapping"
     | "remove_entity_mapping"

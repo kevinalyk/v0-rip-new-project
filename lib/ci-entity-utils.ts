@@ -1097,6 +1097,35 @@ export async function mergeEntityDonationIdentifiers(entityId: string, newIdenti
 }
 
 /**
+ * Change an existing entity's `type` (e.g. "organization" -> "pac") without
+ * touching any other field (name, party, state, description,
+ * donationIdentifiers, ballotpediaUrl, image, etc.). Used by the
+ * Claude/Grok-facing CI Assignment MCP's `update_entity_type` tool, which is
+ * deliberately restricted to only this one field to keep blast radius small.
+ * Returns the before/after state so callers can log a full audit trail and
+ * support Undo.
+ */
+export async function updateEntityType(entityId: string, newType: string) {
+  try {
+    const entity = await prisma.ciEntity.findUnique({ where: { id: entityId } })
+    if (!entity) {
+      return { success: false, error: `Entity ${entityId} not found` }
+    }
+
+    const before = entity.type
+    const updated = await prisma.ciEntity.update({
+      where: { id: entityId },
+      data: { type: newType },
+    })
+
+    return { success: true, entity: updated, before, after: updated.type }
+  } catch (error: any) {
+    console.error("Error updating entity type:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
  * Assign campaigns to an entity and create mapping
  */
 export async function assignCampaignsToEntity(

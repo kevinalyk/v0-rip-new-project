@@ -3,7 +3,7 @@
  * Claude.ai / Claude Desktop custom connector. See
  * docs/plans/CLAUDE_CI_ASSIGNMENT_MCP.md for the full design.
  *
- * Deliberately exposes ONLY these 11 tools - nothing else exists on this
+ * Deliberately exposes ONLY these 12 tools - nothing else exists on this
  * surface, so Claude physically cannot call anything beyond this narrow
  * workflow:
  *   1. list_unassigned_messages   (ci:read)
@@ -17,12 +17,18 @@
  *   9. list_entity_mappings       (ci:read)
  *   10. add_entity_mapping        (ci:manage_mappings)
  *   11. remove_entity_mapping     (ci:manage_mappings)
+ *   12. update_entity_type        (ci:update_entity)
  *
  * Tools 9-11 manage the sender email/domain/phone and CTA-domain mappings
  * that assign_messages_to_entity / categorize_messages match against - so
  * Claude can both assign messages using existing mappings AND keep those
  * mappings current (e.g. a candidate switches ESPs and starts sending from
  * a new domain) without needing separate admin UI access.
+ *
+ * Tool 12 lets an entity's type (politician/pac/organization/nonprofit/
+ * state_party) be corrected after creation (e.g. DLCC was miscategorized as
+ * "organization" instead of a party committee) - restricted to only the
+ * `type` field, same pattern as update_entity_donation_identifiers.
  *
  * Auth: bearer token -> ApiKey table (shared with the read-only public v1
  * API, distinguished by scope strings - see lib/ci-api-auth.ts). Every write
@@ -52,6 +58,7 @@ import {
   assignCampaignsToEntity,
   assignSmsToEntity,
   mergeEntityDonationIdentifiers,
+  updateEntityType,
   getSopDeleteEligibleMessages,
   softDeleteMessages,
   categorizeMessages,
@@ -374,6 +381,57 @@ const handler = createMcpHandler(
               {
                 type: "text" as const,
                 text: JSON.stringify({ success: true, entityId, donationIdentifiers: result.after }, null, 2),
+              },
+            ],
+          }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 12: update_entity_type ────────────────────────────────────────
+    server.registerTool(
+      "update_entity_type",
+      {
+        title: "Update Entity Type",
+        description:
+          'Changes an existing entity\'s type (e.g. "organization" -> "state_party" or "pac") to fix a miscategorization. Only this field is editable through this tool - name, party, state, donationIdentifiers, bio, and image stay off-limits. Use list_entities first to confirm the entityId and current type. Requires a "reasoning" string.',
+        inputSchema: {
+          entityId: z.string(),
+          type: z.enum(["politician", "pac", "organization", "nonprofit", "state_party"]),
+          reasoning: z.string().min(1).describe("Why this entity's type is being corrected"),
+        },
+      },
+      async ({ entityId, type, reasoning }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.UPDATE_ENTITY)
+          await assertAutomationEnabled()
+
+          const apiKeyId = extra.authInfo!.extra!.apiKeyId as string
+          await enforceCiRateLimit(apiKeyId, "update_entity_type")
+
+          const result = await updateEntityType(entityId, type)
+
+          if (!result.success) {
+            throw new CiApiError(result.error || "Failed to update entity type", 500)
+          }
+
+          await logCiApiAction({
+            apiKeyId,
+            action: "update_entity_type",
+            reasoning,
+            targetType: "entity",
+            entityId,
+            beforeState: { type: result.before },
+            afterState: { type: result.after },
+          })
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({ success: true, entityId, type: result.after }, null, 2),
               },
             ],
           }

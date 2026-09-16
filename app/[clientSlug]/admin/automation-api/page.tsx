@@ -38,6 +38,7 @@ const ALL_SCOPES = [
   { value: "ci:assign", label: "Assign messages to entities" },
   { value: "ci:create_entity", label: "Create new entities" },
   { value: "ci:update_entity", label: "Update entity donation identifiers" },
+  { value: "ci:manage_mappings", label: "Add/remove entity email, domain, phone & CTA mappings" },
   { value: "ci:delete", label: "Delete junk messages (per SOP rules)" },
 ]
 

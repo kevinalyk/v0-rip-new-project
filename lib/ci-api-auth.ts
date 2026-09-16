@@ -12,10 +12,11 @@
  * Reuses the existing ApiKey table/model (see prisma/schema.prisma, and key
  * creation/hash helpers in lib/api-auth.ts) rather than a second credential
  * system. CI-assignment keys are distinguished purely by scope strings:
- *   - "ci:read"           list_unassigned_messages, list_entities, list_delete_eligible_messages
+ *   - "ci:read"           list_unassigned_messages, list_entities, list_delete_eligible_messages, list_entity_mappings
  *   - "ci:assign"         assign_messages_to_entity, categorize_messages
  *   - "ci:create_entity"  create_entity
  *   - "ci:update_entity"  update_entity_donation_identifiers
+ *   - "ci:manage_mappings" add_entity_mapping, remove_entity_mapping
  *   - "ci:delete"         delete_messages
  */
 
@@ -57,6 +58,7 @@ export const CI_SCOPES = {
   ASSIGN: "ci:assign",
   CREATE_ENTITY: "ci:create_entity",
   UPDATE_ENTITY: "ci:update_entity",
+  MANAGE_MAPPINGS: "ci:manage_mappings",
   DELETE: "ci:delete",
 } as const
 
@@ -67,6 +69,7 @@ export const CI_ASSIGNMENT_ALL_SCOPES: CiScope[] = [
   CI_SCOPES.ASSIGN,
   CI_SCOPES.CREATE_ENTITY,
   CI_SCOPES.UPDATE_ENTITY,
+  CI_SCOPES.MANAGE_MAPPINGS,
   CI_SCOPES.DELETE,
 ]
 
@@ -86,6 +89,7 @@ export const CI_API_LIMITS = {
   MAX_NEW_ENTITIES_PER_DAY: Number.POSITIVE_INFINITY,
   MAX_ENTITY_UPDATES_PER_DAY: 50,
   MAX_DELETES_PER_HOUR: 300, // max message IDs soft-deleted per hour via delete_messages
+  MAX_MAPPING_CHANGES_PER_DAY: 200, // combined add_entity_mapping + remove_entity_mapping budget
 }
 
 export class CiApiError extends Error {
@@ -179,7 +183,14 @@ export async function assertAutomationEnabled(): Promise<void> {
  */
 export async function enforceCiRateLimit(
   apiKeyId: string,
-  action: "assign_messages" | "categorize_messages" | "create_entity" | "update_entity_identifiers" | "delete_messages",
+  action:
+    | "assign_messages"
+    | "categorize_messages"
+    | "create_entity"
+    | "update_entity_identifiers"
+    | "delete_messages"
+    | "add_entity_mapping"
+    | "remove_entity_mapping",
 ): Promise<void> {
   const now = Date.now()
 
@@ -225,6 +236,23 @@ export async function enforceCiRateLimit(
     }
   }
 
+  if (action === "add_entity_mapping" || action === "remove_entity_mapping") {
+    const windowStart = new Date(now - 24 * 60 * 60 * 1000)
+    const count = await prisma.ciApiActionLog.count({
+      where: {
+        apiKeyId,
+        action: { in: ["add_entity_mapping", "remove_entity_mapping"] },
+        createdAt: { gte: windowStart },
+      },
+    })
+    if (count >= CI_API_LIMITS.MAX_MAPPING_CHANGES_PER_DAY) {
+      throw new CiApiError(
+        `Rate limit exceeded: max ${CI_API_LIMITS.MAX_MAPPING_CHANGES_PER_DAY} entity mapping changes per day`,
+        429,
+      )
+    }
+  }
+
   if (action === "delete_messages") {
     const windowStart = new Date(now - 60 * 60 * 1000)
     const rows = await prisma.ciApiActionLog.findMany({
@@ -249,7 +277,14 @@ export async function enforceCiRateLimit(
  */
 export async function logCiApiAction(params: {
   apiKeyId: string
-  action: "assign_messages" | "categorize_messages" | "create_entity" | "update_entity_identifiers" | "delete_messages"
+  action:
+    | "assign_messages"
+    | "categorize_messages"
+    | "create_entity"
+    | "update_entity_identifiers"
+    | "delete_messages"
+    | "add_entity_mapping"
+    | "remove_entity_mapping"
   reasoning?: string
   targetType?: "sms" | "campaign" | "entity"
   targetIds?: string[]

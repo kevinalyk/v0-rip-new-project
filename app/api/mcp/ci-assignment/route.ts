@@ -3,7 +3,7 @@
  * Claude.ai / Claude Desktop custom connector. See
  * docs/plans/CLAUDE_CI_ASSIGNMENT_MCP.md for the full design.
  *
- * Deliberately exposes ONLY these 8 tools - nothing else exists on this
+ * Deliberately exposes ONLY these 11 tools - nothing else exists on this
  * surface, so Claude physically cannot call anything beyond this narrow
  * workflow:
  *   1. list_unassigned_messages   (ci:read)
@@ -14,6 +14,15 @@
  *   6. list_delete_eligible_messages (ci:read)
  *   7. delete_messages            (ci:delete)
  *   8. categorize_messages        (ci:assign)
+ *   9. list_entity_mappings       (ci:read)
+ *   10. add_entity_mapping        (ci:manage_mappings)
+ *   11. remove_entity_mapping     (ci:manage_mappings)
+ *
+ * Tools 9-11 manage the sender email/domain/phone and CTA-domain mappings
+ * that assign_messages_to_entity / categorize_messages match against - so
+ * Claude can both assign messages using existing mappings AND keep those
+ * mappings current (e.g. a candidate switches ESPs and starts sending from
+ * a new domain) without needing separate admin UI access.
  *
  * Auth: bearer token -> ApiKey table (shared with the read-only public v1
  * API, distinguished by scope strings - see lib/ci-api-auth.ts). Every write
@@ -46,6 +55,9 @@ import {
   getSopDeleteEligibleMessages,
   softDeleteMessages,
   categorizeMessages,
+  getEntityMappings,
+  addEntityMapping,
+  deleteEntityMapping,
   type DonationIdentifiers,
 } from "@/lib/ci-entity-utils"
 import { sendCiEntityCreatedByApiNotification } from "@/lib/ci-api-notifications"
@@ -371,7 +383,7 @@ const handler = createMcpHandler(
       },
     )
 
-    // ── Tool 6: list_delete_eligible_messages ───────────────────────────────
+    // ── Tool 6: list_delete_eligible_messages ────────��──────────────────────
     server.registerTool(
       "list_delete_eligible_messages",
       {
@@ -509,6 +521,188 @@ const handler = createMcpHandler(
                 ),
               },
             ],
+          }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 9: list_entity_mappings ─────────────────────────────────────────
+    server.registerTool(
+      "list_entity_mappings",
+      {
+        title: "List Entity Mappings",
+        description:
+          "Lists the sender email/domain/phone and CTA-domain mappings already saved on an entity - the same mappings shown in the admin UI's \"Email & SMS Mappings\" panel. These are what assign_messages_to_entity is really keying off of when a match is obvious, and what categorize_messages matches against for auto-assignment. Use this before add_entity_mapping to confirm a mapping doesn't already exist, or before remove_entity_mapping to get the exact mappingId to remove.",
+        inputSchema: {
+          entityId: z.string().describe("The CiEntity id to list mappings for"),
+        },
+      },
+      async ({ entityId }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.READ)
+
+          const entity = await prisma.ciEntity.findUnique({ where: { id: entityId } })
+          if (!entity) {
+            throw new CiApiError(`Entity ${entityId} not found`, 404)
+          }
+
+          const mappings = await getEntityMappings(entityId)
+          const results = mappings.map((m) => ({
+            id: m.id,
+            senderEmail: m.senderEmail,
+            senderDomain: m.senderDomain,
+            senderPhone: m.senderPhone,
+            ctaDomain: m.ctaDomain,
+            createdAt: m.createdAt,
+          }))
+
+          return {
+            content: [
+              { type: "text" as const, text: JSON.stringify({ entityId, entityName: entity.name, mappings: results }, null, 2) },
+            ],
+          }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 10: add_entity_mapping ──────────────────────────────────────────
+    server.registerTool(
+      "add_entity_mapping",
+      {
+        title: "Add Entity Mapping",
+        description:
+          'Adds one sender email, sender domain, SMS short code/phone number, or CTA link/domain to an entity, exactly like the "+" buttons in the admin UI\'s "Email & SMS Mappings" panel. Any future email/SMS from this sender (or with a CTA link on this domain) will then be eligible for auto-assignment to this entity via categorize_messages, or recognized as an obvious match for assign_messages_to_entity. The value is auto-classified: all-digits -> phone/short code, contains "@" -> sender email, contains "://" -> CTA domain (root domain + path extracted from the URL), otherwise -> sender domain. Rejects shared email platforms (e.g. substack.com, mailchimp.com) as a bare domain since that would misassign every other sender on that platform - use the full sender email address instead. Requires a "reasoning" string.',
+        inputSchema: {
+          entityId: z.string().describe("The CiEntity id to add this mapping to"),
+          value: z
+            .string()
+            .min(1)
+            .describe(
+              'The email (e.g. "info@example.com"), domain (e.g. "example.com"), phone/short code (e.g. "55404"), or CTA URL (e.g. "https://go.example.com/donate") to map',
+            ),
+          reasoning: z.string().min(1).describe("Why this sender/domain/phone/CTA link belongs to this entity"),
+        },
+      },
+      async ({ entityId, value, reasoning }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.MANAGE_MAPPINGS)
+          await assertAutomationEnabled()
+
+          const entity = await prisma.ciEntity.findUnique({ where: { id: entityId } })
+          if (!entity) {
+            throw new CiApiError(`Entity ${entityId} not found`, 404)
+          }
+
+          const apiKeyId = extra.authInfo!.extra!.apiKeyId as string
+          await enforceCiRateLimit(apiKeyId, "add_entity_mapping")
+
+          const result = await addEntityMapping(entityId, value)
+          if (!result.success || !result.mapping) {
+            throw new CiApiError(result.error || "Failed to add mapping", 400)
+          }
+
+          await logCiApiAction({
+            apiKeyId,
+            action: "add_entity_mapping",
+            reasoning,
+            targetType: "entity",
+            entityId,
+            afterState: {
+              mappingId: result.mapping.id,
+              senderEmail: result.mapping.senderEmail,
+              senderDomain: result.mapping.senderDomain,
+              senderPhone: result.mapping.senderPhone,
+              ctaDomain: result.mapping.ctaDomain,
+            },
+          })
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  {
+                    success: true,
+                    entityId,
+                    entityName: entity.name,
+                    mapping: {
+                      id: result.mapping.id,
+                      senderEmail: result.mapping.senderEmail,
+                      senderDomain: result.mapping.senderDomain,
+                      senderPhone: result.mapping.senderPhone,
+                      ctaDomain: result.mapping.ctaDomain,
+                    },
+                  },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 11: remove_entity_mapping ───────────────────────────────────────
+    server.registerTool(
+      "remove_entity_mapping",
+      {
+        title: "Remove Entity Mapping",
+        description:
+          "Removes one sender email/domain/phone or CTA-domain mapping from an entity, exactly like the trash icon next to a mapping row in the admin UI. Use list_entity_mappings first to get the exact mappingId - this tool refuses to delete a mapping that doesn't belong to the entityId you pass, as a safety check against acting on the wrong entity. Requires a \"reasoning\" string.",
+        inputSchema: {
+          entityId: z.string().describe("The CiEntity id this mapping is expected to belong to"),
+          mappingId: z.string().describe("The mapping id to remove (from list_entity_mappings)"),
+          reasoning: z.string().min(1).describe("Why this mapping should be removed (e.g. sender no longer belongs here)"),
+        },
+      },
+      async ({ entityId, mappingId, reasoning }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.MANAGE_MAPPINGS)
+          await assertAutomationEnabled()
+
+          const existing = await prisma.ciEntityMapping.findUnique({ where: { id: mappingId } })
+          if (!existing) {
+            throw new CiApiError(`Mapping ${mappingId} not found`, 404)
+          }
+          if (existing.entityId !== entityId) {
+            throw new CiApiError(
+              `Mapping ${mappingId} belongs to entity ${existing.entityId}, not ${entityId}. Refusing to remove - re-check with list_entity_mappings.`,
+              400,
+            )
+          }
+
+          const apiKeyId = extra.authInfo!.extra!.apiKeyId as string
+          await enforceCiRateLimit(apiKeyId, "remove_entity_mapping")
+
+          const result = await deleteEntityMapping(mappingId)
+          if (!result.success) {
+            throw new CiApiError(result.error || "Failed to remove mapping", 500)
+          }
+
+          await logCiApiAction({
+            apiKeyId,
+            action: "remove_entity_mapping",
+            reasoning,
+            targetType: "entity",
+            entityId,
+            beforeState: {
+              mappingId: existing.id,
+              senderEmail: existing.senderEmail,
+              senderDomain: existing.senderDomain,
+              senderPhone: existing.senderPhone,
+              ctaDomain: existing.ctaDomain,
+            },
+          })
+
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify({ success: true, entityId, mappingId }, null, 2) }],
           }
         } catch (error) {
           return toolError(error)

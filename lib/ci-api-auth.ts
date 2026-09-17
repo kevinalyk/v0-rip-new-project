@@ -62,6 +62,7 @@ export const CI_SCOPES = {
   MANAGE_MAPPINGS: "ci:manage_mappings",
   DELETE: "ci:delete",
   DELETE_ENTITY: "ci:delete_entity",
+  DIGEST_READ: "ci:digest_read",
 } as const
 
 export type CiScope = (typeof CI_SCOPES)[keyof typeof CI_SCOPES]
@@ -74,6 +75,7 @@ export const CI_ASSIGNMENT_ALL_SCOPES: CiScope[] = [
   CI_SCOPES.MANAGE_MAPPINGS,
   CI_SCOPES.DELETE,
   CI_SCOPES.DELETE_ENTITY,
+  CI_SCOPES.DIGEST_READ,
 ]
 
 // Guardrail caps - deliberately conservative. Raise only with a clear reason;

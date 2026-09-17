@@ -41,6 +41,7 @@ const ALL_SCOPES = [
   { value: "ci:manage_mappings", label: "Add/remove entity email, domain, phone & CTA mappings" },
   { value: "ci:delete", label: "Delete junk messages (per SOP rules)" },
   { value: "ci:delete_entity", label: "Delete entities (e.g. to undo a mistaken creation)" },
+  { value: "ci:digest_read", label: "Read aggregated CI digest data (inbox pulse, loudest senders, patterns, repeating content)" },
 ]
 
 interface ApiKeyRow {

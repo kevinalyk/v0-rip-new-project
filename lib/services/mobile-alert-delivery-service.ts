@@ -106,6 +106,19 @@ type ExpoTicket = {
   details?: { error?: string }
 }
 
+export function buildAnnouncementPushMessage(
+  expoPushToken: string,
+  announcement: { slug: string; title: string },
+): Record<string, unknown> {
+  return {
+    to: expoPushToken,
+    sound: "default",
+    title: "What’s New in Inbox.GOP",
+    body: announcement.title,
+    data: { announcementSlug: announcement.slug },
+  }
+}
+
 async function sendExpoPush(messages: Array<Record<string, unknown>>): Promise<ExpoTicket[]> {
   let delay = 250
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -290,6 +303,106 @@ export async function notifyMobileAlertsForMessage(candidate: MobileAlertCandida
         body: candidate.type === "email" ? candidate.subject : candidate.preview.slice(0, 180),
         data: { feedItemId: candidate.id, messageType: candidate.type },
       },
+    })),
+  )
+  const ticketsByDelivery = new Map<string, ExpoTicket[]>()
+  const networkFailedDeliveries = new Set<string>()
+  const invalidTokenIds = new Set<string>()
+
+  for (let offset = 0; offset < jobs.length; offset += 100) {
+    const chunk = jobs.slice(offset, offset + 100)
+    try {
+      const tickets = await sendExpoPush(chunk.map(({ message }) => message))
+      chunk.forEach((job, index) => {
+        const ticket = tickets[index]
+        if (!ticket) return
+        const deliveryTickets = ticketsByDelivery.get(job.deliveryId) || []
+        deliveryTickets.push(ticket)
+        ticketsByDelivery.set(job.deliveryId, deliveryTickets)
+        if (ticket.details?.error === "DeviceNotRegistered") invalidTokenIds.add(job.tokenId)
+      })
+    } catch {
+      chunk.forEach(({ deliveryId }) => networkFailedDeliveries.add(deliveryId))
+    }
+  }
+
+  if (invalidTokenIds.size) {
+    await prisma.mobilePushToken.updateMany({
+      where: { id: { in: [...invalidTokenIds] } },
+      data: { enabled: false },
+    })
+  }
+
+  await Promise.all(prepared.map(({ deliveryId }) => {
+    const tickets = ticketsByDelivery.get(deliveryId) || []
+    const sent = tickets.some((ticket) => ticket.status === "ok")
+    return prisma.mobileAlertDelivery.update({
+      where: { id: deliveryId },
+      data: {
+        status: sent ? "sent" : "failed",
+        expoTicketIds: tickets.flatMap((ticket) => ticket.id ? [ticket.id] : []),
+        error: sent
+          ? null
+          : networkFailedDeliveries.has(deliveryId)
+            ? "Push delivery failed"
+            : "Push tickets were rejected",
+      },
+    })
+  }))
+}
+
+/**
+ * Notifies every eligible registered iPhone once when a product announcement is
+ * created. MobileAlertDelivery's compound unique key makes retries idempotent per
+ * user and announcement; editing an existing article does not notify again.
+ */
+export async function notifyMobileDevicesForAnnouncement(announcement: {
+  id: string
+  slug: string
+  title: string
+}): Promise<void> {
+  const tokens = await prisma.mobilePushToken.findMany({
+    where: {
+      enabled: true,
+      user: {
+        firstLogin: false,
+        productUpdateEnabled: true,
+        client: { is: { active: true } },
+      },
+    },
+    select: { id: true, userId: true, expoPushToken: true },
+  })
+
+  const tokensByUser = new Map<string, PushTokenRecord[]>()
+  for (const token of tokens) {
+    const userTokens = tokensByUser.get(token.userId) || []
+    userTokens.push({ id: token.id, expoPushToken: token.expoPushToken })
+    tokensByUser.set(token.userId, userTokens)
+  }
+
+  const prepared: { deliveryId: string; tokens: PushTokenRecord[] }[] = []
+  for (const [userId, userTokens] of tokensByUser) {
+    try {
+      const delivery = await prisma.mobileAlertDelivery.create({
+        data: {
+          userId,
+          sourceType: "announcement",
+          sourceId: announcement.id,
+        },
+        select: { id: true },
+      })
+      prepared.push({ deliveryId: delivery.id, tokens: userTokens.slice(0, 100) })
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") continue
+      throw error
+    }
+  }
+
+  const jobs = prepared.flatMap(({ deliveryId, tokens: deliveryTokens }) =>
+    deliveryTokens.map(({ id: tokenId, expoPushToken }) => ({
+      deliveryId,
+      tokenId,
+      message: buildAnnouncementPushMessage(expoPushToken, announcement),
     })),
   )
   const ticketsByDelivery = new Map<string, ExpoTicket[]>()

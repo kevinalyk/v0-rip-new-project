@@ -2,10 +2,27 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import {
+  buildAnnouncementPushMessage,
   candidateIsVisibleToClient,
   matchesMobileAlert,
   type MobileAlertCandidate,
 } from "@/lib/services/mobile-alert-delivery-service"
+
+test("announcement pushes deep-link to the native What's New article", () => {
+  assert.deepEqual(
+    buildAnnouncementPushMessage("ExponentPushToken[test-token]", {
+      slug: "mobile-security-update",
+      title: "Mobile security update",
+    }),
+    {
+      to: "ExponentPushToken[test-token]",
+      sound: "default",
+      title: "What’s New in Inbox.GOP",
+      body: "Mobile security update",
+      data: { announcementSlug: "mobile-security-update" },
+    },
+  )
+})
 
 const candidate: MobileAlertCandidate = {
   id: "message-1",

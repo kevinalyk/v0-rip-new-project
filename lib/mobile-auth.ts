@@ -490,13 +490,33 @@ export function rateLimitKeyForEmail(email: string): string {
   return hmacKey("email", email.trim().toLowerCase())
 }
 
+export function rateLimitKeyForSignupIp(ip: string): string {
+  return hmacKey("signup-ip", ip)
+}
+
+export function rateLimitKeyForLoginIp(ip: string, window: "minute" | "hour"): string {
+  return hmacKey(`login-ip-${window}`, ip)
+}
+
+export function rateLimitKeyForLoginEmail(email: string, window: "minute" | "hour"): string {
+  return hmacKey(`login-email-${window}`, email.trim().toLowerCase())
+}
+
 /**
  * Fixed-window limiter backed by MobileAuthAttempt. Returns true if the request is
  * allowed. Never stores the raw identifier — only its HMAC. Occasionally sweeps old
  * rows so the table cannot grow unbounded without needing a cron job.
  */
-export async function checkMobileRateLimit(key: string, limit: number): Promise<boolean> {
-  const windowStart = new Date(Math.floor(Date.now() / RATE_LIMIT_WINDOW_MS) * RATE_LIMIT_WINDOW_MS)
+export async function checkMobileRateLimit(
+  key: string,
+  limit: number,
+  windowMs = RATE_LIMIT_WINDOW_MS,
+): Promise<boolean> {
+  if (!Number.isSafeInteger(limit) || limit < 1 || !Number.isSafeInteger(windowMs) || windowMs < 1) {
+    throw new Error("Rate-limit configuration must use positive safe integers")
+  }
+
+  const windowStart = new Date(Math.floor(Date.now() / windowMs) * windowMs)
 
   const row = await prisma.mobileAuthAttempt.upsert({
     where: { key_windowStart: { key, windowStart } },
@@ -505,8 +525,9 @@ export async function checkMobileRateLimit(key: string, limit: number): Promise<
   })
 
   if (Math.random() < RATE_LIMIT_CLEANUP_SAMPLE_RATE) {
+    const retentionMs = Math.max(RATE_LIMIT_RETENTION_MS, windowMs * 2)
     prisma.mobileAuthAttempt
-      .deleteMany({ where: { windowStart: { lt: new Date(Date.now() - RATE_LIMIT_RETENTION_MS) } } })
+      .deleteMany({ where: { windowStart: { lt: new Date(Date.now() - retentionMs) } } })
       .catch((err: unknown) => console.error("[mobile-auth] rate limit cleanup failed:", err))
   }
 

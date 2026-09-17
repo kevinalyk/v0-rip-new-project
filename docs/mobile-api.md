@@ -85,12 +85,19 @@ Nothing in either of those was modified.
     signs out every existing mobile session once**; sessions created after deployment
     are unaffected.
 - **Rate limiting**: `MobileAuthAttempt` (Postgres, not in-memory) keys attempts by
-  `HMAC-SHA256(MOBILE_JWT_SECRET, "ip:" + ip)` and
-  `HMAC-SHA256(MOBILE_JWT_SECRET, "email:" + normalizedEmail)` — raw IP/email/
-  password/token are never stored. Login and refresh both return `429
+  scoped `HMAC-SHA256` values derived with `MOBILE_JWT_SECRET` — raw IP/email/
+  password/token are never stored. Login is limited independently by IP and email
+  across both one-minute and one-hour windows; refresh is limited by IP. The shared
+  signup endpoint used by iOS is limited by IP across a one-hour window using the
+  same durable store, so serverless instance changes cannot reset the counter.
+  Login and refresh both return `429
   TOO_MANY_ATTEMPTS` regardless of whether the identifier exists or which limit
   tripped, and old rows are opportunistically deleted on a sampled fraction of
   requests so the table self-trims without a cron job.
+- **Signup attribution**: the native client sends `X-Inbox-Signup-Source: ios` to
+  the shared signup endpoint. New users persist that value in `User.signupSource`;
+  existing and web-created users default to `web`. This field is analytics metadata,
+  never an authentication or authorization claim.
 - **Caching**: every mobile API response sets `Cache-Control: no-store`.
 
 ## Middleware defense-in-depth
@@ -388,9 +395,9 @@ route remains available after a downgrade so sign-out cleanup can still succeed.
 Cursor-paginated Inbox.GOP product announcements, newest first. Response:
 `{ data: AnnouncementSummary[], pagination: { nextCursor, hasMore } }`, where each
 summary contains the stable `id` and `slug`, `title`, plain-text `excerpt`, optional
-`imageUrl`, `publishedAt`, and `updatedAt`. The stable identifiers are suitable for a
-future push-notification payload; opening the app still re-fetches the announcement
-through the authenticated API.
+`imageUrl`, `publishedAt`, and `updatedAt`. New announcements send the stable slug in
+a push-notification payload; opening it still re-fetches the announcement through the
+authenticated API.
 
 ### `GET /api/mobile/v1/news/[slug]` (bearer)
 Returns `{ data: AnnouncementDetail }` with all summary fields plus the rich HTML
@@ -422,6 +429,13 @@ so a user who qualifies through both paths still receives only one push. Shared 
 messages may notify every opted-in client following the entity. Personal captures are
 restricted to the source client before recipient selection, matching mobile feed
 authorization and preventing cross-client notification leakage.
+
+Creating a new product announcement also fans out a push to each enabled registered
+iPhone belonging to an active user/client with product updates enabled. These use
+`sourceType: "announcement"` plus the announcement ID in `MobileAlertDelivery`, so
+retries cannot notify the same user twice and editing an existing article does not
+send another push. The payload contains only `announcementSlug`; tapping it opens the
+authenticated native What's New detail route.
 
 This feature requires the `20260908170000_add_mobile_ci_push_alerts` migration before
 the new backend routes are deployed. The migration has paired rollback SQL, but the

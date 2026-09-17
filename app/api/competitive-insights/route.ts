@@ -538,6 +538,28 @@ export async function GET(request: NextRequest) {
         smsMessages = rows
         smsCount = count
 
+        // Display-side dedup: if two rows share the same entity + same calendar day + same
+        // normalized message text, keep only one (earliest received). Mirrors the email dedup
+        // above — the underlying dedupHash at ingestion only catches byte-identical messages, so
+        // near-identical re-sends/broadcast repeats (e.g. differing only by a tracking link or
+        // dynamic amount) can still land as separate rows and show up as exact-looking duplicates
+        // in the feed.
+        const smsDedupNormalize = (msg: string) =>
+          (msg || "")
+            .toLowerCase()
+            .replace(/https?:\/\/\S+|\$[\d,]+(\.\d{2})?|\b\d{5,}\b|\s+/g, " ")
+            .substring(0, 120)
+            .trim()
+        const smsDedupMap = new Map<string, (typeof smsMessages)[0]>()
+        for (const sms of smsMessages) {
+          const day = sms.createdAt ? new Date(sms.createdAt).toISOString().slice(0, 10) : "unknown"
+          const key = `${sms.entityId ?? sms.phoneNumber ?? ""}__${day}__${smsDedupNormalize(sms.message || "")}`
+          const existing = smsDedupMap.get(key)
+          if (!existing || new Date(sms.createdAt).getTime() < new Date(existing.createdAt).getTime()) {
+            smsDedupMap.set(key, sms)
+          }
+        }
+        smsMessages = Array.from(smsDedupMap.values())
       }
     } catch (dbError) {
       console.error("Database query error:", dbError)

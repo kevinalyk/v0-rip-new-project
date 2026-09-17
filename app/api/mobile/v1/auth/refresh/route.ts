@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   }
 
   const { refreshToken } = body
-  if (!refreshToken) {
+  if (typeof refreshToken !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(refreshToken)) {
     return mobileError(400, "INVALID_BODY", "refreshToken is required")
   }
 

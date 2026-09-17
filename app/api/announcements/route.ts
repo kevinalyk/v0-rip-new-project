@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
+import { notifyMobileDevicesForAnnouncement } from "@/lib/services/mobile-alert-delivery-service"
 
 function generateSlug(title: string): string {
   const base = title
@@ -64,6 +65,14 @@ export async function POST(request: NextRequest) {
         createdBy: authResult.user.userId || authResult.user.id,
       },
     })
+
+    // The announcement is already durable at this point. Push delivery is best-effort
+    // and must never turn a successful publish into a misleading 500 response.
+    try {
+      await notifyMobileDevicesForAnnouncement(announcement)
+    } catch (error) {
+      console.error("[announcements] Mobile push fan-out failed", error)
+    }
 
     return NextResponse.json(announcement, { status: 201 })
   } catch (error) {

@@ -3,10 +3,17 @@ import test from "node:test"
 
 import { MobileAuthError } from "@/lib/mobile-auth"
 import {
+  resolveInitialFollowingPushPreference,
   validateMobileDeviceId,
   validateMobilePushTokenInput,
   validateFollowingPushPreference,
 } from "@/lib/services/mobile-push-token-service"
+
+test("new device registrations default following notifications on without overriding an explicit choice", () => {
+  assert.equal(resolveInitialFollowingPushPreference(undefined), true)
+  assert.equal(resolveInitialFollowingPushPreference(true), true)
+  assert.equal(resolveInitialFollowingPushPreference(false), false)
+})
 
 test("accepts and trims an iOS Expo push token and installation ID", () => {
   assert.deepEqual(validateMobilePushTokenInput({

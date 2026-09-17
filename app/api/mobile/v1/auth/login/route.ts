@@ -5,11 +5,16 @@ import {
   issueMobileSession,
   mobileError,
   mobileJson,
-  rateLimitKeyForEmail,
-  rateLimitKeyForIp,
+  rateLimitKeyForLoginEmail,
+  rateLimitKeyForLoginIp,
 } from "@/lib/mobile-auth"
 
 const LOGIN_RATE_LIMIT_PER_MINUTE = 5
+const LOGIN_RATE_LIMIT_PER_HOUR = 20
+const ONE_HOUR_MS = 60 * 60 * 1000
+// A fixed valid bcrypt hash keeps unknown-account attempts on the same expensive
+// password-check path as known accounts, reducing email-enumeration timing signals.
+const DUMMY_PASSWORD_HASH = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
 
 function getClientIp(request: Request): string {
   return (
@@ -30,14 +35,27 @@ export async function POST(request: Request) {
   }
 
   const { email, password, deviceId, deviceName } = body
-  if (!email || !password) {
+  if (
+    typeof email !== "string" ||
+    typeof password !== "string" ||
+    !email ||
+    !password ||
+    email.length > 320 ||
+    password.length > 1024 ||
+    (deviceId !== undefined && (typeof deviceId !== "string" || deviceId.length > 128)) ||
+    (deviceName !== undefined && (typeof deviceName !== "string" || deviceName.length > 200))
+  ) {
     return mobileError(400, "INVALID_BODY", "email and password are required")
   }
 
   const ip = getClientIp(request)
-  const ipAllowed = await checkMobileRateLimit(rateLimitKeyForIp(ip), LOGIN_RATE_LIMIT_PER_MINUTE)
-  const emailAllowed = await checkMobileRateLimit(rateLimitKeyForEmail(email), LOGIN_RATE_LIMIT_PER_MINUTE)
-  if (!ipAllowed || !emailAllowed) {
+  const [ipMinuteAllowed, emailMinuteAllowed, ipHourAllowed, emailHourAllowed] = await Promise.all([
+    checkMobileRateLimit(rateLimitKeyForLoginIp(ip, "minute"), LOGIN_RATE_LIMIT_PER_MINUTE),
+    checkMobileRateLimit(rateLimitKeyForLoginEmail(email, "minute"), LOGIN_RATE_LIMIT_PER_MINUTE),
+    checkMobileRateLimit(rateLimitKeyForLoginIp(ip, "hour"), LOGIN_RATE_LIMIT_PER_HOUR, ONE_HOUR_MS),
+    checkMobileRateLimit(rateLimitKeyForLoginEmail(email, "hour"), LOGIN_RATE_LIMIT_PER_HOUR, ONE_HOUR_MS),
+  ])
+  if (!ipMinuteAllowed || !emailMinuteAllowed || !ipHourAllowed || !emailHourAllowed) {
     // Same generic shape as an invalid-credentials error — no signal about which
     // limit tripped or whether the account exists.
     return mobileError(429, "TOO_MANY_ATTEMPTS", "Too many attempts. Please try again later.")
@@ -51,12 +69,8 @@ export async function POST(request: Request) {
 
   const genericInvalid = () => mobileError(401, "INVALID_CREDENTIALS", "Invalid email or password")
 
-  if (!user) {
-    return genericInvalid()
-  }
-
-  const passwordMatch = await bcryptjs.compare(password, user.password)
-  if (!passwordMatch) {
+  const passwordMatch = await bcryptjs.compare(password, user?.password ?? DUMMY_PASSWORD_HASH)
+  if (!user || !passwordMatch) {
     return genericInvalid()
   }
 

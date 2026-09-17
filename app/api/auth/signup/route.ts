@@ -1,46 +1,47 @@
 import { type NextRequest, NextResponse } from "next/server"
 import bcryptjs from "bcryptjs"
+import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { sendNewSignupNotification, sendWelcomeEmail } from "@/lib/mailgun"
 import { createToken } from "@/lib/auth"
+import {
+  checkMobileRateLimit,
+  rateLimitKeyForSignupIp,
+} from "@/lib/mobile-auth"
 
-const signupAttempts = new Map<string, { count: number; resetTime: number }>()
 const MAX_ATTEMPTS = 3
 const RATE_LIMIT_WINDOW = 60 * 60 * 1000 // 1 hour in milliseconds
 
-function checkRateLimit(ip: string): { allowed: boolean; remainingTime?: number } {
-  const now = Date.now()
-  const attempt = signupAttempts.get(ip)
-
-  if (!attempt || now > attempt.resetTime) {
-    // Reset or create new entry
-    signupAttempts.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW })
-    return { allowed: true }
-  }
-
-  if (attempt.count >= MAX_ATTEMPTS) {
-    const remainingTime = Math.ceil((attempt.resetTime - now) / 1000 / 60) // minutes
-    return { allowed: false, remainingTime }
-  }
-
-  attempt.count++
-  return { allowed: true }
+function getClientIp(request: Request): string {
+  // Vercel overwrites these headers to prevent spoofing. Prefer the Vercel-specific
+  // form so a customer-owned proxy cannot replace the canonical client address.
+  return (
+    request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    "unknown"
+  )
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown"
-    const rateCheck = checkRateLimit(ip)
+    const ip = getClientIp(request)
+    const allowed = await checkMobileRateLimit(
+      rateLimitKeyForSignupIp(ip),
+      MAX_ATTEMPTS,
+      RATE_LIMIT_WINDOW,
+    )
 
-    if (!rateCheck.allowed) {
+    if (!allowed) {
       return NextResponse.json(
-        { error: `Too many signup attempts. Please try again in ${rateCheck.remainingTime} minutes.` },
-        { status: 429 },
+        { error: "Too many signup attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": "3600" } },
       )
     }
 
     const body = await request.json()
     const { clientName, firstName, lastName, email, password, trialCode, _hp, _ts } = body
+    const signupSource = request.headers.get("x-inbox-signup-source") === "ios" ? "ios" : "web"
 
     if (_hp) {
       return NextResponse.json({ error: "Invalid submission" }, { status: 400 })
@@ -169,7 +170,7 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await bcryptjs.hash(password, 10)
 
     // Create client and user in a transaction
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Create the client on the free plan. Trials now require a card via Stripe Checkout, so a
       // redeemed code does NOT grant the trial here — it's stashed as "pending" and the frontend
       // redirects to Stripe immediately after signup. The webhook (checkout.session.completed)
@@ -214,6 +215,7 @@ export async function POST(request: NextRequest) {
           firstLogin: false,
           clientId: client.id,
           lastActive: new Date(),
+          signupSource,
         },
       })
 

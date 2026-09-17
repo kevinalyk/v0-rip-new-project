@@ -23,6 +23,7 @@ model User {
   digestEnabled         Boolean   @default(true)
   weeklyDigestEnabled   Boolean   @default(true)
   productUpdateEnabled  Boolean   @default(true)
+  signupSource          String    @default("web") // "web" | "ios"; analytics attribution, not an authorization claim
   createdAt             DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -1148,7 +1149,7 @@ model MobilePushToken {
   deviceId         String
   platform         String   @default("ios")
   enabled          Boolean  @default(true)
-  followingEnabled Boolean @default(false)
+  followingEnabled Boolean @default(true)
   lastSeenAt       DateTime @default(now())
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -1162,7 +1163,7 @@ model MobilePushToken {
 model MobileAlertDelivery {
   id              String   @id @default(cuid())
   userId          String
-  sourceType      String   // "email" | "sms"
+  sourceType      String   // "email" | "sms" | "announcement"
   sourceId        String
   status          String   @default("pending") // "pending" | "sent" | "failed"
   expoTicketIds   String[] @default([])

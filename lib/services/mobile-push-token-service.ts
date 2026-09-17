@@ -20,6 +20,10 @@ export function validateFollowingPushPreference(value: unknown): boolean {
   return value
 }
 
+export function resolveInitialFollowingPushPreference(value: boolean | undefined): boolean {
+  return value ?? true
+}
+
 export function validateMobilePushTokenInput(
   input: { expoPushToken?: string; deviceId?: string; platform?: string },
 ): { token: string; deviceId: string } {
@@ -59,7 +63,7 @@ export async function registerMobilePushToken(
         expoPushToken: token,
         deviceId,
         platform: "ios",
-        followingEnabled: followingEnabled ?? false,
+        followingEnabled: resolveInitialFollowingPushPreference(followingEnabled),
       },
       update: {
         userId,

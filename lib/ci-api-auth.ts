@@ -18,6 +18,7 @@
  *   - "ci:update_entity"  update_entity_donation_identifiers
  *   - "ci:manage_mappings" add_entity_mapping, remove_entity_mapping
  *   - "ci:delete"         delete_messages
+ *   - "ci:delete_entity"  delete_entity
  */
 
 import { createHash, randomBytes } from "crypto"
@@ -60,6 +61,7 @@ export const CI_SCOPES = {
   UPDATE_ENTITY: "ci:update_entity",
   MANAGE_MAPPINGS: "ci:manage_mappings",
   DELETE: "ci:delete",
+  DELETE_ENTITY: "ci:delete_entity",
 } as const
 
 export type CiScope = (typeof CI_SCOPES)[keyof typeof CI_SCOPES]
@@ -71,6 +73,7 @@ export const CI_ASSIGNMENT_ALL_SCOPES: CiScope[] = [
   CI_SCOPES.UPDATE_ENTITY,
   CI_SCOPES.MANAGE_MAPPINGS,
   CI_SCOPES.DELETE,
+  CI_SCOPES.DELETE_ENTITY,
 ]
 
 // Guardrail caps - deliberately conservative. Raise only with a clear reason;
@@ -90,6 +93,7 @@ export const CI_API_LIMITS = {
   MAX_ENTITY_UPDATES_PER_DAY: 50,
   MAX_DELETES_PER_HOUR: 300, // max message IDs soft-deleted per hour via delete_messages
   MAX_MAPPING_CHANGES_PER_DAY: 200, // combined add_entity_mapping + remove_entity_mapping budget
+  MAX_ENTITY_DELETES_PER_DAY: 20, // deliberately low - entity deletion is destructive/hard to undo, meant only for fixing recent mistakes
 }
 
 export class CiApiError extends Error {
@@ -191,7 +195,8 @@ export async function enforceCiRateLimit(
     | "update_entity_type"
     | "delete_messages"
     | "add_entity_mapping"
-    | "remove_entity_mapping",
+    | "remove_entity_mapping"
+    | "delete_entity",
 ): Promise<void> {
   const now = Date.now()
 
@@ -272,6 +277,19 @@ export async function enforceCiRateLimit(
       throw new CiApiError(`Rate limit exceeded: max ${CI_API_LIMITS.MAX_DELETES_PER_HOUR} message deletions per hour`, 429)
     }
   }
+
+  if (action === "delete_entity") {
+    const windowStart = new Date(now - 24 * 60 * 60 * 1000)
+    const count = await prisma.ciApiActionLog.count({
+      where: { apiKeyId, action: "delete_entity", createdAt: { gte: windowStart } },
+    })
+    if (count >= CI_API_LIMITS.MAX_ENTITY_DELETES_PER_DAY) {
+      throw new CiApiError(
+        `Rate limit exceeded: max ${CI_API_LIMITS.MAX_ENTITY_DELETES_PER_DAY} entity deletions per day`,
+        429,
+      )
+    }
+  }
 }
 
 /**
@@ -291,6 +309,7 @@ export async function logCiApiAction(params: {
     | "delete_messages"
     | "add_entity_mapping"
     | "remove_entity_mapping"
+    | "delete_entity"
   reasoning?: string
   targetType?: "sms" | "campaign" | "entity"
   targetIds?: string[]

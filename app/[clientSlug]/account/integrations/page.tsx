@@ -16,6 +16,7 @@ import { SlackEntityPicker, type SlackPickerEntity } from "@/components/slack-en
 import { SlackMessageFilters, type SlackMessageFilterValues } from "@/components/slack-message-filters"
 import { SlackAdditionalBots } from "@/components/slack-additional-bots"
 import { SLACK_MULTI_BOT_ENABLED } from "@/lib/feature-flags"
+import type { SubscriptionPlan } from "@/lib/subscription-utils"
 
 const DEFAULT_MESSAGE_FILTERS: SlackMessageFilterValues = {
   messageTypeFilter: "all",
@@ -53,7 +54,7 @@ export default function AccountIntegrationsPage() {
 
   const [loading, setLoading] = useState(true)
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
-  const [subscriptionPlan, setSubscriptionPlan] = useState<"free" | "basic" | "standard" | "all" | null>(null)
+  const [subscriptionPlan, setSubscriptionPlan] = useState<SubscriptionPlan | null>(null)
   const [loadingSubscription, setLoadingSubscription] = useState(true)
   const [slackStatus, setSlackStatus] = useState<SlackStatus | null>(null)
   const [connecting, setConnecting] = useState(false)
@@ -504,7 +505,7 @@ export default function AccountIntegrationsPage() {
     )
   }
 
-  const hasIntegrationsAccess = subscriptionPlan === "all"
+  const hasIntegrationsAccess = (subscriptionPlan as string) === "all"
 
   const isConnected = slackStatus?.status === "connected"
   const isAwaitingChannel = slackStatus?.status === "awaiting_channel"
@@ -553,7 +554,7 @@ export default function AccountIntegrationsPage() {
                   "Post alerts to any channel your team already uses",
                   "Toggle alerting on or off at any time",
                 ]}
-                currentPlan={subscriptionPlan ?? "free"}
+                currentPlan={(subscriptionPlan === "all" ? "all" : "free") as SubscriptionPlan}
                 requiredPlan="all"
                 targetPlan="all"
               />

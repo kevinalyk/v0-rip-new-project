@@ -3,7 +3,7 @@
  * Claude.ai / Claude Desktop custom connector. See
  * docs/plans/CLAUDE_CI_ASSIGNMENT_MCP.md for the full design.
  *
- * Deliberately exposes ONLY these 12 tools - nothing else exists on this
+ * Deliberately exposes ONLY these 13 tools - nothing else exists on this
  * surface, so Claude physically cannot call anything beyond this narrow
  * workflow:
  *   1. list_unassigned_messages   (ci:read)
@@ -18,6 +18,7 @@
  *   10. add_entity_mapping        (ci:manage_mappings)
  *   11. remove_entity_mapping     (ci:manage_mappings)
  *   12. update_entity_type        (ci:update_entity)
+ *   13. delete_entity             (ci:delete_entity)
  *
  * Tools 9-11 manage the sender email/domain/phone and CTA-domain mappings
  * that assign_messages_to_entity / categorize_messages match against - so
@@ -29,6 +30,13 @@
  * state_party) be corrected after creation (e.g. DLCC was miscategorized as
  * "organization" instead of a party committee) - restricted to only the
  * `type` field, same pattern as update_entity_donation_identifiers.
+ *
+ * Tool 13 lets an entity created by mistake (duplicate, wrong org entirely)
+ * be removed outright - unassigns any campaigns/SMS pointed at it and
+ * deletes its mappings first, same cleanup order as the admin UI's delete
+ * button. Gated by its own scope (ci:delete_entity) and a conservative daily
+ * cap, separate from ci:delete (which only covers junk message deletion),
+ * since deleting an entity is more destructive than deleting a message.
  *
  * Auth: bearer token -> ApiKey table (shared with the read-only public v1
  * API, distinguished by scope strings - see lib/ci-api-auth.ts). Every write
@@ -65,6 +73,7 @@ import {
   getEntityMappings,
   addEntityMapping,
   deleteEntityMapping,
+  deleteEntity,
   type DonationIdentifiers,
 } from "@/lib/ci-entity-utils"
 import { sendCiEntityCreatedByApiNotification } from "@/lib/ci-api-notifications"

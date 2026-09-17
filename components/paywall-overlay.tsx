@@ -5,20 +5,21 @@ import { Button } from "@/components/ui/button"
 import { Lock, Sparkles, TrendingUp } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useRouter, usePathname } from "next/navigation"
+import type { SubscriptionPlan } from "@/lib/subscription-utils"
 
 interface PaywallOverlayProps {
   title: string
   description: string
   features: string[]
-  currentPlan: "starter" | "professional" | "enterprise"
+  currentPlan: SubscriptionPlan
   upgradePlan?: string
   upgradePrice?: string
   upgradeNote?: string
   // Legacy prop for backward compatibility
-  requiredPlan?: "professional" | "enterprise"
+  requiredPlan?: SubscriptionPlan
   isPreview?: boolean
   upgradeType?: "plan" | "addon"
-  targetPlan?: "professional" | "enterprise"
+  targetPlan?: SubscriptionPlan
 }
 
 export function PaywallOverlay({
@@ -39,8 +40,9 @@ export function PaywallOverlay({
 
   const getPlanPrice = (plan: string) => {
     switch (plan) {
-      case "professional":
+      case "paid":
         return "$1,000"
+      case "all":
       case "enterprise":
         return "Custom"
       default:

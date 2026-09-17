@@ -3,8 +3,8 @@
  * Claude.ai / Claude Desktop custom connector. See
  * docs/plans/CLAUDE_CI_ASSIGNMENT_MCP.md for the full design.
  *
- * Deliberately exposes ONLY these 13 tools - nothing else exists on this
- * surface, so Claude physically cannot call anything beyond this narrow
+ * Deliberately exposes ONLY these 18 tools - nothing else exists on this
+ * surface, so Claude/Grok physically cannot call anything beyond this narrow
  * workflow:
  *   1. list_unassigned_messages   (ci:read)
  *   2. list_entities              (ci:read)
@@ -19,6 +19,11 @@
  *   11. remove_entity_mapping     (ci:manage_mappings)
  *   12. update_entity_type        (ci:update_entity)
  *   13. delete_entity             (ci:delete_entity)
+ *   14. get_digest_inbox_pulse       (ci:digest_read)
+ *   15. get_digest_loudest_senders   (ci:digest_read)
+ *   16. get_digest_repeating_content (ci:digest_read)
+ *   17. get_digest_patterns_and_types (ci:digest_read)
+ *   18. get_digest_dem_footnote      (ci:digest_read)
  *
  * Tools 9-11 manage the sender email/domain/phone and CTA-domain mappings
  * that assign_messages_to_entity / categorize_messages match against - so
@@ -37,6 +42,15 @@
  * button. Gated by its own scope (ci:delete_entity) and a conservative daily
  * cap, separate from ci:delete (which only covers junk message deletion),
  * since deleting an entity is more destructive than deleting a message.
+ *
+ * Tools 14-18 back the Mon/Wed/Fri CI digest write-up (originally handed to
+ * Claude, now Grok). Gated by their own scope (ci:digest_read) rather than
+ * "ci:read" so a digest-only key can't also browse/act on unassigned
+ * messages or entities. All five are read-only, global (not client-scoped -
+ * this digest goes to every client), and return only aggregated counts and
+ * already-sanitized subject/message text - never raw email bodies, donor
+ * data, or client account data. No rate limit or kill-switch check, same as
+ * the other read-only tools (1, 2, 6, 9).
  *
  * Auth: bearer token -> ApiKey table (shared with the read-only public v1
  * API, distinguished by scope strings - see lib/ci-api-auth.ts). Every write
@@ -77,6 +91,9 @@ import {
   type DonationIdentifiers,
 } from "@/lib/ci-entity-utils"
 import { sendCiEntityCreatedByApiNotification } from "@/lib/ci-api-notifications"
+import { nameToSlug } from "@/lib/directory-utils"
+import { SUBJECT_PATTERNS } from "@/lib/subject-line-classifier"
+import { MESSAGE_TYPE_LABELS } from "@/lib/message-classifier"
 
 const donationIdentifiersSchema = z
   .object({
@@ -770,6 +787,374 @@ const handler = createMcpHandler(
 
           return {
             content: [{ type: "text" as const, text: JSON.stringify({ success: true, entityId, mappingId }, null, 2) }],
+          }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Digest window helper ────────────────────────────────────────────────
+    // Shared by tools 14-18. Defaults to the last 72 hours (covers the
+    // longest Mon/Wed/Fri -> Fri/Mon gap) when no explicit window is passed.
+    function resolveDigestWindow(fromDate?: string, toDate?: string) {
+      const to = toDate ? new Date(toDate) : new Date()
+      const from = fromDate ? new Date(fromDate) : new Date(to.getTime() - 72 * 60 * 60 * 1000)
+      if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+        throw new CiApiError("fromDate/toDate must be valid ISO date strings", 400)
+      }
+      return { from, to }
+    }
+
+    const digestDateInputs = {
+      fromDate: z.string().optional().describe("ISO date/time; window start. Defaults to 72 hours before toDate."),
+      toDate: z.string().optional().describe("ISO date/time; window end. Defaults to now."),
+    }
+
+    // ── Tool 14: get_digest_inbox_pulse ─────────────────────────────────────
+    server.registerTool(
+      "get_digest_inbox_pulse",
+      {
+        title: "Get Digest Inbox Pulse",
+        description:
+          "Read-only, global (all clients combined) volume and email/SMS mix over a date window, for the Mon/Wed/Fri CI digest's opening \"inbox pulse\" section. Returns total email count, total SMS count, and the email/SMS split as percentages. Defaults to the last 72 hours if no fromDate/toDate given.",
+        inputSchema: digestDateInputs,
+      },
+      async ({ fromDate, toDate }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.DIGEST_READ)
+          const { from, to } = resolveDigestWindow(fromDate, toDate)
+
+          const [emailCount, smsCount] = await Promise.all([
+            prisma.competitiveInsightCampaign.count({
+              where: { isDeleted: false, dateReceived: { gte: from, lte: to } },
+            }),
+            prisma.smsQueue.count({
+              where: { isDeleted: false, createdAt: { gte: from, lte: to } },
+            }),
+          ])
+
+          const total = emailCount + smsCount
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  {
+                    windowStart: from.toISOString(),
+                    windowEnd: to.toISOString(),
+                    totalEmails: emailCount,
+                    totalSms: smsCount,
+                    totalVolume: total,
+                    emailPct: total > 0 ? Math.round((emailCount / total) * 1000) / 10 : 0,
+                    smsPct: total > 0 ? Math.round((smsCount / total) * 1000) / 10 : 0,
+                  },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 15: get_digest_loudest_senders ─────────────────────────────────
+    server.registerTool(
+      "get_digest_loudest_senders",
+      {
+        title: "Get Digest Loudest Senders",
+        description:
+          "Read-only, global (all clients combined) leaderboard of the entities that sent the most email + SMS in a date window, for the digest's \"loudest senders\" section. Each result includes a directory link (/directory/<slug>) so the write-up can cite/verify the entity. Defaults to the last 72 hours and top 10 if not specified. Set party to \"republican\" or \"democrat\" to filter (omit for both).",
+        inputSchema: {
+          ...digestDateInputs,
+          limit: z.number().int().min(1).max(50).default(10),
+          party: z.enum(["republican", "democrat"]).optional().describe("Filter to one party; omit for all entities"),
+        },
+      },
+      async ({ fromDate, toDate, limit, party }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.DIGEST_READ)
+          const { from, to } = resolveDigestWindow(fromDate, toDate)
+
+          const [campaignCounts, smsCounts] = await Promise.all([
+            prisma.competitiveInsightCampaign.groupBy({
+              by: ["entityId"],
+              where: { isDeleted: false, dateReceived: { gte: from, lte: to }, entityId: { not: null } },
+              _count: { _all: true },
+            }),
+            prisma.smsQueue.groupBy({
+              by: ["entityId"],
+              where: { isDeleted: false, createdAt: { gte: from, lte: to }, entityId: { not: null } },
+              _count: { _all: true },
+            }),
+          ])
+
+          const byEntity = new Map<string, { emailCount: number; smsCount: number }>()
+          for (const row of campaignCounts) {
+            if (!row.entityId) continue
+            byEntity.set(row.entityId, { emailCount: row._count._all, smsCount: 0 })
+          }
+          for (const row of smsCounts) {
+            if (!row.entityId) continue
+            const existing = byEntity.get(row.entityId) || { emailCount: 0, smsCount: 0 }
+            existing.smsCount = row._count._all
+            byEntity.set(row.entityId, existing)
+          }
+
+          const entityIds = Array.from(byEntity.keys())
+          const entities = await prisma.ciEntity.findMany({
+            where: { id: { in: entityIds }, ...(party ? { party } : {}) },
+            select: { id: true, name: true, type: true, party: true, state: true },
+          })
+
+          const results = entities
+            .map((e: { id: string; name: string; type: string; party: string | null; state: string | null }) => {
+              const counts = byEntity.get(e.id)!
+              return {
+                entityId: e.id,
+                entityName: e.name,
+                type: e.type,
+                party: e.party,
+                state: e.state,
+                emailCount: counts.emailCount,
+                smsCount: counts.smsCount,
+                totalVolume: counts.emailCount + counts.smsCount,
+                directoryUrl: `/directory/${nameToSlug(e.name)}`,
+              }
+            })
+            .sort((a: { totalVolume: number }, b: { totalVolume: number }) => b.totalVolume - a.totalVolume)
+            .slice(0, limit)
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  { windowStart: from.toISOString(), windowEnd: to.toISOString(), senders: results },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 16: get_digest_repeating_content ───────────────────────────────
+    server.registerTool(
+      "get_digest_repeating_content",
+      {
+        title: "Get Digest Repeating Content",
+        description:
+          "Read-only, global (all clients combined) list of the most-repeated email subject lines and SMS copy in a date window, for the digest's \"what's repeating\" section. Subjects are the already-sanitized subject field (merge tags like {{first_name}} are replaced with a placeholder, never raw). Only returns items sent 2+ times. Defaults to the last 72 hours and top 10 each.",
+        inputSchema: {
+          ...digestDateInputs,
+          limit: z.number().int().min(1).max(25).default(10),
+        },
+      },
+      async ({ fromDate, toDate, limit }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.DIGEST_READ)
+          const { from, to } = resolveDigestWindow(fromDate, toDate)
+
+          const [subjectGroups, smsGroups] = await Promise.all([
+            prisma.competitiveInsightCampaign.groupBy({
+              by: ["subject"],
+              where: { isDeleted: false, dateReceived: { gte: from, lte: to } },
+              _count: { _all: true },
+            }),
+            prisma.smsQueue.groupBy({
+              by: ["message"],
+              where: { isDeleted: false, createdAt: { gte: from, lte: to }, message: { not: null } },
+              _count: { _all: true },
+            }),
+          ])
+
+          const topSubjects = subjectGroups
+            .filter((g: { subject: string; _count: { _all: number } }) => g._count._all >= 2 && g.subject)
+            .sort(
+              (a: { _count: { _all: number } }, b: { _count: { _all: number } }) => b._count._all - a._count._all,
+            )
+            .slice(0, limit)
+            .map((g: { subject: string; _count: { _all: number } }) => ({ subject: g.subject, count: g._count._all }))
+
+          const topSmsCopy = smsGroups
+            .filter((g: { message: string | null; _count: { _all: number } }) => g._count._all >= 2 && g.message)
+            .sort(
+              (a: { _count: { _all: number } }, b: { _count: { _all: number } }) => b._count._all - a._count._all,
+            )
+            .slice(0, limit)
+            .map((g: { message: string | null; _count: { _all: number } }) => ({
+              message: g.message,
+              count: g._count._all,
+            }))
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  { windowStart: from.toISOString(), windowEnd: to.toISOString(), topSubjects, topSmsCopy },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 17: get_digest_patterns_and_types ──────────────────────────────
+    server.registerTool(
+      "get_digest_patterns_and_types",
+      {
+        title: "Get Digest Patterns And Types",
+        description:
+          "Read-only, global (all clients combined) breakdown of subject-line patterns (all-caps, urgency, dollar signs, questions, emoji, etc.) and message types (urgency/deadline, attack, match offer, survey, petition, etc.) in a date window, for the digest's \"patterns and types\" section. Counts come from the same classification already stored on each campaign at ingest. Defaults to the last 72 hours.",
+        inputSchema: digestDateInputs,
+      },
+      async ({ fromDate, toDate }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.DIGEST_READ)
+          const { from, to } = resolveDigestWindow(fromDate, toDate)
+
+          const campaigns = await prisma.competitiveInsightCampaign.findMany({
+            where: { isDeleted: false, dateReceived: { gte: from, lte: to } },
+            select: { subjectPatterns: true, messageTypes: true },
+          })
+
+          const patternCounts = new Map<string, number>()
+          const typeCounts = new Map<string, number>()
+          for (const c of campaigns) {
+            for (const p of c.subjectPatterns || []) {
+              patternCounts.set(p, (patternCounts.get(p) || 0) + 1)
+            }
+            for (const t of c.messageTypes || []) {
+              typeCounts.set(t, (typeCounts.get(t) || 0) + 1)
+            }
+          }
+
+          const total = campaigns.length
+          const toResult = (map: Map<string, number>, labels: Record<string, { label: string } | string>) =>
+            Array.from(map.entries())
+              .sort((a, b) => b[1] - a[1])
+              .map(([key, count]) => ({
+                key,
+                label: typeof labels[key] === "string" ? (labels[key] as string) : (labels[key] as { label: string } | undefined)?.label || key,
+                count,
+                pct: total > 0 ? Math.round((count / total) * 1000) / 10 : 0,
+              }))
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  {
+                    windowStart: from.toISOString(),
+                    windowEnd: to.toISOString(),
+                    totalEmails: total,
+                    subjectPatterns: toResult(patternCounts, SUBJECT_PATTERNS),
+                    messageTypes: toResult(typeCounts, MESSAGE_TYPE_LABELS),
+                  },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 18: get_digest_dem_footnote ─────────────────────────────────────
+    server.registerTool(
+      "get_digest_dem_footnote",
+      {
+        title: "Get Digest Democrat Footnote",
+        description:
+          "Read-only, global list of the loudest Democrat-side entities in a date window, for the digest's optional thin \"Dem-watch\" footnote. Same shape as get_digest_loudest_senders but pre-filtered to party=democrat. Defaults to the last 72 hours and top 5.",
+        inputSchema: {
+          ...digestDateInputs,
+          limit: z.number().int().min(1).max(25).default(5),
+        },
+      },
+      async ({ fromDate, toDate, limit }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.DIGEST_READ)
+          const { from, to } = resolveDigestWindow(fromDate, toDate)
+
+          const [campaignCounts, smsCounts] = await Promise.all([
+            prisma.competitiveInsightCampaign.groupBy({
+              by: ["entityId"],
+              where: { isDeleted: false, dateReceived: { gte: from, lte: to }, entityId: { not: null } },
+              _count: { _all: true },
+            }),
+            prisma.smsQueue.groupBy({
+              by: ["entityId"],
+              where: { isDeleted: false, createdAt: { gte: from, lte: to }, entityId: { not: null } },
+              _count: { _all: true },
+            }),
+          ])
+
+          const byEntity = new Map<string, { emailCount: number; smsCount: number }>()
+          for (const row of campaignCounts) {
+            if (!row.entityId) continue
+            byEntity.set(row.entityId, { emailCount: row._count._all, smsCount: 0 })
+          }
+          for (const row of smsCounts) {
+            if (!row.entityId) continue
+            const existing = byEntity.get(row.entityId) || { emailCount: 0, smsCount: 0 }
+            existing.smsCount = row._count._all
+            byEntity.set(row.entityId, existing)
+          }
+
+          const entityIds = Array.from(byEntity.keys())
+          const entities = await prisma.ciEntity.findMany({
+            where: { id: { in: entityIds }, party: "democrat" },
+            select: { id: true, name: true, type: true, state: true },
+          })
+
+          const results = entities
+            .map((e: { id: string; name: string; type: string; state: string | null }) => {
+              const counts = byEntity.get(e.id)!
+              return {
+                entityId: e.id,
+                entityName: e.name,
+                type: e.type,
+                state: e.state,
+                emailCount: counts.emailCount,
+                smsCount: counts.smsCount,
+                totalVolume: counts.emailCount + counts.smsCount,
+                directoryUrl: `/directory/${nameToSlug(e.name)}`,
+              }
+            })
+            .sort((a: { totalVolume: number }, b: { totalVolume: number }) => b.totalVolume - a.totalVolume)
+            .slice(0, limit)
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  { windowStart: from.toISOString(), windowEnd: to.toISOString(), senders: results },
+                  null,
+                  2,
+                ),
+              },
+            ],
           }
         } catch (error) {
           return toolError(error)

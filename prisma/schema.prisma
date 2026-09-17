@@ -1149,7 +1149,7 @@ model MobilePushToken {
   deviceId         String
   platform         String   @default("ios")
   enabled          Boolean  @default(true)
-  followingEnabled Boolean @default(false)
+  followingEnabled Boolean @default(true)
   lastSeenAt       DateTime @default(now())
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

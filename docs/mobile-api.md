@@ -380,7 +380,9 @@ Registers or refreshes this installation's Expo push token:
 to only one user; signing into the same installation as another account safely moves
 the token. Setting `followingEnabled: true` opts this installation into one push
 whenever a new email or SMS from any entity followed by the user's client is ingested.
-Existing tokens default to false, so deployment never silently opts in a user.
+New registrations default this app-level preference to true after Apple grants system
+notification permission. Re-registering an existing installation without the field
+preserves its stored preference, so an explicit opt-out is never silently reversed.
 
 ### `PATCH /api/mobile/v1/push-token` (bearer)
 `{ deviceId, followingEnabled }` changes the followed-entity preference for an
@@ -446,8 +448,9 @@ iOS configuration; remote push cannot be validated in the iOS Simulator.
 Followed-entity notification preferences additionally require
 `20260911120000_add_following_push_preference`. The migration adds a fail-closed
 `followingEnabled=false` column to existing push-token rows and includes paired
-rollback SQL. Apply it through the normal reviewed migration process before deploying
-the API or building the native release.
+rollback SQL. The later `20260917090000_add_user_signup_source` migration changes only
+the database default for future token rows to true; existing preferences remain
+unchanged. Apply migrations through the normal reviewed process before deployment.
 
 ## Tests
 

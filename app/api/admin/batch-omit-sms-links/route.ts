@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { cookies } from "next/headers"
 import { jwtVerify } from "jose"
+import { MASKED_PHONE_REGEX } from "@/lib/sms-redaction"
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "your-secret-key")
 
@@ -23,7 +24,13 @@ async function verifyAdmin() {
 
 function omitLinks(message: string): { result: string; count: number } {
   let count = 0
-  const result = message.replace(URL_REGEX, () => {
+  // Also omit partially-masked phone numbers (e.g. "XXX-XXX-6680") so the last 4
+  // digits aren't left exposed, on top of the existing link redaction.
+  const afterPhones = message.replace(MASKED_PHONE_REGEX, () => {
+    count++
+    return "[Omitted Number]"
+  })
+  const result = afterPhones.replace(URL_REGEX, () => {
     count++
     return "[Omitted Link]"
   })

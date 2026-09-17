@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { getAuthenticatedUser } from "@/lib/auth"
+import { redactMaskedPhoneNumbers } from "@/lib/sms-redaction"
 
 // Matches https://... URLs and bare domain URLs like 76pac.com/9k7Tfrh
 // Excludes email addresses (foo@domain.com) via negative lookbehind on @
@@ -8,7 +9,9 @@ const URL_REGEX =
   /https?:\/\/[^\s]+|(?<![a-zA-Z0-9@])(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}(?:\/[^\s]*)?/g
 
 function redactLinks(message: string): string {
-  return message.replace(URL_REGEX, "[Omitted Link]")
+  // Also omit partially-masked phone numbers (e.g. "XXX-XXX-6680") so the last 4
+  // digits aren't left exposed, on top of the existing link redaction.
+  return redactMaskedPhoneNumbers(message).replace(URL_REGEX, "[Omitted Link]")
 }
 
 export async function POST(request: Request) {

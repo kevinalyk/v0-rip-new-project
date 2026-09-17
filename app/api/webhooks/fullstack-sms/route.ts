@@ -6,6 +6,7 @@ import { findEntityForPhone } from "@/lib/ci-entity-utils"
 import { isPhoneThirdParty } from "@/lib/ci-mapping-cache"
 import { extractSmsCtaLinks } from "@/lib/sms-link-extractor"
 import { getRedactedNames, applyRedaction } from "@/lib/redaction-utils"
+import { redactMaskedPhoneNumbers } from "@/lib/sms-redaction"
 import { notifyFollowersOfNewMessage } from "@/lib/slack-alerts"
 import { notifyMobileAlertsForMessage } from "@/lib/services/mobile-alert-delivery-service"
 import { detectDonationPlatform } from "@/lib/detect-donation-platform"
@@ -159,10 +160,14 @@ export async function POST(request: Request) {
     const redactedNames = await getRedactedNames()
     const nameRedactedMessage = (applyRedaction(cleanedMessage, redactedNames) as string) || cleanedMessage
 
+    // Omit partially-masked phone numbers (e.g. "XXX-XXX-6680") so the last 4 digits
+    // aren't left exposed in the message body.
+    const phoneRedactedMessage = redactMaskedPhoneNumbers(nameRedactedMessage)
+
     // Omit URLs from the message body — links are preserved in ctaLinks for the CTA section
     // Matches both https://example.com/path and bare domains like example.com/path
     const urlRegex = /https?:\/\/[^\s]+|(?<![a-zA-Z0-9@])(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:\/[^\s]*)?/g
-    const redactedMessage = nameRedactedMessage.replace(urlRegex, "[Omitted Link]")
+    const redactedMessage = phoneRedactedMessage.replace(urlRegex, "[Omitted Link]")
 
     // Save to the SmsQueue table.
     // NOTE: We use create() + catch P2002 rather than upsert() here. Prisma's upsert with an

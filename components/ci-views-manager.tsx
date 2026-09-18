@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -36,15 +36,15 @@ import {
 interface CiView {
   id: string
   name: string
-  filterSettings: any
+  filterSettings: Record<string, unknown>
   createdAt: string
   updatedAt: string
 }
 
 interface CiViewsManagerProps {
   clientSlug: string
-  currentFilters: any
-  onLoadView: (filterSettings: any) => void
+  currentFilters: Record<string, unknown>
+  onLoadView: (filterSettings: Record<string, unknown>) => void
   hasActiveFilters: boolean
 }
 
@@ -59,7 +59,7 @@ export function CiViewsManager({ clientSlug, currentFilters, onLoadView, hasActi
   const [viewToDelete, setViewToDelete] = useState<CiView | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  const fetchViews = async () => {
+  const fetchViews = useCallback(async () => {
     try {
       setLoading(true)
       const response = await fetch(`/api/ci-views?clientSlug=${clientSlug}`)
@@ -72,11 +72,11 @@ export function CiViewsManager({ clientSlug, currentFilters, onLoadView, hasActi
     } finally {
       setLoading(false)
     }
-  }
+  }, [clientSlug])
 
   useEffect(() => {
     fetchViews()
-  }, [clientSlug])
+  }, [fetchViews])
 
   const handleSaveView = async () => {
     if (!viewName.trim()) {
@@ -234,8 +234,7 @@ export function CiViewsManager({ clientSlug, currentFilters, onLoadView, hasActi
           <DialogHeader>
             <DialogTitle>Save Current View</DialogTitle>
             <DialogDescription>
-              Give this filter configuration a name so you can quickly apply it later. All users in your organization
-              will be able to use this view.
+              Give this filter configuration a name so you can quickly apply it later. This view is private to your account.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -277,8 +276,8 @@ export function CiViewsManager({ clientSlug, currentFilters, onLoadView, hasActi
           <AlertDialogHeader>
             <AlertDialogTitle>Delete View</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{viewToDelete?.name}"? This action cannot be undone and will affect all
-              users in your organization.
+              Are you sure you want to delete “{viewToDelete?.name}”? This action cannot be undone. Other users’ saved
+              views will not be affected.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

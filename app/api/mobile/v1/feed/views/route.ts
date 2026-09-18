@@ -2,15 +2,15 @@ import { MobileAuthError, mobileError, mobileJson, withMobileAuth } from "@/lib/
 import { requireCompetitiveInsights, requireFeedSearchAndFilters } from "@/lib/services/authz"
 import { createMobileSavedView, listMobileSavedViews } from "@/lib/services/mobile-saved-view-service"
 
-// GET /api/mobile/v1/feed/views — organization-wide saved CI filter presets.
+// GET /api/mobile/v1/feed/views — the caller's personal saved CI filter presets.
 export const GET = withMobileAuth(async (_request, ctx) => {
   requireCompetitiveInsights(ctx)
   const { clientId } = requireFeedSearchAndFilters(ctx)
-  return mobileJson({ data: await listMobileSavedViews(clientId) })
+  return mobileJson({ data: await listMobileSavedViews(ctx.userId, clientId) })
 })
 
 // POST /api/mobile/v1/feed/views — save the caller's current mobile CI filters
-// as an organization-wide view that remains compatible with the web app.
+// as a personal view that remains compatible with the web app.
 export const POST = withMobileAuth(async (request, ctx) => {
   requireCompetitiveInsights(ctx)
   const { clientId } = requireFeedSearchAndFilters(ctx)

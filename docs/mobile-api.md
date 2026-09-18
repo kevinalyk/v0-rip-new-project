@@ -279,22 +279,24 @@ the entitlements returned by `/auth/me` and avoid requesting this endpoint when 
 capability is false.
 
 ### `GET /api/mobile/v1/feed/views` (bearer)
-Returns the caller's organization-wide saved CI views newest first as
+Returns the signed-in user's personal saved CI views newest first as
 `{ data: { id, name, filters, createdAt, updatedAt }[] }`. The service translates
 the web app's legacy saved-filter representation into current mobile feed query
 fields, including sender names mapped to entity IDs. Missing, stale, or malformed
-filter values fail closed by being omitted. Saved views are client-scoped and, like
+filter values fail closed by being omitted. Saved views are user-owned and tenant-scoped and, like
 the feed's search and filter controls, require a paid plan; Starter accounts receive
 `403 FEED_FILTERS_NOT_AVAILABLE`.
 
 ### `POST /api/mobile/v1/feed/views` (bearer)
-Creates an organization-wide saved view from the current mobile feed state. The JSON
+Creates a personal saved view from the current mobile feed state. The JSON
 body is `{ name, filters }`, where `filters` accepts the same search, entity, party,
 state, entity-type, message, donation-platform, date, and following-only fields as
 the feed. Names are trimmed and limited to 80 characters; entity IDs and enum values
 are validated before the write. The stored representation remains compatible with
 the existing web CI view manager while retaining canonical entity IDs for exact
 mobile restoration. Returns `{ data: SavedFeedView }` with status 201.
+Existing client-wide views are copied to every current teammate during migration;
+afterward, creating, editing, or deleting a view affects only that user.
 Like listing views, creation requires paid feed search/filter access; Starter accounts
 receive `403 FEED_FILTERS_NOT_AVAILABLE`.
 

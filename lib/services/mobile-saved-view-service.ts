@@ -235,9 +235,9 @@ export async function createMobileSavedView(userId: string, clientId: string, va
   return { ...created, filters: input.filters }
 }
 
-export async function listMobileSavedViews(clientId: string) {
+export async function listMobileSavedViews(userId: string, clientId: string) {
   const views: SavedViewRecord[] = await prisma.ciView.findMany({
-    where: { clientId },
+    where: { clientId, createdBy: userId },
     select: { id: true, name: true, filterSettings: true, createdAt: true, updatedAt: true },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   })

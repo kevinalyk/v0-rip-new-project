@@ -298,10 +298,17 @@ const handler = createMcpHandler(
           party: z.enum(["republican", "democrat", "independent"]).optional(),
           state: z.string().optional().describe('State abbreviation (e.g. "CA") or "Nationwide"'),
           donationIdentifiers: donationIdentifiersSchema.optional(),
+          ballotpediaUrl: z
+            .string()
+            .url()
+            .optional()
+            .describe(
+              "The entity's Ballotpedia page URL (e.g. https://ballotpedia.org/Jane_Doe), if known. Once set, the nightly refresh cron automatically scrapes it to fill in the entity's bio, office, and headshot - so providing this now saves a manual admin step later.",
+            ),
           reasoning: z.string().min(1).describe("Why this entity needs to be created (no existing match found)"),
         },
       },
-      async ({ name, type, description, party, state, donationIdentifiers, reasoning }, extra) => {
+      async ({ name, type, description, party, state, donationIdentifiers, ballotpediaUrl, reasoning }, extra) => {
         try {
           requireCiScope(extra.authInfo?.scopes, CI_SCOPES.CREATE_ENTITY)
           await assertAutomationEnabled()
@@ -325,6 +332,7 @@ const handler = createMcpHandler(
             party,
             state,
             donationIdentifiers as DonationIdentifiers | undefined,
+            ballotpediaUrl,
           )
 
           if (!result.success || !result.entity) {
@@ -337,7 +345,7 @@ const handler = createMcpHandler(
             reasoning,
             targetType: "entity",
             entityId: result.entity.id,
-            afterState: { name, type, description, party, state, donationIdentifiers },
+            afterState: { name, type, description, party, state, donationIdentifiers, ballotpediaUrl },
           })
 
           sendCiEntityCreatedByApiNotification({

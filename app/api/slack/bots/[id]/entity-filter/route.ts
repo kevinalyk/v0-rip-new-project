@@ -42,7 +42,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
 
   const subscriptions = await prisma.ciEntitySubscription.findMany({
-    where: { clientId },
+    where: { clientId, userId: userRecord.id },
     select: { entityId: true },
   })
 

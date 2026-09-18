@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
     let subscribedEntityIds: string[] = []
     if (subscriptionsOnly) {
       const subscriptions = await prisma.ciEntitySubscription.findMany({
-        where: { clientId: targetClientId },
+        where: { userId: authResult.user.id },
         select: { entityId: true },
       })
       subscribedEntityIds = subscriptions.map((sub) => sub.entityId)

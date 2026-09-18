@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 
   // Not configured yet - suggest current Following as the default selection.
   const subscriptions = await prisma.ciEntitySubscription.findMany({
-    where: { clientId },
+    where: { clientId, userId: userRecord.id },
     select: { entityId: true },
   })
 

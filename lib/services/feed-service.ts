@@ -267,7 +267,8 @@ function entityAttributeWhere(filters: FeedFilters): Record<string, unknown> {
 }
 
 /**
- * Resolves the tag and subscriptionsOnly filters — both are per-client join tables
+ * Resolves the tag and subscriptionsOnly filters. Tags are per-client while
+ * following is personal to the signed-in user.
  * (EntityTag, CiEntitySubscription), not entity attributes, so they can't be expressed
  * as a plain `entity: {...}` relation filter. Returns null when neither filter is
  * active (no restriction), or the intersection of whichever filters ARE active
@@ -275,13 +276,20 @@ function entityAttributeWhere(filters: FeedFilters): Record<string, unknown> {
  * valid, meaningful result — e.g. following nothing while `subscriptionsOnly=true`
  * must return zero items, not the full unrestricted feed.
  */
-async function resolveEntityIdRestriction(clientId: string, filters: FeedFilters): Promise<string[] | null> {
+async function resolveEntityIdRestriction(
+  clientId: string,
+  userId: string,
+  filters: FeedFilters,
+): Promise<string[] | null> {
   const sets: string[][] = []
 
   if (filters.entityIds?.length) sets.push([...new Set(filters.entityIds)])
 
   if (filters.subscriptionsOnly) {
-    const subs = await prisma.ciEntitySubscription.findMany({ where: { clientId }, select: { entityId: true } })
+    const subs = await prisma.ciEntitySubscription.findMany({
+      where: { clientId, userId },
+      select: { entityId: true },
+    })
     sets.push(subs.map((s: (typeof subs)[number]) => s.entityId))
   }
 
@@ -457,7 +465,7 @@ async function resolveOwnershipWhere(filters: FeedFilters): Promise<OwnershipWhe
   return { email: includeLegacy(legacyEmailIds), sms: includeLegacy(legacySmsIds) }
 }
 
-export async function listMobileFeedEntities(clientId: string) {
+export async function listMobileFeedEntities(clientId: string, userId: string) {
   const [entities, subscriptions] = await Promise.all([
     prisma.ciEntity.findMany({
       where: { type: { not: "data_broker" } },
@@ -465,7 +473,7 @@ export async function listMobileFeedEntities(clientId: string) {
       orderBy: { name: "asc" },
       take: 10000,
     }),
-    prisma.ciEntitySubscription.findMany({ where: { clientId }, select: { entityId: true } }),
+    prisma.ciEntitySubscription.findMany({ where: { clientId, userId }, select: { entityId: true } }),
   ])
   const followedIds = new Set<string>(
     subscriptions.map((subscription: { entityId: string }) => subscription.entityId),
@@ -498,6 +506,7 @@ export async function listMobileFeedEntities(clientId: string) {
  */
 export async function getFeedPage(
   clientId: string,
+  userId: string,
   plan: SubscriptionPlan,
   filters: FeedFilters,
   cursor: FeedCursor | null,
@@ -506,7 +515,7 @@ export async function getFeedPage(
 
   const [dateBounds, entityIdRestriction, ownershipFilters] = await Promise.all([
     getMobileFeedDateBounds(clientId, plan),
-    resolveEntityIdRestriction(clientId, filters),
+    resolveEntityIdRestriction(clientId, userId, filters),
     resolveOwnershipWhere(filters),
   ])
   const queryDateBounds = getDateBounds(dateBounds, filters)

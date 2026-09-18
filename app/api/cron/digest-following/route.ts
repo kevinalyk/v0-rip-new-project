@@ -76,10 +76,11 @@ export async function GET(request: Request) {
     // ── Process each client ──────────────────────────────────────────────────
     for (const client of clients) {
       try {
-        // Get all entity subscriptions for this client
+        // Get each user's personal entity subscriptions for this client.
         const subscriptions = await prisma.ciEntitySubscription.findMany({
           where: { clientId: client.id },
           select: {
+            userId: true,
             entityId: true,
             entity: {
               select: {
@@ -171,7 +172,7 @@ export async function GET(request: Request) {
         }
 
         // ── Build per-entity sections ─────────────────────────────────────────────
-        const entitySections: DigestEntitySection[] = subscriptions.map((sub) => {
+        const entitySections: Array<DigestEntitySection & { userId: string }> = subscriptions.map((sub) => {
           const entity = sub.entity
 
           // Collect emails for this entity
@@ -202,6 +203,7 @@ export async function GET(request: Request) {
             .slice(0, 10)
 
           return {
+            userId: sub.userId,
             entityName: entity.name,
             entitySlug: nameToSlug(entity.name),
             party: entity.party,
@@ -227,13 +229,16 @@ export async function GET(request: Request) {
 
         for (const user of users) {
           if (!user.email) continue
+          const personalSections: DigestEntitySection[] = entitySections
+            .filter((section) => section.userId === user.id)
+          if (personalSections.length === 0) continue
 
           const ok = await sendFollowingDigest({
             to: user.email,
             userId: user.id,
             firstName: user.firstName,
             digestDate: digestDateLabel,
-            entitySections,
+            entitySections: personalSections,
             clientSlug: client.slug,
           })
 

@@ -12,7 +12,7 @@ import {
 export const GET = withMobileAuth(async (_request, ctx) => {
   requireCompetitiveInsights(ctx)
   const { clientId } = requireFeedSearchAndFilters(ctx)
-  const entities = await listMobileFeedEntities(clientId)
+  const entities = await listMobileFeedEntities(clientId, ctx.userId)
   return mobileJson({
     states: STATES,
     parties: PARTIES,

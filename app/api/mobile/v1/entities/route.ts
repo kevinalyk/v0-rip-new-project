@@ -47,7 +47,7 @@ export const GET = withMobileAuth(async (request, ctx) => {
   const { clientId } = requireClientContext(ctx)
   const searchParams = new URL(request.url).searchParams
   const cursor = decodeDirectoryCursor(searchParams.get("cursor"))
-  const result = await listDirectoryEntities(clientId, parseDirectoryFilters(searchParams), cursor)
+  const result = await listDirectoryEntities(clientId, ctx.userId, parseDirectoryFilters(searchParams), cursor)
   return mobileJson({
     data: result.entities,
     pagination: {

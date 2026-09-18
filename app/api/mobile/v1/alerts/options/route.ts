@@ -12,7 +12,7 @@ import {
 export const GET = withMobileAuth(async (_request, ctx) => {
   const { clientId } = requireMobileAlerts(ctx)
   const [entities, tags] = await Promise.all([
-    listMobileFeedEntities(clientId),
+    listMobileFeedEntities(clientId, ctx.userId),
     prisma.entityTag.findMany({
       where: { clientId },
       distinct: ["tagName"],

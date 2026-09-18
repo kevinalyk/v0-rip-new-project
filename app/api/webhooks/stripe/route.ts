@@ -34,13 +34,16 @@ async function enforceFollowLimits(clientId: string, newPlan: string, prismaClie
     },
   })
 
-  const followsToRemove = currentFollows.length - newFollowLimit
-  if (followsToRemove <= 0) {
-    return 0
+  const followsByUser = new Map<string, typeof currentFollows>()
+  for (const follow of currentFollows) {
+    const follows = followsByUser.get(follow.userId) || []
+    follows.push(follow)
+    followsByUser.set(follow.userId, follows)
   }
-
-  const entitiesToUnfollow = currentFollows.slice(newFollowLimit)
-  const entityIdsToUnfollow = entitiesToUnfollow.map((f) => f.id)
+  const entityIdsToUnfollow = [...followsByUser.values()]
+    .flatMap((follows) => follows.slice(newFollowLimit))
+    .map((follow) => follow.id)
+  if (entityIdsToUnfollow.length === 0) return 0
 
   await prismaClient.ciEntitySubscription.deleteMany({
     where: {
@@ -48,8 +51,8 @@ async function enforceFollowLimits(clientId: string, newPlan: string, prismaClie
     },
   })
 
-  console.log(`[Stripe Webhook] Unfollowed ${followsToRemove} entities for client ${clientId}`)
-  return followsToRemove
+  console.log(`[Stripe Webhook] Unfollowed ${entityIdsToUnfollow.length} excess personal follows for client ${clientId}`)
+  return entityIdsToUnfollow.length
 }
 
 function getFeaturesLost(oldPlan: string, newPlan: string): string[] {
@@ -520,22 +523,20 @@ export async function POST(req: NextRequest) {
               const expiryDate = new Date(subscription.cancel_at * 1000)
               const currentPlanName = formatPlanName(client.subscriptionPlan)
 
-              const follows = await prisma.ciEntitySubscription.findMany({
-                where: { clientId: client.id },
-                include: { entity: { select: { name: true } } },
-                orderBy: { createdAt: "asc" },
-              })
-
-              const followedEntityNames = follows.map((f) => f.entity.name)
               const featuresLost = getFeaturesLost(client.subscriptionPlan, "free")
 
               for (const user of users) {
+                const follows = await prisma.ciEntitySubscription.findMany({
+                  where: { clientId: client.id, userId: user.id },
+                  include: { entity: { select: { name: true } } },
+                  orderBy: { createdAt: "asc" },
+                })
                 await sendSubscriptionCancellationWarning(
                   user.email,
                   client.slug,
                   currentPlanName,
                   expiryDate,
-                  followedEntityNames,
+                  follows.map((follow) => follow.entity.name),
                   featuresLost,
                 )
               }
@@ -667,20 +668,7 @@ export async function POST(req: NextRequest) {
               const newPlan = client.scheduledDowngradePlan as SubscriptionPlan
               const newLimits = getPlanLimits(newPlan)
 
-              const follows = await prisma.ciEntitySubscription.findMany({
-                where: { clientId: client.id },
-                orderBy: { createdAt: "asc" },
-              })
-
-              if (follows.length > (newLimits.ciFollowLimit || 0)) {
-                const toUnfollow = follows.slice(newLimits.ciFollowLimit || 0)
-                await prisma.ciEntitySubscription.deleteMany({
-                  where: {
-                    id: { in: toUnfollow.map((f) => f.id) },
-                  },
-                })
-                console.log(`[Stripe Webhook] Unfollowed ${toUnfollow.length} entities due to plan downgrade`)
-              }
+              await enforceFollowLimits(client.id, newPlan, prisma)
 
               updateData.subscriptionPlan = newPlan
               updateData.scheduledDowngradePlan = null

@@ -74,6 +74,7 @@ export const GET = withMobileAuth(async (request, ctx) => {
 
   const { items, nextCursor, hasMore } = await getFeedPage(
     clientId,
+    ctx.userId,
     plan,
     parseMobileFeedFilters(url.searchParams),
     cursor,

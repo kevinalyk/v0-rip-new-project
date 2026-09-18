@@ -56,6 +56,7 @@ async function cleanup() {
   await prisma.competitiveInsightCampaign.deleteMany({ where: { subject: { startsWith: PREFIX } } })
   await prisma.smsQueue.deleteMany({ where: { rawData: { startsWith: PREFIX } } })
   await prisma.ciEntitySubscription.deleteMany({ where: { clientId: { startsWith: PREFIX } } })
+  await prisma.user.deleteMany({ where: { email: { startsWith: PREFIX.toLowerCase() } } })
   await prisma.ciEntity.deleteMany({ where: { name: { startsWith: PREFIX } } })
   await prisma.client.deleteMany({ where: { id: { startsWith: PREFIX } } })
 }
@@ -74,6 +75,14 @@ async function main() {
       subscriptionPlan: "paid",
     },
   })
+  const user = await prisma.user.create({
+    data: {
+      email: `${PREFIX.toLowerCase()}user@example.com`,
+      password: "test-only",
+      firstLogin: false,
+      clientId: client.id,
+    },
+  })
 
   const entities = await Promise.all(
     Array.from({ length: 6 }, (_, i) =>
@@ -84,22 +93,22 @@ async function main() {
   try {
     await test("concurrent follows of the SAME entity are idempotent — no error, one row", async () => {
       const results = await Promise.allSettled([
-        followEntity(client.id, "paid", entities[0].id),
-        followEntity(client.id, "paid", entities[0].id),
-        followEntity(client.id, "paid", entities[0].id),
+        followEntity(client.id, user.id, "paid", entities[0].id),
+        followEntity(client.id, user.id, "paid", entities[0].id),
+        followEntity(client.id, user.id, "paid", entities[0].id),
       ])
       const rejected = results.filter((r) => r.status === "rejected")
       assert(rejected.length === 0, `expected no rejections from concurrent identical follows, got ${rejected.length}`)
 
-      const count = await prisma.ciEntitySubscription.count({ where: { clientId: client.id, entityId: entities[0].id } })
+      const count = await prisma.ciEntitySubscription.count({ where: { userId: user.id, entityId: entities[0].id } })
       assert(count === 1, `expected exactly 1 subscription row, got ${count}`)
 
-      await unfollowEntity(client.id, entities[0].id)
+      await unfollowEntity(client.id, user.id, entities[0].id)
     })
 
     await test("follow limit is never exceeded under concurrent follows of DIFFERENT entities", async () => {
       // Limit is 3 on the "paid" plan; fire 6 concurrent follows of 6 different entities.
-      const results = await Promise.allSettled(entities.map((e) => followEntity(client.id, "paid", e.id)))
+      const results = await Promise.allSettled(entities.map((e) => followEntity(client.id, user.id, "paid", e.id)))
 
       const fulfilled = results.filter((r) => r.status === "fulfilled")
       const rejectedWithLimit = results.filter(
@@ -109,18 +118,18 @@ async function main() {
       assert(fulfilled.length === 3, `expected exactly 3 successful follows (the plan limit), got ${fulfilled.length}`)
       assert(rejectedWithLimit.length === 3, `expected exactly 3 FOLLOW_LIMIT_REACHED rejections, got ${rejectedWithLimit.length}`)
 
-      const finalCount = await prisma.ciEntitySubscription.count({ where: { clientId: client.id } })
+      const finalCount = await prisma.ciEntitySubscription.count({ where: { userId: user.id } })
       assert(finalCount === 3, `follow count must never exceed the plan limit of 3, got ${finalCount}`)
 
       await prisma.ciEntitySubscription.deleteMany({ where: { clientId: client.id } })
     })
 
     await test("unlimited-follow plans skip the limit check entirely", async () => {
-      const results = await Promise.allSettled(entities.map((e) => followEntity(client.id, "all", e.id)))
+      const results = await Promise.allSettled(entities.map((e) => followEntity(client.id, user.id, "all", e.id)))
       const rejected = results.filter((r) => r.status === "rejected")
       assert(rejected.length === 0, `plan with no follow limit should never reject, got ${rejected.length} rejections`)
 
-      const finalCount = await prisma.ciEntitySubscription.count({ where: { clientId: client.id } })
+      const finalCount = await prisma.ciEntitySubscription.count({ where: { userId: user.id } })
       assert(finalCount === entities.length, `expected all ${entities.length} follows to succeed, got ${finalCount}`)
 
       await prisma.ciEntitySubscription.deleteMany({ where: { clientId: client.id } })
@@ -140,28 +149,30 @@ async function main() {
       await prisma.ciEntity.create({
         data: { name: `${PREFIX}Directory Hidden Broker`, type: "data_broker", party: "republican", state: "MO" },
       })
-      const otherClient = await prisma.client.create({
+      const teammate = await prisma.user.create({
         data: {
-          id: `${PREFIX}other-client`,
-          name: `${PREFIX}Other Client`,
-          slug: `${PREFIX.toLowerCase()}other-client`,
-          active: true,
-          subscriptionPlan: "all",
+          email: `${PREFIX.toLowerCase()}teammate@example.com`,
+          password: "test-only",
+          firstLogin: false,
+          clientId: client.id,
         },
       })
-      await prisma.ciEntitySubscription.create({ data: { clientId: otherClient.id, entityId: directoryEntity.id } })
+      await prisma.ciEntitySubscription.create({
+        data: { clientId: client.id, userId: teammate.id, entityId: directoryEntity.id },
+      })
 
       const beforeFollow = await listDirectoryEntities(
         client.id,
+        user.id,
         { search: "Directory", party: "republican", state: "MO", entityType: "candidate" },
         null,
       )
       assert(beforeFollow.entities.length === 1, `expected one matching candidate, got ${beforeFollow.entities.length}`)
       assert(beforeFollow.entities[0].id === directoryEntity.id, "expected the candidate result")
-      assert(beforeFollow.entities[0].isFollowing === false, "another client's follow must not leak")
+      assert(beforeFollow.entities[0].isFollowing === false, "a teammate's follow must not leak")
 
-      await followEntity(client.id, "all", directoryEntity.id)
-      const afterFollow = await listDirectoryEntities(client.id, { search: "Directory" }, null)
+      await followEntity(client.id, user.id, "all", directoryEntity.id)
+      const afterFollow = await listDirectoryEntities(client.id, user.id, { search: "Directory" }, null)
       assert(afterFollow.entities.some((entity) => entity.id === directoryEntity.id && entity.isFollowing), "caller's follow should be present")
       assert(!afterFollow.entities.some((entity) => entity.type === "data_broker"), "data brokers must never appear")
     })
@@ -192,7 +203,7 @@ async function main() {
         },
       })
 
-      const profile = await getDirectoryEntity(client.id, "all", directoryEntity.id)
+      const profile = await getDirectoryEntity(client.id, user.id, "all", directoryEntity.id)
       assert(profile.id === directoryEntity.id, "expected requested profile")
       assert(profile.imageUrl === "https://example.com/candidate.png", "expected profile image")
       assert(profile.recentMessages.some((message) => message.type === "email"), "expected recent email")

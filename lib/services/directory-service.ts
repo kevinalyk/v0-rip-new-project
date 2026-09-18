@@ -131,6 +131,7 @@ function directoryWhere(filters: DirectoryFilters): Prisma.CiEntityWhereInput {
 
 export async function listDirectoryEntities(
   clientId: string,
+  userId: string,
   filters: DirectoryFilters,
   cursor: DirectoryCursor | null,
 ) {
@@ -143,7 +144,7 @@ export async function listDirectoryEntities(
       select: {
         ...directoryListSelect,
         subscriptions: {
-          where: { clientId },
+          where: { clientId, userId },
           select: directoryListSelect.subscriptions.select,
           take: 1,
         },
@@ -175,6 +176,7 @@ export async function listDirectoryEntities(
 
 export async function getDirectoryEntity(
   clientId: string,
+  userId: string,
   plan: SubscriptionPlan,
   entityId: string,
 ) {
@@ -183,7 +185,7 @@ export async function getDirectoryEntity(
     select: {
       ...directoryDetailSelect,
       subscriptions: {
-        where: { clientId },
+        where: { clientId, userId },
         select: directoryDetailSelect.subscriptions.select,
         take: 1,
       },

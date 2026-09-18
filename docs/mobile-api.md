@@ -157,7 +157,7 @@ The mobile feed intentionally mirrors the existing web Competitive Insights feed
 - `tag` and `subscriptionsOnly` are resolved to entity-ID sets (via `EntityTag` and
   `CiEntitySubscription`, both scoped to the caller's `clientId`) and intersected
   when both are supplied. An empty resulting set (e.g. `subscriptionsOnly=true` for
-  a client following nothing) short-circuits to an empty feed — it is never treated
+  a user following nothing) short-circuits to an empty feed — it is never treated
   as "no restriction."
 - Every filter — access scope, selected entity IDs, entity attributes
   (`party`/`state`/`entityType`), Third Party/House File classification, donation
@@ -180,7 +180,7 @@ rejected outright rather than silently treated as "start from the beginning."
 
 ## Follow limits and concurrency
 
-`POST /entities/[id]/follow` enforces the client's subscription-plan follow limit
+`POST /entities/[id]/follow` enforces the caller's subscription-plan follow limit
 and is safe under concurrent calls (double-taps, multiple devices):
 
 - The existence check, count, and insert run inside one `Serializable` Prisma
@@ -315,7 +315,8 @@ data-broker, processed-SMS, and retention-window checks. An inaccessible item re
 the same `404 NOT_FOUND` response as feed detail and is not mutated.
 
 ### `GET /api/mobile/v1/entities/followed` (bearer)
-Entities (`CiEntity`) the caller's client currently follows: `{ data: CiEntity[] }`.
+Entities (`CiEntity`) the signed-in user currently follows: `{ data: CiEntity[] }`.
+Following is personal: teammates in the same client can maintain different lists.
 
 ### `GET /api/mobile/v1/entities` (bearer)
 Cursor-paginated mobile Directory. Supports `search`, `party`, `state`,
@@ -379,7 +380,7 @@ Registers or refreshes this installation's Expo push token:
 `{ expoPushToken, deviceId, platform: "ios", followingEnabled? }`. A token can belong
 to only one user; signing into the same installation as another account safely moves
 the token. Setting `followingEnabled: true` opts this installation into one push
-whenever a new email or SMS from any entity followed by the user's client is ingested.
+whenever a new email or SMS from any entity followed by that user is ingested.
 New registrations default this app-level preference to true after Apple grants system
 notification permission. Re-registering an existing installation without the field
 preserves its stored preference, so an explicit opt-out is never silently reversed.
@@ -415,7 +416,7 @@ access, a supported paid plan, and an enabled device token. Matching supports
 keyword, entity, party, state, entity type, Email/SMS, House File/Third Party,
 donation platform, followed-only, and client-scoped entity-tag criteria.
 The universal Following preference is available across plans and selects recipients
-from the client-level followed-entity list plus each device's explicit opt-in.
+from the user's personal followed-entity list plus each device's explicit opt-in.
 Data-broker messages never produce a notification.
 
 At most one push is sent to a user for a message, even if several of their alerts
@@ -428,7 +429,7 @@ the normal feed authorization and retention rules run again.
 
 The same deduplication covers followed-entity notifications and custom-alert matches,
 so a user who qualifies through both paths still receives only one push. Shared seed
-messages may notify every opted-in client following the entity. Personal captures are
+messages may notify every opted-in user following the entity. Personal captures are
 restricted to the source client before recipient selection, matching mobile feed
 authorization and preventing cross-client notification leakage.
 

@@ -108,6 +108,20 @@ async function main() {
       dataRetentionDays: 90,
     },
   })
+  const [userA, userB, tightRetentionUser, starterUser] = await Promise.all([
+    prisma.user.create({
+      data: { email: `${PREFIX.toLowerCase()}a@example.com`, password: "test-only", firstLogin: false, clientId: clientA.id },
+    }),
+    prisma.user.create({
+      data: { email: `${PREFIX.toLowerCase()}b@example.com`, password: "test-only", firstLogin: false, clientId: clientB.id },
+    }),
+    prisma.user.create({
+      data: { email: `${PREFIX.toLowerCase()}tight@example.com`, password: "test-only", firstLogin: false, clientId: clientTightRetention.id },
+    }),
+    prisma.user.create({
+      data: { email: `${PREFIX.toLowerCase()}starter@example.com`, password: "test-only", firstLogin: false, clientId: clientStarter.id },
+    }),
+  ])
 
   const entity = await prisma.ciEntity.create({
     data: {
@@ -160,7 +174,7 @@ async function main() {
     })
 
     await test("feed listing includes shared (entity-assigned) campaigns for any client", async () => {
-      const { items } = await getFeedPage(clientB.id, PLAN, {}, null)
+      const { items } = await getFeedPage(clientB.id, userB.id, PLAN, {}, null)
       assert(items.some((i) => i.id === sharedCampaign.id), "shared campaign should appear for a non-owning client")
       assert(
         items.find((i) => i.id === sharedCampaign.id)?.entity?.imageUrl === entity.imageUrl,
@@ -169,7 +183,7 @@ async function main() {
     })
 
     await test("feed listing never includes a client's own personal (unassigned) capture", async () => {
-      const { items } = await getFeedPage(clientA.id, PLAN, {}, null)
+      const { items } = await getFeedPage(clientA.id, userA.id, PLAN, {}, null)
       assert(
         !items.some((i) => i.id === personalCampaignA.id),
         "personal capture must not appear in the shared feed listing, even for its own client",
@@ -177,7 +191,7 @@ async function main() {
     })
 
     await test("feed listing excludes campaigns assigned to a data_broker entity", async () => {
-      const { items } = await getFeedPage(clientA.id, PLAN, {}, null)
+      const { items } = await getFeedPage(clientA.id, userA.id, PLAN, {}, null)
       assert(!items.some((i) => i.id === dataBrokerCampaign.id), "data_broker campaigns must be excluded")
     })
 
@@ -188,7 +202,7 @@ async function main() {
     // shared feed instead of the intended zero rows. See the entityAttributeWhere comment in
     // lib/services/feed-service.ts for the fix (separate AND conditions).
     await test("feed listing does not leak data_broker campaigns via entityType=data_broker filter", async () => {
-      const { items } = await getFeedPage(clientA.id, PLAN, { entityType: "data_broker" }, null)
+      const { items } = await getFeedPage(clientA.id, userA.id, PLAN, { entityType: "data_broker" }, null)
       assert(!items.some((i) => i.id === dataBrokerCampaign.id), "entityType=data_broker must not bypass the exclusion")
       assert(items.length === 0, "entityType=data_broker should yield zero rows given the contradiction with the exclusion")
     })
@@ -267,12 +281,12 @@ async function main() {
 
     // ── subscriptionsOnly: empty vs populated follow list ─────────────────────
     await test("subscriptionsOnly=true with zero follows returns an empty feed, not the full feed", async () => {
-      const { items } = await getFeedPage(clientB.id, PLAN, { subscriptionsOnly: true }, null)
+      const { items } = await getFeedPage(clientB.id, userB.id, PLAN, { subscriptionsOnly: true }, null)
       assert(items.length === 0, "a client following nothing should see nothing with subscriptionsOnly=true")
     })
 
     await test("subscriptionsOnly=true with a follow returns only that entity's items", async () => {
-      await prisma.ciEntitySubscription.create({ data: { clientId: clientB.id, entityId: entity.id } })
+      await prisma.ciEntitySubscription.create({ data: { clientId: clientB.id, userId: userB.id, entityId: entity.id } })
       const otherEntityCampaign = await prisma.competitiveInsightCampaign.create({
         data: {
           entityId: otherEntity.id,
@@ -284,7 +298,7 @@ async function main() {
         },
       })
       try {
-        const { items } = await getFeedPage(clientB.id, PLAN, { subscriptionsOnly: true }, null)
+        const { items } = await getFeedPage(clientB.id, userB.id, PLAN, { subscriptionsOnly: true }, null)
         assert(items.some((i) => i.id === sharedCampaign.id), "followed entity's campaign should appear")
         assert(!items.some((i) => i.id === otherEntityCampaign.id), "un-followed entity's campaign should not appear")
       } finally {
@@ -302,10 +316,10 @@ async function main() {
         data: { clientId: clientA.id, entityId: entity.id, tagName: "watchlist", tagColor: "#FF0000", createdBy: taggingUser.id },
       })
       try {
-        const tagged = await getFeedPage(clientA.id, PLAN, { tag: "watchlist" }, null)
+        const tagged = await getFeedPage(clientA.id, userA.id, PLAN, { tag: "watchlist" }, null)
         assert(tagged.items.some((i) => i.id === sharedCampaign.id), "entity tagged 'watchlist' should appear")
 
-        const untagged = await getFeedPage(clientB.id, PLAN, { tag: "watchlist" }, null)
+        const untagged = await getFeedPage(clientB.id, userB.id, PLAN, { tag: "watchlist" }, null)
         assert(untagged.items.length === 0, "a client with no matching tags should see an empty feed")
       } finally {
         await prisma.entityTag.deleteMany({ where: { clientId: clientA.id, entityId: entity.id } })
@@ -315,9 +329,9 @@ async function main() {
 
     // ── Search filters (email + sms) ───────────────────────────────────────────
     await test("search filter matches email subject/sender", async () => {
-      const { items } = await getFeedPage(clientA.id, PLAN, { search: "Shared campaign" }, null)
+      const { items } = await getFeedPage(clientA.id, userA.id, PLAN, { search: "Shared campaign" }, null)
       assert(items.some((i) => i.id === sharedCampaign.id), "search should match the campaign subject")
-      const { items: noMatch } = await getFeedPage(clientA.id, PLAN, { search: "nonexistent-search-term-xyz" }, null)
+      const { items: noMatch } = await getFeedPage(clientA.id, userA.id, PLAN, { search: "nonexistent-search-term-xyz" }, null)
       assert(noMatch.length === 0, "an unmatched search term should return nothing")
     })
 
@@ -349,6 +363,7 @@ async function main() {
     await test("repeatable entity selection restricts results to the selected entity IDs", async () => {
       const { items } = await getFeedPage(
         clientA.id,
+        userA.id,
         PLAN,
         { entityIds: [independentEntity.id], search: PREFIX },
         null,
@@ -360,6 +375,7 @@ async function main() {
     await test("party, state, and entity-type filters match the web feed semantics", async () => {
       const { items } = await getFeedPage(
         clientA.id,
+        userA.id,
         PLAN,
         { party: "independent", state: "CO", entityType: "organization", search: PREFIX },
         null,
@@ -442,7 +458,7 @@ async function main() {
     })
 
     await test("Third Party and House File filters work independently and together", async () => {
-      const thirdParty = await getFeedPage(clientA.id, PLAN, { search: `${PREFIX}Ownership`, thirdParty: true }, null)
+      const thirdParty = await getFeedPage(clientA.id, userA.id, PLAN, { search: `${PREFIX}Ownership`, thirdParty: true }, null)
       assert(thirdParty.items.some((item) => item.id === thirdPartyCampaign.id), "third-party item should appear")
       assert(thirdParty.items.some((item) => item.id === legacyThirdPartyCampaign.id), "legacy third-party item should appear")
       assert(thirdParty.items.some((item) => item.id === legacyThirdPartySms.id), "legacy third-party SMS should appear")
@@ -450,7 +466,7 @@ async function main() {
       assert(!thirdParty.items.some((item) => item.id === legacyHouseCampaign.id), "legacy house-file item should be excluded")
       assert(!thirdParty.items.some((item) => item.id === legacyHouseSms.id), "legacy house-file SMS should be excluded")
 
-      const houseFile = await getFeedPage(clientA.id, PLAN, { search: `${PREFIX}Ownership`, houseFileOnly: true }, null)
+      const houseFile = await getFeedPage(clientA.id, userA.id, PLAN, { search: `${PREFIX}Ownership`, houseFileOnly: true }, null)
       assert(houseFile.items.some((item) => item.id === houseFileCampaign.id), "house-file item should appear")
       assert(houseFile.items.some((item) => item.id === legacyHouseCampaign.id), "legacy house-file item should appear")
       assert(houseFile.items.some((item) => item.id === legacyHouseSms.id), "legacy house-file SMS should appear")
@@ -460,6 +476,7 @@ async function main() {
 
       const both = await getFeedPage(
         clientA.id,
+        userA.id,
         PLAN,
         { search: `${PREFIX}Ownership`, thirdParty: true, houseFileOnly: true },
         null,
@@ -528,6 +545,7 @@ async function main() {
     await test("donation-platform filter uses the campaign's normalized platform", async () => {
       const { items } = await getFeedPage(
         clientA.id,
+        userA.id,
         PLAN,
         { search: `${PREFIX}Platform`, donationPlatform: "winred" },
         null,
@@ -539,6 +557,7 @@ async function main() {
     await test("donation-platform filter matches legacy email JSON arrays and text-or-jsonb SMS storage", async () => {
       const anedot = await getFeedPage(
         clientA.id,
+        userA.id,
         PLAN,
         { search: `${PREFIX}Legacy Anedot`, donationPlatform: "anedot" },
         null,
@@ -547,6 +566,7 @@ async function main() {
 
       const ngpvan = await getFeedPage(
         clientA.id,
+        userA.id,
         PLAN,
         { search: `${PREFIX}Legacy NGPVAN`, donationPlatform: "ngpvan" },
         null,
@@ -555,6 +575,7 @@ async function main() {
 
       const winredSms = await getFeedPage(
         clientA.id,
+        userA.id,
         PLAN,
         { search: `${PREFIX}Legacy WinRed SMS`, donationPlatform: "winred", messageType: "sms" },
         null,
@@ -577,6 +598,7 @@ async function main() {
     await test("custom date range is combined with, and cannot widen, the retention floor", async () => {
       const inside = await getFeedPage(
         clientA.id,
+        userA.id,
         PLAN,
         {
           search: `${PREFIX}Dated`,
@@ -589,6 +611,7 @@ async function main() {
 
       const outside = await getFeedPage(
         clientA.id,
+        userA.id,
         PLAN,
         { search: `${PREFIX}Dated`, fromDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
         null,
@@ -616,12 +639,12 @@ async function main() {
     })
 
     await test("search filter matches sms message content", async () => {
-      const { items } = await getFeedPage(clientA.id, PLAN, { search: `${PREFIX}Please donate`, messageType: "sms" }, null)
+      const { items } = await getFeedPage(clientA.id, userA.id, PLAN, { search: `${PREFIX}Please donate`, messageType: "sms" }, null)
       assert(items.some((i) => i.id === smsCampaign.id), "search should match the SMS message body")
     })
 
     await test("unprocessed SMS is excluded from the feed listing", async () => {
-      const { items } = await getFeedPage(clientA.id, PLAN, { messageType: "sms" }, null)
+      const { items } = await getFeedPage(clientA.id, userA.id, PLAN, { messageType: "sms" }, null)
       assert(!items.some((i) => i.id === unprocessedSms.id), "unprocessed SMS must not appear in the feed")
       assert(items.some((i) => i.id === smsCampaign.id), "processed SMS should still appear")
     })
@@ -661,7 +684,7 @@ async function main() {
         },
       })
       try {
-        const { items } = await getFeedPage(clientTightRetention.id, PLAN, {}, null)
+        const { items } = await getFeedPage(clientTightRetention.id, tightRetentionUser.id, PLAN, {}, null)
         assert(
           !items.some((i) => i.id === oldCampaign.id),
           "an item older than the client's 1-day retention window must not appear, even on the 'all' plan",
@@ -696,7 +719,7 @@ async function main() {
       })
 
       try {
-        const { items } = await getFeedPage(clientStarter.id, "free", {}, null)
+        const { items } = await getFeedPage(clientStarter.id, starterUser.id, "free", {}, null)
         assert(items.some((item) => item.id === recentCampaign.id), "Starter should see a campaign inside the delayed one-hour window")
         assert(!items.some((item) => item.id === oldCampaign.id), "Starter must not see newer data outside the delayed window")
 
@@ -704,7 +727,7 @@ async function main() {
         assert(oldDetail === null, "Starter must not reach an older item directly by ID")
 
         await expectMobileError(
-          () => getFeedPage(clientStarter.id, "free", { fromDate: new Date(0) }, null),
+          () => getFeedPage(clientStarter.id, starterUser.id, "free", { fromDate: new Date(0) }, null),
           "FEED_FILTERS_NOT_AVAILABLE",
         )
       } finally {
@@ -745,12 +768,12 @@ async function main() {
         ),
       )
       try {
-        const page1 = await getFeedPage(clientA.id, PLAN, {}, null)
+        const page1 = await getFeedPage(clientA.id, userA.id, PLAN, {}, null)
         assert(page1.hasMore, "expected more than one page given >25 bulk items")
         assert(page1.nextCursor !== null, "expected a nextCursor on a full first page")
 
         const cursor = decodeCursor(page1.nextCursor)
-        const page2 = await getFeedPage(clientA.id, PLAN, {}, cursor)
+        const page2 = await getFeedPage(clientA.id, userA.id, PLAN, {}, cursor)
 
         const page1Ids = new Set(page1.items.map((i) => i.id))
         const overlap = page2.items.filter((i) => page1Ids.has(i.id))

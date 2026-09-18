@@ -1,11 +1,11 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { PrismaClient } from "@prisma/client"
 import { cookies } from "next/headers"
 import jwt from "jsonwebtoken"
 
 const prisma = new PrismaClient()
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get("auth_token")?.value
@@ -23,24 +23,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "User not found or not associated with a client" }, { status: 404 })
     }
 
-    // Get clientSlug from query params for super_admins
-    const searchParams = request.nextUrl.searchParams
-    const clientSlug = searchParams.get("clientSlug")
-    
-    let targetClientId = user.clientId
-    if (user.role === "super_admin" && clientSlug) {
-      const targetClient = await prisma.client.findUnique({
-        where: { slug: clientSlug },
-        select: { id: true },
-      })
-      if (targetClient) {
-        targetClientId = targetClient.id
-      }
-    }
-
-    // Get all subscribed entity IDs for this client
+    // Following is personal, including for super-admins viewing another client.
     const subscriptions = await prisma.ciEntitySubscription.findMany({
-      where: { clientId: targetClientId },
+      where: { clientId: user.clientId, userId: user.id },
       select: { entityId: true },
     })
 

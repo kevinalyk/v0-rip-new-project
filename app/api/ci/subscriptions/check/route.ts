@@ -58,8 +58,8 @@ export async function GET(request: NextRequest) {
 
     const subscription = await prisma.ciEntitySubscription.findUnique({
       where: {
-        clientId_entityId: {
-          clientId: user.clientId,
+        userId_entityId: {
+          userId: user.id,
           entityId,
         },
       },

@@ -37,6 +37,7 @@ model User {
   entityTags    EntityTag[] // Added relation to entity tags created by this user
   lookupSearches LookupSearch[] // Searches made via the public lookup tool
   campaignAlerts CampaignAlertSubscription[]
+  ciEntitySubscriptions CiEntitySubscription[]
   slackIntegrationsConnected SlackIntegration[] // Slack integrations this user (as Owner/Admin) completed setup for
   slackChannelsConnected     SlackChannel[] // Additional (paid, add-on) Slack bot channels this user completed setup for
   mobileRefreshTokens MobileRefreshToken[] // Mobile app refresh-token sessions (see lib/mobile-auth.ts)
@@ -840,16 +841,20 @@ model PersonalPhoneNumber {
 model CiEntitySubscription {
   id        String   @id @default(cuid())
   clientId  String
+  userId    String
   entityId  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   entity    CiEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
 
-  @@unique([clientId, entityId])
-  @@index([clientId])
+  @@unique([userId, entityId])
+  @@index([clientId, userId])
   @@index([entityId])
+  // Keep the legacy client-level table intact for zero-downtime deployment and rollback.
+  @@map("CiUserEntitySubscription")
 }
 
 model CiView {

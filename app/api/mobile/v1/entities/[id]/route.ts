@@ -8,6 +8,6 @@ type Params = { params: Promise<{ id: string }> }
 export const GET = withMobileAuth<Params>(async (_request, ctx, { params }) => {
   const { clientId, plan } = requireClientContext(ctx)
   const { id } = await params
-  const entity = await getDirectoryEntity(clientId, plan, id)
+  const entity = await getDirectoryEntity(clientId, ctx.userId, plan, id)
   return mobileJson({ data: entity })
 })

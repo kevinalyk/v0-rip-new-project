@@ -74,7 +74,7 @@ function normalizedParty(value: string | null): string {
 export function matchesMobileAlert(
   alert: MatchableAlert,
   candidate: MobileAlertCandidate,
-  clientFollowsEntity: boolean,
+  userFollowsEntity: boolean,
   clientTagsForEntity: ReadonlySet<string>,
 ): boolean {
   if (alert.entityIds.length && !alert.entityIds.includes(candidate.entityId)) return false
@@ -89,7 +89,7 @@ export function matchesMobileAlert(
     alert.donationPlatform &&
     alert.donationPlatform.toLowerCase() !== candidate.donationPlatform?.toLowerCase()
   ) return false
-  if (alert.subscriptionsOnly && !clientFollowsEntity) return false
+  if (alert.subscriptionsOnly && !userFollowsEntity) return false
   if (alert.tag && !clientTagsForEntity.has(alert.tag.toLowerCase())) return false
 
   if (alert.search) {
@@ -173,15 +173,15 @@ export async function notifyMobileAlertsForMessage(candidate: MobileAlertCandida
   const clientIds = [...new Set(alerts.map((alert) => alert.clientId).filter((id): id is string => Boolean(id)))]
   const [subscriptions, entityTags] = await Promise.all([
     prisma.ciEntitySubscription.findMany({
-      where: { clientId: { in: clientIds }, entityId: candidate.entityId },
-      select: { clientId: true },
+      where: { userId: { in: alerts.map((alert) => alert.userId) }, entityId: candidate.entityId },
+      select: { userId: true },
     }),
     prisma.entityTag.findMany({
       where: { clientId: { in: clientIds }, entityId: candidate.entityId },
       select: { clientId: true, tagName: true },
     }),
-  ]) as [{ clientId: string }[], { clientId: string; tagName: string }[]]
-  const followingClients = new Set(subscriptions.map(({ clientId }) => clientId))
+  ]) as [{ userId: string }[], { clientId: string; tagName: string }[]]
+  const followingUsers = new Set(subscriptions.map(({ userId }) => userId))
   const tagsByClient = new Map<string, Set<string>>()
   for (const { clientId, tagName } of entityTags) {
     const tags = tagsByClient.get(clientId) || new Set<string>()
@@ -216,7 +216,7 @@ export async function notifyMobileAlertsForMessage(candidate: MobileAlertCandida
     if (matchesMobileAlert(
       alert,
       candidate,
-      followingClients.has(client.id),
+      followingUsers.has(alert.userId),
       tagsByClient.get(client.id) || new Set(),
     )) {
       addRecipient(alert.userId, alert.user.mobilePushTokens, alert.id)
@@ -224,46 +224,48 @@ export async function notifyMobileAlertsForMessage(candidate: MobileAlertCandida
   }
 
   // The Following switch is intentionally independent from paid custom alerts.
-  // Every user whose active client follows this entity may opt in on each iPhone.
+  // Every user who personally follows this entity may opt in on each iPhone.
   const followed = await prisma.ciEntitySubscription.findMany({
     where: {
       entityId: candidate.entityId,
       ...(candidate.sourceClientId ? { clientId: candidate.sourceClientId } : {}),
     },
-    select: { clientId: true },
-  }) as { clientId: string }[]
-  const followedClientIds = [...new Set(followed.map(({ clientId }) => clientId))]
-  if (followedClientIds.length) {
-    const clients = await prisma.client.findMany({
-      where: {
-        id: { in: followedClientIds },
-        active: true,
-        hasCompetitiveInsights: true,
-        OR: [
-          { subscriptionStatus: "active" },
-          { subscriptionPlan: "free" },
-        ],
-      },
-      select: {
-        id: true,
-        users: {
-          where: { firstLogin: false },
-          select: {
-            id: true,
-            mobilePushTokens: {
-              where: { enabled: true, followingEnabled: true },
-              select: { id: true, expoPushToken: true },
+    select: {
+      clientId: true,
+      user: {
+        select: {
+          id: true,
+          firstLogin: true,
+          client: {
+            select: {
+              id: true,
+              active: true,
+              hasCompetitiveInsights: true,
+              subscriptionStatus: true,
+              subscriptionPlan: true,
             },
+          },
+          mobilePushTokens: {
+            where: { enabled: true, followingEnabled: true },
+            select: { id: true, expoPushToken: true },
           },
         },
       },
-    })
-    for (const client of clients) {
-      if (!candidateIsVisibleToClient(candidate, client.id)) continue
-      for (const user of client.users) {
-        if (user.mobilePushTokens.length) addRecipient(user.id, user.mobilePushTokens)
-      }
-    }
+    },
+  })
+  for (const subscription of followed) {
+    const user = subscription.user
+    const client = user.client
+    if (
+      user.firstLogin ||
+      !client ||
+      client.id !== subscription.clientId ||
+      !client.active ||
+      !client.hasCompetitiveInsights ||
+      (client.subscriptionPlan !== "free" && client.subscriptionStatus !== "active") ||
+      !candidateIsVisibleToClient(candidate, client.id)
+    ) continue
+    if (user.mobilePushTokens.length) addRecipient(user.id, user.mobilePushTokens)
   }
 
   const prepared: { deliveryId: string; tokens: PushTokenRecord[] }[] = []

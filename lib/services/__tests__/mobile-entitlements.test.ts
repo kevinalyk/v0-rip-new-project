@@ -190,7 +190,7 @@ test("the filter-metadata authorization guard rejects Starter", () => {
 
 test("getFeedPage rejects a Starter filter before attempting database work", async () => {
   await assert.rejects(
-    getFeedPage("not-a-real-client", "free", { search: "fundraising" }, null),
+    getFeedPage("not-a-real-client", "not-a-real-user", "free", { search: "fundraising" }, null),
     (error: unknown) =>
       error instanceof MobileAuthError && error.code === "FEED_FILTERS_NOT_AVAILABLE",
   )

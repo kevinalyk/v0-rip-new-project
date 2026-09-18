@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
 
     // Get all subscribed entity IDs
     const subscriptions = await prisma.ciEntitySubscription.findMany({
-      where: { clientId: user.clientId },
+      where: { clientId: user.clientId, userId: user.id },
       include: { entity: true },
     })
 

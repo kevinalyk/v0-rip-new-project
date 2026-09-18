@@ -13,7 +13,7 @@ export const POST = withMobileAuth<Params>(async (_request, ctx, { params }) => 
   const { id } = await params
 
   try {
-    const result = await followEntity(clientId, plan as SubscriptionPlan, id)
+    const result = await followEntity(clientId, ctx.userId, plan as SubscriptionPlan, id)
     return mobileJson({ following: true, alreadyFollowing: result.alreadyFollowing })
   } catch (error) {
     if (error instanceof MobileAuthError) return mobileError(error.status, error.code, error.message)
@@ -27,6 +27,6 @@ export const DELETE = withMobileAuth<Params>(async (_request, ctx, { params }) =
   const { clientId } = requireClientContext(ctx)
   const { id } = await params
 
-  await unfollowEntity(clientId, id)
+  await unfollowEntity(clientId, ctx.userId, id)
   return mobileJson({ following: false })
 })

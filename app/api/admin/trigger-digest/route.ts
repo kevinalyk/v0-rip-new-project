@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
         const subscriptions = await prisma.ciEntitySubscription.findMany({
           where: { clientId: client.id },
           select: {
+            userId: true,
             entityId: true,
             entity: { select: { id: true, name: true, party: true, state: true } },
           },
@@ -144,7 +145,7 @@ export async function POST(request: NextRequest) {
         for (const s of smsMessages) smsTokenMap[s.id] = await ensureSmsToken(s.id, s.shareToken)
 
         // ── Build entity sections ─────────────────────────────────────────────
-        const entitySections: DigestEntitySection[] = subscriptions.map((sub) => {
+        const entitySections: Array<DigestEntitySection & { userId: string }> = subscriptions.map((sub) => {
           const entity = sub.entity
           const entityEmails: DigestMessage[] = emails
             .filter((e) => e.entityId === entity.id)
@@ -168,6 +169,7 @@ export async function POST(request: NextRequest) {
             .sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime())
             .slice(0, 10)
           return {
+            userId: sub.userId,
             entityName: entity.name,
             entitySlug: nameToSlug(entity.name),
             party: entity.party,
@@ -188,7 +190,7 @@ export async function POST(request: NextRequest) {
             digestEnabled: true,
             ...(emailOverride ? { email: emailOverride } : {}),
           },
-          select: { email: true, firstName: true },
+          select: { id: true, email: true, firstName: true },
         })
 
         let sent = 0
@@ -196,11 +198,15 @@ export async function POST(request: NextRequest) {
 
         for (const user of users) {
           if (!user.email) continue
+          const personalSections: DigestEntitySection[] = entitySections
+            .filter((section) => section.userId === user.id)
+          if (personalSections.length === 0) continue
           const ok = await sendFollowingDigest({
             to: user.email,
+            userId: user.id,
             firstName: user.firstName,
             digestDate: digestDateLabel,
-            entitySections,
+            entitySections: personalSections,
             clientSlug: client.slug,
           })
           if (ok) sent++

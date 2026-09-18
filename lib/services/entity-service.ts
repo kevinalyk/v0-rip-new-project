@@ -3,9 +3,9 @@ import prisma from "@/lib/prisma"
 import { canFollowMoreEntities, getCIFollowLimit, type SubscriptionPlan } from "@/lib/subscription-utils"
 import { MobileAuthError } from "@/lib/mobile-auth"
 
-export async function listFollowedEntities(clientId: string) {
+export async function listFollowedEntities(clientId: string, userId: string) {
   const subs = await prisma.ciEntitySubscription.findMany({
-    where: { clientId },
+    where: { clientId, userId },
     include: { entity: true },
     orderBy: { createdAt: "desc" },
   })
@@ -41,7 +41,7 @@ function sleep(ms: number) {
  * - Unlimited plans (`limit === null`) skip the transaction/count entirely and go
  *   straight to a plain insert — there is no limit to race against, so the only
  *   thing that needs to be safe is idempotency, which the unique constraint on
- *   (clientId, entityId) already guarantees (caught below as `alreadyFollowing`).
+ *   (userId, entityId) already guarantees (caught below as `alreadyFollowing`).
  *   This also avoids needlessly serializing unrelated concurrent follows against
  *   each other for accounts that don't have a cap to enforce.
  * - Limited plans run the existence check + count + insert inside a single
@@ -53,12 +53,13 @@ function sleep(ms: number) {
  *   backoff up to MAX_SERIALIZATION_RETRIES times rather than assuming one retry
  *   is enough.
  * - If a duplicate insert still slips through (e.g. a retried transaction racing
- *   the `ciEntitySubscription_clientId_entityId` unique constraint directly), that
+ *   the `ciEntitySubscription_userId_entityId` unique constraint directly), that
  *   unique-violation is caught and treated as success — following is idempotent,
  *   never a 500.
  */
 export async function followEntity(
   clientId: string,
+  userId: string,
   plan: SubscriptionPlan,
   entityId: string,
   attempt = 0,
@@ -72,7 +73,7 @@ export async function followEntity(
 
   if (limit === null) {
     try {
-      await prisma.ciEntitySubscription.create({ data: { clientId, entityId } })
+      await prisma.ciEntitySubscription.create({ data: { clientId, userId, entityId } })
       return { alreadyFollowing: false }
     } catch (error) {
       if (isUniqueConstraintViolation(error)) return { alreadyFollowing: true }
@@ -84,11 +85,11 @@ export async function followEntity(
     const result = await prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
         const existing = await tx.ciEntitySubscription.findUnique({
-          where: { clientId_entityId: { clientId, entityId } },
+          where: { userId_entityId: { userId, entityId } },
         })
         if (existing) return { alreadyFollowing: true }
 
-        const currentFollowCount = await tx.ciEntitySubscription.count({ where: { clientId } })
+        const currentFollowCount = await tx.ciEntitySubscription.count({ where: { clientId, userId } })
         if (!canFollowMoreEntities(plan, currentFollowCount)) {
           throw new MobileAuthError(
             403,
@@ -97,7 +98,7 @@ export async function followEntity(
           )
         }
 
-        await tx.ciEntitySubscription.create({ data: { clientId, entityId } })
+        await tx.ciEntitySubscription.create({ data: { clientId, userId, entityId } })
         return { alreadyFollowing: false }
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -109,12 +110,12 @@ export async function followEntity(
       // Small jittered backoff so retries spread out instead of immediately
       // re-colliding with the same set of competing transactions.
       await sleep(10 * (attempt + 1) + Math.random() * 20)
-      return followEntity(clientId, plan, entityId, attempt + 1)
+      return followEntity(clientId, userId, plan, entityId, attempt + 1)
     }
     throw error
   }
 }
 
-export async function unfollowEntity(clientId: string, entityId: string) {
-  await prisma.ciEntitySubscription.deleteMany({ where: { clientId, entityId } })
+export async function unfollowEntity(clientId: string, userId: string, entityId: string) {
+  await prisma.ciEntitySubscription.deleteMany({ where: { clientId, userId, entityId } })
 }

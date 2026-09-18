@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { PrismaClient } from "@prisma/client"
 import { cookies } from "next/headers"
 import jwt from "jsonwebtoken"
-import { canFollowMoreEntities, getCIFollowLimit } from "@/lib/subscription-utils"
+import { canFollowMoreEntities, getCIFollowLimit, type SubscriptionPlan } from "@/lib/subscription-utils"
 
 const prisma = new PrismaClient()
 
@@ -34,8 +34,8 @@ export async function POST(request: NextRequest) {
     // Check if subscription exists
     const existingSubscription = await prisma.ciEntitySubscription.findUnique({
       where: {
-        clientId_entityId: {
-          clientId: user.clientId,
+        userId_entityId: {
+          userId: user.id,
           entityId,
         },
       },
@@ -48,11 +48,11 @@ export async function POST(request: NextRequest) {
       })
       return NextResponse.json({ subscribed: false })
     } else {
-      const subscriptionPlan = user.client?.subscriptionPlan || "free"
+      const subscriptionPlan = (user.client?.subscriptionPlan || "free") as SubscriptionPlan
 
       // Count current subscriptions
       const currentFollowCount = await prisma.ciEntitySubscription.count({
-        where: { clientId: user.clientId },
+        where: { clientId: user.clientId, userId: user.id },
       })
 
       // Check if user can follow more entities
@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
       await prisma.ciEntitySubscription.create({
         data: {
           clientId: user.clientId,
+          userId: user.id,
           entityId,
         },
       })

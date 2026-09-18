@@ -195,6 +195,7 @@ export async function enforceCiRateLimit(
     | "create_entity"
     | "update_entity_identifiers"
     | "update_entity_type"
+    | "update_entity_name"
     | "delete_messages"
     | "add_entity_mapping"
     | "remove_entity_mapping"
@@ -231,12 +232,12 @@ export async function enforceCiRateLimit(
     }
   }
 
-  if (action === "update_entity_identifiers" || action === "update_entity_type") {
+  if (action === "update_entity_identifiers" || action === "update_entity_type" || action === "update_entity_name") {
     const windowStart = new Date(now - 24 * 60 * 60 * 1000)
     const count = await prisma.ciApiActionLog.count({
       where: {
         apiKeyId,
-        action: { in: ["update_entity_identifiers", "update_entity_type"] },
+        action: { in: ["update_entity_identifiers", "update_entity_type", "update_entity_name"] },
         createdAt: { gte: windowStart },
       },
     })
@@ -308,6 +309,7 @@ export async function logCiApiAction(params: {
     | "create_entity"
     | "update_entity_identifiers"
     | "update_entity_type"
+    | "update_entity_name"
     | "delete_messages"
     | "add_entity_mapping"
     | "remove_entity_mapping"

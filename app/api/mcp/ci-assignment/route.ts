@@ -3,7 +3,7 @@
  * Claude.ai / Claude Desktop custom connector. See
  * docs/plans/CLAUDE_CI_ASSIGNMENT_MCP.md for the full design.
  *
- * Deliberately exposes ONLY these 18 tools - nothing else exists on this
+ * Deliberately exposes ONLY these 19 tools - nothing else exists on this
  * surface, so Claude/Grok physically cannot call anything beyond this narrow
  * workflow:
  *   1. list_unassigned_messages   (ci:read)
@@ -24,6 +24,7 @@
  *   16. get_digest_repeating_content (ci:digest_read)
  *   17. get_digest_patterns_and_types (ci:digest_read)
  *   18. get_digest_dem_footnote      (ci:digest_read)
+ *   19. update_entity_name        (ci:update_entity)
  *
  * Tools 9-11 manage the sender email/domain/phone and CTA-domain mappings
  * that assign_messages_to_entity / categorize_messages match against - so
@@ -51,6 +52,11 @@
  * already-sanitized subject/message text - never raw email bodies, donor
  * data, or client account data. No rate limit or kill-switch check, same as
  * the other read-only tools (1, 2, 6, 9).
+ *
+ * Tool 19 lets an entity's display `name` be corrected after creation (e.g.
+ * "Kristen Gillibrand" -> "Kirsten Gillibrand") - restricted to only the
+ * `name` field, same pattern as update_entity_type, and blocked if another
+ * entity already has the target name.
  *
  * Auth: bearer token -> ApiKey table (shared with the read-only public v1
  * API, distinguished by scope strings - see lib/ci-api-auth.ts). Every write
@@ -81,6 +87,7 @@ import {
   assignSmsToEntity,
   mergeEntityDonationIdentifiers,
   updateEntityType,
+  updateEntityName,
   getSopDeleteEligibleMessages,
   softDeleteMessages,
   categorizeMessages,
@@ -466,6 +473,57 @@ const handler = createMcpHandler(
               {
                 type: "text" as const,
                 text: JSON.stringify({ success: true, entityId, type: result.after }, null, 2),
+              },
+            ],
+          }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 19: update_entity_name ─────────────────────────────────────────
+    server.registerTool(
+      "update_entity_name",
+      {
+        title: "Update Entity Name",
+        description:
+          'Fixes an existing entity\'s display name (e.g. a misspelling like "Kristen Gillibrand" -> "Kirsten Gillibrand"). Only this field is editable through this tool - type, party, state, donationIdentifiers, bio, and image stay off-limits. Use list_entities first to confirm the entityId and current name. Fails if another entity already has the target name. Requires a "reasoning" string.',
+        inputSchema: {
+          entityId: z.string(),
+          name: z.string().min(1).describe("The corrected display name"),
+          reasoning: z.string().min(1).describe("Why this entity's name is being corrected"),
+        },
+      },
+      async ({ entityId, name, reasoning }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.UPDATE_ENTITY)
+          await assertAutomationEnabled()
+
+          const apiKeyId = extra.authInfo!.extra!.apiKeyId as string
+          await enforceCiRateLimit(apiKeyId, "update_entity_name")
+
+          const result = await updateEntityName(entityId, name)
+
+          if (!result.success) {
+            throw new CiApiError(result.error || "Failed to update entity name", 500)
+          }
+
+          await logCiApiAction({
+            apiKeyId,
+            action: "update_entity_name",
+            reasoning,
+            targetType: "entity",
+            entityId,
+            beforeState: { name: result.before },
+            afterState: { name: result.after },
+          })
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({ success: true, entityId, name: result.after }, null, 2),
               },
             ],
           }

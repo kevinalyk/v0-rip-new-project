@@ -1126,6 +1126,49 @@ export async function updateEntityType(entityId: string, newType: string) {
 }
 
 /**
+ * Fix an existing entity's display `name` (e.g. a misspelling like "Kristen
+ * Gillibrand" -> "Kirsten Gillibrand") without touching any other field
+ * (type, party, state, description, donationIdentifiers, ballotpediaUrl,
+ * image, etc.). Used by the Claude/Grok-facing CI Assignment MCP's
+ * `update_entity_name` tool, which is deliberately restricted to only this
+ * one field to keep blast radius small - same pattern as updateEntityType.
+ * Blocks the rename if another entity already has the target name (the
+ * `name` column is unique). Returns the before/after state so callers can
+ * log a full audit trail and support Undo.
+ */
+export async function updateEntityName(entityId: string, newName: string) {
+  try {
+    const entity = await prisma.ciEntity.findUnique({ where: { id: entityId } })
+    if (!entity) {
+      return { success: false, error: `Entity ${entityId} not found` }
+    }
+
+    const trimmedName = newName.trim()
+    if (!trimmedName) {
+      return { success: false, error: "Name cannot be empty" }
+    }
+
+    if (trimmedName !== entity.name) {
+      const collision = await prisma.ciEntity.findUnique({ where: { name: trimmedName } })
+      if (collision && collision.id !== entityId) {
+        return { success: false, error: `Another entity already exists with the name "${trimmedName}" (id: ${collision.id})` }
+      }
+    }
+
+    const before = entity.name
+    const updated = await prisma.ciEntity.update({
+      where: { id: entityId },
+      data: { name: trimmedName },
+    })
+
+    return { success: true, entity: updated, before, after: updated.name }
+  } catch (error: any) {
+    console.error("Error updating entity name:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
  * Assign campaigns to an entity and create mapping
  */
 export async function assignCampaignsToEntity(

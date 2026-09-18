@@ -317,6 +317,8 @@ the same `404 NOT_FOUND` response as feed detail and is not mutated.
 ### `GET /api/mobile/v1/entities/followed` (bearer)
 Entities (`CiEntity`) the signed-in user currently follows: `{ data: CiEntity[] }`.
 Following is personal: teammates in the same client can maintain different lists.
+Existing client-level follows are copied to every current teammate at migration time.
+The retained legacy table is maintained as a client-wide union for safe application rollback.
 
 ### `GET /api/mobile/v1/entities` (bearer)
 Cursor-paginated mobile Directory. Supports `search`, `party`, `state`,

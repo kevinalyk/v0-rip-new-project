@@ -4,7 +4,7 @@ import { neon } from "@neondatabase/serverless"
 
 const sql = neon(process.env.DATABASE_URL!)
 
-// GET - Fetch all views for a client
+// GET - Fetch the signed-in user's views for the selected client context.
 export async function GET(request: NextRequest) {
   try {
     const token = request.cookies.get("auth_token")?.value
@@ -48,7 +48,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch all views for this client
+    // Personal ownership is always the authenticated user, including when a
+    // super-admin is viewing another client context.
     const views = await sql`
       SELECT 
         id,
@@ -57,8 +58,8 @@ export async function GET(request: NextRequest) {
         "createdBy",
         "createdAt",
         "updatedAt"
-      FROM "CiView"
-      WHERE "clientId" = ${clientId}
+      FROM "UserCiView"
+      WHERE "clientId" = ${clientId} AND "createdBy" = ${decoded.userId}
       ORDER BY "createdAt" DESC
     `
 
@@ -89,9 +90,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Name, filterSettings, and clientSlug are required" }, { status: 400 })
     }
 
-    // Get user's client
+    // Get the user's client and role.
     const userResult = await sql`
-      SELECT "clientId" 
+      SELECT "clientId", role
       FROM "User" 
       WHERE id = ${decoded.userId}
     `
@@ -100,14 +101,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    const clientId = userResult[0].clientId
+    let clientId = userResult[0].clientId
+    if (userResult[0].role === "super_admin") {
+      const targetClientResult = await sql`
+        SELECT id FROM "Client" WHERE slug = ${clientSlug}
+      `
+      if (targetClientResult && targetClientResult.length > 0) {
+        clientId = targetClientResult[0].id
+      }
+    }
 
     // Create new view
     const viewId = crypto.randomUUID()
     const now = new Date()
 
     await sql`
-      INSERT INTO "CiView" (
+      INSERT INTO "UserCiView" (
         id,
         name,
         "clientId",
@@ -175,11 +184,11 @@ export async function PUT(request: NextRequest) {
 
     const clientId = userResult[0].clientId
 
-    // Check if view belongs to user's client
+    // Only the creator may update a personal saved view.
     const viewCheck = await sql`
       SELECT id 
-      FROM "CiView" 
-      WHERE id = ${id} AND "clientId" = ${clientId}
+      FROM "UserCiView"
+      WHERE id = ${id} AND "clientId" = ${clientId} AND "createdBy" = ${decoded.userId}
     `
 
     if (!viewCheck || viewCheck.length === 0) {
@@ -190,7 +199,7 @@ export async function PUT(request: NextRequest) {
 
     // Build update query dynamically based on what's provided
     const updates: string[] = []
-    const values: any[] = []
+    const values: Array<string | Date> = []
 
     if (name !== undefined) {
       updates.push(`name = $${values.length + 1}`)
@@ -206,12 +215,13 @@ export async function PUT(request: NextRequest) {
     values.push(now)
 
     values.push(id)
+    values.push(decoded.userId)
 
     await sql.unsafe(
       `
-      UPDATE "CiView" 
+      UPDATE "UserCiView"
       SET ${updates.join(", ")}
-      WHERE id = $${values.length}
+      WHERE id = $${values.length - 1} AND "createdBy" = $${values.length}
     `,
       values,
     )
@@ -256,10 +266,10 @@ export async function DELETE(request: NextRequest) {
 
     const clientId = userResult[0].clientId
 
-    // Delete view (only if it belongs to user's client)
+    // Delete only the authenticated user's personal copy.
     const result = await sql`
-      DELETE FROM "CiView" 
-      WHERE id = ${viewId} AND "clientId" = ${clientId}
+      DELETE FROM "UserCiView"
+      WHERE id = ${viewId} AND "clientId" = ${clientId} AND "createdBy" = ${decoded.userId}
       RETURNING id
     `
 

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
 import test from "node:test"
+import { join } from "node:path"
 
 import { MobileAuthError } from "@/lib/mobile-auth"
 import {
@@ -156,4 +158,21 @@ test("preserves canonical mobile entity IDs while keeping legacy sender names", 
       filters: { entityIds: ["entity-a", "entity-b"] },
     },
   )
+})
+
+test("mobile saved-view listing is scoped to both tenant and authenticated user", () => {
+  const service = readFileSync(join(process.cwd(), "lib/services/mobile-saved-view-service.ts"), "utf8")
+  const route = readFileSync(join(process.cwd(), "app/api/mobile/v1/feed/views/route.ts"), "utf8")
+
+  assert.match(service, /listMobileSavedViews\(userId: string, clientId: string\)/)
+  assert.match(service, /where:\s*\{\s*clientId,\s*createdBy:\s*userId\s*\}/)
+  assert.match(route, /listMobileSavedViews\(ctx\.userId, clientId\)/)
+})
+
+test("web saved-view CRUD requires the authenticated creator", () => {
+  const route = readFileSync(join(process.cwd(), "app/api/ci-views/route.ts"), "utf8")
+
+  assert.match(route, /FROM "UserCiView"[\s\S]*?"createdBy" = \$\{decoded\.userId\}/)
+  assert.match(route, /UPDATE "UserCiView"[\s\S]*?"createdBy" = \$\$\{values\.length\}/)
+  assert.match(route, /DELETE FROM "UserCiView"[\s\S]*?"createdBy" = \$\{decoded\.userId\}/)
 })

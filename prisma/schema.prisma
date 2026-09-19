@@ -870,7 +870,11 @@ model CiView {
   createdByUser  User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
 
   @@index([clientId])
+  @@index([createdBy])
   @@index([name])
+  // Personal saved views live in a parallel table so the previous deployment
+  // can continue using the legacy client-wide CiView table during rollout.
+  @@map("UserCiView")
 }
 
 model EntityTag {

@@ -92,10 +92,13 @@ export const CI_API_LIMITS = {
   // count/comparison code path stays intact if we ever want to reintroduce
   // a (much higher) guardrail.
   MAX_NEW_ENTITIES_PER_DAY: Number.POSITIVE_INFINITY,
-  MAX_ENTITY_UPDATES_PER_DAY: 50,
+  // Raised from 50 to 500/day - with ~1,300 entities to maintain (state,
+  // party, name, donation identifiers), 50/day was stalling routine cleanup
+  // work; entity metadata edits are low-risk and easily reversible.
+  MAX_ENTITY_UPDATES_PER_DAY: 500,
   MAX_DELETES_PER_HOUR: 300, // max message IDs soft-deleted per hour via delete_messages
-  MAX_MAPPING_CHANGES_PER_DAY: 200, // combined add_entity_mapping + remove_entity_mapping budget
-  MAX_ENTITY_DELETES_PER_DAY: 20, // deliberately low - entity deletion is destructive/hard to undo, meant only for fixing recent mistakes
+  MAX_MAPPING_CHANGES_PER_DAY: 500, // combined add_entity_mapping + remove_entity_mapping budget - raised alongside MAX_ENTITY_UPDATES_PER_DAY for the same reason
+  MAX_ENTITY_DELETES_PER_DAY: 20, // deliberately left low - entity deletion is destructive/hard to undo, meant only for fixing recent mistakes
 }
 
 export class CiApiError extends Error {

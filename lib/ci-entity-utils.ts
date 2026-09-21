@@ -1169,6 +1169,68 @@ export async function updateEntityName(entityId: string, newName: string) {
 }
 
 /**
+ * Change an existing entity's `party` (e.g. null -> "democrat", or fixing a
+ * miscategorized affiliation) without touching any other field (name, type,
+ * state, description, donationIdentifiers, ballotpediaUrl, image, etc.).
+ * Used by the Claude/Grok-facing CI Assignment MCP's `update_entity_party`
+ * tool, which is deliberately restricted to only this one field to keep
+ * blast radius small - same pattern as updateEntityType/updateEntityName.
+ * `newParty` may be null to clear a party (e.g. a nonpartisan org that was
+ * incorrectly given one). Returns the before/after state so callers can log
+ * a full audit trail and support Undo.
+ */
+export async function updateEntityParty(entityId: string, newParty: string | null) {
+  try {
+    const entity = await prisma.ciEntity.findUnique({ where: { id: entityId } })
+    if (!entity) {
+      return { success: false, error: `Entity ${entityId} not found` }
+    }
+
+    const before = entity.party
+    const updated = await prisma.ciEntity.update({
+      where: { id: entityId },
+      data: { party: newParty },
+    })
+
+    return { success: true, entity: updated, before, after: updated.party }
+  } catch (error: any) {
+    console.error("Error updating entity party:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Change an existing entity's `state` (e.g. null -> "NY", or fixing a wrong
+ * state) without touching any other field (name, type, party, description,
+ * donationIdentifiers, ballotpediaUrl, image, etc.). Used by the
+ * Claude/Grok-facing CI Assignment MCP's `update_entity_state` tool, which is
+ * deliberately restricted to only this one field to keep blast radius small
+ * - same pattern as updateEntityType/updateEntityName. `newState` may be
+ * null to clear a state (e.g. a national committee that was incorrectly
+ * given one). Returns the before/after state so callers can log a full
+ * audit trail and support Undo.
+ */
+export async function updateEntityState(entityId: string, newState: string | null) {
+  try {
+    const entity = await prisma.ciEntity.findUnique({ where: { id: entityId } })
+    if (!entity) {
+      return { success: false, error: `Entity ${entityId} not found` }
+    }
+
+    const before = entity.state
+    const updated = await prisma.ciEntity.update({
+      where: { id: entityId },
+      data: { state: newState },
+    })
+
+    return { success: true, entity: updated, before, after: updated.state }
+  } catch (error: any) {
+    console.error("Error updating entity state:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
  * Assign campaigns to an entity and create mapping
  */
 export async function assignCampaignsToEntity(

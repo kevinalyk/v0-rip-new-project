@@ -25,6 +25,8 @@
  *   17. get_digest_patterns_and_types (ci:digest_read)
  *   18. get_digest_dem_footnote      (ci:digest_read)
  *   19. update_entity_name        (ci:update_entity)
+ *   20. update_entity_party       (ci:update_entity)
+ *   21. update_entity_state       (ci:update_entity)
  *
  * Tools 9-11 manage the sender email/domain/phone and CTA-domain mappings
  * that assign_messages_to_entity / categorize_messages match against - so
@@ -88,6 +90,8 @@ import {
   mergeEntityDonationIdentifiers,
   updateEntityType,
   updateEntityName,
+  updateEntityParty,
+  updateEntityState,
   getSopDeleteEligibleMessages,
   softDeleteMessages,
   categorizeMessages,
@@ -533,7 +537,112 @@ const handler = createMcpHandler(
       },
     )
 
-    // ── Tool 6: list_delete_eligible_messages ────────��──────────────────────
+    // ── Tool 20: update_entity_party ─────────────────────────────────────────
+    server.registerTool(
+      "update_entity_party",
+      {
+        title: "Update Entity Party",
+        description:
+          'Fixes an existing entity\'s party affiliation (e.g. missing/null -> "democrat", or correcting a wrong value). Only this field is editable through this tool - name, type, state, donationIdentifiers, bio, and image stay off-limits. Use list_entities first to confirm the entityId and current party. Pass null to clear the party (e.g. a nonpartisan org). Requires a "reasoning" string.',
+        inputSchema: {
+          entityId: z.string(),
+          party: z.enum(["republican", "democrat", "independent"]).nullable().describe("New party, or null to clear"),
+          reasoning: z.string().min(1).describe("Why this entity's party is being corrected"),
+        },
+      },
+      async ({ entityId, party, reasoning }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.UPDATE_ENTITY)
+          await assertAutomationEnabled()
+
+          const apiKeyId = extra.authInfo!.extra!.apiKeyId as string
+          await enforceCiRateLimit(apiKeyId, "update_entity_party")
+
+          const result = await updateEntityParty(entityId, party)
+
+          if (!result.success) {
+            throw new CiApiError(result.error || "Failed to update entity party", 500)
+          }
+
+          await logCiApiAction({
+            apiKeyId,
+            action: "update_entity_party",
+            reasoning,
+            targetType: "entity",
+            entityId,
+            beforeState: { party: result.before },
+            afterState: { party: result.after },
+          })
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({ success: true, entityId, party: result.after }, null, 2),
+              },
+            ],
+          }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 21: update_entity_state ─────────────────────────────────────────
+    server.registerTool(
+      "update_entity_state",
+      {
+        title: "Update Entity State",
+        description:
+          'Fixes an existing entity\'s state (e.g. missing/null -> "NY", or correcting a wrong value). Only this field is editable through this tool - name, type, party, donationIdentifiers, bio, and image stay off-limits. Use list_entities first to confirm the entityId and current state. Pass null to clear the state (e.g. a national committee). Requires a "reasoning" string.',
+        inputSchema: {
+          entityId: z.string(),
+          state: z
+            .string()
+            .nullable()
+            .describe('Two-letter state code (e.g. "NY"), "Nationwide", or null to clear'),
+          reasoning: z.string().min(1).describe("Why this entity's state is being corrected"),
+        },
+      },
+      async ({ entityId, state, reasoning }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.UPDATE_ENTITY)
+          await assertAutomationEnabled()
+
+          const apiKeyId = extra.authInfo!.extra!.apiKeyId as string
+          await enforceCiRateLimit(apiKeyId, "update_entity_state")
+
+          const result = await updateEntityState(entityId, state)
+
+          if (!result.success) {
+            throw new CiApiError(result.error || "Failed to update entity state", 500)
+          }
+
+          await logCiApiAction({
+            apiKeyId,
+            action: "update_entity_state",
+            reasoning,
+            targetType: "entity",
+            entityId,
+            beforeState: { state: result.before },
+            afterState: { state: result.after },
+          })
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({ success: true, entityId, state: result.after }, null, 2),
+              },
+            ],
+          }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 6: list_delete_eligible_messages ────────────────────────────────
     server.registerTool(
       "list_delete_eligible_messages",
       {

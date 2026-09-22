@@ -22,6 +22,7 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/api/auth/reset-password") ||
     request.nextUrl.pathname.startsWith("/api/auth/forgot-password") ||
     request.nextUrl.pathname.startsWith("/api/auth/validate-invitation") ||
+    request.nextUrl.pathname.startsWith("/api/auth/client-invitation") ||
     request.nextUrl.pathname.startsWith("/api/auth/set-password") ||
     request.nextUrl.pathname.startsWith("/api/share/") ||
     request.nextUrl.pathname.startsWith("/api/og/") ||
@@ -72,6 +73,7 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname === "/signup" ||
     request.nextUrl.pathname === "/reset-password" ||
     request.nextUrl.pathname === "/set-password" ||
+    request.nextUrl.pathname === "/accept-invitation" ||
     request.nextUrl.pathname === "/testpage" ||
     request.nextUrl.pathname.startsWith("/share/") ||
     request.nextUrl.pathname === "/news" ||
@@ -125,6 +127,8 @@ export async function middleware(request: NextRequest) {
             !currentPath.startsWith("/reset-password") &&
             !currentPath.startsWith("/signup") &&
             !currentPath.startsWith("/set-password") &&
+            !currentPath.startsWith("/finish-account") &&
+            !currentPath.startsWith("/accept-invitation") &&
             !currentPath.startsWith("/share/") &&
             !currentPath.startsWith("/news") &&
             !currentPath.startsWith("/digest") &&

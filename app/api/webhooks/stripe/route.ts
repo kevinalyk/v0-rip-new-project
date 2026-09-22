@@ -3,6 +3,7 @@ import { stripe } from "@/lib/stripe"
 import { prisma } from "@/lib/prisma"
 import { headers } from "next/headers"
 import type { SubscriptionPlan } from "@/lib/subscription-utils"
+import type Stripe from "stripe"
 import { unassignClientSeeds } from "@/lib/seed-utils"
 import { getPlanLimits, formatPlanName, getUserSeatsIncluded } from "@/lib/subscription-utils"
 import {
@@ -11,24 +12,66 @@ import {
   sendTrialConvertedEmail,
   sendTrialEndingSoonEmail,
 } from "@/lib/mailgun"
+import { notifyClientUsersCoveredByWebPlan } from "@/lib/services/mobile-alert-delivery-service"
+import { getEffectiveMobileEntitlements } from "@/lib/services/mobile-entitlements"
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
-async function enforceFollowLimits(clientId: string, newPlan: string, prismaClient: typeof prisma): Promise<number> {
-  const planLimits = getPlanLimits(newPlan as any)
-  const newFollowLimit = planLimits.ciFollowLimit
+type ClientSubscriptionUpdate = Partial<{
+  additionalUserSeats: number
+  cancelAtPeriodEnd: boolean
+  emailVolumeLimit: number
+  emailVolumeUsed: number
+  hasCompetitiveInsights: boolean
+  lastUsageReset: Date
+  paidUserSeats: number
+  pendingTrialCodeId: string | null
+  pendingTrialLengthDays: number | null
+  scheduledDowngradePlan: SubscriptionPlan | null
+  stripeCiSubscriptionId: string | null
+  stripeCiSubscriptionItemId: string | null
+  stripeCustomerId: string
+  stripeSubscriptionId: string | null
+  stripeSubscriptionItemId: string | null
+  stripeUserSeatPriceId: string
+  stripeUserSeatsItemId: string
+  subscriptionPlan: SubscriptionPlan
+  subscriptionRenewDate: Date
+  subscriptionStartDate: Date
+  subscriptionStatus: string
+  trialEndedNoticeSeen: boolean
+  trialExpiresAt: Date | null
+  userSeatsIncluded: number
+}>
 
-  if (newFollowLimit === null) {
-    return 0
-  }
+function stripeProductName(product: string | Stripe.Product | Stripe.DeletedProduct): string | null {
+  if (typeof product === "string" || ("deleted" in product && product.deleted)) return null
+  return product.name
+}
 
-  const currentFollows = await prismaClient.ciEntitySubscription.findMany({
+async function enforceFollowLimits(
+  clientId: string,
+  newPlan: string,
+  prismaClient: typeof prisma,
+  newSubscriptionStatus = "active",
+): Promise<number> {
+  const currentFollows: Array<{
+    id: string
+    userId: string
+    user: {
+      mobileSubscriptionPlan: string
+      mobileSubscriptionStatus: string
+      mobileSubscriptionExpiresAt: Date | null
+    }
+  }> = await prismaClient.ciEntitySubscription.findMany({
     where: { clientId },
     orderBy: { createdAt: "asc" },
     include: {
-      entity: {
+      user: {
         select: {
-          name: true,
+          mobileSubscriptionPlan: true,
+          mobileSubscriptionStatus: true,
+          mobileSubscriptionExpiresAt: true,
         },
       },
     },
@@ -41,8 +84,20 @@ async function enforceFollowLimits(clientId: string, newPlan: string, prismaClie
     followsByUser.set(follow.userId, follows)
   }
   const entityIdsToUnfollow = [...followsByUser.values()]
-    .flatMap((follows) => follows.slice(newFollowLimit))
-    .map((follow) => follow.id)
+    .flatMap((follows) => {
+      const user = follows[0]?.user
+      if (!user) return follows.map((follow) => follow.id)
+      const limit = getEffectiveMobileEntitlements(
+        newPlan,
+        newSubscriptionStatus,
+        {
+          plan: user.mobileSubscriptionPlan,
+          status: user.mobileSubscriptionStatus,
+          expiresAt: user.mobileSubscriptionExpiresAt,
+        },
+      ).followedEntityLimit
+      return limit === null ? [] : follows.slice(limit).map((follow) => follow.id)
+    })
   if (entityIdsToUnfollow.length === 0) return 0
 
   await prismaClient.ciEntitySubscription.deleteMany({
@@ -55,9 +110,23 @@ async function enforceFollowLimits(clientId: string, newPlan: string, prismaClie
   return entityIdsToUnfollow.length
 }
 
+async function notifyCoveredMobileUsers(
+  clientId: string,
+  subscriptionId: string,
+  plan: string | undefined,
+  status: string | undefined,
+): Promise<void> {
+  if (!plan || plan === "free" || (status !== "active" && status !== "trialing")) return
+  await notifyClientUsersCoveredByWebPlan(
+    clientId,
+    `stripe-coverage-${subscriptionId}-${plan}`,
+    formatPlanName(plan as SubscriptionPlan),
+  )
+}
+
 function getFeaturesLost(oldPlan: string, newPlan: string): string[] {
-  const oldLimits = getPlanLimits(oldPlan as any)
-  const newLimits = getPlanLimits(newPlan as any)
+  const oldLimits = getPlanLimits(oldPlan as SubscriptionPlan)
+  const newLimits = getPlanLimits(newPlan as SubscriptionPlan)
   const features: string[] = []
 
   if (oldLimits.ciHistoryDays === null && newLimits.ciHistoryDays !== null) {
@@ -97,7 +166,7 @@ function getFeaturesLost(oldPlan: string, newPlan: string): string[] {
 
 export async function POST(req: NextRequest) {
   const body = await req.text()
-  const signature = headers().get("stripe-signature")
+  const signature = (await headers()).get("stripe-signature")
 
   if (!signature || !webhookSecret) {
     console.error("[Stripe Webhook] Missing signature or webhook secret")
@@ -123,8 +192,6 @@ export async function POST(req: NextRequest) {
 
         const sessionClientId = session.client_reference_id || session.metadata?.clientId
         const plan = session.metadata?.plan as SubscriptionPlan
-        const hasCompetitiveInsights = session.metadata?.hasCompetitiveInsights === "true"
-        const subscriptionType = session.metadata?.subscriptionType // "plan", "ci", or "both"
 
         // Fallback: resolve clientId via the customer's email if not set in session metadata
         let resolvedClientId = sessionClientId
@@ -162,7 +229,7 @@ export async function POST(req: NextRequest) {
             expand: ["items.data.price.product"],
           })
 
-          const updateData: any = {
+          const updateData: ClientSubscriptionUpdate = {
             stripeCustomerId: session.customer as string,
             subscriptionStatus: "active",
           }
@@ -178,7 +245,7 @@ export async function POST(req: NextRequest) {
             "[Stripe Webhook] Subscription items:",
             subscription.items.data.map((item) => ({
               id: item.id,
-              product: typeof item.price.product === "object" ? item.price.product.name : item.price.product,
+              product: stripeProductName(item.price.product) || item.price.product,
             })),
           )
 
@@ -187,7 +254,7 @@ export async function POST(req: NextRequest) {
           let additionalUserSeats = 0
 
           for (const item of subscription.items.data) {
-            const productName = typeof item.price.product === "object" ? item.price.product.name : null
+            const productName = stripeProductName(item.price.product)
 
             if (
               productName === "Basic" ||
@@ -307,6 +374,12 @@ export async function POST(req: NextRequest) {
             where: { id: clientId },
             data: updateData,
           })
+          await notifyCoveredMobileUsers(
+            clientId,
+            subscription.id,
+            updateData.subscriptionPlan,
+            updateData.subscriptionStatus,
+          )
           console.log("[Stripe Webhook] Updated client subscription:", clientId, updateData)
 
           // Resolve customer email and client name for the admin notification
@@ -386,7 +459,7 @@ export async function POST(req: NextRequest) {
           expand: ["items.data.price.product"],
         })
 
-        const updateData: any = {
+        const updateData: ClientSubscriptionUpdate = {
           subscriptionStatus: "active",
           subscriptionStartDate: new Date(fullSubscription.current_period_start * 1000),
           subscriptionRenewDate: new Date(fullSubscription.current_period_end * 1000),
@@ -398,7 +471,7 @@ export async function POST(req: NextRequest) {
         let additionalUserSeats = 0
 
         for (const item of fullSubscription.items.data) {
-          const productName = typeof item.price.product === "object" ? item.price.product.name : null
+          const productName = stripeProductName(item.price.product)
 
           if (
             productName === "Basic" ||
@@ -483,6 +556,12 @@ export async function POST(req: NextRequest) {
         }
 
         await prisma.client.update({ where: { id: client.id }, data: updateData })
+        await notifyCoveredMobileUsers(
+          client.id,
+          subscription.id,
+          updateData.subscriptionPlan || client.subscriptionPlan,
+          updateData.subscriptionStatus || client.subscriptionStatus,
+        )
         console.log("[Stripe Webhook] Updated client on subscription.created:", client.id, updateData)
         break
       }
@@ -536,7 +615,7 @@ export async function POST(req: NextRequest) {
                   client.slug,
                   currentPlanName,
                   expiryDate,
-                  follows.map((follow) => follow.entity.name),
+                  follows.map((follow: { entity: { name: string } }) => follow.entity.name),
                   featuresLost,
                 )
               }
@@ -547,7 +626,7 @@ export async function POST(req: NextRequest) {
             expand: ["items.data.price.product"],
           })
 
-          const updateData: any = {
+          const updateData: ClientSubscriptionUpdate = {
             cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
           }
 
@@ -568,7 +647,7 @@ export async function POST(req: NextRequest) {
           let additionalUserSeats = 0
 
           for (const item of fullSubscription.items.data) {
-            const productName = typeof item.price.product === "object" ? item.price.product.name : null
+            const productName = stripeProductName(item.price.product)
 
             if (
               productName === "Basic" ||
@@ -672,7 +751,7 @@ export async function POST(req: NextRequest) {
 
               updateData.subscriptionPlan = newPlan
               updateData.scheduledDowngradePlan = null
-              updateData.hasCompetitiveInsights = newLimits.hasCompetitiveInsights
+              updateData.hasCompetitiveInsights = true
               updateData.emailVolumeLimit =
                 newLimits.emailVolumeLimit === Number.POSITIVE_INFINITY ? 999999999 : newLimits.emailVolumeLimit
             }
@@ -704,6 +783,12 @@ export async function POST(req: NextRequest) {
               where: { id: client.id },
               data: updateData,
             })
+            await notifyCoveredMobileUsers(
+              client.id,
+              subscription.id,
+              updateData.subscriptionPlan || client.subscriptionPlan,
+              updateData.subscriptionStatus || client.subscriptionStatus,
+            )
             console.log("[Stripe Webhook] Updated subscription:", updateData)
           }
         }
@@ -721,10 +806,10 @@ export async function POST(req: NextRequest) {
         })
 
         if (client) {
-          const unfollowedCount = await enforceFollowLimits(client.id, "free", prisma)
+          const unfollowedCount = await enforceFollowLimits(client.id, "free", prisma, "cancelled")
           console.log(`[Stripe Webhook] Auto-unfollowed ${unfollowedCount} entities`)
 
-          const updateData: any = {
+          const updateData: ClientSubscriptionUpdate = {
             cancelAtPeriodEnd: false,
           }
 

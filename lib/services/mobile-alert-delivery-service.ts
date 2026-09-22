@@ -1,7 +1,10 @@
 import { Prisma } from "@prisma/client"
 
 import prisma from "@/lib/prisma"
-import { getMobileClientEntitlements } from "@/lib/services/mobile-entitlements"
+import {
+  getEffectiveMobileEntitlements,
+  hasActiveApplePersonalSubscription,
+} from "@/lib/services/mobile-entitlements"
 
 export type MobileAlertCandidate = {
   id: string
@@ -37,6 +40,9 @@ type MobileAlertRecord = Prisma.CampaignAlertSubscriptionGetPayload<{
   include: {
     user: {
       select: {
+        mobileSubscriptionPlan: true
+        mobileSubscriptionStatus: true
+        mobileSubscriptionExpiresAt: true
         client: {
           select: {
             id: true
@@ -119,6 +125,34 @@ export function buildAnnouncementPushMessage(
   }
 }
 
+export type AccountAccessPushKind = "web_ready" | "covered"
+
+export function buildAccountAccessPushMessage(
+  expoPushToken: string,
+  input: {
+    kind: AccountAccessPushKind
+    clientName: string
+    planName?: string
+    shouldCancelAppleSubscription: boolean
+  },
+): Record<string, unknown> {
+  const covered = input.kind === "covered"
+  return {
+    to: expoPushToken,
+    sound: "default",
+    title: covered ? "Your mobile access is covered" : "Your web access is ready",
+    body: covered
+      ? input.shouldCancelAppleSubscription
+        ? `${input.clientName}'s ${input.planName || "web"} plan now includes your mobile access. Cancel Personal through Apple to avoid paying twice.`
+        : `${input.clientName}'s ${input.planName || "web"} plan now includes your full Inbox.GOP mobile access.`
+      : `You can now use your free Inbox.GOP web workspace for ${input.clientName}.`,
+    data: {
+      accountAccessKind: input.kind,
+      shouldCancelAppleSubscription: input.shouldCancelAppleSubscription,
+    },
+  }
+}
+
 async function sendExpoPush(messages: Array<Record<string, unknown>>): Promise<ExpoTicket[]> {
   let delay = 250
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -155,6 +189,9 @@ export async function notifyMobileAlertsForMessage(candidate: MobileAlertCandida
     include: {
       user: {
         select: {
+          mobileSubscriptionPlan: true,
+          mobileSubscriptionStatus: true,
+          mobileSubscriptionExpiresAt: true,
           client: {
             select: {
               id: true,
@@ -202,13 +239,23 @@ export async function notifyMobileAlertsForMessage(candidate: MobileAlertCandida
 
   for (const alert of alerts) {
     const client = alert.user.client
+    const entitlements = client
+      ? getEffectiveMobileEntitlements(
+          client.subscriptionPlan,
+          client.subscriptionStatus,
+          {
+            plan: alert.user.mobileSubscriptionPlan,
+            status: alert.user.mobileSubscriptionStatus,
+            expiresAt: alert.user.mobileSubscriptionExpiresAt,
+          },
+        )
+      : null
     if (
       !client ||
       alert.clientId !== client.id ||
       !client.active ||
-      client.subscriptionStatus !== "active" ||
       !client.hasCompetitiveInsights ||
-      !getMobileClientEntitlements(client.subscriptionPlan).canUseAlerts ||
+      !entitlements?.canUseAlerts ||
       alert.user.mobilePushTokens.length === 0 ||
       !candidateIsVisibleToClient(candidate, client.id)
     ) continue
@@ -451,4 +498,112 @@ export async function notifyMobileDevicesForAnnouncement(announcement: {
       },
     })
   }))
+}
+
+/**
+ * Sends an idempotent account-access notification to one user. `eventKey` is a
+ * server-created identifier (for example `web-ready` or a Stripe subscription id),
+ * never caller-controlled text. The delivery record prevents duplicate pushes when
+ * Stripe retries a webhook or a user signs into the web app more than once.
+ */
+export async function notifyMobileAccountAccess(
+  userId: string,
+  eventKey: string,
+  input: {
+    kind: AccountAccessPushKind
+    clientName: string
+    planName?: string
+  },
+): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      mobileSubscriptionPlan: true,
+      mobileSubscriptionStatus: true,
+      mobileSubscriptionExpiresAt: true,
+      mobilePushTokens: {
+        where: { enabled: true },
+        select: { id: true, expoPushToken: true },
+      },
+    },
+  })
+  if (!user?.mobilePushTokens.length) return
+
+  let delivery: { id: string }
+  try {
+    delivery = await prisma.mobileAlertDelivery.create({
+      data: { userId, sourceType: "account_access", sourceId: eventKey },
+      select: { id: true },
+    })
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return
+    throw error
+  }
+
+  const shouldCancelAppleSubscription = hasActiveApplePersonalSubscription({
+    plan: user.mobileSubscriptionPlan,
+    status: user.mobileSubscriptionStatus,
+    expiresAt: user.mobileSubscriptionExpiresAt,
+  })
+  const tokens = user.mobilePushTokens.slice(0, 100)
+
+  try {
+    const tickets = await sendExpoPush(
+      tokens.map(({ expoPushToken }: { expoPushToken: string }) =>
+        buildAccountAccessPushMessage(expoPushToken, {
+          ...input,
+          shouldCancelAppleSubscription,
+        }),
+      ),
+    )
+    const invalidTokenIds = tickets.flatMap((ticket, index) =>
+      ticket.details?.error === "DeviceNotRegistered" && tokens[index]?.id
+        ? [tokens[index].id]
+        : [],
+    )
+    if (invalidTokenIds.length) {
+      await prisma.mobilePushToken.updateMany({
+        where: { id: { in: invalidTokenIds } },
+        data: { enabled: false },
+      })
+    }
+    const sent = tickets.some((ticket) => ticket.status === "ok")
+    await prisma.mobileAlertDelivery.update({
+      where: { id: delivery.id },
+      data: {
+        status: sent ? "sent" : "failed",
+        expoTicketIds: tickets.flatMap((ticket) => ticket.id ? [ticket.id] : []),
+        error: sent ? null : "Push tickets were rejected",
+      },
+    })
+  } catch {
+    await prisma.mobileAlertDelivery.update({
+      where: { id: delivery.id },
+      data: { status: "failed", error: "Push delivery failed" },
+    })
+  }
+}
+
+export async function notifyClientUsersCoveredByWebPlan(
+  clientId: string,
+  eventKey: string,
+  planName: string,
+): Promise<void> {
+  const client = await prisma.client.findUnique({
+    where: { id: clientId },
+    select: { name: true, users: { select: { id: true, firstLogin: true } } },
+  })
+  if (!client) return
+
+  await Promise.all(
+    client.users
+      .filter((user: { firstLogin: boolean }) => !user.firstLogin)
+      .map((user: { id: string }) =>
+        notifyMobileAccountAccess(user.id, eventKey, {
+          kind: "covered",
+          clientName: client.name,
+          planName,
+        }),
+      ),
+  )
 }

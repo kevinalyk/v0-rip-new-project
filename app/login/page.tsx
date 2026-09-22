@@ -31,7 +31,7 @@ function LoginForm({ successMessage = "", redirectUrl = "" }) {
     checkDatabaseConnection()
   }, [])
 
-  const checkDatabaseConnection = async () => {
+  const checkDatabaseConnection = async (): Promise<boolean> => {
     try {
       setCheckingDb(true)
       const response = await fetch("/api/health")
@@ -39,13 +39,16 @@ function LoginForm({ successMessage = "", redirectUrl = "" }) {
 
       if (response.ok && data.status === "ok") {
         setDbStatus("connected")
+        return true
       } else {
         setDbStatus("disconnected")
         toast.error("We're experiencing technical difficulties. Please try again in a moment.")
+        return false
       }
-    } catch (err) {
+    } catch {
       setDbStatus("disconnected")
       toast.error("We're experiencing technical difficulties. Please try again in a moment.")
+      return false
     } finally {
       setCheckingDb(false)
     }
@@ -55,8 +58,8 @@ function LoginForm({ successMessage = "", redirectUrl = "" }) {
     e.preventDefault()
 
     if (dbStatus !== "connected") {
-      await checkDatabaseConnection()
-      if (dbStatus !== "connected") {
+      const connected = await checkDatabaseConnection()
+      if (!connected) {
         toast.error("Service temporarily unavailable. Please try again later.")
         return
       }
@@ -89,19 +92,22 @@ function LoginForm({ successMessage = "", redirectUrl = "" }) {
         document.body.appendChild(form)
         form.submit()
       } else {
-        const redirectTarget = redirectUrl || "/"
+        const redirectTarget = data.requiresWebOnboarding
+          ? "/finish-account"
+          : redirectUrl || data.redirectTo || "/"
         const form = document.createElement("form")
         form.method = "GET"
         form.action = redirectTarget
         document.body.appendChild(form)
         form.submit()
       }
-    } catch (err: any) {
-      const userMessage = err.message || "Unable to sign in. Please check your credentials and try again."
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : ""
+      const userMessage = message || "Unable to sign in. Please check your credentials and try again."
 
       toast.error(userMessage)
 
-      if (err.message && (err.message.includes("network") || err.message.includes("fetch"))) {
+      if (message && (message.includes("network") || message.includes("fetch"))) {
         setDbStatus("disconnected")
       }
 
@@ -200,7 +206,7 @@ function LoginForm({ successMessage = "", redirectUrl = "" }) {
         </CardContent>
         <CardFooter className="flex justify-center">
           <p className="text-sm text-muted-foreground">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link href="/signup" className="text-rip-blue hover:underline">
               Sign up
             </Link>

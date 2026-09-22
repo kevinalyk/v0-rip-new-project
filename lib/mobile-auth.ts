@@ -34,9 +34,10 @@ import { randomBytes, createHash, createHmac } from "crypto"
 import prisma from "@/lib/prisma"
 import type { Prisma } from "@prisma/client"
 import {
-  getMobileClientEntitlements,
+  getEffectiveMobileEntitlements,
   type MobileClientEntitlements,
 } from "@/lib/services/mobile-entitlements"
+import type { SubscriptionPlan } from "@/lib/subscription-utils"
 
 const ISSUER = "inbox-gop-mobile"
 const AUDIENCE = "inbox-gop-ios"
@@ -102,6 +103,7 @@ export interface MobileAuthContext {
     subscriptionStatus: string
     hasCompetitiveInsights: boolean
     entitlements: MobileClientEntitlements
+    effectiveMobilePlan: SubscriptionPlan
   } | null
 }
 
@@ -217,6 +219,18 @@ export async function requireMobileAuth(request: Request): Promise<MobileAuthCon
     )
   }
 
+  const effectiveEntitlements = user.client
+    ? getEffectiveMobileEntitlements(
+        user.client.subscriptionPlan,
+        user.client.subscriptionStatus,
+        {
+          plan: user.mobileSubscriptionPlan,
+          status: user.mobileSubscriptionStatus,
+          expiresAt: user.mobileSubscriptionExpiresAt,
+        },
+      )
+    : null
+
   return {
     userId: user.id,
     role: user.role,
@@ -231,7 +245,8 @@ export async function requireMobileAuth(request: Request): Promise<MobileAuthCon
           subscriptionPlan: user.client.subscriptionPlan,
           subscriptionStatus: user.client.subscriptionStatus,
           hasCompetitiveInsights: user.client.hasCompetitiveInsights,
-          entitlements: getMobileClientEntitlements(user.client.subscriptionPlan),
+          entitlements: effectiveEntitlements!,
+          effectiveMobilePlan: effectiveEntitlements!.effectivePlan,
         }
       : null,
   }

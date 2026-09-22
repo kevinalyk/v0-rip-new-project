@@ -24,6 +24,14 @@ model User {
   weeklyDigestEnabled   Boolean   @default(true)
   productUpdateEnabled  Boolean   @default(true)
   signupSource          String    @default("web") // "web" | "ios"; analytics attribution, not an authorization claim
+  webOnboardingCompletedAt DateTime? // Null until an iOS-created account confirms its free web workspace
+  mobileSubscriptionPlan String   @default("free") // "free" | "personal"
+  mobileSubscriptionStatus String @default("inactive") // Apple lifecycle: inactive, active, grace_period, billing_retry, expired, revoked
+  mobileSubscriptionExpiresAt DateTime?
+  mobileSubscriptionUpdatedAt DateTime?
+  appleOriginalTransactionId String? @unique
+  appleProductId             String?
+  appleSubscriptionEnvironment String? // "sandbox" | "production"
   createdAt             DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -43,6 +51,10 @@ model User {
   mobileRefreshTokens MobileRefreshToken[] // Mobile app refresh-token sessions (see lib/mobile-auth.ts)
   mobilePushTokens MobilePushToken[]
   mobileAlertDeliveries MobileAlertDelivery[]
+  clientJoinInvitations ClientJoinInvitation[] @relation("ClientJoinInvitee")
+  clientJoinInvitationsSent ClientJoinInvitation[] @relation("ClientJoinInviter")
+
+  @@index([signupSource, webOnboardingCompletedAt])
   }
 
 model Domain {
@@ -152,6 +164,7 @@ model Client {
   id                String     @id // e.g., "red_spark_strategy"
   name              String     @unique // e.g., "Red Spark Strategy"
   description       String?
+  accountKind       String     @default("organization") // "personal" for an auto-created one-user mobile workspace
   active            Boolean    @default(true)
   dataRetentionDays Int        @default(90)
   slug              String     @unique // e.g., "redsparkstrategy"
@@ -222,9 +235,31 @@ model Client {
   slackEntityFilters   SlackEntityFilter[]
   slackChannels        SlackChannel[] // Additional (paid, add-on) Slack bot channels
   trialCodeRedemption  TrialCodeRedemption?
+  joinInvitations      ClientJoinInvitation[]
   
   @@index([totalUsers])
   @@index([trialExpiresAt])
+  @@index([accountKind])
+}
+
+model ClientJoinInvitation {
+  id             String   @id @default(uuid())
+  tokenHash      String   @unique
+  userId         String
+  targetClientId String
+  invitedRole    String
+  invitedByUserId String
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  user        User   @relation("ClientJoinInvitee", fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy   User   @relation("ClientJoinInviter", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  targetClient Client @relation(fields: [targetClientId], references: [id], onDelete: Cascade)
+
+  @@index([userId, acceptedAt])
+  @@index([targetClientId, acceptedAt])
+  @@index([expiresAt])
 }
 
 // A code an admin generates (e.g. "LAUNCH2026") that grants a new signup a time-limited

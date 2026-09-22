@@ -98,6 +98,14 @@ Nothing in either of those was modified.
   the shared signup endpoint. New users persist that value in `User.signupSource`;
   existing and web-created users default to `web`. This field is analytics metadata,
   never an authentication or authorization claim.
+- **Personal workspace bootstrap**: iOS signup automatically creates a one-user
+  `Client` with `accountKind=personal` and the Starter web plan. The person can use
+  the app immediately without inventing an organization name. Their first web login
+  is routed through `/finish-account`, where they confirm the workspace name, keep
+  free web access, or start a Basic/Professional web checkout. An existing
+  organization can invite that same email; accepting the secure invitation moves
+  the user's personal follows, saved views, and alerts to the organization without
+  changing their credentials.
 - **Caching**: every mobile API response sets `Cache-Control: no-store`.
 
 ## Middleware defense-in-depth
@@ -141,14 +149,14 @@ The mobile feed intentionally mirrors the existing web Competitive Insights feed
   Client.dataRetentionDays)`. This is enforced identically on listing and on direct
   by-ID access, so an item outside the retention window can't be reached just by
   guessing its ID.
-- Mobile plan capabilities are derived on the server from `PLAN_LIMITS`; the native
-  client never maintains a second plan matrix. Starter (`free`) receives three hours
-  of feed history, zero followed entities, no feed search/filter access, and no
-  mobile alerts. Basic (`paid`) receives 72 hours, three followed entities,
-  search/filter access, and unlimited mobile alerts.
-  Professional (`all`), Advanced (`basic_inboxing`), and Enterprise receive full
-  history, unlimited follows, and search/filter access. Unknown plan strings fail
-  closed instead of inheriting a paid capability.
+- Mobile capabilities are resolved per user on every authenticated request; they are
+  never cached in the access JWT. Starter (`free`) receives the delayed one-hour
+  window, zero followed entities, no search/filter access, and no custom alerts.
+  An active Apple Personal subscription unlocks the complete, ad-free native
+  experience while leaving the web workspace on Starter. Basic (`paid`) includes
+  the same complete native experience for its one covered user. Professional
+  (`all`), Advanced (`basic_inboxing`), and Enterprise cover their organization
+  users. Unknown plans and inactive subscription states fail closed.
 - Starter may paginate the unfiltered feed, but any substantive search/filter passed
   to `getFeedPage` is rejected before database work with `403
   FEED_FILTERS_NOT_AVAILABLE`. This service-level check prevents a future route or
@@ -230,9 +238,10 @@ returns the same success response.
 
 ### `GET /api/mobile/v1/auth/me` (bearer)
 Returns the current user's profile directly (not wrapped in `data`):
-`{ id, email, firstName, lastName, role, firstLogin, client: { id, name, slug, subscriptionPlan, subscriptionStatus, hasCompetitiveInsights, trialExpiresAt, entitlements } | null }`.
+`{ id, email, firstName, lastName, role, firstLogin, signupSource, webOnboardingComplete, mobileSubscription, client: { id, name, slug, subscriptionPlan, subscriptionStatus, hasCompetitiveInsights, trialExpiresAt, entitlements } | null }`.
 `entitlements` is `{ canSearchAndFilterFeed, canUseAlerts, feedHistoryHours,
-feedDelayHours, followedEntityLimit }`; `null` history/follow limits mean
+feedDelayHours, followedEntityLimit, isAdFree, accessSource,
+clientPlanCoversMobile, shouldPromptAppleCancellation }`; `null` history/follow limits mean
 unlimited. `feedDelayHours` is the number of hours the feed window itself is
 shifted into the past (0 means real-time); Starter is currently the only plan
 with a non-zero delay (24h), so its 1-hour `feedHistoryHours` window shows
@@ -443,6 +452,21 @@ iPhone belonging to an active user/client with product updates enabled. These us
 retries cannot notify the same user twice and editing an existing article does not
 send another push. The payload contains only `announcementSlug`; tapping it opens the
 authenticated native What's New detail route.
+
+Account-access notifications use `sourceType: "account_access"` and a stable event
+key, making first-web-login, invitation acceptance, and Stripe webhook retries
+idempotent. A mobile-origin user receives confirmation when their free web workspace
+becomes available. Joining a paid organization or upgrading the web workspace sends
+another notification that the web plan now covers mobile access. If Apple Personal
+is still active, tapping that notification opens native cancellation guidance and a
+link to Apple's subscription-management screen. The app cannot cancel an Apple
+subscription on the user's behalf.
+
+The personal-account data model and effective-entitlement resolver require
+`20260921180000_add_mobile_personal_accounts`. Actual Apple purchase activation also
+requires the Inbox.GOP Personal in-app subscription product and signed App Store
+transaction/server-notification verification; no client-supplied subscription flag
+is trusted as authorization.
 
 This feature requires the `20260908170000_add_mobile_ci_push_alerts` migration before
 the new backend routes are deployed. The migration has paired rollback SQL, but the

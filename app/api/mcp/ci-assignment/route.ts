@@ -486,6 +486,66 @@ const handler = createMcpHandler(
       },
     )
 
+    // ── Tool 13: delete_entity ───────────────────────────────────────────────
+    // NOTE: this tool was documented in the header comment above and
+    // deleteEntity() was already imported from lib/ci-entity-utils, but the
+    // actual server.registerTool() call was never added - meaning the tool
+    // never existed on the MCP surface at all, regardless of the caller's
+    // scopes. That's the real cause of Grok's "still can't delete" reports;
+    // it wasn't a bad/stale API key or a missing ci:delete_entity scope
+    // (the "Grok" key already has it - see AutomationSetting/ApiKey rows).
+    server.registerTool(
+      "delete_entity",
+      {
+        title: "Delete Entity",
+        description:
+          'Permanently deletes a CiEntity created by mistake (exact duplicate, or the wrong org entirely) - unassigns any campaigns/SMS pointed at it (sets their entityId back to null, does not delete the messages themselves) and removes its sender/CTA mappings first, then deletes the entity row. This cannot be undone through this tool. Use list_entities first to confirm the entityId and that it has few/no assigned messages before deleting. Requires a "reasoning" string.',
+        inputSchema: {
+          entityId: z.string().describe("The CiEntity id to delete"),
+          reasoning: z.string().min(1).describe("Why this entity is being deleted (e.g. exact duplicate of entity X)"),
+        },
+      },
+      async ({ entityId, reasoning }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.DELETE_ENTITY)
+          await assertAutomationEnabled()
+
+          const entity = await prisma.ciEntity.findUnique({ where: { id: entityId } })
+          if (!entity) {
+            throw new CiApiError(`Entity ${entityId} not found`, 404)
+          }
+
+          const apiKeyId = extra.authInfo!.extra!.apiKeyId as string
+          await enforceCiRateLimit(apiKeyId, "delete_entity")
+
+          const result = await deleteEntity(entityId)
+          if (!result.success) {
+            throw new CiApiError(result.error || "Failed to delete entity", 500)
+          }
+
+          await logCiApiAction({
+            apiKeyId,
+            action: "delete_entity",
+            reasoning,
+            targetType: "entity",
+            entityId,
+            beforeState: { name: entity.name, type: entity.type, party: entity.party, state: entity.state },
+          })
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({ success: true, entityId, deletedName: entity.name }, null, 2),
+              },
+            ],
+          }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
     // ── Tool 19: update_entity_name ─────────────────────────────────────────
     server.registerTool(
       "update_entity_name",

@@ -33,9 +33,18 @@ export async function POST(request: NextRequest) {
     const client = dbUser?.clientId
       ? await prisma.client.findUnique({
           where: { id: dbUser.clientId },
-          select: { name: true },
+          select: { name: true, subscriptionPlan: true },
         })
       : null
+
+    // Free accounts (no active paid subscription) cannot request personal email seeds —
+    // this is a paid add-on available on Basic and up.
+    if (!client || client.subscriptionPlan === "free") {
+      return NextResponse.json(
+        { error: "Personal email seeds require a paid plan. Please upgrade to Basic, Professional, or Enterprise." },
+        { status: 403 },
+      )
+    }
 
     const requesterName = [dbUser?.firstName, dbUser?.lastName].filter(Boolean).join(" ") || "Unknown"
     const requesterEmail = dbUser?.email || "Unknown"

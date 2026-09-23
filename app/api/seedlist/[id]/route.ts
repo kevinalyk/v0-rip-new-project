@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { getAuthenticatedUser, isSystemAdmin } from "@/lib/auth"
+import { computeSeedPurpose } from "@/lib/seed-utils"
 
 // Delete a seed email - admin or owner only
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
@@ -78,7 +79,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     const seedEmail = await prisma.seedEmail.findUnique({
       where: { id: params.id },
-      select: { locked: true, ownedByClient: true, email: true },
+      select: { locked: true, ownedByClient: true, email: true, assignedToClient: true, domainHealthMode: true },
     })
 
     if (!seedEmail) {
@@ -86,15 +87,33 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     }
 
     const body = await request.json()
-    const { assignedToClient, domainHealthMode } = body
+    const { assignedToClient, domainHealthMode, purpose } = body
 
     // Handle domain health mode toggle first — this is allowed even on locked emails
     if (typeof domainHealthMode === "boolean") {
       const updatedSeed = await prisma.seedEmail.update({
         where: { id: params.id },
-        data: { domainHealthMode },
+        data: {
+          domainHealthMode,
+          purpose: computeSeedPurpose({
+            assignedToClient: seedEmail.assignedToClient,
+            domainHealthMode,
+            locked: seedEmail.locked,
+          }),
+        },
       })
       console.log(`Seed email ${params.id} domainHealthMode set to ${domainHealthMode}`)
+      return NextResponse.json(updatedSeed)
+    }
+
+    // Handle purpose label updates — this is just a descriptive note, not a
+    // reassignment, so it's allowed even on locked emails.
+    if (typeof purpose === "string" || purpose === null) {
+      const updatedSeed = await prisma.seedEmail.update({
+        where: { id: params.id },
+        data: { purpose: purpose === "" ? null : purpose },
+      })
+      console.log(`Seed email ${params.id} purpose set to ${purpose}`)
       return NextResponse.json(updatedSeed)
     }
 
@@ -116,7 +135,14 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     // Update the seed email's assigned client (standard assignment)
     const updatedSeed = await prisma.seedEmail.update({
       where: { id: params.id },
-      data: { assignedToClient },
+      data: {
+        assignedToClient,
+        purpose: computeSeedPurpose({
+          assignedToClient,
+          domainHealthMode: seedEmail.domainHealthMode ?? false,
+          locked: seedEmail.locked,
+        }),
+      },
     })
 
     console.log(`Seed email ${params.id} assigned to client ${assignedToClient}`)

@@ -4,6 +4,7 @@ import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
 import { toast } from "sonner"
 import { usePathname } from "next/navigation"
+import { useCurrentUser } from "@/lib/hooks/use-current-user"
 
 type Domain = {
   id: string
@@ -28,11 +29,23 @@ export function DomainProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const pathname = usePathname()
+  // Shared with sidebar/main-content/trial-banner via a common SWR key, so this
+  // provider's mount doesn't add its own extra /api/auth/me request on top of theirs.
+  const { user, loading: userLoading } = useCurrentUser()
 
   useEffect(() => {
     async function fetchDomains() {
+      // Wait for the shared user fetch to settle before deciding whether to fetch domains
+      if (userLoading) return
+
       try {
         setLoading(true)
+
+        // If user is not authenticated, silently skip fetching domains
+        if (!user) {
+          setLoading(false)
+          return
+        }
 
         // Special routes to exclude: /login, /reset-password, /debug
         const specialRoutes = ["/login", "/reset-password", "/debug", "/"]
@@ -45,20 +58,6 @@ export function DomainProvider({ children }: { children: React.ReactNode }) {
             clientSlug = segments[0]
           }
         }
-
-        const userResponse = await fetch("/api/auth/me", { credentials: "include" })
-
-        // If user is not authenticated (401), silently skip fetching domains
-        if (userResponse.status === 401) {
-          setLoading(false)
-          return
-        }
-
-        if (!userResponse.ok) {
-          throw new Error("Failed to fetch user data")
-        }
-
-        const userData = await userResponse.json()
 
         // Fetch domains
         const domainsUrl = clientSlug ? `/api/domains?clientSlug=${clientSlug}` : "/api/domains"
@@ -76,12 +75,12 @@ export function DomainProvider({ children }: { children: React.ReactNode }) {
 
         const domainsData = await domainsResponse.json()
 
-        const userIsAdmin = userData.role === "super_admin"
+        const userIsAdmin = user.role === "super_admin"
         setIsAdmin(userIsAdmin)
 
         const domainsWithAll =
           domainsData.length > 0
-            ? [{ id: "all", name: "All Campaigns", domain: "all", role: userData.role }, ...domainsData]
+            ? [{ id: "all", name: "All Campaigns", domain: "all", role: user.role }, ...domainsData]
             : domainsData
 
         setDomains(domainsWithAll)
@@ -109,7 +108,8 @@ export function DomainProvider({ children }: { children: React.ReactNode }) {
     }
 
     fetchDomains()
-  }, [pathname]) // Re-fetch when pathname changes (client switch)
+    // Re-fetch when pathname changes (client switch) or once the shared user fetch settles
+  }, [pathname, userLoading, !!user, user?.role])
 
   const handleSetSelectedDomain = (domain: Domain) => {
     setSelectedDomain(domain)

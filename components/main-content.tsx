@@ -19,6 +19,7 @@ import { useRouter } from "next/navigation"
 
 // Add the import for useDomain at the top with other imports
 import { useDomain } from "@/lib/domain-context"
+import { useCurrentUser } from "@/lib/hooks/use-current-user"
 
 // Import necessary components for each content section
 import { Button } from "@/components/ui/button"
@@ -115,39 +116,31 @@ export function MainContent({ collapsed, activeTab, clientSlug, isAdminView = fa
   const router = useRouter()
   const [clients, setClients] = useState<{ id: string; name: string; slug: string | null }[]>([])
   const [loadingClients, setLoadingClients] = useState(false)
-  const [currentUser, setCurrentUser] = useState<any>(null)
+  const { user: currentUser } = useCurrentUser()
 
   useEffect(() => {
-    const fetchUserAndClients = async () => {
+    // If super-admin, fetch all clients
+    if (currentUser?.role !== "super_admin") return
+
+    const fetchClients = async () => {
       try {
-        // Fetch current user
-        const userResponse = await fetch("/api/auth/me", {
+        setLoadingClients(true)
+        const clientsResponse = await fetch("/api/clients", {
           credentials: "include",
         })
-        if (userResponse.ok) {
-          const userData = await userResponse.json()
-          setCurrentUser(userData)
-
-          // If super-admin, fetch all clients
-          if (userData.role === "super_admin") {
-            setLoadingClients(true)
-            const clientsResponse = await fetch("/api/clients", {
-              credentials: "include",
-            })
-            if (clientsResponse.ok) {
-              const clientsData = await clientsResponse.json()
-              setClients(clientsData)
-            }
-            setLoadingClients(false)
-          }
+        if (clientsResponse.ok) {
+          const clientsData = await clientsResponse.json()
+          setClients(clientsData)
         }
       } catch (error) {
-        console.error("Error fetching user/clients:", error)
+        console.error("Error fetching clients:", error)
+      } finally {
+        setLoadingClients(false)
       }
     }
 
-    fetchUserAndClients()
-  }, [])
+    fetchClients()
+  }, [currentUser?.role])
 
   const handleClientSwitch = (client: { id: string; name: string; slug: string | null }) => {
     // Special case: RIP client goes to /rip
@@ -2432,33 +2425,27 @@ function SettingsContent() {
   const [clientName, setClientName] = useState<string>("System")
 
   const { selectedDomain } = useDomain()
+  const { user: currentUser, loading: userLoading } = useCurrentUser()
 
-  // Fetch client info and settings on mount
+  // Fetch client info and settings once the shared user fetch settles
   useEffect(() => {
+    if (userLoading) return
     fetchClientAndSettings()
-  }, [])
+  }, [userLoading, currentUser?.clientId])
 
   const fetchClientAndSettings = async () => {
     try {
       setLoading(true)
 
-      // First, get the user's client info
-      const userResponse = await fetch("/api/auth/me", { credentials: "include" })
-      if (!userResponse.ok) {
-        throw new Error("Failed to fetch user data")
-      }
-
-      const userData = await userResponse.json()
-
       // Get client ID from user or from first domain
       let fetchedClientId: string | null = null
 
-      if (userData.clientId) {
+      if (currentUser?.clientId) {
         // User has a client assigned
-        fetchedClientId = userData.clientId
+        fetchedClientId = currentUser.clientId
 
         // Fetch client details
-        const clientResponse = await fetch(`/api/clients/${userData.clientId}`, {
+        const clientResponse = await fetch(`/api/clients/${currentUser.clientId}`, {
           credentials: "include",
         })
 
@@ -2633,6 +2620,7 @@ function SettingsContent() {
 
 function UserSettingsContent() {
   const { theme, setTheme } = useTheme()
+  const { user: fetchedUser, loading: userFetchLoading } = useCurrentUser()
   const [user, setUser] = useState<{
     firstName: string
     lastName: string
@@ -2651,34 +2639,19 @@ function UserSettingsContent() {
   const [resetPasswordSuccess, setResetPasswordSuccess] = useState(false)
   const [resetPasswordError, setResetPasswordError] = useState("")
 
-  // Fetch user data on mount
+  // Sync local user state from the shared /api/auth/me cache
   useEffect(() => {
-    fetchUserData()
-  }, [])
-
-  const fetchUserData = async () => {
-    try {
-      setLoading(true)
-      const response = await fetch("/api/auth/me", {
-        credentials: "include",
+    setLoading(userFetchLoading)
+    if (fetchedUser) {
+      setUser({
+        firstName: fetchedUser.firstName || "",
+        lastName: fetchedUser.lastName || "",
+        email: fetchedUser.email || "",
+        role: fetchedUser.role || "",
+        client: fetchedUser.client || null,
       })
-
-      if (response.ok) {
-        const userData = await response.json()
-        setUser({
-          firstName: userData.firstName || "",
-          lastName: userData.lastName || "",
-          email: userData.email || "",
-          role: userData.role || "",
-          client: userData.client || null,
-        })
-      }
-    } catch (error) {
-      console.error("Error fetching user data:", error)
-    } finally {
-      setLoading(false)
     }
-  }
+  }, [fetchedUser, userFetchLoading])
 
   const handleResetPassword = async () => {
     try {

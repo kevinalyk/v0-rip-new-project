@@ -52,6 +52,7 @@ import { Logo } from "@/components/logo"
 import { useTheme } from "next-themes"
 import { Separator } from "@/components/ui/separator"
 import { useDomain } from "@/lib/domain-context"
+import { useCurrentUser } from "@/lib/hooks/use-current-user"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ReportProblemDialog } from "@/components/report-problem-dialog"
 
@@ -86,8 +87,9 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
   // this component, so it's left out of the destructure entirely rather than bound
   // to unused local names.
   const { selectedDomain } = useDomain()
-  const [userRole, setUserRole] = useState<string | null>(null)
-  const [authLoaded, setAuthLoaded] = useState(false)
+  const { user: currentUser, loading: userLoading } = useCurrentUser()
+  const userRole = currentUser?.role ?? null
+  const authLoaded = !userLoading
   const [clients, setClients] = useState<Client[]>([])
   const [loadingClients, setLoadingClients] = useState(false)
   const [selectedClientSlug, setSelectedClientSlug] = useState<string>("")
@@ -106,25 +108,6 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
 
   useEffect(() => {
     setMounted(true)
-  }, [])
-
-  useEffect(() => {
-    const fetchUserRole = async () => {
-      try {
-        const response = await fetch("/api/auth/me", {
-          credentials: "include",
-        })
-        if (response.ok) {
-          const user = await response.json()
-          setUserRole(user.role)
-        }
-      } catch (error) {
-        console.error("Error fetching user role:", error)
-      } finally {
-        setAuthLoaded(true)
-      }
-    }
-    fetchUserRole()
   }, [])
 
   useEffect(() => {

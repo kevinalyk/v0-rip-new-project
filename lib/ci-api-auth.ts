@@ -63,6 +63,12 @@ export const CI_SCOPES = {
   DELETE: "ci:delete",
   DELETE_ENTITY: "ci:delete_entity",
   DIGEST_READ: "ci:digest_read",
+  // Read-only access to client account rosters (Client + User contact info)
+  // and their Stripe payment/subscription status. Deliberately separate from
+  // "ci:read" (which only covers CI entities/messages) since this scope
+  // exposes billing and contact data across every client, not just CI
+  // workflow data - keep it opt-in per key.
+  ACCOUNTS_READ: "ci:accounts_read",
 } as const
 
 export type CiScope = (typeof CI_SCOPES)[keyof typeof CI_SCOPES]
@@ -76,6 +82,7 @@ export const CI_ASSIGNMENT_ALL_SCOPES: CiScope[] = [
   CI_SCOPES.DELETE,
   CI_SCOPES.DELETE_ENTITY,
   CI_SCOPES.DIGEST_READ,
+  CI_SCOPES.ACCOUNTS_READ,
 ]
 
 // Guardrail caps - deliberately conservative. Raise only with a clear reason;

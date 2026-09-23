@@ -660,6 +660,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                       onClick={() => navigate("/rip/admin/seed-insights")}
                     />
                     <NavItem
+                      icon={<Inbox size={18} />}
+                      label="WinRed Inbox"
+                      active={pathname === "/rip/admin/winred-inbox"}
+                      collapsed={false}
+                      onClick={() => navigate("/rip/admin/winred-inbox")}
+                    />
+                    <NavItem
                       icon={<Activity size={18} />}
                       label="Site Traffic"
                       active={pathname === "/rip/admin/site-traffic"}

@@ -104,6 +104,10 @@
     {
       "path": "/api/cron/expire-trials",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/winred-inbox-scan",
+      "schedule": "0 11 * * *"
     }
   ]
 }

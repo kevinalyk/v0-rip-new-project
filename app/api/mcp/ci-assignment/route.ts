@@ -3,7 +3,7 @@
  * Claude.ai / Claude Desktop custom connector. See
  * docs/plans/CLAUDE_CI_ASSIGNMENT_MCP.md for the full design.
  *
- * Deliberately exposes ONLY these 19 tools - nothing else exists on this
+ * Deliberately exposes ONLY these 22 tools - nothing else exists on this
  * surface, so Claude/Grok physically cannot call anything beyond this narrow
  * workflow:
  *   1. list_unassigned_messages   (ci:read)
@@ -27,6 +27,7 @@
  *   19. update_entity_name        (ci:update_entity)
  *   20. update_entity_party       (ci:update_entity)
  *   21. update_entity_state       (ci:update_entity)
+ *   22. list_accounts             (ci:accounts_read)
  *
  * Tools 9-11 manage the sender email/domain/phone and CTA-domain mappings
  * that assign_messages_to_entity / categorize_messages match against - so
@@ -59,6 +60,13 @@
  * "Kristen Gillibrand" -> "Kirsten Gillibrand") - restricted to only the
  * `name` field, same pattern as update_entity_type, and blocked if another
  * entity already has the target name.
+ *
+ * Tool 22 lists client accounts, their user contacts, and live Stripe
+ * payment status (subscription state, amount, renewal date, past-due/invoice
+ * status). Gated by its own scope (ci:accounts_read) rather than "ci:read"
+ * since it exposes contact/billing data across every client, not just CI
+ * workflow data - a key without this scope cannot see it. Read-only, no rate
+ * limit or kill-switch check, same as the other read-only tools.
  *
  * Auth: bearer token -> ApiKey table (shared with the read-only public v1
  * API, distinguished by scope strings - see lib/ci-api-auth.ts). Every write
@@ -546,7 +554,7 @@ const handler = createMcpHandler(
       },
     )
 
-    // ── Tool 19: update_entity_name ─────────────────────────────────────────
+    // ── Tool 19: update_entity_name ──────���──────────────────────────────────
     server.registerTool(
       "update_entity_name",
       {
@@ -1391,6 +1399,115 @@ const handler = createMcpHandler(
               },
             ],
           }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 22: list_accounts ────────────────────────────────────────────
+    server.registerTool(
+      "list_accounts",
+      {
+        title: "List Client Accounts",
+        description:
+          "Lists rip-tool client accounts with their user contacts and Stripe payment status - name, slug, active flag, subscription plan/status, trial state, every user (name, email, role, lastActive) on the account, and live Stripe billing details (amount, currency, billing interval, current period end, cancel-at-period-end, past-due/latest invoice status) when the client has a Stripe subscription. Gated by its own scope (ci:accounts_read), separate from ci:read, since this exposes contact and billing data across every client rather than just CI workflow data.",
+        inputSchema: {
+          search: z.string().optional().describe("Case-insensitive substring match on client name or slug"),
+          limit: z.number().int().min(1).max(200).default(50),
+        },
+      },
+      async ({ search, limit }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.ACCOUNTS_READ)
+
+          const clients = await prisma.client.findMany({
+            where: search
+              ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { slug: { contains: search, mode: "insensitive" } }] }
+              : undefined,
+            orderBy: { name: "asc" },
+            take: limit,
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              active: true,
+              subscriptionPlan: true,
+              subscriptionStatus: true,
+              hasCompetitiveInsights: true,
+              cancelAtPeriodEnd: true,
+              trialExpiresAt: true,
+              subscriptionRenewDate: true,
+              createdAt: true,
+              stripeCustomerId: true,
+              stripeSubscriptionId: true,
+              users: {
+                select: { id: true, firstName: true, lastName: true, email: true, role: true, lastActive: true },
+                orderBy: { createdAt: "asc" },
+              },
+            },
+          })
+
+          const { stripe } = await import("@/lib/stripe")
+
+          const results = await Promise.all(
+            clients.map(async (c) => {
+              let payment: Record<string, unknown> | null = null
+
+              if (c.stripeSubscriptionId) {
+                try {
+                  const sub = await stripe.subscriptions.retrieve(c.stripeSubscriptionId, {
+                    expand: ["items.data.price", "latest_invoice"],
+                  })
+                  const item = sub.items.data[0]
+                  const latestInvoice = sub.latest_invoice
+                  payment = {
+                    stripeStatus: sub.status, // "active", "past_due", "canceled", "trialing", etc.
+                    amountCents: item?.price?.unit_amount ?? null,
+                    currency: item?.price?.currency ?? null,
+                    billingInterval: item?.price?.recurring?.interval ?? null,
+                    currentPeriodEnd: sub.current_period_end
+                      ? new Date(sub.current_period_end * 1000).toISOString()
+                      : null,
+                    cancelAtPeriodEnd: sub.cancel_at_period_end,
+                    latestInvoiceStatus:
+                      latestInvoice && typeof latestInvoice === "object" ? latestInvoice.status : null,
+                  }
+                } catch (err) {
+                  console.error("[v0] list_accounts: failed to fetch Stripe subscription for", c.id, err)
+                  payment = { error: "Failed to fetch Stripe subscription details" }
+                }
+              } else if (c.stripeCustomerId) {
+                payment = { stripeStatus: "no_active_subscription" }
+              }
+
+              return {
+                id: c.id,
+                name: c.name,
+                slug: c.slug,
+                active: c.active,
+                subscriptionPlan: c.subscriptionPlan,
+                subscriptionStatus: c.subscriptionStatus,
+                hasCompetitiveInsights: c.hasCompetitiveInsights,
+                cancelAtPeriodEnd: c.cancelAtPeriodEnd,
+                trialExpiresAt: c.trialExpiresAt,
+                subscriptionRenewDate: c.subscriptionRenewDate,
+                createdAt: c.createdAt,
+                stripeCustomerId: c.stripeCustomerId,
+                stripeSubscriptionId: c.stripeSubscriptionId,
+                payment,
+                users: c.users.map((u) => ({
+                  id: u.id,
+                  name: [u.firstName, u.lastName].filter(Boolean).join(" ") || null,
+                  email: u.email,
+                  role: u.role,
+                  lastActive: u.lastActive,
+                })),
+              }
+            }),
+          )
+
+          return { content: [{ type: "text" as const, text: JSON.stringify(results, null, 2) }] }
         } catch (error) {
           return toolError(error)
         }

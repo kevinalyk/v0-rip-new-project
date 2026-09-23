@@ -68,6 +68,7 @@ export default function SeedListContent({
   const [showPasswordStates, setShowPasswordStates] = useState<{ [key: string]: boolean }>({})
   const [decryptedPasswords, setDecryptedPasswords] = useState<{ [key: string]: string }>({})
   const [encryptedPasswords, setEncryptedPasswords] = useState<{ [key: string]: string }>({})
+  const [savingPurposeId, setSavingPurposeId] = useState<string | null>(null)
   const [decryptingStates, setDecryptingStates] = useState<{ [key: string]: boolean }>({})
   const [isDebugDialogOpen, setIsDebugDialogOpen] = useState(false)
   const [debuggingId, setDebuggingId] = useState<string | null>(null)
@@ -521,6 +522,31 @@ export default function SeedListContent({
     }
   }
 
+  const handlePurposeChange = async (seedId: string, purpose: string) => {
+    try {
+      setSavingPurposeId(seedId)
+      const response = await fetch(`/api/seedlist/${seedId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ purpose: purpose || null }),
+        credentials: "include",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to update purpose")
+      }
+
+      setSeedEmails((prev) =>
+        prev.map((email) => (email.id === seedId ? { ...email, purpose: purpose || null } : email)),
+      )
+    } catch (error) {
+      console.error("Error updating purpose:", error)
+      toast.error("Failed to update purpose")
+    } finally {
+      setSavingPurposeId(null)
+    }
+  }
+
   const handleBulkUnassign = async () => {
     setBulkUnassignLoading(true)
     try {
@@ -960,13 +986,14 @@ export default function SeedListContent({
               {isAdminView && <TableHead>Password</TableHead>}
               {!isAdminView && <TableHead>Added On</TableHead>}
               {isAdminView && <TableHead className="w-[120px]">Domain Health</TableHead>}
+              {isAdminView && <TableHead className="w-[160px]">Purpose</TableHead>}
               <TableHead className="w-[150px] text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={isAdminView ? 6 : 5} className="text-center py-12">
+                <TableCell colSpan={isAdminView ? 7 : 5} className="text-center py-12">
                   <div className="flex justify-center">
                     <Loader2 size={24} className="animate-spin text-rip-red" />
                   </div>
@@ -1114,6 +1141,27 @@ export default function SeedListContent({
                             <ShieldCheck size={14} className="text-blue-500 flex-shrink-0" />
                           )}
                         </div>
+                      </TableCell>
+                    )}
+                    {isAdminView && (
+                      <TableCell>
+                        <Input
+                          defaultValue={email.purpose || ""}
+                          placeholder="e.g. CI, Domain Health"
+                          className="h-8 text-sm"
+                          disabled={savingPurposeId === email.id}
+                          onBlur={(e) => {
+                            const value = e.target.value.trim()
+                            if (value !== (email.purpose || "")) {
+                              handlePurposeChange(email.id, value)
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                              e.currentTarget.blur()
+                            }
+                          }}
+                        />
                       </TableCell>
                     )}
                     <TableCell className="text-right">

@@ -545,6 +545,8 @@ model SeedEmail {
   oauthConnected  Boolean   @default(false) // Whether OAuth is set up and working
   // Domain health monitoring — when true, this seed is used for domain health scans for its assigned client
   domainHealthMode  Boolean   @default(false)
+  // Free-text label for what this seed is being used for, e.g. "CI", "Personal", "Domain Health". Optional and admin-editable.
+  purpose         String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

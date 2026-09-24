@@ -3,7 +3,7 @@
  * Claude.ai / Claude Desktop custom connector. See
  * docs/plans/CLAUDE_CI_ASSIGNMENT_MCP.md for the full design.
  *
- * Deliberately exposes ONLY these 22 tools - nothing else exists on this
+ * Deliberately exposes ONLY these 23 tools - nothing else exists on this
  * surface, so Claude/Grok physically cannot call anything beyond this narrow
  * workflow:
  *   1. list_unassigned_messages   (ci:read)
@@ -28,6 +28,7 @@
  *   20. update_entity_party       (ci:update_entity)
  *   21. update_entity_state       (ci:update_entity)
  *   22. list_accounts             (ci:accounts_read)
+ *   23. list_site_visits          (ci:site_visits_read)
  *
  * Tools 9-11 manage the sender email/domain/phone and CTA-domain mappings
  * that assign_messages_to_entity / categorize_messages match against - so
@@ -67,6 +68,14 @@
  * since it exposes contact/billing data across every client, not just CI
  * workflow data - a key without this scope cannot see it. Read-only, no rate
  * limit or kill-switch check, same as the other read-only tools.
+ *
+ * Tool 23 queries the raw SiteVisit traffic log (IP, path, method, status
+ * code, referer, user agent, geo, and - if the visitor was logged in -
+ * userId/userEmail). Gated by its own scope (ci:site_visits_read) since raw
+ * per-visitor traffic data (including anonymous, unauthenticated visitors)
+ * is more sensitive than aggregated CI digest stats or client billing
+ * rosters. Read-only, no rate limit or kill-switch check, same as the other
+ * read-only tools.
  *
  * Auth: bearer token -> ApiKey table (shared with the read-only public v1
  * API, distinguished by scope strings - see lib/ci-api-auth.ts). Every write
@@ -1508,6 +1517,71 @@ const handler = createMcpHandler(
           )
 
           return { content: [{ type: "text" as const, text: JSON.stringify(results, null, 2) }] }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 23: list_site_visits ───────────────────────────────────────────
+    server.registerTool(
+      "list_site_visits",
+      {
+        title: "List Site Visits",
+        description:
+          "Read-only query of the raw SiteVisit traffic log - every recorded request's IP, path, HTTP method, status code, referer, user agent, geo (country/city), and - if the visitor was authenticated - userId/userEmail. Filter by path (substring), ip (exact), userId, isAuthenticated, and/or a date window; defaults to the most recent visits if no filters given. Gated by its own scope (ci:site_visits_read), separate from ci:read and ci:accounts_read, since this exposes raw per-visitor traffic data across the whole site, including anonymous visitors.",
+        inputSchema: {
+          path: z.string().optional().describe("Case-insensitive substring match on the visited path"),
+          ip: z.string().optional().describe("Exact match on visitor IP address"),
+          userId: z.string().optional().describe("Exact match on authenticated userId"),
+          isAuthenticated: z.boolean().optional().describe("Filter to only authenticated (true) or only anonymous (false) visits"),
+          fromDate: z.string().optional().describe("ISO date/time; window start"),
+          toDate: z.string().optional().describe("ISO date/time; window end"),
+          limit: z.number().int().min(1).max(200).default(50),
+        },
+      },
+      async ({ path, ip, userId, isAuthenticated, fromDate, toDate, limit }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.SITE_VISITS_READ)
+
+          let createdAt: { gte?: Date; lte?: Date } | undefined
+          if (fromDate || toDate) {
+            const from = fromDate ? new Date(fromDate) : undefined
+            const to = toDate ? new Date(toDate) : undefined
+            if ((from && Number.isNaN(from.getTime())) || (to && Number.isNaN(to.getTime()))) {
+              throw new CiApiError("fromDate/toDate must be valid ISO date strings", 400)
+            }
+            createdAt = { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) }
+          }
+
+          const visits = await prisma.siteVisit.findMany({
+            where: {
+              ...(path ? { path: { contains: path, mode: "insensitive" } } : {}),
+              ...(ip ? { ip } : {}),
+              ...(userId ? { userId } : {}),
+              ...(typeof isAuthenticated === "boolean" ? { isAuthenticated } : {}),
+              ...(createdAt ? { createdAt } : {}),
+            },
+            orderBy: { createdAt: "desc" },
+            take: limit,
+            select: {
+              id: true,
+              ip: true,
+              userAgent: true,
+              referer: true,
+              path: true,
+              method: true,
+              statusCode: true,
+              userId: true,
+              userEmail: true,
+              isAuthenticated: true,
+              country: true,
+              city: true,
+              createdAt: true,
+            },
+          })
+
+          return { content: [{ type: "text" as const, text: JSON.stringify(visits, null, 2) }] }
         } catch (error) {
           return toolError(error)
         }

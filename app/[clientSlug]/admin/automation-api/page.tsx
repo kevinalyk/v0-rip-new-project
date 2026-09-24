@@ -42,6 +42,8 @@ const ALL_SCOPES = [
   { value: "ci:delete", label: "Delete junk messages (per SOP rules)" },
   { value: "ci:delete_entity", label: "Delete entities (e.g. to undo a mistaken creation)" },
   { value: "ci:digest_read", label: "Read aggregated CI digest data (inbox pulse, loudest senders, patterns, repeating content)" },
+  { value: "ci:accounts_read", label: "Read client accounts, contacts & Stripe billing status" },
+  { value: "ci:site_visits_read", label: "Read raw site traffic log (SiteVisit: IPs, paths, referers, geo)" },
 ]
 
 interface ApiKeyRow {

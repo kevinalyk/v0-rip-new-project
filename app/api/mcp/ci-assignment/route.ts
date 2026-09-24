@@ -3,7 +3,7 @@
  * Claude.ai / Claude Desktop custom connector. See
  * docs/plans/CLAUDE_CI_ASSIGNMENT_MCP.md for the full design.
  *
- * Deliberately exposes ONLY these 23 tools - nothing else exists on this
+ * Deliberately exposes ONLY these 24 tools - nothing else exists on this
  * surface, so Claude/Grok physically cannot call anything beyond this narrow
  * workflow:
  *   1. list_unassigned_messages   (ci:read)
@@ -29,6 +29,7 @@
  *   21. update_entity_state       (ci:update_entity)
  *   22. list_accounts             (ci:accounts_read)
  *   23. list_site_visits          (ci:site_visits_read)
+ *   24. update_entity_image       (ci:update_entity)
  *
  * Tools 9-11 manage the sender email/domain/phone and CTA-domain mappings
  * that assign_messages_to_entity / categorize_messages match against - so
@@ -77,6 +78,12 @@
  * rosters. Read-only, no rate limit or kill-switch check, same as the other
  * read-only tools.
  *
+ * Tool 24 sets a manual `imageUrl` override on an entity (e.g. a missing or
+ * wrong headshot) - restricted to only the `imageUrl` field, same pattern as
+ * update_entity_type/update_entity_name. Always marks the override as
+ * `imageUrlSource: "manual"` so the nightly Ballotpedia refresh cron treats
+ * it as locked and never overwrites it.
+ *
  * Auth: bearer token -> ApiKey table (shared with the read-only public v1
  * API, distinguished by scope strings - see lib/ci-api-auth.ts). Every write
  * tool additionally checks the global kill switch (AutomationSetting) and a
@@ -109,6 +116,7 @@ import {
   updateEntityName,
   updateEntityParty,
   updateEntityState,
+  updateEntityImage,
   getSopDeleteEligibleMessages,
   softDeleteMessages,
   categorizeMessages,
@@ -710,6 +718,57 @@ const handler = createMcpHandler(
               {
                 type: "text" as const,
                 text: JSON.stringify({ success: true, entityId, state: result.after }, null, 2),
+              },
+            ],
+          }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 24: update_entity_image ─────────────────────────────────────────
+    server.registerTool(
+      "update_entity_image",
+      {
+        title: "Update Entity Image",
+        description:
+          'Sets a manual imageUrl override for an existing entity (e.g. a missing headshot, or a wrong/broken one scraped from Ballotpedia). Only this field is editable through this tool - name, type, party, state, donationIdentifiers, bio, and ballotpediaUrl stay off-limits. The override is marked as "manual" so the nightly Ballotpedia refresh cron never overwrites it. Use list_entities first to confirm the entityId. Requires a "reasoning" string.',
+        inputSchema: {
+          entityId: z.string(),
+          imageUrl: z.string().url().describe("The new image URL to use for this entity"),
+          reasoning: z.string().min(1).describe("Why this entity's image is being set/corrected"),
+        },
+      },
+      async ({ entityId, imageUrl, reasoning }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.UPDATE_ENTITY)
+          await assertAutomationEnabled()
+
+          const apiKeyId = extra.authInfo!.extra!.apiKeyId as string
+          await enforceCiRateLimit(apiKeyId, "update_entity_image")
+
+          const result = await updateEntityImage(entityId, imageUrl)
+
+          if (!result.success) {
+            throw new CiApiError(result.error || "Failed to update entity image", 500)
+          }
+
+          await logCiApiAction({
+            apiKeyId,
+            action: "update_entity_image",
+            reasoning,
+            targetType: "entity",
+            entityId,
+            beforeState: result.before,
+            afterState: result.after,
+          })
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({ success: true, entityId, ...result.after }, null, 2),
               },
             ],
           }

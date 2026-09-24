@@ -257,21 +257,15 @@ export default function SeedListContent({
   }
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!selectedDomain) {
-      toast.error("Please select a domain first")
-      return
-    }
-
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    try {
-      setLoading(true)
-
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("domainId", selectedDomain.id)
-
+  const file = e.target.files?.[0]
+  if (!file) return
+  
+  try {
+  setLoading(true)
+  
+  const formData = new FormData()
+  formData.append("file", file)
+  
       const response = await fetch("/api/seedlist/import", {
         method: "POST",
         body: formData,
@@ -302,11 +296,6 @@ export default function SeedListContent({
   }
 
   const exportToCSV = async () => {
-    if (!selectedDomain) {
-      toast.error("Please select a domain first")
-      return
-    }
-
     try {
       setLoading(true)
 
@@ -352,14 +341,9 @@ export default function SeedListContent({
   }
 
   const handleDeleteSeed = async (id: string) => {
-    if (!selectedDomain) {
-      toast.error("Please select a domain first")
-      return
-    }
-
     try {
       setDeletingId(id)
-      const response = await fetch(`/api/seedlist/${id}?domainId=${selectedDomain.id}`, {
+      const response = await fetch(`/api/seedlist/${id}`, {
         method: "DELETE",
         credentials: "include",
       })
@@ -416,7 +400,7 @@ export default function SeedListContent({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ id, email, provider, domainId: selectedDomain.id }),
+        body: JSON.stringify({ id, email, provider }),
         credentials: "include",
       })
 
@@ -443,7 +427,7 @@ export default function SeedListContent({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ id, email, provider, domainId: selectedDomain.id }),
+        body: JSON.stringify({ id, email, provider }),
         credentials: "include",
       })
 
@@ -467,7 +451,7 @@ export default function SeedListContent({
 
     setDecryptingStates((prev) => ({ ...prev, [emailId]: true }))
     try {
-      const response = await fetch(`/api/seedlist/${emailId}/password?domainId=${selectedDomain.id}`, {
+      const response = await fetch(`/api/seedlist/${emailId}/password`, {
         credentials: "include",
       })
 
@@ -1204,7 +1188,7 @@ export default function SeedListContent({
                             size="icon"
                             onClick={() =>
                               window.open(
-                                `/api/oauth/microsoft?seedEmailId=${email.id}&domainId=${selectedDomain.id}`,
+                                `/api/oauth/microsoft?seedEmailId=${email.id}`,
                                 "_blank",
                               )
                             }

@@ -69,6 +69,12 @@ export const CI_SCOPES = {
   // exposes billing and contact data across every client, not just CI
   // workflow data - keep it opt-in per key.
   ACCOUNTS_READ: "ci:accounts_read",
+  // Read-only access to the SiteVisit traffic log (IP, path, referer, user
+  // agent, geo, and - if authenticated - userId/userEmail). Deliberately
+  // separate from "ci:read" and "ci:accounts_read" since this exposes raw
+  // visitor/traffic data (including anonymous visitors) across the whole
+  // site, not just CI workflow data or client billing rosters.
+  SITE_VISITS_READ: "ci:site_visits_read",
 } as const
 
 export type CiScope = (typeof CI_SCOPES)[keyof typeof CI_SCOPES]
@@ -83,6 +89,7 @@ export const CI_ASSIGNMENT_ALL_SCOPES: CiScope[] = [
   CI_SCOPES.DELETE_ENTITY,
   CI_SCOPES.DIGEST_READ,
   CI_SCOPES.ACCOUNTS_READ,
+  CI_SCOPES.SITE_VISITS_READ,
 ]
 
 // Guardrail caps - deliberately conservative. Raise only with a clear reason;

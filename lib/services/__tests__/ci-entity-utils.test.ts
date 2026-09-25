@@ -63,6 +63,7 @@ test("SHARED_ESP_DOMAINS contains no accidental duplicates and only the intended
     "sparkpostmail.com",
     "actionnetwork.org",
     "salsalabs.org",
+    "e.conservativevets.net",
   ]
   assert.equal(SHARED_ESP_DOMAINS.size, expected.length)
   for (const domain of expected) {

@@ -8,6 +8,10 @@ import {
   checkMobileRateLimit,
   rateLimitKeyForSignupIp,
 } from "@/lib/mobile-auth"
+import {
+  createPersonalWorkspaceIdentity,
+  uniqueWorkspaceName,
+} from "@/lib/services/personal-account-service"
 
 const MAX_ATTEMPTS = 3
 const RATE_LIMIT_WINDOW = 60 * 60 * 1000 // 1 hour in milliseconds
@@ -42,6 +46,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { clientName, firstName, lastName, email, password, trialCode, _hp, _ts } = body
     const signupSource = request.headers.get("x-inbox-signup-source") === "ios" ? "ios" : "web"
+    const isIosSignup = signupSource === "ios"
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : ""
 
     if (_hp) {
       return NextResponse.json({ error: "Invalid submission" }, { status: 400 })
@@ -55,13 +61,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate required fields
-    if (!clientName || !firstName || !lastName || !email || !password) {
+    if ((!isIosSignup && !clientName) || !firstName || !lastName || !normalizedEmail || !password) {
       return NextResponse.json({ error: "All fields are required" }, { status: 400 })
     }
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(normalizedEmail)) {
       return NextResponse.json({ error: "Invalid email format" }, { status: 400 })
     }
 
@@ -83,7 +89,7 @@ export async function POST(request: NextRequest) {
     const existingUser = await prisma.user.findFirst({
       where: {
         email: {
-          equals: email,
+          equals: normalizedEmail,
           mode: "insensitive",
         },
       },
@@ -93,17 +99,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "An account with this email already exists" }, { status: 400 })
     }
 
-    // Check if client name already exists (case-insensitive)
+    const personalWorkspace = isIosSignup
+      ? createPersonalWorkspaceIdentity({ firstName, lastName, email: normalizedEmail })
+      : null
+    let resolvedClientName = isIosSignup ? personalWorkspace!.name : String(clientName).trim()
+
+    // Check if client name already exists (case-insensitive). Mobile personal
+    // workspaces receive a stable unique fallback instead of asking someone to
+    // invent an organization name on a small signup screen.
     const existingClient = await prisma.client.findFirst({
       where: {
         name: {
-          equals: clientName,
+          equals: resolvedClientName,
           mode: "insensitive",
         },
       },
     })
 
-    if (existingClient) {
+    if (existingClient && !isIosSignup) {
       return NextResponse.json(
         {
           error:
@@ -112,13 +125,12 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       )
     }
+    if (existingClient && personalWorkspace) {
+      resolvedClientName = uniqueWorkspaceName(personalWorkspace.name, personalWorkspace.id)
+    }
 
-    // Generate client ID and slug from name
-    // ID: lowercase with underscores (e.g., "red_spark_strategy")
-    const clientId = clientName.toLowerCase().replace(/\s+/g, "_")
-
-    // Slug: lowercase with no spaces (e.g., "redsparkstrategy")
-    const clientSlug = clientName.toLowerCase().replace(/\s+/g, "")
+    const clientId = personalWorkspace?.id || resolvedClientName.toLowerCase().replace(/\s+/g, "_")
+    const clientSlug = personalWorkspace?.slug || resolvedClientName.toLowerCase().replace(/\s+/g, "")
 
     // Check if generated ID or slug already exists
     const existingClientById = await prisma.client.findFirst({
@@ -127,7 +139,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    if (existingClientById) {
+    if (existingClientById && !isIosSignup) {
       return NextResponse.json(
         {
           error:
@@ -140,7 +152,7 @@ export async function POST(request: NextRequest) {
     // Validate the trial code (optional field) up front, before the transaction, so a bad code
     // fails fast with a clear message instead of rolling back a half-created account.
     let matchedTrialCode: { id: string; trialLengthDays: number } | null = null
-    if (trialCode && typeof trialCode === "string" && trialCode.trim().length > 0) {
+    if (!isIosSignup && trialCode && typeof trialCode === "string" && trialCode.trim().length > 0) {
       const codeRow = await prisma.trialCode.findFirst({
         where: { code: { equals: trialCode.trim(), mode: "insensitive" } },
       })
@@ -164,7 +176,9 @@ export async function POST(request: NextRequest) {
       day: "2-digit",
       year: "numeric",
     })
-    const description = `Created by ${firstName} ${lastName} on ${createdDate}`
+    const description = isIosSignup
+      ? `Personal mobile workspace created for ${firstName} ${lastName} on ${createdDate}`
+      : `Created by ${firstName} ${lastName} on ${createdDate}`
 
     // Hash password
     const hashedPassword = await bcryptjs.hash(password, 10)
@@ -179,11 +193,13 @@ export async function POST(request: NextRequest) {
       const client = await tx.client.create({
         data: {
           id: clientId,
-          name: clientName,
+          name: resolvedClientName,
           slug: clientSlug,
           description,
           active: true,
           dataRetentionDays: 90,
+          accountKind: isIosSignup ? "personal" : "organization",
+          hasCompetitiveInsights: isIosSignup,
           ...(matchedTrialCode
             ? {
                 pendingTrialCodeId: matchedTrialCode.id,
@@ -207,7 +223,7 @@ export async function POST(request: NextRequest) {
       // Create user
       const user = await tx.user.create({
         data: {
-          email,
+          email: normalizedEmail,
           firstName,
           lastName,
           password: hashedPassword,
@@ -216,6 +232,7 @@ export async function POST(request: NextRequest) {
           clientId: client.id,
           lastActive: new Date(),
           signupSource,
+          webOnboardingCompletedAt: isIosSignup ? null : new Date(),
         },
       })
 
@@ -226,7 +243,7 @@ export async function POST(request: NextRequest) {
     sendWelcomeEmail({
       firstName,
       lastName,
-      email,
+      email: normalizedEmail,
       organizationName: result.client.name,
       plan: matchedTrialCode ? `${matchedTrialCode.trialLengthDays}-Day Free Trial (pending card on file)` : "Free",
       loginUrl: "https://app.rip-tool.com/login",
@@ -236,7 +253,7 @@ export async function POST(request: NextRequest) {
     sendNewSignupNotification({
       firstName,
       lastName,
-      email,
+      email: normalizedEmail,
       clientId: result.client.id,
       clientName: result.client.name,
       clientSlug: result.client.slug,
@@ -266,6 +283,7 @@ export async function POST(request: NextRequest) {
         // start the trial, instead of going to the dashboard. Only set when a valid trial code
         // was redeemed above.
         requiresTrialCheckout: Boolean(matchedTrialCode),
+        requiresWebOnboarding: isIosSignup,
         user: {
           id: result.user.id,
           email: result.user.email,

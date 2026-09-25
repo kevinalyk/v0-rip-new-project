@@ -1,5 +1,5 @@
 import prisma from "@/lib/prisma"
-import { getMobileClientEntitlements } from "@/lib/services/mobile-entitlements"
+import { getEffectiveMobileEntitlements } from "@/lib/services/mobile-entitlements"
 
 /**
  * Shared user-profile shape for the mobile API. Deliberately mirrors (but does not
@@ -17,6 +17,11 @@ export async function getMobileUserProfile(userId: string) {
       lastName: true,
       role: true,
       firstLogin: true,
+      signupSource: true,
+      webOnboardingCompletedAt: true,
+      mobileSubscriptionPlan: true,
+      mobileSubscriptionStatus: true,
+      mobileSubscriptionExpiresAt: true,
       client: {
         select: {
           id: true,
@@ -33,6 +38,18 @@ export async function getMobileUserProfile(userId: string) {
 
   if (!user) return null
 
+  const entitlements = user.client
+    ? getEffectiveMobileEntitlements(
+        user.client.subscriptionPlan,
+        user.client.subscriptionStatus,
+        {
+          plan: user.mobileSubscriptionPlan,
+          status: user.mobileSubscriptionStatus,
+          expiresAt: user.mobileSubscriptionExpiresAt,
+        },
+      )
+    : null
+
   return {
     id: user.id,
     email: user.email,
@@ -40,10 +57,17 @@ export async function getMobileUserProfile(userId: string) {
     lastName: user.lastName,
     role: user.role,
     firstLogin: user.firstLogin,
+    signupSource: user.signupSource,
+    webOnboardingComplete: user.webOnboardingCompletedAt !== null,
+    mobileSubscription: {
+      plan: user.mobileSubscriptionPlan,
+      status: user.mobileSubscriptionStatus,
+      expiresAt: user.mobileSubscriptionExpiresAt?.toISOString() ?? null,
+    },
     client: user.client
       ? {
           ...user.client,
-          entitlements: getMobileClientEntitlements(user.client.subscriptionPlan),
+          entitlements,
         }
       : null,
   }

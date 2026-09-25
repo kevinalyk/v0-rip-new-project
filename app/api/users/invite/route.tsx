@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 import { verifyToken } from "@/lib/auth"
 import crypto from "crypto"
+import prisma from "@/lib/prisma"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -32,9 +33,10 @@ export async function POST(request: NextRequest) {
     }
 
     const { firstName, lastName, email, role, clientSlug } = await request.json()
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : ""
 
     // Validate input
-    if (!firstName || !lastName || !email || !role) {
+    if (!firstName || !lastName || !normalizedEmail || !role) {
       return NextResponse.json({ error: "First name, last name, email, and role are required" }, { status: 400 })
     }
 
@@ -51,6 +53,9 @@ export async function POST(request: NextRequest) {
       }
 
       targetClientId = targetClient[0].id
+    }
+    if (!targetClientId) {
+      return NextResponse.json({ error: "No organization is available for this invitation" }, { status: 400 })
     }
 
     // Check seat limits before inviting
@@ -93,42 +98,59 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check if user already exists
-    const existingUser = await sql`
-      SELECT id FROM "User" WHERE email = ${email}
-    `
-
-    if (existingUser && existingUser.length > 0) {
-      return NextResponse.json({ error: "User with this email already exists" }, { status: 400 })
-    }
-
-    const userId = crypto.randomUUID()
-
-    const newUser = await sql`
-      INSERT INTO "User" (id, "firstName", "lastName", email, role, "clientId", "firstLogin", "createdAt", "updatedAt")
-      VALUES (${userId}, ${firstName}, ${lastName}, ${email}, ${role}, ${targetClientId}, true, NOW(), NOW())
-      RETURNING id, email, "firstName", "lastName"
-    `
-
-    // Generate invitation token
+    const existingUser = await prisma.user.findFirst({
+      where: { email: { equals: normalizedEmail, mode: "insensitive" } },
+      include: { client: { select: { id: true, accountKind: true } } },
+    })
     const invitationToken = crypto.randomBytes(32).toString("hex")
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+    let invitedUser: { id: string; email: string; firstName: string | null; lastName: string | null }
+    let invitationLink: string
+    let existingMobileAccount = false
 
-    // Store invitation token
-    await sql`
-      INSERT INTO "UserInvitation" (token, userid, expiresat)
-      VALUES (${invitationToken}, ${newUser[0].id}, ${expiresAt})
-    `
+    if (existingUser) {
+      if (existingUser.client?.accountKind !== "personal" || existingUser.signupSource !== "ios") {
+        return NextResponse.json({ error: "User with this email already belongs to an account" }, { status: 400 })
+      }
+      if (existingUser.clientId === targetClientId) {
+        return NextResponse.json({ error: "This user already belongs to your organization" }, { status: 400 })
+      }
 
-    // Send invitation email via Mailgun
-    const invitationLink = `${process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"}/set-password?token=${invitationToken}`
+      const tokenHash = crypto.createHash("sha256").update(invitationToken).digest("hex")
+      await prisma.clientJoinInvitation.create({
+        data: {
+          tokenHash,
+          userId: existingUser.id,
+          targetClientId,
+          invitedRole: role,
+          invitedByUserId: String(payload.userId),
+          expiresAt,
+        },
+      })
+      invitedUser = existingUser
+      existingMobileAccount = true
+      invitationLink = `${process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"}/accept-invitation?token=${invitationToken}`
+    } else {
+      const userId = crypto.randomUUID()
+      const newUser = await sql`
+        INSERT INTO "User" (id, "firstName", "lastName", email, role, "clientId", "firstLogin", "createdAt", "updatedAt")
+        VALUES (${userId}, ${firstName}, ${lastName}, ${normalizedEmail}, ${role}, ${targetClientId}, true, NOW(), NOW())
+        RETURNING id, email, "firstName", "lastName"
+      `
+      invitedUser = newUser[0] as typeof invitedUser
+      await sql`
+        INSERT INTO "UserInvitation" (token, userid, expiresat)
+        VALUES (${invitationToken}, ${newUser[0].id}, ${expiresAt})
+      `
+      invitationLink = `${process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"}/set-password?token=${invitationToken}`
+    }
 
     const mailgunDomain = process.env.MAILGUN_DOMAIN!
     const mailgunApiKey = process.env.MAILGUN_API_KEY!
 
     const formData = new FormData()
     formData.append("from", `Inbox.GOP <hello@${mailgunDomain}>`)
-    formData.append("to", email)
+    formData.append("to", normalizedEmail)
     formData.append("subject", "You've been invited to Inbox.GOP")
     formData.append(
       "html",
@@ -147,8 +169,8 @@ export async function POST(request: NextRequest) {
           <div class="container">
             <h2>Welcome to Inbox.GOP!</h2>
             <p>Hi ${firstName},</p>
-            <p>You've been invited to join Inbox.GOP. Click the button below to set your password and get started:</p>
-            <a href="${invitationLink}" class="button">Set Your Password</a>
+            <p>You've been invited to join Inbox.GOP. Click the button below to ${existingMobileAccount ? "accept the invitation with your existing account" : "set your password and get started"}:</p>
+            <a href="${invitationLink}" class="button">${existingMobileAccount ? "Accept Invitation" : "Set Your Password"}</a>
             <p>Or copy and paste this link into your browser:</p>
             <p style="word-break: break-all; color: #0070f3;">${invitationLink}</p>
             <p>This invitation link will expire in 7 days.</p>
@@ -176,7 +198,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       message: "User invited successfully",
-      user: newUser[0],
+      user: invitedUser,
+      existingMobileAccount,
     })
   } catch (error) {
     console.error("Error inviting user:", error)

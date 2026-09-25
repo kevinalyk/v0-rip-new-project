@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import bcryptjs from "bcryptjs"
 import prisma from "@/lib/prisma"
 import { createToken } from "@/lib/auth"
+import { notifyMobileAccountAccess } from "@/lib/services/mobile-alert-delivery-service"
 
 export async function POST(request: Request) {
   try {
@@ -14,7 +15,9 @@ export async function POST(request: Request) {
         client: {
           select: {
             id: true,
+            name: true,
             slug: true,
+            accountKind: true,
           },
         },
       },
@@ -39,6 +42,10 @@ export async function POST(request: Request) {
       clientSlug: user.client?.slug || null,
     }
     const token = await createToken(tokenPayload)
+    const requiresWebOnboarding =
+      user.signupSource === "ios" &&
+      user.webOnboardingCompletedAt === null &&
+      user.client?.accountKind === "personal"
 
     const response = NextResponse.json({
       user: {
@@ -49,6 +56,8 @@ export async function POST(request: Request) {
         role: user.role,
         firstLogin: user.firstLogin,
       },
+      requiresWebOnboarding,
+      redirectTo: requiresWebOnboarding ? "/finish-account" : "/",
     })
 
     response.cookies.set({
@@ -65,6 +74,13 @@ export async function POST(request: Request) {
       where: { id: user.id },
       data: { lastActive: new Date() },
     })
+
+    if (user.signupSource === "ios" && user.client) {
+      await notifyMobileAccountAccess(user.id, "web-ready", {
+        kind: "web_ready",
+        clientName: user.client.name,
+      }).catch((error) => console.error("[Login] Web-access push failed:", error))
+    }
 
     return response
   } catch (error) {

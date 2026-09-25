@@ -1,9 +1,6 @@
 import type { MobileAuthContext } from "@/lib/mobile-auth"
 import { MobileAuthError } from "@/lib/mobile-auth"
-import {
-  getMobileClientEntitlements,
-  isSupportedSubscriptionPlan,
-} from "@/lib/services/mobile-entitlements"
+import { isSupportedSubscriptionPlan } from "@/lib/services/mobile-entitlements"
 import { hasCompetitiveInsightsAccess, type SubscriptionPlan, type SubscriptionStatus } from "@/lib/subscription-utils"
 
 /**
@@ -18,7 +15,7 @@ export function requireClientContext(ctx: MobileAuthContext): { clientId: string
   if (!isSupportedSubscriptionPlan(ctx.client.subscriptionPlan)) {
     throw new MobileAuthError(403, "UNSUPPORTED_SUBSCRIPTION_PLAN", "This account's subscription plan is not supported")
   }
-  return { clientId: ctx.clientId, plan: ctx.client.subscriptionPlan }
+  return { clientId: ctx.clientId, plan: ctx.client.effectiveMobilePlan }
 }
 
 /** Client isolation guard: throws 403 if a loaded resource's clientId doesn't match the caller's. */
@@ -60,7 +57,7 @@ export function requireFeedSearchAndFilters(
   ctx: MobileAuthContext,
 ): { clientId: string; plan: SubscriptionPlan } {
   const clientContext = requireClientContext(ctx)
-  if (!getMobileClientEntitlements(clientContext.plan).canSearchAndFilterFeed) {
+  if (!ctx.client?.entitlements.canSearchAndFilterFeed) {
     throw new MobileAuthError(
       403,
       "FEED_FILTERS_NOT_AVAILABLE",
@@ -76,7 +73,7 @@ export function requireMobileAlerts(
 ): { clientId: string; plan: SubscriptionPlan } {
   requireCompetitiveInsights(ctx)
   const clientContext = requireClientContext(ctx)
-  if (!getMobileClientEntitlements(clientContext.plan).canUseAlerts) {
+  if (!ctx.client?.entitlements.canUseAlerts) {
     throw new MobileAuthError(403, "ALERTS_NOT_AVAILABLE", "Push alerts are available on paid plans")
   }
   return clientContext

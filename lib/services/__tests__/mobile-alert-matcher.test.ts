@@ -2,11 +2,30 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import {
+  buildAccountAccessPushMessage,
   buildAnnouncementPushMessage,
   candidateIsVisibleToClient,
   matchesMobileAlert,
   type MobileAlertCandidate,
 } from "@/lib/services/mobile-alert-delivery-service"
+
+test("account-access pushes route users to coverage and cancellation guidance", () => {
+  assert.deepEqual(
+    buildAccountAccessPushMessage("ExponentPushToken[test-token]", {
+      kind: "covered",
+      clientName: "Example Organization",
+      planName: "Professional",
+      shouldCancelAppleSubscription: true,
+    }),
+    {
+      to: "ExponentPushToken[test-token]",
+      sound: "default",
+      title: "Your mobile access is covered",
+      body: "Example Organization's Professional plan now includes your mobile access. Cancel Personal through Apple to avoid paying twice.",
+      data: { accountAccessKind: "covered", shouldCancelAppleSubscription: true },
+    },
+  )
+})
 
 test("announcement pushes deep-link to the native What's New article", () => {
   assert.deepEqual(

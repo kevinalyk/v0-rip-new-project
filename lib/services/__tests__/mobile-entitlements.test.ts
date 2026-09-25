@@ -12,6 +12,7 @@ import {
   type FeedFilters,
 } from "@/lib/services/feed-service"
 import {
+  getEffectiveMobileEntitlements,
   getMobileClientEntitlements,
   type MobileClientEntitlements,
 } from "@/lib/services/mobile-entitlements"
@@ -24,13 +25,21 @@ const EXPECTED_ENTITLEMENTS: Record<SubscriptionPlan, MobileClientEntitlements> 
     feedHistoryHours: 1,
     feedDelayHours: 24,
     followedEntityLimit: 0,
+    isAdFree: false,
+    accessSource: "free",
+    clientPlanCoversMobile: false,
+    shouldPromptAppleCancellation: false,
   },
   paid: {
     canSearchAndFilterFeed: true,
     canUseAlerts: true,
-    feedHistoryHours: 72,
+    feedHistoryHours: null,
     feedDelayHours: 0,
-    followedEntityLimit: 3,
+    followedEntityLimit: null,
+    isAdFree: true,
+    accessSource: "client_plan",
+    clientPlanCoversMobile: true,
+    shouldPromptAppleCancellation: false,
   },
   all: {
     canSearchAndFilterFeed: true,
@@ -38,6 +47,10 @@ const EXPECTED_ENTITLEMENTS: Record<SubscriptionPlan, MobileClientEntitlements> 
     feedHistoryHours: null,
     feedDelayHours: 0,
     followedEntityLimit: null,
+    isAdFree: true,
+    accessSource: "client_plan",
+    clientPlanCoversMobile: true,
+    shouldPromptAppleCancellation: false,
   },
   basic_inboxing: {
     canSearchAndFilterFeed: true,
@@ -45,6 +58,10 @@ const EXPECTED_ENTITLEMENTS: Record<SubscriptionPlan, MobileClientEntitlements> 
     feedHistoryHours: null,
     feedDelayHours: 0,
     followedEntityLimit: null,
+    isAdFree: true,
+    accessSource: "client_plan",
+    clientPlanCoversMobile: true,
+    shouldPromptAppleCancellation: false,
   },
   enterprise: {
     canSearchAndFilterFeed: true,
@@ -52,10 +69,20 @@ const EXPECTED_ENTITLEMENTS: Record<SubscriptionPlan, MobileClientEntitlements> 
     feedHistoryHours: null,
     feedDelayHours: 0,
     followedEntityLimit: null,
+    isAdFree: true,
+    accessSource: "client_plan",
+    clientPlanCoversMobile: true,
+    shouldPromptAppleCancellation: false,
   },
 }
 
 function authContext(plan: string): MobileAuthContext {
+  const supportedPlans: readonly string[] = ["free", "all", "basic_inboxing", "enterprise"]
+  const effectiveMobilePlan: SubscriptionPlan = plan === "paid"
+    ? "all"
+    : supportedPlans.includes(plan)
+      ? plan as SubscriptionPlan
+      : "free"
   return {
     userId: "user-1",
     role: "client",
@@ -70,6 +97,7 @@ function authContext(plan: string): MobileAuthContext {
       subscriptionStatus: "active",
       hasCompetitiveInsights: true,
       entitlements: getMobileClientEntitlements(plan),
+      effectiveMobilePlan,
     },
   }
 }
@@ -104,6 +132,46 @@ test("unknown plans fail closed to Starter entitlements", () => {
   )
 })
 
+test("Apple Personal unlocks complete mobile access without upgrading the web workspace", () => {
+  const entitlements = getEffectiveMobileEntitlements(
+    "free",
+    "active",
+    { plan: "personal", status: "active", expiresAt: new Date("2026-10-01T00:00:00.000Z") },
+    new Date("2026-09-21T00:00:00.000Z"),
+  )
+
+  assert.equal(entitlements.effectivePlan, "all")
+  assert.equal(entitlements.accessSource, "apple_personal")
+  assert.equal(entitlements.clientPlanCoversMobile, false)
+  assert.equal(entitlements.feedHistoryHours, null)
+  assert.equal(entitlements.followedEntityLimit, null)
+  assert.equal(entitlements.isAdFree, true)
+})
+
+test("a covered web plan wins and tells active Apple subscribers to cancel", () => {
+  const entitlements = getEffectiveMobileEntitlements(
+    "paid",
+    "active",
+    { plan: "personal", status: "active", expiresAt: null },
+  )
+
+  assert.equal(entitlements.accessSource, "client_plan")
+  assert.equal(entitlements.clientPlanCoversMobile, true)
+  assert.equal(entitlements.shouldPromptAppleCancellation, true)
+})
+
+test("expired Apple Personal access fails closed to free mobile access", () => {
+  const entitlements = getEffectiveMobileEntitlements(
+    "free",
+    "active",
+    { plan: "personal", status: "active", expiresAt: new Date("2026-09-20T00:00:00.000Z") },
+    new Date("2026-09-21T00:00:00.000Z"),
+  )
+
+  assert.equal(entitlements.effectivePlan, "free")
+  assert.equal(entitlements.accessSource, "free")
+})
+
 test("mobile alerts are paid-only and enforced by the API authorization layer", () => {
   assert.throws(
     () => requireMobileAlerts(authContext("free")),
@@ -112,7 +180,7 @@ test("mobile alerts are paid-only and enforced by the API authorization layer", 
       error.status === 403 &&
       error.code === "ALERTS_NOT_AVAILABLE",
   )
-  assert.deepEqual(requireMobileAlerts(authContext("paid")), { clientId: "client-1", plan: "paid" })
+  assert.deepEqual(requireMobileAlerts(authContext("paid")), { clientId: "client-1", plan: "all" })
   assert.deepEqual(requireMobileAlerts(authContext("enterprise")), { clientId: "client-1", plan: "enterprise" })
 })
 
@@ -174,7 +242,7 @@ test("Starter can paginate an unfiltered feed but cannot apply any filter", () =
 test("paid plans retain search/filter access", () => {
   for (const plan of ["paid", "all", "basic_inboxing", "enterprise"] as const) {
     assert.doesNotThrow(() => assertMobileFeedFiltersAllowed(plan, { search: "fundraising", state: "TX" }))
-    assert.equal(requireFeedSearchAndFilters(authContext(plan)).plan, plan)
+    assert.equal(requireFeedSearchAndFilters(authContext(plan)).plan, plan === "paid" ? "all" : plan)
   }
 })
 

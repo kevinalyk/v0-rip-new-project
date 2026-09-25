@@ -58,6 +58,7 @@ export async function GET(request: Request) {
           active: true,
           locked: true,
           domainHealthMode: true,
+          purpose: true,
         },
       })
 
@@ -74,6 +75,7 @@ export async function GET(request: Request) {
           active: true,
           locked: true,
           domainHealthMode: true,
+          purpose: true,
         },
       })
     } else {
@@ -105,6 +107,7 @@ export async function GET(request: Request) {
           active: true,
           locked: true,
           domainHealthMode: true,
+          purpose: true,
         },
       })
 

@@ -1231,6 +1231,42 @@ export async function updateEntityState(entityId: string, newState: string | nul
 }
 
 /**
+ * Set a manual `imageUrl` override for an entity (e.g. a headshot that's
+ * missing, wrong, or unavailable from Ballotpedia) without touching any
+ * other field (name, type, party, state, description, donationIdentifiers,
+ * ballotpediaUrl, etc.). Used by the Claude/Grok-facing CI Assignment MCP's
+ * `update_entity_image` tool, which is deliberately restricted to only this
+ * one field - same pattern as updateEntityType/updateEntityName. Always sets
+ * `imageUrlSource` to "manual" so the nightly Ballotpedia refresh cron treats
+ * it as locked and never overwrites it. Returns the before/after state so
+ * callers can log a full audit trail and support Undo.
+ */
+export async function updateEntityImage(entityId: string, newImageUrl: string) {
+  try {
+    const entity = await prisma.ciEntity.findUnique({ where: { id: entityId } })
+    if (!entity) {
+      return { success: false, error: `Entity ${entityId} not found` }
+    }
+
+    const before = { imageUrl: entity.imageUrl, imageUrlSource: entity.imageUrlSource }
+    const updated = await prisma.ciEntity.update({
+      where: { id: entityId },
+      data: { imageUrl: newImageUrl, imageUrlSource: "manual" },
+    })
+
+    return {
+      success: true,
+      entity: updated,
+      before,
+      after: { imageUrl: updated.imageUrl, imageUrlSource: updated.imageUrlSource },
+    }
+  } catch (error: any) {
+    console.error("Error updating entity image:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
  * Assign campaigns to an entity and create mapping
  */
 export async function assignCampaignsToEntity(

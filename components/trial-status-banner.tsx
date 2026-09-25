@@ -1,11 +1,11 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import useSWR from "swr"
 import Link from "next/link"
 import { X, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { useCurrentUser } from "@/lib/hooks/use-current-user"
 
 interface MeResponse {
   client?: {
@@ -16,7 +16,6 @@ interface MeResponse {
   iat?: number
 }
 
-const fetcher = (url: string) => fetch(url).then((res) => (res.ok ? res.json() : null))
 const DISMISS_STORAGE_KEY = "trialBannerDismissedIat"
 
 // Shows a dismissible top-of-page banner while a code-redeemed trial is active ("X days left"),
@@ -26,7 +25,7 @@ const DISMISS_STORAGE_KEY = "trialBannerDismissedIat"
 // dismissed. The "trial ended" modal is tracked server-side via trialEndedNoticeSeen instead,
 // since it truly only needs to show once ever per trial end, not once per login.
 export function TrialStatusBanner() {
-  const { data } = useSWR<MeResponse>("/api/auth/me", fetcher)
+  const { user: data } = useCurrentUser() as { user: MeResponse | null }
   const [bannerDismissed, setBannerDismissed] = useState(true)
   const [endedDialogOpen, setEndedDialogOpen] = useState(false)
 

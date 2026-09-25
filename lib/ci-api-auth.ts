@@ -63,6 +63,18 @@ export const CI_SCOPES = {
   DELETE: "ci:delete",
   DELETE_ENTITY: "ci:delete_entity",
   DIGEST_READ: "ci:digest_read",
+  // Read-only access to client account rosters (Client + User contact info)
+  // and their Stripe payment/subscription status. Deliberately separate from
+  // "ci:read" (which only covers CI entities/messages) since this scope
+  // exposes billing and contact data across every client, not just CI
+  // workflow data - keep it opt-in per key.
+  ACCOUNTS_READ: "ci:accounts_read",
+  // Read-only access to the SiteVisit traffic log (IP, path, referer, user
+  // agent, geo, and - if authenticated - userId/userEmail). Deliberately
+  // separate from "ci:read" and "ci:accounts_read" since this exposes raw
+  // visitor/traffic data (including anonymous visitors) across the whole
+  // site, not just CI workflow data or client billing rosters.
+  SITE_VISITS_READ: "ci:site_visits_read",
 } as const
 
 export type CiScope = (typeof CI_SCOPES)[keyof typeof CI_SCOPES]
@@ -76,6 +88,8 @@ export const CI_ASSIGNMENT_ALL_SCOPES: CiScope[] = [
   CI_SCOPES.DELETE,
   CI_SCOPES.DELETE_ENTITY,
   CI_SCOPES.DIGEST_READ,
+  CI_SCOPES.ACCOUNTS_READ,
+  CI_SCOPES.SITE_VISITS_READ,
 ]
 
 // Guardrail caps - deliberately conservative. Raise only with a clear reason;
@@ -201,6 +215,7 @@ export async function enforceCiRateLimit(
     | "update_entity_name"
     | "update_entity_party"
     | "update_entity_state"
+    | "update_entity_image"
     | "delete_messages"
     | "add_entity_mapping"
     | "remove_entity_mapping"
@@ -317,6 +332,7 @@ export async function logCiApiAction(params: {
     | "update_entity_name"
     | "update_entity_party"
     | "update_entity_state"
+    | "update_entity_image"
     | "delete_messages"
     | "add_entity_mapping"
     | "remove_entity_mapping"

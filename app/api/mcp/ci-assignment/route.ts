@@ -3,7 +3,7 @@
  * Claude.ai / Claude Desktop custom connector. See
  * docs/plans/CLAUDE_CI_ASSIGNMENT_MCP.md for the full design.
  *
- * Deliberately exposes ONLY these 19 tools - nothing else exists on this
+ * Deliberately exposes ONLY these 24 tools - nothing else exists on this
  * surface, so Claude/Grok physically cannot call anything beyond this narrow
  * workflow:
  *   1. list_unassigned_messages   (ci:read)
@@ -27,6 +27,9 @@
  *   19. update_entity_name        (ci:update_entity)
  *   20. update_entity_party       (ci:update_entity)
  *   21. update_entity_state       (ci:update_entity)
+ *   22. list_accounts             (ci:accounts_read)
+ *   23. list_site_visits          (ci:site_visits_read)
+ *   24. update_entity_image       (ci:update_entity)
  *
  * Tools 9-11 manage the sender email/domain/phone and CTA-domain mappings
  * that assign_messages_to_entity / categorize_messages match against - so
@@ -60,6 +63,27 @@
  * `name` field, same pattern as update_entity_type, and blocked if another
  * entity already has the target name.
  *
+ * Tool 22 lists client accounts, their user contacts, and live Stripe
+ * payment status (subscription state, amount, renewal date, past-due/invoice
+ * status). Gated by its own scope (ci:accounts_read) rather than "ci:read"
+ * since it exposes contact/billing data across every client, not just CI
+ * workflow data - a key without this scope cannot see it. Read-only, no rate
+ * limit or kill-switch check, same as the other read-only tools.
+ *
+ * Tool 23 queries the raw SiteVisit traffic log (IP, path, method, status
+ * code, referer, user agent, geo, and - if the visitor was logged in -
+ * userId/userEmail). Gated by its own scope (ci:site_visits_read) since raw
+ * per-visitor traffic data (including anonymous, unauthenticated visitors)
+ * is more sensitive than aggregated CI digest stats or client billing
+ * rosters. Read-only, no rate limit or kill-switch check, same as the other
+ * read-only tools.
+ *
+ * Tool 24 sets a manual `imageUrl` override on an entity (e.g. a missing or
+ * wrong headshot) - restricted to only the `imageUrl` field, same pattern as
+ * update_entity_type/update_entity_name. Always marks the override as
+ * `imageUrlSource: "manual"` so the nightly Ballotpedia refresh cron treats
+ * it as locked and never overwrites it.
+ *
  * Auth: bearer token -> ApiKey table (shared with the read-only public v1
  * API, distinguished by scope strings - see lib/ci-api-auth.ts). Every write
  * tool additionally checks the global kill switch (AutomationSetting) and a
@@ -92,6 +116,7 @@ import {
   updateEntityName,
   updateEntityParty,
   updateEntityState,
+  updateEntityImage,
   getSopDeleteEligibleMessages,
   softDeleteMessages,
   categorizeMessages,
@@ -486,7 +511,67 @@ const handler = createMcpHandler(
       },
     )
 
-    // ── Tool 19: update_entity_name ─────────────────────────────────────────
+    // ── Tool 13: delete_entity ───────────────────────────────────────────────
+    // NOTE: this tool was documented in the header comment above and
+    // deleteEntity() was already imported from lib/ci-entity-utils, but the
+    // actual server.registerTool() call was never added - meaning the tool
+    // never existed on the MCP surface at all, regardless of the caller's
+    // scopes. That's the real cause of Grok's "still can't delete" reports;
+    // it wasn't a bad/stale API key or a missing ci:delete_entity scope
+    // (the "Grok" key already has it - see AutomationSetting/ApiKey rows).
+    server.registerTool(
+      "delete_entity",
+      {
+        title: "Delete Entity",
+        description:
+          'Permanently deletes a CiEntity created by mistake (exact duplicate, or the wrong org entirely) - unassigns any campaigns/SMS pointed at it (sets their entityId back to null, does not delete the messages themselves) and removes its sender/CTA mappings first, then deletes the entity row. This cannot be undone through this tool. Use list_entities first to confirm the entityId and that it has few/no assigned messages before deleting. Requires a "reasoning" string.',
+        inputSchema: {
+          entityId: z.string().describe("The CiEntity id to delete"),
+          reasoning: z.string().min(1).describe("Why this entity is being deleted (e.g. exact duplicate of entity X)"),
+        },
+      },
+      async ({ entityId, reasoning }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.DELETE_ENTITY)
+          await assertAutomationEnabled()
+
+          const entity = await prisma.ciEntity.findUnique({ where: { id: entityId } })
+          if (!entity) {
+            throw new CiApiError(`Entity ${entityId} not found`, 404)
+          }
+
+          const apiKeyId = extra.authInfo!.extra!.apiKeyId as string
+          await enforceCiRateLimit(apiKeyId, "delete_entity")
+
+          const result = await deleteEntity(entityId)
+          if (!result.success) {
+            throw new CiApiError(result.error || "Failed to delete entity", 500)
+          }
+
+          await logCiApiAction({
+            apiKeyId,
+            action: "delete_entity",
+            reasoning,
+            targetType: "entity",
+            entityId,
+            beforeState: { name: entity.name, type: entity.type, party: entity.party, state: entity.state },
+          })
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({ success: true, entityId, deletedName: entity.name }, null, 2),
+              },
+            ],
+          }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 19: update_entity_name ──────���──────────────────────────────────
     server.registerTool(
       "update_entity_name",
       {
@@ -633,6 +718,57 @@ const handler = createMcpHandler(
               {
                 type: "text" as const,
                 text: JSON.stringify({ success: true, entityId, state: result.after }, null, 2),
+              },
+            ],
+          }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 24: update_entity_image ─────────────────────────────────────────
+    server.registerTool(
+      "update_entity_image",
+      {
+        title: "Update Entity Image",
+        description:
+          'Sets a manual imageUrl override for an existing entity (e.g. a missing headshot, or a wrong/broken one scraped from Ballotpedia). Only this field is editable through this tool - name, type, party, state, donationIdentifiers, bio, and ballotpediaUrl stay off-limits. The override is marked as "manual" so the nightly Ballotpedia refresh cron never overwrites it. Use list_entities first to confirm the entityId. Requires a "reasoning" string.',
+        inputSchema: {
+          entityId: z.string(),
+          imageUrl: z.string().url().describe("The new image URL to use for this entity"),
+          reasoning: z.string().min(1).describe("Why this entity's image is being set/corrected"),
+        },
+      },
+      async ({ entityId, imageUrl, reasoning }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.UPDATE_ENTITY)
+          await assertAutomationEnabled()
+
+          const apiKeyId = extra.authInfo!.extra!.apiKeyId as string
+          await enforceCiRateLimit(apiKeyId, "update_entity_image")
+
+          const result = await updateEntityImage(entityId, imageUrl)
+
+          if (!result.success) {
+            throw new CiApiError(result.error || "Failed to update entity image", 500)
+          }
+
+          await logCiApiAction({
+            apiKeyId,
+            action: "update_entity_image",
+            reasoning,
+            targetType: "entity",
+            entityId,
+            beforeState: result.before,
+            afterState: result.after,
+          })
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({ success: true, entityId, ...result.after }, null, 2),
               },
             ],
           }
@@ -1331,6 +1467,180 @@ const handler = createMcpHandler(
               },
             ],
           }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 22: list_accounts ────────────────────────────────────────────
+    server.registerTool(
+      "list_accounts",
+      {
+        title: "List Client Accounts",
+        description:
+          "Lists rip-tool client accounts with their user contacts and Stripe payment status - name, slug, active flag, subscription plan/status, trial state, every user (name, email, role, lastActive) on the account, and live Stripe billing details (amount, currency, billing interval, current period end, cancel-at-period-end, past-due/latest invoice status) when the client has a Stripe subscription. Gated by its own scope (ci:accounts_read), separate from ci:read, since this exposes contact and billing data across every client rather than just CI workflow data.",
+        inputSchema: {
+          search: z.string().optional().describe("Case-insensitive substring match on client name or slug"),
+          limit: z.number().int().min(1).max(200).default(50),
+        },
+      },
+      async ({ search, limit }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.ACCOUNTS_READ)
+
+          const clients = await prisma.client.findMany({
+            where: search
+              ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { slug: { contains: search, mode: "insensitive" } }] }
+              : undefined,
+            orderBy: { name: "asc" },
+            take: limit,
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              active: true,
+              subscriptionPlan: true,
+              subscriptionStatus: true,
+              hasCompetitiveInsights: true,
+              cancelAtPeriodEnd: true,
+              trialExpiresAt: true,
+              subscriptionRenewDate: true,
+              createdAt: true,
+              stripeCustomerId: true,
+              stripeSubscriptionId: true,
+              users: {
+                select: { id: true, firstName: true, lastName: true, email: true, role: true, lastActive: true },
+                orderBy: { createdAt: "asc" },
+              },
+            },
+          })
+
+          const { stripe } = await import("@/lib/stripe")
+
+          const results = await Promise.all(
+            clients.map(async (c) => {
+              let payment: Record<string, unknown> | null = null
+
+              if (c.stripeSubscriptionId) {
+                try {
+                  const sub = await stripe.subscriptions.retrieve(c.stripeSubscriptionId, {
+                    expand: ["items.data.price", "latest_invoice"],
+                  })
+                  const item = sub.items.data[0]
+                  const latestInvoice = sub.latest_invoice
+                  payment = {
+                    stripeStatus: sub.status, // "active", "past_due", "canceled", "trialing", etc.
+                    amountCents: item?.price?.unit_amount ?? null,
+                    currency: item?.price?.currency ?? null,
+                    billingInterval: item?.price?.recurring?.interval ?? null,
+                    currentPeriodEnd: sub.current_period_end
+                      ? new Date(sub.current_period_end * 1000).toISOString()
+                      : null,
+                    cancelAtPeriodEnd: sub.cancel_at_period_end,
+                    latestInvoiceStatus:
+                      latestInvoice && typeof latestInvoice === "object" ? latestInvoice.status : null,
+                  }
+                } catch (err) {
+                  console.error("[v0] list_accounts: failed to fetch Stripe subscription for", c.id, err)
+                  payment = { error: "Failed to fetch Stripe subscription details" }
+                }
+              } else if (c.stripeCustomerId) {
+                payment = { stripeStatus: "no_active_subscription" }
+              }
+
+              return {
+                id: c.id,
+                name: c.name,
+                slug: c.slug,
+                active: c.active,
+                subscriptionPlan: c.subscriptionPlan,
+                subscriptionStatus: c.subscriptionStatus,
+                hasCompetitiveInsights: c.hasCompetitiveInsights,
+                cancelAtPeriodEnd: c.cancelAtPeriodEnd,
+                trialExpiresAt: c.trialExpiresAt,
+                subscriptionRenewDate: c.subscriptionRenewDate,
+                createdAt: c.createdAt,
+                stripeCustomerId: c.stripeCustomerId,
+                stripeSubscriptionId: c.stripeSubscriptionId,
+                payment,
+                users: c.users.map((u) => ({
+                  id: u.id,
+                  name: [u.firstName, u.lastName].filter(Boolean).join(" ") || null,
+                  email: u.email,
+                  role: u.role,
+                  lastActive: u.lastActive,
+                })),
+              }
+            }),
+          )
+
+          return { content: [{ type: "text" as const, text: JSON.stringify(results, null, 2) }] }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 23: list_site_visits ───────────────────────────────────────────
+    server.registerTool(
+      "list_site_visits",
+      {
+        title: "List Site Visits",
+        description:
+          "Read-only query of the raw SiteVisit traffic log - every recorded request's IP, path, HTTP method, status code, referer, user agent, geo (country/city), and - if the visitor was authenticated - userId/userEmail. Filter by path (substring), ip (exact), userId, isAuthenticated, and/or a date window; defaults to the most recent visits if no filters given. Gated by its own scope (ci:site_visits_read), separate from ci:read and ci:accounts_read, since this exposes raw per-visitor traffic data across the whole site, including anonymous visitors.",
+        inputSchema: {
+          path: z.string().optional().describe("Case-insensitive substring match on the visited path"),
+          ip: z.string().optional().describe("Exact match on visitor IP address"),
+          userId: z.string().optional().describe("Exact match on authenticated userId"),
+          isAuthenticated: z.boolean().optional().describe("Filter to only authenticated (true) or only anonymous (false) visits"),
+          fromDate: z.string().optional().describe("ISO date/time; window start"),
+          toDate: z.string().optional().describe("ISO date/time; window end"),
+          limit: z.number().int().min(1).max(200).default(50),
+        },
+      },
+      async ({ path, ip, userId, isAuthenticated, fromDate, toDate, limit }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.SITE_VISITS_READ)
+
+          let createdAt: { gte?: Date; lte?: Date } | undefined
+          if (fromDate || toDate) {
+            const from = fromDate ? new Date(fromDate) : undefined
+            const to = toDate ? new Date(toDate) : undefined
+            if ((from && Number.isNaN(from.getTime())) || (to && Number.isNaN(to.getTime()))) {
+              throw new CiApiError("fromDate/toDate must be valid ISO date strings", 400)
+            }
+            createdAt = { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) }
+          }
+
+          const visits = await prisma.siteVisit.findMany({
+            where: {
+              ...(path ? { path: { contains: path, mode: "insensitive" } } : {}),
+              ...(ip ? { ip } : {}),
+              ...(userId ? { userId } : {}),
+              ...(typeof isAuthenticated === "boolean" ? { isAuthenticated } : {}),
+              ...(createdAt ? { createdAt } : {}),
+            },
+            orderBy: { createdAt: "desc" },
+            take: limit,
+            select: {
+              id: true,
+              ip: true,
+              userAgent: true,
+              referer: true,
+              path: true,
+              method: true,
+              statusCode: true,
+              userId: true,
+              userEmail: true,
+              isAuthenticated: true,
+              country: true,
+              city: true,
+              createdAt: true,
+            },
+          })
+
+          return { content: [{ type: "text" as const, text: JSON.stringify(visits, null, 2) }] }
         } catch (error) {
           return toolError(error)
         }

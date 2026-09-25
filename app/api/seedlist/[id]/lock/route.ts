@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { getAuthenticatedUser, isSystemAdmin } from "@/lib/auth"
+import { computeSeedPurpose } from "@/lib/seed-utils"
 
 // PATCH endpoint to toggle seed email's locked status
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
@@ -26,7 +27,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     const seedEmail = await prisma.seedEmail.findUnique({
       where: { id: params.id },
-      select: { locked: true, email: true, assignedToClient: true },
+      select: { locked: true, email: true, assignedToClient: true, domainHealthMode: true },
     })
 
     if (!seedEmail) {
@@ -40,7 +41,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       return NextResponse.json({ error: "locked must be a boolean" }, { status: 400 })
     }
 
-    const updateData: { locked: boolean; assignedToClient?: string } = { locked }
+    const updateData: { locked: boolean; assignedToClient?: string; purpose?: string | null } = { locked }
 
     if (locked && !seedEmail.assignedToClient) {
       // Find the RIP client
@@ -57,6 +58,13 @@ export async function PATCH(request: Request, { params }: { params: { id: string
         )
       }
     }
+
+    // Keep the purpose label in sync with the new lock state
+    updateData.purpose = computeSeedPurpose({
+      assignedToClient: updateData.assignedToClient ?? seedEmail.assignedToClient,
+      domainHealthMode: seedEmail.domainHealthMode,
+      locked,
+    })
 
     // Update the seed email's locked status
     const updatedSeed = await prisma.seedEmail.update({

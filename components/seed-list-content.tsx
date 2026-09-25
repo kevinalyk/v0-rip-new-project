@@ -68,6 +68,7 @@ export default function SeedListContent({
   const [showPasswordStates, setShowPasswordStates] = useState<{ [key: string]: boolean }>({})
   const [decryptedPasswords, setDecryptedPasswords] = useState<{ [key: string]: string }>({})
   const [encryptedPasswords, setEncryptedPasswords] = useState<{ [key: string]: string }>({})
+  const [savingPurposeId, setSavingPurposeId] = useState<string | null>(null)
   const [decryptingStates, setDecryptingStates] = useState<{ [key: string]: boolean }>({})
   const [isDebugDialogOpen, setIsDebugDialogOpen] = useState(false)
   const [debuggingId, setDebuggingId] = useState<string | null>(null)
@@ -256,21 +257,15 @@ export default function SeedListContent({
   }
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!selectedDomain) {
-      toast.error("Please select a domain first")
-      return
-    }
-
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    try {
-      setLoading(true)
-
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("domainId", selectedDomain.id)
-
+  const file = e.target.files?.[0]
+  if (!file) return
+  
+  try {
+  setLoading(true)
+  
+  const formData = new FormData()
+  formData.append("file", file)
+  
       const response = await fetch("/api/seedlist/import", {
         method: "POST",
         body: formData,
@@ -301,11 +296,6 @@ export default function SeedListContent({
   }
 
   const exportToCSV = async () => {
-    if (!selectedDomain) {
-      toast.error("Please select a domain first")
-      return
-    }
-
     try {
       setLoading(true)
 
@@ -351,14 +341,9 @@ export default function SeedListContent({
   }
 
   const handleDeleteSeed = async (id: string) => {
-    if (!selectedDomain) {
-      toast.error("Please select a domain first")
-      return
-    }
-
     try {
       setDeletingId(id)
-      const response = await fetch(`/api/seedlist/${id}?domainId=${selectedDomain.id}`, {
+      const response = await fetch(`/api/seedlist/${id}`, {
         method: "DELETE",
         credentials: "include",
       })
@@ -415,7 +400,7 @@ export default function SeedListContent({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ id, email, provider, domainId: selectedDomain.id }),
+        body: JSON.stringify({ id, email, provider }),
         credentials: "include",
       })
 
@@ -442,7 +427,7 @@ export default function SeedListContent({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ id, email, provider, domainId: selectedDomain.id }),
+        body: JSON.stringify({ id, email, provider }),
         credentials: "include",
       })
 
@@ -466,7 +451,7 @@ export default function SeedListContent({
 
     setDecryptingStates((prev) => ({ ...prev, [emailId]: true }))
     try {
-      const response = await fetch(`/api/seedlist/${emailId}/password?domainId=${selectedDomain.id}`, {
+      const response = await fetch(`/api/seedlist/${emailId}/password`, {
         credentials: "include",
       })
 
@@ -518,6 +503,31 @@ export default function SeedListContent({
       toast.error("Failed to update client assignment")
     } finally {
       setUpdatingClientId(null)
+    }
+  }
+
+  const handlePurposeChange = async (seedId: string, purpose: string) => {
+    try {
+      setSavingPurposeId(seedId)
+      const response = await fetch(`/api/seedlist/${seedId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ purpose: purpose || null }),
+        credentials: "include",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to update purpose")
+      }
+
+      setSeedEmails((prev) =>
+        prev.map((email) => (email.id === seedId ? { ...email, purpose: purpose || null } : email)),
+      )
+    } catch (error) {
+      console.error("Error updating purpose:", error)
+      toast.error("Failed to update purpose")
+    } finally {
+      setSavingPurposeId(null)
     }
   }
 
@@ -960,13 +970,14 @@ export default function SeedListContent({
               {isAdminView && <TableHead>Password</TableHead>}
               {!isAdminView && <TableHead>Added On</TableHead>}
               {isAdminView && <TableHead className="w-[120px]">Domain Health</TableHead>}
+              {isAdminView && <TableHead className="w-[160px]">Purpose</TableHead>}
               <TableHead className="w-[150px] text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={isAdminView ? 6 : 5} className="text-center py-12">
+                <TableCell colSpan={isAdminView ? 7 : 5} className="text-center py-12">
                   <div className="flex justify-center">
                     <Loader2 size={24} className="animate-spin text-rip-red" />
                   </div>
@@ -1116,6 +1127,27 @@ export default function SeedListContent({
                         </div>
                       </TableCell>
                     )}
+                    {isAdminView && (
+                      <TableCell>
+                        <Input
+                          defaultValue={email.purpose || ""}
+                          placeholder="e.g. CI, Domain Health"
+                          className="h-8 text-sm"
+                          disabled={savingPurposeId === email.id}
+                          onBlur={(e) => {
+                            const value = e.target.value.trim()
+                            if (value !== (email.purpose || "")) {
+                              handlePurposeChange(email.id, value)
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                              e.currentTarget.blur()
+                            }
+                          }}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         {currentUser?.role === "super_admin" && email.domainHealthMode && (
@@ -1156,7 +1188,7 @@ export default function SeedListContent({
                             size="icon"
                             onClick={() =>
                               window.open(
-                                `/api/oauth/microsoft?seedEmailId=${email.id}&domainId=${selectedDomain.id}`,
+                                `/api/oauth/microsoft?seedEmailId=${email.id}`,
                                 "_blank",
                               )
                             }

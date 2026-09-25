@@ -245,7 +245,7 @@ export async function POST(request: NextRequest) {
       lastName,
       email: normalizedEmail,
       organizationName: result.client.name,
-      plan: matchedTrialCode ? `${matchedTrialCode.trialLengthDays}-Day Free Trial (pending card on file)` : "Free Trial",
+      plan: matchedTrialCode ? `${matchedTrialCode.trialLengthDays}-Day Free Trial (pending card on file)` : "Free",
       loginUrl: "https://app.rip-tool.com/login",
     }).catch((err) => console.error("[Signup] Welcome email failed:", err))
 

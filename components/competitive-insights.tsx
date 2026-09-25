@@ -3045,6 +3045,12 @@ export function CompetitiveInsights({
                           <CiEntitySubscribeButton
                             entityId={selectedCampaign.entity.id}
                             entityName={selectedCampaign.entity.name}
+                            onSubscriptionChange={(subscribed) => {
+                              const entityId = selectedCampaign.entity!.id
+                              setSubscribedEntityIds((prev) =>
+                                subscribed ? [...new Set([...prev, entityId])] : prev.filter((id) => id !== entityId),
+                              )
+                            }}
                           />
                         )}
                         <div className="flex items-center gap-1">

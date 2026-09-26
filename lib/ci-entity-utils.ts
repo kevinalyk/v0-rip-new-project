@@ -167,6 +167,7 @@ export const SHARED_ESP_DOMAINS = new Set([
   "sparkpostmail.com",
   "actionnetwork.org",
   "salsalabs.org",
+  "e.conservativevets.net",
 ])
 
 /**

@@ -1,6 +1,24 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { getCurrentUser } from "@/lib/auth"
+import { getCurrentUser, getRequestIp, isIpBlocked } from "@/lib/auth"
+
+// Kills an existing session that was issued before an admin blocked the account or its IP.
+// The JWT itself stays valid (it's stateless), so this DB-backed check on /api/auth/me — which
+// nearly every authenticated page fetches on mount — is what actually logs a blocked user out,
+// typically on their very next navigation.
+function blockedResponse(reason: string) {
+  const response = NextResponse.json({ error: reason }, { status: 403 })
+  response.cookies.set({
+    name: "auth_token",
+    value: "",
+    httpOnly: true,
+    path: "/",
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 0,
+  })
+  return response
+}
 
 const DEDUP_WINDOW_SECONDS = 30
 
@@ -92,6 +110,7 @@ export async function GET(request: Request) {
         lastName: true,
         role: true,
         firstLogin: true,
+        blocked: true,
         client: {
           select: {
             id: true,
@@ -107,6 +126,11 @@ export async function GET(request: Request) {
     if (!user) {
       console.log(`[auth/me] 404 | User ID not in DB: ${currentUser.userId} | IP: ${ip}`)
       return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    if (user.blocked || (await isIpBlocked(ip))) {
+      console.log(`[auth/me] 403 blocked | User: ${user.email} | IP: ${ip}`)
+      return blockedResponse("This account has been suspended.")
     }
 
     console.log(`[auth/me] 200 | User: ${user.email} | IP: ${ip} | Country: ${country}`)

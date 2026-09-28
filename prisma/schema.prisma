@@ -32,6 +32,9 @@ model User {
   appleOriginalTransactionId String? @unique
   appleProductId             String?
   appleSubscriptionEnvironment String? // "sandbox" | "production"
+  blocked         Boolean   @default(false) // Admin-initiated lockout (suspected abuse/fraud). Checked at login and on every /api/auth/me poll.
+  blockedAt       DateTime?
+  blockedReason   String?
   createdAt             DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -1404,4 +1407,20 @@ model MobileAuthAttempt {
 
   @@unique([key, windowStart])
   @@index([windowStart])
+}
+
+// IP addresses locked out via the admin "Block" action on a User. Checked at login, signup,
+// and on every /api/auth/me poll (which nearly every authenticated page fetches on mount), so
+// an existing session from a blocked IP is killed on its next navigation, not just new attempts.
+// sourceUserId tracks which block action added the row, purely so unblocking that user can
+// clean up the rows it added (an IP added by more than one blocked user is left in place until
+// every one of them is unblocked).
+model BlockedIp {
+  id           String   @id @default(cuid())
+  ipAddress    String   @unique
+  reason       String?
+  sourceUserId String?
+  createdAt    DateTime @default(now())
+
+  @@index([sourceUserId])
 }

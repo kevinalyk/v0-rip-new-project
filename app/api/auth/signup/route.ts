@@ -3,7 +3,7 @@ import bcryptjs from "bcryptjs"
 import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { sendNewSignupNotification, sendWelcomeEmail } from "@/lib/mailgun"
-import { createToken } from "@/lib/auth"
+import { createToken, isIpBlocked } from "@/lib/auth"
 import {
   checkMobileRateLimit,
   rateLimitKeyForSignupIp,
@@ -30,6 +30,14 @@ function getClientIp(request: Request): string {
 export async function POST(request: NextRequest) {
   try {
     const ip = getClientIp(request)
+
+    if (await isIpBlocked(ip)) {
+      return NextResponse.json(
+        { error: "Unable to create an account at this time." },
+        { status: 403 },
+      )
+    }
+
     const allowed = await checkMobileRateLimit(
       rateLimitKeyForSignupIp(ip),
       MAX_ATTEMPTS,

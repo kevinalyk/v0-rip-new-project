@@ -19,6 +19,9 @@ export async function GET(request: NextRequest, { params }: { params: { clientId
         role: true,
         lastActive: true,
         createdAt: true,
+        blocked: true,
+        blockedAt: true,
+        blockedReason: true,
       },
       orderBy: { lastActive: "desc" },
     })

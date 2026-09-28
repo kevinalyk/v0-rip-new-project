@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
+import { getPlanLimits, type SubscriptionPlan } from "@/lib/subscription-utils"
 
 export const dynamic = "force-dynamic"
 
@@ -51,6 +52,21 @@ export async function GET(request: NextRequest) {
       })
       if (targetClient) {
         targetClientId = targetClient.id
+      }
+    }
+
+    // Reports are gated behind the hasReports plan entitlement. Enforce this
+    // server-side — the client-side blur overlay is cosmetic only and must not
+    // be relied on to withhold data (super_admins impersonating a client via
+    // clientSlug are exempt, since they aren't bound by that client's plan).
+    if (authResult.user.role !== "super_admin") {
+      const targetClient = await prisma.client.findUnique({
+        where: { id: targetClientId },
+        select: { subscriptionPlan: true },
+      })
+      const plan = (targetClient?.subscriptionPlan || "free") as SubscriptionPlan
+      if (!getPlanLimits(plan).hasReports) {
+        return NextResponse.json({ error: "Upgrade required" }, { status: 403 })
       }
     }
 

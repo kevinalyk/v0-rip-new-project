@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
+import { getPlanLimits, type SubscriptionPlan } from "@/lib/subscription-utils"
 
 export const dynamic = "force-dynamic"
 
@@ -66,6 +67,29 @@ export async function GET(request: NextRequest) {
     const sortBy = (searchParams.get("sortBy") || "volume") as SortField
     const limitParam = parseInt(searchParams.get("limit") || "50", 10)
     const limit = Math.min(Math.max(limitParam, 10), 200)
+
+    // Resolve clientId — super_admins may impersonate a client via clientSlug
+    let targetClientId = authResult.user.clientId!
+    if (authResult.user.role === "super_admin" && clientSlug) {
+      const targetClient = await prisma.client.findUnique({
+        where: { slug: clientSlug },
+        select: { id: true },
+      })
+      if (targetClient) targetClientId = targetClient.id
+    }
+
+    // Reports are gated behind the hasReports plan entitlement. Enforce this
+    // server-side — the client-side blur overlay is cosmetic only.
+    if (authResult.user.role !== "super_admin") {
+      const targetClient = await prisma.client.findUnique({
+        where: { id: targetClientId },
+        select: { subscriptionPlan: true },
+      })
+      const plan = (targetClient?.subscriptionPlan || "free") as SubscriptionPlan
+      if (!getPlanLimits(plan).hasReports) {
+        return NextResponse.json({ error: "Upgrade required" }, { status: 403 })
+      }
+    }
 
     // Build entity where clause
     const entityWhere: any = {}

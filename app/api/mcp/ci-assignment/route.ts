@@ -3,7 +3,7 @@
  * Claude.ai / Claude Desktop custom connector. See
  * docs/plans/CLAUDE_CI_ASSIGNMENT_MCP.md for the full design.
  *
- * Deliberately exposes ONLY these 24 tools - nothing else exists on this
+ * Deliberately exposes ONLY these 25 tools - nothing else exists on this
  * surface, so Claude/Grok physically cannot call anything beyond this narrow
  * workflow:
  *   1. list_unassigned_messages   (ci:read)
@@ -30,6 +30,7 @@
  *   22. list_accounts             (ci:accounts_read)
  *   23. list_site_visits          (ci:site_visits_read)
  *   24. update_entity_image       (ci:update_entity)
+ *   25. create_digest_article     (ci:digest_write)
  *
  * Tools 9-11 manage the sender email/domain/phone and CTA-domain mappings
  * that assign_messages_to_entity / categorize_messages match against - so
@@ -84,6 +85,16 @@
  * `imageUrlSource: "manual"` so the nightly Ballotpedia refresh cron treats
  * it as locked and never overwrites it.
  *
+ * Tool 25 writes and publishes a CI news article (the Mon/Wed/Fri digest
+ * write-up, now handed to Grok) as a live DigestArticle - handles sanitizing
+ * the article HTML, uploading an optional hero image to Blob storage, and
+ * generating a unique slug, same as app/api/v1/digest does for the scheduled
+ * digest job. Gated by its own scope (ci:digest_write) rather than
+ * "ci:digest_read" (which only exposes read-only aggregated stats for
+ * drafting) since this tool performs a public-facing publish action. No
+ * draft/review step - publishes immediately unless "publishedAt" is set.
+ * Rate-limited separately from every other write tool.
+ *
  * Auth: bearer token -> ApiKey table (shared with the read-only public v1
  * API, distinguished by scope strings - see lib/ci-api-auth.ts). Every write
  * tool additionally checks the global kill switch (AutomationSetting) and a
@@ -124,6 +135,7 @@ import {
   addEntityMapping,
   deleteEntityMapping,
   deleteEntity,
+  createDigestArticle,
   type DonationIdentifiers,
 } from "@/lib/ci-entity-utils"
 import { sendCiEntityCreatedByApiNotification } from "@/lib/ci-api-notifications"
@@ -778,6 +790,64 @@ const handler = createMcpHandler(
       },
     )
 
+    // ── Tool 25: create_digest_article ───────────────────────────────────────
+    server.registerTool(
+      "create_digest_article",
+      {
+        title: "Create Digest Article",
+        description:
+          'Writes up and publishes a CI news article (e.g. the Mon/Wed/Fri digest write-up) as a live DigestArticle. "body" is sanitized HTML - internal links pass through, external links get target="_blank" rel="noopener noreferrer", javascript:/data:/vbscript: hrefs are stripped. Provide either "imageBase64" (uploaded to Blob storage) or an existing "imageUrl" - not both. The slug is auto-generated from the title (or the optional "slug" hint) and de-duplicated. Requires a "reasoning" string. Published immediately (or at "publishedAt" if given) - there is no draft/review step, so do not call this until the article is ready to go live.',
+        inputSchema: {
+          title: z.string().min(1),
+          summary: z.string().optional().describe("Short teaser/summary shown in article lists"),
+          body: z.string().min(1).describe("Full article HTML"),
+          imageBase64: z.string().optional().describe("data: URL or raw base64 image data to upload as the article's hero image"),
+          imageUrl: z.string().url().optional().describe("Existing hosted image URL to use instead of uploading"),
+          imageFilename: z.string().optional(),
+          sources: z.array(z.string()).optional().describe("Source links cited in the article"),
+          tags: z.array(z.string()).optional(),
+          publishedAt: z.string().optional().describe("ISO date to backdate/schedule publishedAt; defaults to now"),
+          slug: z.string().optional().describe("Optional slug hint; defaults to a slugified title"),
+          reasoning: z.string().min(1).describe("Why this article is being published now"),
+        },
+      },
+      async ({ title, summary, body, imageBase64, imageUrl, imageFilename, sources, tags, publishedAt, slug, reasoning }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.DIGEST_WRITE)
+          await assertAutomationEnabled()
+
+          const apiKeyId = extra.authInfo!.extra!.apiKeyId as string
+          await enforceCiRateLimit(apiKeyId, "create_digest_article")
+
+          const article = await createDigestArticle({
+            title,
+            summary,
+            body,
+            imageBase64,
+            imageUrl,
+            imageFilename,
+            sources,
+            tags,
+            publishedAt,
+            slug,
+            createdBy: "grok",
+          })
+
+          await logCiApiAction({
+            apiKeyId,
+            action: "create_digest_article",
+            reasoning,
+            targetType: "digest_article",
+            afterState: article,
+          })
+
+          return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, ...article }, null, 2) }] }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
     // ── Tool 6: list_delete_eligible_messages ────────────────────────────────
     server.registerTool(
       "list_delete_eligible_messages",
@@ -1173,7 +1243,7 @@ const handler = createMcpHandler(
       },
     )
 
-    // ── Tool 15: get_digest_loudest_senders ─────────────────────────────────
+    // ── Tool 15: get_digest_loudest_senders ─────���───────────────────────────
     server.registerTool(
       "get_digest_loudest_senders",
       {

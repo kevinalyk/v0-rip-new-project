@@ -253,7 +253,6 @@ export class EngagementSimulator {
       AND locked = 'true'
       AND active = true
       AND ("assignedToClient" IS NULL OR "assignedToClient" != 'RIP')
-      AND ("domainHealthMode" = false OR "domainHealthMode" IS NULL)
     `
 
     console.log(`📋 Found ${accounts.length} eligible accounts`)

@@ -251,7 +251,7 @@ export class EngagementSimulator {
       AND email IS NOT NULL
       AND password IS NOT NULL
       AND locked = 'true'
-      AND ("domainHealthMode" = false OR "domainHealthMode" IS NULL)
+      AND active = true
       AND ("assignedToClient" IS NULL OR "assignedToClient" != 'RIP')
     `
 

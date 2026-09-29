@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
   AlertDialog,
@@ -15,7 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Loader2, Search, Users, CheckCircle, XCircle, Building2, ChevronDown, ChevronRight, Ban } from "lucide-react"
+import { Loader2, Search, Users, CheckCircle, XCircle, Building2, ChevronDown, ChevronRight, Ban, ShieldOff, ShieldCheck } from "lucide-react"
 import { format, formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 
@@ -27,6 +28,9 @@ interface ClientUser {
   role: string
   lastActive: string | null
   createdAt: string
+  blocked: boolean
+  blockedAt: string | null
+  blockedReason: string | null
 }
 
 interface ClientRow {
@@ -74,6 +78,11 @@ export function AdminAccountsContent() {
   const [usersLoading, setUsersLoading] = useState<Record<string, boolean>>({})
   const [endTrialTarget, setEndTrialTarget] = useState<ClientRow | null>(null)
   const [endTrialLoading, setEndTrialLoading] = useState(false)
+  const [blockTarget, setBlockTarget] = useState<{ clientId: string; user: ClientUser } | null>(null)
+  const [blockReason, setBlockReason] = useState("")
+  const [blockLoading, setBlockLoading] = useState(false)
+  const [unblockTarget, setUnblockTarget] = useState<{ clientId: string; user: ClientUser } | null>(null)
+  const [unblockLoading, setUnblockLoading] = useState(false)
 
   useEffect(() => {
     const fetchClients = async () => {
@@ -137,6 +146,71 @@ export function AdminAccountsContent() {
     } finally {
       setEndTrialLoading(false)
       setEndTrialTarget(null)
+    }
+  }
+
+  const handleBlockUser = async () => {
+    if (!blockTarget) return
+    setBlockLoading(true)
+    try {
+      const res = await fetch(`/api/admin/block-user/${blockTarget.user.id}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: blockReason.trim() || undefined }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(
+          data.blockedIp
+            ? `${blockTarget.user.email} and their IP (${data.blockedIp}) have been blocked`
+            : `${blockTarget.user.email} has been blocked`
+        )
+        setUsersMap((prev) => ({
+          ...prev,
+          [blockTarget.clientId]: prev[blockTarget.clientId].map((u) =>
+            u.id === blockTarget.user.id
+              ? { ...u, blocked: true, blockedAt: new Date().toISOString(), blockedReason: blockReason.trim() || null }
+              : u
+          ),
+        }))
+      } else {
+        toast.error(data.error ?? "Failed to block user")
+      }
+    } catch {
+      toast.error("Failed to block user")
+    } finally {
+      setBlockLoading(false)
+      setBlockTarget(null)
+      setBlockReason("")
+    }
+  }
+
+  const handleUnblockUser = async () => {
+    if (!unblockTarget) return
+    setUnblockLoading(true)
+    try {
+      const res = await fetch(`/api/admin/unblock-user/${unblockTarget.user.id}`, {
+        method: "POST",
+        credentials: "include",
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(`${unblockTarget.user.email} has been unblocked`)
+        setUsersMap((prev) => ({
+          ...prev,
+          [unblockTarget.clientId]: prev[unblockTarget.clientId].map((u) =>
+            u.id === unblockTarget.user.id ? { ...u, blocked: false, blockedAt: null, blockedReason: null } : u
+          ),
+        }))
+      } else {
+        toast.error(data.error ?? "Failed to unblock user")
+      }
+    } catch {
+      toast.error("Failed to unblock user")
+    } finally {
+      setUnblockLoading(false)
+      setUnblockTarget(null)
     }
   }
 
@@ -356,7 +430,8 @@ export function AdminAccountsContent() {
                             <th className="text-left pb-1.5 font-medium w-1/4">Name</th>
                             <th className="text-left pb-1.5 font-medium w-1/3">Email</th>
                             <th className="text-left pb-1.5 font-medium w-1/6">Role</th>
-                            <th className="text-left pb-1.5 font-medium w-1/4">Last Active</th>
+                            <th className="text-left pb-1.5 font-medium w-1/5">Last Active</th>
+                            <th className="text-right pb-1.5 font-medium"></th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border/50">
@@ -365,7 +440,19 @@ export function AdminAccountsContent() {
                               <td className="py-1.5 pr-4">
                                 {[u.firstName, u.lastName].filter(Boolean).join(" ") || "—"}
                               </td>
-                              <td className="py-1.5 pr-4 text-muted-foreground">{u.email}</td>
+                              <td className="py-1.5 pr-4 text-muted-foreground">
+                                <div className="flex items-center gap-1.5">
+                                  {u.email}
+                                  {u.blocked && (
+                                    <span
+                                      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-destructive/10 text-destructive"
+                                      title={u.blockedReason ?? undefined}
+                                    >
+                                      Blocked
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
                               <td className="py-1.5 pr-4">
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground capitalize">
                                   {u.role}
@@ -375,6 +462,31 @@ export function AdminAccountsContent() {
                                 {u.lastActive
                                   ? formatDistanceToNow(new Date(u.lastActive), { addSuffix: true })
                                   : "Never"}
+                              </td>
+                              <td className="py-1.5 text-right">
+                                {u.role !== "super_admin" && (
+                                  u.blocked ? (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-6 px-2 text-[11px] gap-1"
+                                      onClick={() => setUnblockTarget({ clientId: c.id, user: u })}
+                                    >
+                                      <ShieldCheck className="h-3 w-3" />
+                                      Unblock
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      className="h-6 px-2 text-[11px] gap-1"
+                                      onClick={() => setBlockTarget({ clientId: c.id, user: u })}
+                                    >
+                                      <ShieldOff className="h-3 w-3" />
+                                      Block
+                                    </Button>
+                                  )
+                                )}
                               </td>
                             </tr>
                           ))}
@@ -414,6 +526,60 @@ export function AdminAccountsContent() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {endTrialLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Ending Trial...</> : "End Trial"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!blockTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setBlockTarget(null)
+            setBlockReason("")
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Block {blockTarget?.user.email}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This immediately locks them out of their account and blocks the most recent IP address we&apos;ve seen
+              for them from signing up or logging in again. This can be reversed with Unblock.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            placeholder="Reason (optional, internal note)"
+            value={blockReason}
+            onChange={(e) => setBlockReason(e.target.value)}
+            className="text-sm"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={blockLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBlockUser}
+              disabled={blockLoading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {blockLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Blocking...</> : "Block User"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!unblockTarget} onOpenChange={(open) => { if (!open) setUnblockTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unblock {unblockTarget?.user.email}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This restores their access and removes any IP block that was added when they were blocked (unless
+              another blocked user shares that same IP).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={unblockLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleUnblockUser} disabled={unblockLoading}>
+              {unblockLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Unblocking...</> : "Unblock User"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

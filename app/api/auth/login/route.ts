@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server"
 import bcryptjs from "bcryptjs"
 import prisma from "@/lib/prisma"
-import { createToken } from "@/lib/auth"
+import { createToken, getRequestIp, isIpBlocked } from "@/lib/auth"
 import { notifyMobileAccountAccess } from "@/lib/services/mobile-alert-delivery-service"
 
 export async function POST(request: Request) {
   try {
+    const ip = getRequestIp(request)
+    if (await isIpBlocked(ip)) {
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 })
+    }
+
     const { email, password } = await request.json()
     const normalizedEmail = email.toLowerCase()
 
@@ -30,6 +35,10 @@ export async function POST(request: Request) {
     const passwordMatch = await bcryptjs.compare(password, user.password)
     if (!passwordMatch) {
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 })
+    }
+
+    if (user.blocked) {
+      return NextResponse.json({ error: "This account has been suspended." }, { status: 403 })
     }
 
     const tokenPayload = {

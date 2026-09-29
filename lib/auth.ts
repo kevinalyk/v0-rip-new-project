@@ -260,6 +260,37 @@ export async function verifyAuth(request: Request) {
   }
 }
 
+/**
+ * Get the real client IP for a request. Vercel overwrites x-vercel-forwarded-for
+ * to prevent spoofing, so it's preferred over the generic x-forwarded-for header,
+ * which a customer-owned proxy could otherwise rewrite.
+ */
+export function getRequestIp(request: Request): string {
+  return (
+    request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    "unknown"
+  )
+}
+
+/**
+ * Check whether an IP address has been blocked by an admin (see BlockedIp model).
+ * Used at signup and login to keep a blocked visitor from creating a new account
+ * or signing back in, even with a different email address.
+ */
+export async function isIpBlocked(ip: string): Promise<boolean> {
+  if (!ip || ip === "unknown") return false
+  try {
+    const prisma = (await import("@/lib/prisma")).default
+    const blocked = await prisma.blockedIp.findUnique({ where: { ipAddress: ip } })
+    return !!blocked
+  } catch (error) {
+    console.error("Error checking blocked IP:", error)
+    return false
+  }
+}
+
 // Helper function to parse cookies from header
 function parseCookies(cookieHeader: string) {
   const cookies: Record<string, string> = {}

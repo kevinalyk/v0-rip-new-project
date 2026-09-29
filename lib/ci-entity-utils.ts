@@ -2351,3 +2351,95 @@ export async function createDigestArticle(input: CreateDigestArticleInput) {
     publishedAt: article.publishedAt,
   }
 }
+
+async function uniqueAnnouncementSlug(base: string): Promise<string> {
+  let slug = base
+  let attempt = 1
+  while (true) {
+    const existing = await prisma.announcement.findUnique({ where: { slug } })
+    if (!existing) return slug
+    attempt++
+    slug = `${base}-${attempt}`
+  }
+}
+
+export type CreateNewsArticleInput = {
+  title: string
+  body: string
+  imageBase64?: string | null
+  imageUrl?: string | null
+  imageFilename?: string | null
+  publishedAt?: string | null
+  slug?: string | null
+  createdBy: string
+}
+
+/**
+ * Create and publish an Announcement (the model backing the public /news
+ * route). Used by the MCP "create_news_article" tool (gated behind the
+ * "ci:news_write" scope) so an agent like Grok can write and post articles
+ * to /news directly - separate from createDigestArticle above, which
+ * publishes to /digest (DigestArticle) for the Mon/Wed/Fri CI write-up.
+ * Mirrors the same HTML sanitization / slug-dedup / optional Blob image
+ * upload pattern as app/api/announcements/route.ts's POST handler, since
+ * both ultimately create the same Announcement row.
+ */
+export async function createNewsArticle(input: CreateNewsArticleInput) {
+  const { title, body: articleBody } = input
+
+  if (!title || typeof title !== "string") {
+    throw new Error("title is required")
+  }
+  if (!articleBody || typeof articleBody !== "string") {
+    throw new Error("body (HTML) is required")
+  }
+
+  // Sanitize <a> tags: internal links pass through, external links get
+  // target="_blank" rel="noopener noreferrer", dangerous protocols stripped.
+  const sanitizedBody = articleBody.replace(/<a\s([^>]*)>/gi, (_match, attrs: string) => {
+    const hrefMatch = attrs.match(/href=["']([^"']*)["']/i)
+    const href = hrefMatch?.[1] ?? ""
+    if (/^(javascript|data|vbscript):/i.test(href.trim())) {
+      return `<a href="#"`
+    }
+    const isInternal = href.startsWith("/") || href.startsWith("#")
+    const targetRel = isInternal ? "" : ` target="_blank" rel="noopener noreferrer"`
+    return `<a href="${href}"${targetRel}>`
+  })
+
+  let imageUrl: string | null = input.imageUrl ?? null
+  if (input.imageBase64 && !imageUrl) {
+    const matches = input.imageBase64.match(/^data:([a-zA-Z0-9+/]+\/[a-zA-Z0-9+/]+);base64,(.+)$/)
+    const mimeType = matches?.[1] ?? "image/jpeg"
+    const base64Data = matches?.[2] ?? input.imageBase64
+    const buffer = Buffer.from(base64Data, "base64")
+    const filename = input.imageFilename ?? `news-${Date.now()}.jpg`
+
+    const blob = await put(`news/${filename}`, buffer, {
+      access: "public",
+      contentType: mimeType,
+    })
+    imageUrl = blob.url
+  }
+
+  const baseSlug = input.slug ? slugifyDigestTitle(input.slug) : slugifyDigestTitle(title)
+  const slug = await uniqueAnnouncementSlug(baseSlug)
+
+  const article = await prisma.announcement.create({
+    data: {
+      slug,
+      title: title.trim(),
+      body: sanitizedBody,
+      imageUrl,
+      publishedAt: input.publishedAt ? new Date(input.publishedAt) : new Date(),
+      createdBy: input.createdBy,
+    },
+  })
+
+  return {
+    id: article.id,
+    slug: article.slug,
+    url: `https://app.rip-tool.com/news/${article.slug}`,
+    publishedAt: article.publishedAt,
+  }
+}

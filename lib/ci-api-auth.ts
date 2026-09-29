@@ -19,6 +19,8 @@
  *   - "ci:manage_mappings" add_entity_mapping, remove_entity_mapping
  *   - "ci:delete"         delete_messages
  *   - "ci:delete_entity"  delete_entity
+ *   - "ci:digest_read"    read-only digest stat tools
+ *   - "ci:digest_write"   create_digest_article (publishes a live DigestArticle)
  */
 
 import { createHash, randomBytes } from "crypto"
@@ -63,6 +65,13 @@ export const CI_SCOPES = {
   DELETE: "ci:delete",
   DELETE_ENTITY: "ci:delete_entity",
   DIGEST_READ: "ci:digest_read",
+  // Write access for posting the finished Mon/Wed/Fri CI digest write-up as a
+  // published DigestArticle. Deliberately separate from "ci:digest_read"
+  // (which only exposes aggregated stats for drafting) since this scope
+  // performs a public-facing WRITE - Grok can publish a live article with
+  // it, not just read numbers. A key can have digest_read without
+  // digest_write (draft-only) or both (full digest workflow).
+  DIGEST_WRITE: "ci:digest_write",
   // Read-only access to client account rosters (Client + User contact info)
   // and their Stripe payment/subscription status. Deliberately separate from
   // "ci:read" (which only covers CI entities/messages) since this scope
@@ -88,6 +97,7 @@ export const CI_ASSIGNMENT_ALL_SCOPES: CiScope[] = [
   CI_SCOPES.DELETE,
   CI_SCOPES.DELETE_ENTITY,
   CI_SCOPES.DIGEST_READ,
+  CI_SCOPES.DIGEST_WRITE,
   CI_SCOPES.ACCOUNTS_READ,
   CI_SCOPES.SITE_VISITS_READ,
 ]
@@ -113,6 +123,10 @@ export const CI_API_LIMITS = {
   MAX_DELETES_PER_HOUR: 300, // max message IDs soft-deleted per hour via delete_messages
   MAX_MAPPING_CHANGES_PER_DAY: 500, // combined add_entity_mapping + remove_entity_mapping budget - raised alongside MAX_ENTITY_UPDATES_PER_DAY for the same reason
   MAX_ENTITY_DELETES_PER_DAY: 20, // deliberately left low - entity deletion is destructive/hard to undo, meant only for fixing recent mistakes
+  // Digest publishes 3x/week on schedule; capped well above that (not at it)
+  // so an ad-hoc extra article doesn't get blocked, while still bounding a
+  // runaway/looping call from publishing dozens of live articles unattended.
+  MAX_DIGEST_ARTICLES_PER_DAY: 10,
 }
 
 export class CiApiError extends Error {
@@ -219,7 +233,8 @@ export async function enforceCiRateLimit(
     | "delete_messages"
     | "add_entity_mapping"
     | "remove_entity_mapping"
-    | "delete_entity",
+    | "delete_entity"
+    | "create_digest_article",
 ): Promise<void> {
   const now = Date.now()
 
@@ -313,6 +328,19 @@ export async function enforceCiRateLimit(
       )
     }
   }
+
+  if (action === "create_digest_article") {
+    const windowStart = new Date(now - 24 * 60 * 60 * 1000)
+    const count = await prisma.ciApiActionLog.count({
+      where: { apiKeyId, action: "create_digest_article", createdAt: { gte: windowStart } },
+    })
+    if (count >= CI_API_LIMITS.MAX_DIGEST_ARTICLES_PER_DAY) {
+      throw new CiApiError(
+        `Rate limit exceeded: max ${CI_API_LIMITS.MAX_DIGEST_ARTICLES_PER_DAY} digest articles per day`,
+        429,
+      )
+    }
+  }
 }
 
 /**
@@ -337,8 +365,9 @@ export async function logCiApiAction(params: {
     | "add_entity_mapping"
     | "remove_entity_mapping"
     | "delete_entity"
+    | "create_digest_article"
   reasoning?: string
-  targetType?: "sms" | "campaign" | "entity"
+  targetType?: "sms" | "campaign" | "entity" | "digest_article"
   targetIds?: string[]
   entityId?: string
   beforeState?: unknown

@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client"
 import { generateObject } from "ai"
 import { z } from "zod"
 import { nanoid } from "nanoid"
+import { put } from "@vercel/blob"
 import { isSenderThirdParty, isPhoneThirdParty, invalidateEntityMappingCache } from "@/lib/ci-mapping-cache"
 
 const prisma = new PrismaClient()
@@ -2241,4 +2242,112 @@ async function findEntityByDonationIdentifier(
   }
 
   return null
+}
+
+// Slugify a title into a URL-safe string (mirrors app/api/v1/digest/route.ts)
+function slugifyDigestTitle(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .trim()
+    .slice(0, 100)
+}
+
+async function uniqueDigestSlug(base: string): Promise<string> {
+  let slug = base
+  let attempt = 1
+  while (true) {
+    const existing = await prisma.digestArticle.findUnique({ where: { slug } })
+    if (!existing) return slug
+    attempt++
+    slug = `${base}-${attempt}`
+  }
+}
+
+export type CreateDigestArticleInput = {
+  title: string
+  summary?: string | null
+  body: string
+  imageBase64?: string | null
+  imageUrl?: string | null
+  imageFilename?: string | null
+  sources?: unknown
+  tags?: unknown
+  publishedAt?: string | null
+  slug?: string | null
+  createdBy: string
+}
+
+/**
+ * Create and publish a DigestArticle. Used by the MCP "create_digest_article"
+ * tool (gated behind the "ci:digest_write" scope) so an agent like Grok can
+ * write and publish CI digest news articles the same way app/api/v1/digest
+ * does for the Mon/Wed/Fri scheduled digest.
+ */
+export async function createDigestArticle(input: CreateDigestArticleInput) {
+  const { title, body: articleBody } = input
+
+  if (!title || typeof title !== "string") {
+    throw new Error("title is required")
+  }
+  if (!articleBody || typeof articleBody !== "string") {
+    throw new Error("body (HTML) is required")
+  }
+
+  // Sanitize <a> tags: internal links pass through, external links get
+  // target="_blank" rel="noopener noreferrer", dangerous protocols stripped.
+  const sanitizedBody = articleBody.replace(/<a\s([^>]*)>/gi, (_match, attrs: string) => {
+    const hrefMatch = attrs.match(/href=["']([^"']*)["']/i)
+    const href = hrefMatch?.[1] ?? ""
+    if (/^(javascript|data|vbscript):/i.test(href.trim())) {
+      return `<a href="#"`
+    }
+    const isInternal = href.startsWith("/") || href.startsWith("#")
+    const targetRel = isInternal ? "" : ` target="_blank" rel="noopener noreferrer"`
+    return `<a href="${href}"${targetRel}>`
+  })
+
+  let imageUrl: string | null = input.imageUrl ?? null
+  if (input.imageBase64 && !imageUrl) {
+    const matches = input.imageBase64.match(/^data:([a-zA-Z0-9+/]+\/[a-zA-Z0-9+/]+);base64,(.+)$/)
+    const mimeType = matches?.[1] ?? "image/jpeg"
+    const base64Data = matches?.[2] ?? input.imageBase64
+    const buffer = Buffer.from(base64Data, "base64")
+    const filename = input.imageFilename ?? `digest-${Date.now()}.jpg`
+
+    const blob = await put(`digest/${filename}`, buffer, {
+      access: "public",
+      contentType: mimeType,
+    })
+    imageUrl = blob.url
+  }
+
+  const baseSlug = input.slug ? slugifyDigestTitle(input.slug) : slugifyDigestTitle(title)
+  const slug = await uniqueDigestSlug(baseSlug)
+
+  const validatedSources = Array.isArray(input.sources) ? input.sources : null
+  const validatedTags = Array.isArray(input.tags) ? input.tags : null
+
+  const article = await prisma.digestArticle.create({
+    data: {
+      slug,
+      title: title.trim(),
+      summary: input.summary?.trim() ?? null,
+      body: sanitizedBody,
+      imageUrl,
+      sources: validatedSources,
+      tags: validatedTags,
+      publishedAt: input.publishedAt ? new Date(input.publishedAt) : new Date(),
+      createdBy: input.createdBy,
+    },
+  })
+
+  return {
+    id: article.id,
+    slug: article.slug,
+    url: `https://app.rip-tool.com/digest/${article.slug}`,
+    publishedAt: article.publishedAt,
+  }
 }

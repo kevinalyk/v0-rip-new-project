@@ -21,6 +21,7 @@
  *   - "ci:delete_entity"  delete_entity
  *   - "ci:digest_read"    read-only digest stat tools
  *   - "ci:digest_write"   create_digest_article (publishes a live DigestArticle)
+ *   - "ci:news_write"     create_news_article (publishes a live Announcement on /news)
  */
 
 import { createHash, randomBytes } from "crypto"
@@ -72,6 +73,12 @@ export const CI_SCOPES = {
   // it, not just read numbers. A key can have digest_read without
   // digest_write (draft-only) or both (full digest workflow).
   DIGEST_WRITE: "ci:digest_write",
+  // Write access for publishing a standalone /news article (the Announcement
+  // model, shown on app/news) - distinct from DIGEST_WRITE, which publishes
+  // to /digest (DigestArticle) for the Mon/Wed/Fri CI write-up. A key can
+  // have either, both, or neither depending on which surface it's meant to
+  // post to.
+  NEWS_WRITE: "ci:news_write",
   // Read-only access to client account rosters (Client + User contact info)
   // and their Stripe payment/subscription status. Deliberately separate from
   // "ci:read" (which only covers CI entities/messages) since this scope
@@ -98,6 +105,7 @@ export const CI_ASSIGNMENT_ALL_SCOPES: CiScope[] = [
   CI_SCOPES.DELETE_ENTITY,
   CI_SCOPES.DIGEST_READ,
   CI_SCOPES.DIGEST_WRITE,
+  CI_SCOPES.NEWS_WRITE,
   CI_SCOPES.ACCOUNTS_READ,
   CI_SCOPES.SITE_VISITS_READ,
 ]
@@ -232,10 +240,11 @@ export async function enforceCiRateLimit(
     | "update_entity_image"
     | "delete_messages"
     | "add_entity_mapping"
-    | "remove_entity_mapping"
-    | "delete_entity"
-    | "create_digest_article",
-): Promise<void> {
+  | "remove_entity_mapping"
+  | "delete_entity"
+  | "create_digest_article"
+  | "create_news_article",
+  ): Promise<void> {
   const now = Date.now()
 
   // assign_messages_to_entity and categorize_messages both result in a
@@ -363,11 +372,12 @@ export async function logCiApiAction(params: {
     | "update_entity_image"
     | "delete_messages"
     | "add_entity_mapping"
-    | "remove_entity_mapping"
-    | "delete_entity"
-    | "create_digest_article"
+  | "remove_entity_mapping"
+  | "delete_entity"
+  | "create_digest_article"
+  | "create_news_article"
   reasoning?: string
-  targetType?: "sms" | "campaign" | "entity" | "digest_article"
+  targetType?: "sms" | "campaign" | "entity" | "digest_article" | "news_article"
   targetIds?: string[]
   entityId?: string
   beforeState?: unknown

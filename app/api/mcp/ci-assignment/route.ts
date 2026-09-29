@@ -3,7 +3,7 @@
  * Claude.ai / Claude Desktop custom connector. See
  * docs/plans/CLAUDE_CI_ASSIGNMENT_MCP.md for the full design.
  *
- * Deliberately exposes ONLY these 25 tools - nothing else exists on this
+ * Deliberately exposes ONLY these 26 tools - nothing else exists on this
  * surface, so Claude/Grok physically cannot call anything beyond this narrow
  * workflow:
  *   1. list_unassigned_messages   (ci:read)
@@ -31,6 +31,7 @@
  *   23. list_site_visits          (ci:site_visits_read)
  *   24. update_entity_image       (ci:update_entity)
  *   25. create_digest_article     (ci:digest_write)
+ *   26. create_news_article       (ci:news_write)
  *
  * Tools 9-11 manage the sender email/domain/phone and CTA-domain mappings
  * that assign_messages_to_entity / categorize_messages match against - so
@@ -95,6 +96,14 @@
  * draft/review step - publishes immediately unless "publishedAt" is set.
  * Rate-limited separately from every other write tool.
  *
+ * Tool 26 writes and publishes a standalone article to the public /news
+ * route (an Announcement row) - the same sanitize/slug/optional-image-upload
+ * pattern as Tool 25, but for /news instead of /digest. Gated by its own
+ * scope (ci:news_write), separate from ci:digest_write, since these are two
+ * distinct public surfaces a key may or may not be allowed to post to. No
+ * draft/review step - publishes immediately unless "publishedAt" is set.
+ * Rate-limited separately from every other write tool.
+ *
  * Auth: bearer token -> ApiKey table (shared with the read-only public v1
  * API, distinguished by scope strings - see lib/ci-api-auth.ts). Every write
  * tool additionally checks the global kill switch (AutomationSetting) and a
@@ -136,6 +145,7 @@ import {
   deleteEntityMapping,
   deleteEntity,
   createDigestArticle,
+  createNewsArticle,
   type DonationIdentifiers,
 } from "@/lib/ci-entity-utils"
 import { sendCiEntityCreatedByApiNotification } from "@/lib/ci-api-notifications"
@@ -583,7 +593,7 @@ const handler = createMcpHandler(
       },
     )
 
-    // ── Tool 19: update_entity_name ──────���──────────────────────────────────
+    // ── Tool 19: update_entity_name ──────���─────────────��────────────────────
     server.registerTool(
       "update_entity_name",
       {
@@ -838,6 +848,58 @@ const handler = createMcpHandler(
             action: "create_digest_article",
             reasoning,
             targetType: "digest_article",
+            afterState: article,
+          })
+
+          return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, ...article }, null, 2) }] }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 26: create_news_article ─────────────────────────────────────────
+    server.registerTool(
+      "create_news_article",
+      {
+        title: "Create News Article",
+        description:
+          'Writes up and publishes a standalone article to the public /news route as a live Announcement. "body" is sanitized HTML - internal links pass through, external links get target="_blank" rel="noopener noreferrer", javascript:/data:/vbscript: hrefs are stripped. Provide either "imageBase64" (uploaded to Blob storage) or an existing "imageUrl" - not both. The slug is auto-generated from the title (or the optional "slug" hint) and de-duplicated. Requires a "reasoning" string. Published immediately (or at "publishedAt" if given) - there is no draft/review step, so do not call this until the article is ready to go live. Separate from create_digest_article, which publishes to /digest instead.',
+        inputSchema: {
+          title: z.string().min(1),
+          body: z.string().min(1).describe("Full article HTML"),
+          imageBase64: z.string().optional().describe("data: URL or raw base64 image data to upload as the article's hero image"),
+          imageUrl: z.string().url().optional().describe("Existing hosted image URL to use instead of uploading"),
+          imageFilename: z.string().optional(),
+          publishedAt: z.string().optional().describe("ISO date to backdate/schedule publishedAt; defaults to now"),
+          slug: z.string().optional().describe("Optional slug hint; defaults to a slugified title"),
+          reasoning: z.string().min(1).describe("Why this article is being published now"),
+        },
+      },
+      async ({ title, body, imageBase64, imageUrl, imageFilename, publishedAt, slug, reasoning }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.NEWS_WRITE)
+          await assertAutomationEnabled()
+
+          const apiKeyId = extra.authInfo!.extra!.apiKeyId as string
+          await enforceCiRateLimit(apiKeyId, "create_news_article")
+
+          const article = await createNewsArticle({
+            title,
+            body,
+            imageBase64,
+            imageUrl,
+            imageFilename,
+            publishedAt,
+            slug,
+            createdBy: "grok",
+          })
+
+          await logCiApiAction({
+            apiKeyId,
+            action: "create_news_article",
+            reasoning,
+            targetType: "news_article",
             afterState: article,
           })
 

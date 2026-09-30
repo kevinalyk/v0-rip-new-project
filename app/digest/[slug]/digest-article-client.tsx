@@ -114,7 +114,8 @@ const PROSE_CLASSES = `prose prose-neutral dark:prose-invert max-w-none text-bas
   [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1
   [&_blockquote]:border-l-4 [&_blockquote]:border-[#dc2a28] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-muted-foreground
   [&_table]:min-w-full [&_table]:text-sm [&_th]:text-left [&_th]:py-2 [&_th]:px-3 [&_th]:font-semibold [&_th]:border-b [&_th]:border-border [&_th]:whitespace-nowrap
-  [&_td]:py-2 [&_td]:px-3 [&_td]:border-b [&_td]:border-border/50 [&_td]:whitespace-nowrap`
+  [&_td]:py-2 [&_td]:px-3 [&_td]:border-b [&_td]:border-border/50 [&_td]:whitespace-nowrap
+  [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5`
 
 // Wrap every <table> in a horizontally-scrollable container so it doesn't overflow on mobile
 function wrapTables(html: string): string {
@@ -180,7 +181,7 @@ function DigestBody({ html }: { html: string }) {
   )
 }
 
-// ─── Main component ──────────────────────��────────────────────────────────────
+// ─── Main component ───────���──────────────��────────────────────────────────────
 export default function DigestArticleClient({
   slug,
   initialArticle,

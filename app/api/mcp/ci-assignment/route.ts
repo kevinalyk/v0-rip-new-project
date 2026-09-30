@@ -3,7 +3,7 @@
  * Claude.ai / Claude Desktop custom connector. See
  * docs/plans/CLAUDE_CI_ASSIGNMENT_MCP.md for the full design.
  *
- * Deliberately exposes ONLY these 26 tools - nothing else exists on this
+ * Deliberately exposes ONLY these 28 tools - nothing else exists on this
  * surface, so Claude/Grok physically cannot call anything beyond this narrow
  * workflow:
  *   1. list_unassigned_messages   (ci:read)
@@ -32,6 +32,8 @@
  *   24. update_entity_image       (ci:update_entity)
  *   25. create_digest_article     (ci:digest_write)
  *   26. create_news_article       (ci:news_write)
+ *   27. update_news_article       (ci:news_write)
+ *   28. delete_news_article       (ci:news_write)
  *
  * Tools 9-11 manage the sender email/domain/phone and CTA-domain mappings
  * that assign_messages_to_entity / categorize_messages match against - so
@@ -104,6 +106,14 @@
  * draft/review step - publishes immediately unless "publishedAt" is set.
  * Rate-limited separately from every other write tool.
  *
+ * Tools 27-28 round ci:news_write out to full CRUD on /news articles -
+ * update_news_article (edit title/body/image/publishedAt in place, mirroring
+ * the admin UI's PATCH) and delete_news_article (hard delete + Blob cleanup,
+ * mirroring the admin UI's DELETE). Same scope as create_news_article since
+ * a key trusted to publish is trusted to correct or retract its own posts;
+ * both log before/after state to the audit trail and are individually
+ * rate-limited.
+ *
  * Auth: bearer token -> ApiKey table (shared with the read-only public v1
  * API, distinguished by scope strings - see lib/ci-api-auth.ts). Every write
  * tool additionally checks the global kill switch (AutomationSetting) and a
@@ -146,6 +156,8 @@ import {
   deleteEntity,
   createDigestArticle,
   createNewsArticle,
+  updateNewsArticle,
+  deleteNewsArticle,
   type DonationIdentifiers,
 } from "@/lib/ci-entity-utils"
 import { sendCiEntityCreatedByApiNotification } from "@/lib/ci-api-notifications"
@@ -342,7 +354,7 @@ const handler = createMcpHandler(
       },
     )
 
-    // ── Tool 4: create_entity ──────────────────────────────────────────────
+    // ── Tool 4: create_entity ───────���──────────────────────────────────────
     server.registerTool(
       "create_entity",
       {
@@ -533,7 +545,7 @@ const handler = createMcpHandler(
       },
     )
 
-    // ── Tool 13: delete_entity ───────────────────────────────────────────────
+    // ── Tool 13: delete_entity ──────────────────────────────────────────��────
     // NOTE: this tool was documented in the header comment above and
     // deleteEntity() was already imported from lib/ci-entity-utils, but the
     // actual server.registerTool() call was never added - meaning the tool
@@ -904,6 +916,107 @@ const handler = createMcpHandler(
           })
 
           return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, ...article }, null, 2) }] }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 27: update_news_article ─────────────────────────────────────────
+    server.registerTool(
+      "update_news_article",
+      {
+        title: "Update News Article",
+        description:
+          'Edits an already-published /news article in place - the same full edit capability the human admin has (title, body HTML, hero image, publishedAt), just automated. Same "body" HTML sanitization rules as create_news_article apply when body is provided. Only pass the fields you want to change; omitted fields are left as-is. Provide either "imageBase64" or "imageUrl" to replace the hero image (the old Blob image is deleted automatically), or pass imageUrl: "" to remove it. Requires a "reasoning" string.',
+        inputSchema: {
+          id: z.string().describe("The Announcement id to update (from create_news_article's result, or the admin UI)"),
+          title: z.string().min(1).optional(),
+          body: z.string().min(1).optional().describe("Full replacement article HTML"),
+          imageBase64: z.string().optional().describe("data: URL or raw base64 image data to upload as the new hero image"),
+          imageUrl: z.string().optional().describe('New hosted image URL, or "" to remove the current image'),
+          imageFilename: z.string().optional(),
+          publishedAt: z.string().optional().describe("ISO date to reschedule publishedAt"),
+          reasoning: z.string().min(1).describe("Why this article is being edited"),
+        },
+      },
+      async ({ id, title, body, imageBase64, imageUrl, imageFilename, publishedAt, reasoning }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.NEWS_WRITE)
+          await assertAutomationEnabled()
+
+          const apiKeyId = extra.authInfo!.extra!.apiKeyId as string
+          await enforceCiRateLimit(apiKeyId, "update_news_article")
+
+          const before = await prisma.announcement.findUnique({ where: { id } })
+          if (!before) {
+            throw new CiApiError(`News article ${id} not found`, 404)
+          }
+
+          const article = await updateNewsArticle({
+            id,
+            title,
+            body,
+            imageBase64,
+            imageUrl,
+            imageFilename,
+            publishedAt,
+          })
+
+          await logCiApiAction({
+            apiKeyId,
+            action: "update_news_article",
+            reasoning,
+            targetType: "news_article",
+            targetIds: [id],
+            beforeState: { title: before.title, body: before.body, imageUrl: before.imageUrl, publishedAt: before.publishedAt },
+            afterState: article,
+          })
+
+          return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, ...article }, null, 2) }] }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 28: delete_news_article ─────────────────────────────────────────
+    server.registerTool(
+      "delete_news_article",
+      {
+        title: "Delete News Article",
+        description:
+          "Permanently removes a published /news article and its hero image (if any) from Blob storage - the same action as the delete button in the admin UI. This is a hard delete with no undo, unlike delete_messages. Requires a \"reasoning\" string.",
+        inputSchema: {
+          id: z.string().describe("The Announcement id to delete"),
+          reasoning: z.string().min(1).describe("Why this article is being removed"),
+        },
+      },
+      async ({ id, reasoning }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.NEWS_WRITE)
+          await assertAutomationEnabled()
+
+          const apiKeyId = extra.authInfo!.extra!.apiKeyId as string
+          await enforceCiRateLimit(apiKeyId, "delete_news_article")
+
+          const before = await prisma.announcement.findUnique({ where: { id } })
+          if (!before) {
+            throw new CiApiError(`News article ${id} not found`, 404)
+          }
+
+          const result = await deleteNewsArticle(id)
+
+          await logCiApiAction({
+            apiKeyId,
+            action: "delete_news_article",
+            reasoning,
+            targetType: "news_article",
+            targetIds: [id],
+            beforeState: { title: before.title, slug: before.slug, imageUrl: before.imageUrl, publishedAt: before.publishedAt },
+          })
+
+          return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, ...result }, null, 2) }] }
         } catch (error) {
           return toolError(error)
         }

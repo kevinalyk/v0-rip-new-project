@@ -243,7 +243,9 @@ export async function enforceCiRateLimit(
   | "remove_entity_mapping"
   | "delete_entity"
   | "create_digest_article"
-  | "create_news_article",
+  | "create_news_article"
+  | "update_news_article"
+  | "delete_news_article",
   ): Promise<void> {
   const now = Date.now()
 
@@ -376,6 +378,8 @@ export async function logCiApiAction(params: {
   | "delete_entity"
   | "create_digest_article"
   | "create_news_article"
+  | "update_news_article"
+  | "delete_news_article"
   reasoning?: string
   targetType?: "sms" | "campaign" | "entity" | "digest_article" | "news_article"
   targetIds?: string[]

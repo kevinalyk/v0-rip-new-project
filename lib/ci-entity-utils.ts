@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client"
 import { generateObject } from "ai"
 import { z } from "zod"
 import { nanoid } from "nanoid"
-import { put } from "@vercel/blob"
+import { put, del } from "@vercel/blob"
 import { isSenderThirdParty, isPhoneThirdParty, invalidateEntityMappingCache } from "@/lib/ci-mapping-cache"
 
 const prisma = new PrismaClient()
@@ -2441,5 +2441,115 @@ export async function createNewsArticle(input: CreateNewsArticleInput) {
     slug: article.slug,
     url: `https://app.rip-tool.com/news/${article.slug}`,
     publishedAt: article.publishedAt,
+  }
+}
+
+export type UpdateNewsArticleInput = {
+  id: string
+  title?: string
+  body?: string
+  imageBase64?: string | null
+  imageUrl?: string | null
+  imageFilename?: string
+  publishedAt?: string
+}
+
+// Mirrors PATCH /api/announcements/[id] (the human admin edit path), plus
+// publishedAt support since automation may need to reschedule an article.
+export async function updateNewsArticle(input: UpdateNewsArticleInput) {
+  const existing = await prisma.announcement.findUnique({ where: { id: input.id } })
+  if (!existing) {
+    throw new Error(`News article ${input.id} not found`)
+  }
+
+  if (input.title !== undefined && !input.title.trim()) {
+    throw new Error("title cannot be empty")
+  }
+  if (input.body !== undefined && !input.body.trim()) {
+    throw new Error("body cannot be empty")
+  }
+
+  let sanitizedBody: string | undefined
+  if (input.body !== undefined) {
+    sanitizedBody = input.body.replace(/<a\s([^>]*)>/gi, (_match, attrs: string) => {
+      const hrefMatch = attrs.match(/href=["']([^"']*)["']/i)
+      const href = hrefMatch?.[1] ?? ""
+      if (/^(javascript|data|vbscript):/i.test(href.trim())) {
+        return `<a href="#"`
+      }
+      const isInternal = href.startsWith("/") || href.startsWith("#")
+      const targetRel = isInternal ? "" : ` target="_blank" rel="noopener noreferrer"`
+      return `<a href="${href}"${targetRel}>`
+    })
+  }
+
+  let imageUrl: string | null | undefined
+  if (input.imageBase64) {
+    const matches = input.imageBase64.match(/^data:([a-zA-Z0-9+/]+\/[a-zA-Z0-9+/]+);base64,(.+)$/)
+    const mimeType = matches?.[1] ?? "image/jpeg"
+    const base64Data = matches?.[2] ?? input.imageBase64
+    const buffer = Buffer.from(base64Data, "base64")
+    const filename = input.imageFilename ?? `news-${Date.now()}.jpg`
+
+    const blob = await put(`news/${filename}`, buffer, {
+      access: "public",
+      contentType: mimeType,
+    })
+    imageUrl = blob.url
+  } else if (input.imageUrl !== undefined) {
+    imageUrl = input.imageUrl
+  }
+
+  // If the image was replaced (or cleared), delete the old one from Blob.
+  if (imageUrl !== undefined && existing.imageUrl && existing.imageUrl !== imageUrl) {
+    try {
+      await del(existing.imageUrl)
+    } catch {
+      // Non-fatal — old image cleanup best-effort
+    }
+  }
+
+  const article = await prisma.announcement.update({
+    where: { id: input.id },
+    data: {
+      ...(input.title !== undefined && { title: input.title.trim() }),
+      ...(sanitizedBody !== undefined && { body: sanitizedBody }),
+      ...(imageUrl !== undefined && { imageUrl: imageUrl || null }),
+      ...(input.publishedAt !== undefined && { publishedAt: new Date(input.publishedAt) }),
+    },
+  })
+
+  return {
+    id: article.id,
+    slug: article.slug,
+    url: `https://app.rip-tool.com/news/${article.slug}`,
+    title: article.title,
+    imageUrl: article.imageUrl,
+    publishedAt: article.publishedAt,
+    updatedAt: article.updatedAt,
+  }
+}
+
+// Mirrors DELETE /api/announcements/[id] (the human admin delete path).
+export async function deleteNewsArticle(id: string) {
+  const existing = await prisma.announcement.findUnique({ where: { id } })
+  if (!existing) {
+    throw new Error(`News article ${id} not found`)
+  }
+
+  if (existing.imageUrl) {
+    try {
+      await del(existing.imageUrl)
+    } catch {
+      // Non-fatal — best-effort
+    }
+  }
+
+  await prisma.announcement.delete({ where: { id } })
+
+  return {
+    id: existing.id,
+    slug: existing.slug,
+    title: existing.title,
   }
 }

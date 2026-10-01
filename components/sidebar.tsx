@@ -650,6 +650,13 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                       onClick={() => navigate("/rip/admin/winred-inbox")}
                     />
                     <NavItem
+                      icon={<LayoutDashboard size={18} />}
+                      label="Dashboard"
+                      active={pathname === "/rip/admin/dashboard"}
+                      collapsed={false}
+                      onClick={() => navigate("/rip/admin/dashboard")}
+                    />
+                    <NavItem
                       icon={<Activity size={18} />}
                       label="Site Traffic"
                       active={pathname === "/rip/admin/site-traffic"}

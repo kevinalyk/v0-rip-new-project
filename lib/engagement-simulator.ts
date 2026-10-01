@@ -272,9 +272,75 @@ export class EngagementSimulator {
     }))
   }
 
-  private async processAccountEngagement(account: SeedAccount): Promise<void> {
-    // Check if it's a good time for this account to be active
-    const isGoodTime = this.isGoodTimeForAccount(account)
+  async simulateDomainHealthEngagement(): Promise<void> {
+    console.log("🩺 Starting domain health engagement simulation (forced full engagement)...")
+
+    const accounts = await this.getDomainHealthAccounts()
+
+    if (accounts.length === 0) {
+      console.log("🩺 No domain health accounts found, skipping")
+      return
+    }
+
+    console.log(`🩺 Processing ${accounts.length} domain health account(s) — engaging with every email`)
+
+    for (const account of accounts) {
+      try {
+        await this.processAccountEngagement(account, true)
+        const delay = 1000 + Math.random() * 9000
+        await this.sleep(delay)
+      } catch (error) {
+        console.error(`❌ Error processing domain health account ${account.email}:`, error)
+      }
+    }
+
+    console.log("✅ Domain health engagement simulation completed")
+  }
+
+  private async getDomainHealthAccounts(): Promise<SeedAccount[]> {
+    console.log("🩺 Fetching domain health seed accounts...")
+
+    const accounts = await sql`
+      SELECT 
+        id,
+        email,
+        provider,
+        password,
+        "appPassword",
+        "twoFactorEnabled",
+        "personality_type" as "personalityType",
+        "open_rate_target" as "openRateTarget", 
+        "reading_schedule" as "readingSchedule",
+        "last_engagement_at" as "lastEngagementAt",
+        "engagement_enabled" as "engagementEnabled"
+      FROM "SeedEmail"
+      WHERE "domainHealthMode" = true
+      AND email IS NOT NULL
+      AND password IS NOT NULL
+      AND locked = 'true'
+      AND active = true
+    `
+
+    console.log(`🩺 Found ${accounts.length} domain health accounts`)
+
+    return accounts.map((account) => ({
+      id: account.id,
+      email: account.email,
+      provider: account.provider,
+      password: account.password,
+      appPassword: account.appPassword,
+      twoFactorEnabled: account.twoFactorEnabled === "true" || account.twoFactorEnabled === true,
+      personalityType: account.personalityType || "moderate",
+      openRateTarget: account.openRateTarget || 50,
+      readingSchedule: account.readingSchedule || "business_hours",
+      lastEngagementAt: account.lastEngagementAt ? new Date(account.lastEngagementAt) : null,
+      engagementEnabled: true, // Always run for domain health seeds regardless of flag
+    }))
+  }
+
+  private async processAccountEngagement(account: SeedAccount, forceFullEngagement = false): Promise<void> {
+    // Domain health accounts always engage, regardless of schedule — we want every email touched
+    const isGoodTime = forceFullEngagement || this.isGoodTimeForAccount(account)
     console.log(
       `⏰ Time check for ${account.email}: ${isGoodTime ? "ACTIVE" : "INACTIVE"} (${account.readingSchedule})`,
     )
@@ -304,22 +370,32 @@ export class EngagementSimulator {
     const senderFamiliarity = await this.getSenderFamiliarity(account.id)
     console.log(`🤝 Loaded familiarity data for ${senderFamiliarity.size} senders`)
 
-    // Process each email through engagement decision engine
-    const emailsToEngage = []
+    let selectedEmails: EmailToProcess[]
 
-    for (const email of emails) {
-      const shouldEngage = await this.shouldEngageWithEmail(account, email, senderFamiliarity)
-      console.log(`🎯 Decision for "${email.subject}": ${shouldEngage ? "ENGAGE" : "SKIP"}`)
-      if (shouldEngage) {
-        emailsToEngage.push(email)
+    if (forceFullEngagement) {
+      // Domain health mode: engage with every email, no personality scoring or session cap
+      selectedEmails = emails
+      console.log(`🩺 Domain health mode: forcing engagement with all ${selectedEmails.length} email(s)`)
+    } else {
+      // Process each email through engagement decision engine
+      const emailsToEngage = []
+
+      for (const email of emails) {
+        const shouldEngage = await this.shouldEngageWithEmail(account, email, senderFamiliarity)
+        console.log(`🎯 Decision for "${email.subject}": ${shouldEngage ? "ENGAGE" : "SKIP"}`)
+        if (shouldEngage) {
+          emailsToEngage.push(email)
+        }
       }
+
+      // Limit engagement per session (realistic behavior)
+      const maxEngagements = Math.min(emailsToEngage.length, 3 + Math.floor(Math.random() * 5))
+      selectedEmails = emailsToEngage.slice(0, maxEngagements)
+
+      console.log(
+        `🎪 Selected ${selectedEmails.length} emails to engage with (from ${emailsToEngage.length} candidates)`,
+      )
     }
-
-    // Limit engagement per session (realistic behavior)
-    const maxEngagements = Math.min(emailsToEngage.length, 3 + Math.floor(Math.random() * 5))
-    const selectedEmails = emailsToEngage.slice(0, maxEngagements)
-
-    console.log(`🎪 Selected ${selectedEmails.length} emails to engage with (from ${emailsToEngage.length} candidates)`)
 
     // Execute engagements with realistic delays
     for (let i = 0; i < selectedEmails.length; i++) {

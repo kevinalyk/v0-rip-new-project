@@ -98,6 +98,10 @@
       "schedule": "0 10,15,21 * * *"
     },
     {
+      "path": "/api/cron/simulate-domain-health-engagement",
+      "schedule": "0 * * * *"
+    },
+    {
       "path": "/api/cron/auto-reply-verified-domains",
       "schedule": "15 * * * *"
     },

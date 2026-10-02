@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyAuth } from "@/lib/auth"
-import { getTrendingEntities } from "@/lib/trending-entities"
+import { getTrendingEntities, isTrendingWindowKey, DEFAULT_TRENDING_WINDOW } from "@/lib/trending-entities"
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,7 +13,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden - Super admin access required" }, { status: 403 })
     }
 
-    const result = await getTrendingEntities()
+    const windowParam = request.nextUrl.searchParams.get("window")
+    const window = isTrendingWindowKey(windowParam) ? windowParam : DEFAULT_TRENDING_WINDOW
+
+    const result = await getTrendingEntities(window)
     return NextResponse.json(result)
   } catch (error) {
     console.error("[v0] Error computing trending entities:", error)

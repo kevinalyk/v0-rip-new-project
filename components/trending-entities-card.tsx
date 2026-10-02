@@ -1,14 +1,22 @@
 "use client"
 
+import { useState } from "react"
 import useSWR from "swr"
-import { ArrowUp, ArrowDown, Flame, Loader2, AlertCircle } from "lucide-react"
-import type { TrendingEntity, TrendingEntitiesResult } from "@/lib/trending-entities"
+import { ArrowUp, ArrowDown, Flame, Loader2, AlertCircle, Info } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import type { TrendingEntity, TrendingEntitiesResult, TrendingWindowKey } from "@/lib/trending-entities"
 
 const fetcher = (url: string) =>
   fetch(url, { credentials: "include" }).then((r) => {
     if (!r.ok) throw new Error("Failed to load")
     return r.json()
   })
+
+const WINDOW_TABS: { key: TrendingWindowKey; label: string }[] = [
+  { key: "24h_7d", label: "24h vs 7d" },
+  { key: "7d_30d", label: "7d vs 30d" },
+  { key: "30d_90d", label: "30d vs 90d" },
+]
 
 function partyColor(party: string | null) {
   if (party === "republican") return "text-red-500"
@@ -42,16 +50,26 @@ function EntityRow({ entity, direction }: { entity: TrendingEntity; direction: "
         <p className="text-sm font-medium text-foreground truncate">{entity.name}</p>
         <p className={`text-xs ${partyColor(entity.party)}`}>
           {entity.state ? `${entity.state} · ` : ""}
-          {entity.current24h} sends today vs {entity.baselineAvgDaily}/day avg
+          {entity.currentCount} sends this window vs {entity.baselineAvgDaily}/day avg
         </p>
       </div>
 
       <div className="shrink-0 text-right">
         {entity.isNewSurge ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/10 px-2 py-0.5 text-xs font-semibold text-orange-500">
-            <Flame className="h-3 w-3" />
-            New surge
-          </span>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/10 px-2 py-0.5 text-xs font-semibold text-orange-500 cursor-help">
+                  <Flame className="h-3 w-3" />
+                  New surge
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-60 text-xs">
+                Was sending next to nothing (under ~1/day average) and has now sent a meaningful
+                volume in this window — a jump from near-zero rather than a plain % increase.
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         ) : (
           <span
             className={`inline-flex items-center gap-1 text-sm font-semibold ${
@@ -81,18 +99,53 @@ function EntityList({ entities, direction, emptyText }: { entities: TrendingEnti
 }
 
 export function TrendingEntitiesCard() {
+  const [window, setWindow] = useState<TrendingWindowKey>("24h_7d")
+
   const { data, error, isLoading } = useSWR<TrendingEntitiesResult>(
-    "/api/admin/dashboard/trending-entities",
+    `/api/admin/dashboard/trending-entities?window=${window}`,
     fetcher,
     { refreshInterval: 5 * 60 * 1000 },
   )
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border">
         <div>
           <h2 className="text-sm font-semibold text-foreground">Trending Senders</h2>
-          <p className="text-xs text-muted-foreground">Last 24h volume vs. trailing 7-day daily average</p>
+          <p className="text-xs text-muted-foreground">{data?.windowLabel ?? "Volume vs. trailing baseline average"}</p>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center rounded-md border border-border bg-muted/40 p-0.5">
+            {WINDOW_TABS.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setWindow(tab.key)}
+                className={`rounded-sm px-2.5 py-1 text-xs font-medium transition-colors ${
+                  window === tab.key
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent className="max-w-64 text-xs">
+                Compares each entity's email+SMS volume in the current window against what their
+                own trailing baseline rate would predict for a window that length. A{" "}
+                <span className="font-semibold">New surge</span> badge means the entity was
+                essentially inactive before (under ~1 send/day on average) and has now sent a
+                meaningful volume.
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 

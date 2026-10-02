@@ -1,18 +1,58 @@
 import { prisma } from "@/lib/prisma"
 
-// How many hours count as the "current" window we're measuring a surge/drop against.
-const CURRENT_WINDOW_HOURS = 24
-// How many days of history (immediately before the current window) we use to establish
-// each entity's "normal" daily sending rate.
-const BASELINE_WINDOW_DAYS = 7
-// An entity needs at least this many sends in the current window to qualify as a "riser" —
-// keeps a 1-send entity from showing up as an "infinite % increase".
-const MIN_RISER_VOLUME = 3
-// An entity needs at least this many average daily sends in the baseline window to qualify
-// as a "faller" — an entity that barely sent anything before can't meaningfully "go quiet".
-const MIN_FALLER_BASELINE_AVG = 2
-// Below this baseline average, we treat any riser as a "new surge" (went from ~nothing to a lot)
-// rather than reporting a % increase, since the % would be misleadingly huge or undefined.
+// Each window pairs a "current" period with a longer "baseline" period immediately before
+// it, used to establish each entity's normal daily sending rate. The current period's total
+// is compared against what the baseline rate would predict for a period of that same length
+// (baselineAvgDaily * currentWindowDays), so a 7-day current window is judged against 7 days'
+// worth of the entity's own baseline rate, not against the raw baseline total.
+export type TrendingWindowKey = "24h_7d" | "7d_30d" | "30d_90d"
+
+interface WindowConfig {
+  currentWindowDays: number
+  baselineWindowDays: number
+  // An entity needs at least this many sends in the current window to qualify as a "riser" —
+  // keeps a tiny absolute increase from showing up as a huge/"infinite" % change.
+  minRiserVolume: number
+  // An entity needs at least this many average daily sends in the baseline window to qualify
+  // as a "faller" — an entity that barely sent anything before can't meaningfully "go quiet".
+  minFallerBaselineAvgDaily: number
+  label: string
+}
+
+export const TRENDING_WINDOW_CONFIGS: Record<TrendingWindowKey, WindowConfig> = {
+  "24h_7d": {
+    currentWindowDays: 1,
+    baselineWindowDays: 7,
+    minRiserVolume: 3,
+    minFallerBaselineAvgDaily: 2,
+    label: "Last 24h vs. trailing 7-day avg",
+  },
+  "7d_30d": {
+    currentWindowDays: 7,
+    baselineWindowDays: 30,
+    minRiserVolume: 5,
+    minFallerBaselineAvgDaily: 2,
+    label: "Last 7 days vs. trailing 30-day avg",
+  },
+  "30d_90d": {
+    currentWindowDays: 30,
+    baselineWindowDays: 90,
+    minRiserVolume: 10,
+    minFallerBaselineAvgDaily: 2,
+    label: "Last 30 days vs. trailing 90-day avg",
+  },
+}
+
+export const DEFAULT_TRENDING_WINDOW: TrendingWindowKey = "24h_7d"
+
+export function isTrendingWindowKey(value: unknown): value is TrendingWindowKey {
+  return typeof value === "string" && value in TRENDING_WINDOW_CONFIGS
+}
+
+// Below this baseline daily average, we treat any riser as a "new surge" (went from ~nothing
+// to a lot) rather than reporting a % increase, since the % would be misleadingly huge or
+// undefined (division by ~zero). This threshold is the same across all three windows — it's
+// about the entity's absolute baseline rate, not the window length.
 const NEW_SURGE_BASELINE_THRESHOLD = 1
 
 export interface TrendingEntity {
@@ -22,8 +62,11 @@ export interface TrendingEntity {
   party: string | null
   state: string | null
   imageUrl: string | null
-  current24h: number
+  /** Total email+SMS sends in the current window. */
+  currentCount: number
+  /** Entity's average daily sends during the baseline window. */
   baselineAvgDaily: number
+  /** currentCount minus what the baseline rate would predict for a window this long. */
   delta: number
   pctChange: number | null
   isNewSurge: boolean
@@ -33,7 +76,9 @@ export interface TrendingEntitiesResult {
   risers: TrendingEntity[]
   fallers: TrendingEntity[]
   generatedAt: string
-  currentWindowHours: number
+  window: TrendingWindowKey
+  windowLabel: string
+  currentWindowDays: number
   baselineWindowDays: number
 }
 
@@ -76,13 +121,21 @@ function mergeCounts(target: Map<string, EntityCounts>, source: Map<string, numb
 
 /**
  * Computes which CiEntities are trending up ("risers") or going unusually quiet ("fallers")
- * by comparing unique email+SMS campaign volume in the last 24h against each entity's
- * average daily volume over the trailing 7 days before that.
+ * for the given window pair, by comparing unique email+SMS campaign volume in the current
+ * period against what each entity's own baseline daily rate would predict for a period of
+ * that length.
+ *
+ * "New surge" = an entity whose baseline daily average was under ~1 send/day (i.e. was
+ * essentially inactive) that has now sent at least the window's minimum riser volume. These
+ * are flagged separately from a plain % increase because the % would be undefined or
+ * meaninglessly huge when the baseline is ~zero (e.g. 0 -> 40 isn't "infinite%", it's a
+ * brand-new surge).
  */
-export async function getTrendingEntities(): Promise<TrendingEntitiesResult> {
+export async function getTrendingEntities(window: TrendingWindowKey = DEFAULT_TRENDING_WINDOW): Promise<TrendingEntitiesResult> {
+  const config = TRENDING_WINDOW_CONFIGS[window]
   const now = new Date()
-  const currentStart = new Date(now.getTime() - CURRENT_WINDOW_HOURS * 60 * 60 * 1000)
-  const baselineStart = new Date(currentStart.getTime() - BASELINE_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+  const currentStart = new Date(now.getTime() - config.currentWindowDays * 24 * 60 * 60 * 1000)
+  const baselineStart = new Date(currentStart.getTime() - config.baselineWindowDays * 24 * 60 * 60 * 1000)
 
   const [emailCurrent, emailBaseline, smsCurrent, smsBaseline] = await Promise.all([
     countByEntity("competitiveInsightCampaign", "dateReceived", currentStart, now),
@@ -93,23 +146,24 @@ export async function getTrendingEntities(): Promise<TrendingEntitiesResult> {
 
   const counts = new Map<string, EntityCounts>()
   mergeCounts(counts, emailCurrent, "current")
-  mergeCounts(counts, smsCurrent, "current")
   mergeCounts(counts, emailBaseline, "baselineTotal")
+  mergeCounts(counts, smsCurrent, "current")
   mergeCounts(counts, smsBaseline, "baselineTotal")
 
   const risersRaw: Omit<TrendingEntity, "name" | "type" | "party" | "state" | "imageUrl">[] = []
   const fallersRaw: Omit<TrendingEntity, "name" | "type" | "party" | "state" | "imageUrl">[] = []
 
   for (const [entityId, { current, baselineTotal }] of counts) {
-    const baselineAvgDaily = baselineTotal / BASELINE_WINDOW_DAYS
-    const delta = current - baselineAvgDaily
-    const pctChange = baselineAvgDaily > 0 ? Math.round((delta / baselineAvgDaily) * 100) : null
-    const isNewSurge = baselineAvgDaily < NEW_SURGE_BASELINE_THRESHOLD && current >= MIN_RISER_VOLUME
+    const baselineAvgDaily = baselineTotal / config.baselineWindowDays
+    const expectedCurrent = baselineAvgDaily * config.currentWindowDays
+    const delta = current - expectedCurrent
+    const pctChange = expectedCurrent > 0 ? Math.round((delta / expectedCurrent) * 100) : null
+    const isNewSurge = baselineAvgDaily < NEW_SURGE_BASELINE_THRESHOLD && current >= config.minRiserVolume
 
-    if (current >= MIN_RISER_VOLUME && delta > 0) {
+    if (current >= config.minRiserVolume && delta > 0) {
       risersRaw.push({
         entityId,
-        current24h: current,
+        currentCount: current,
         baselineAvgDaily: Math.round(baselineAvgDaily * 10) / 10,
         delta: Math.round(delta * 10) / 10,
         pctChange,
@@ -117,10 +171,10 @@ export async function getTrendingEntities(): Promise<TrendingEntitiesResult> {
       })
     }
 
-    if (baselineAvgDaily >= MIN_FALLER_BASELINE_AVG && delta < 0) {
+    if (baselineAvgDaily >= config.minFallerBaselineAvgDaily && delta < 0) {
       fallersRaw.push({
         entityId,
-        current24h: current,
+        currentCount: current,
         baselineAvgDaily: Math.round(baselineAvgDaily * 10) / 10,
         delta: Math.round(delta * 10) / 10,
         pctChange,
@@ -173,7 +227,9 @@ export async function getTrendingEntities(): Promise<TrendingEntitiesResult> {
     risers: topRisers.map(hydrate).filter((e): e is TrendingEntity => e !== null),
     fallers: topFallers.map(hydrate).filter((e): e is TrendingEntity => e !== null),
     generatedAt: now.toISOString(),
-    currentWindowHours: CURRENT_WINDOW_HOURS,
-    baselineWindowDays: BASELINE_WINDOW_DAYS,
+    window,
+    windowLabel: config.label,
+    currentWindowDays: config.currentWindowDays,
+    baselineWindowDays: config.baselineWindowDays,
   }
 }

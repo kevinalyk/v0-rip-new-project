@@ -32,6 +32,7 @@ export default function ComparisonsPage() {
   const [selectedParty, setSelectedParty] = useState("all")
   const [selectedState, setSelectedState] = useState("all")
   const [selectedEntityType, setSelectedEntityType] = useState("all")
+  const [selectedHouseFile, setSelectedHouseFile] = useState("all")
   const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined })
   const [isFromCalendarOpen, setIsFromCalendarOpen] = useState(false)
   const [isToCalendarOpen, setIsToCalendarOpen] = useState(false)
@@ -40,6 +41,7 @@ export default function ComparisonsPage() {
     selectedParty !== "all" ||
     selectedState !== "all" ||
     selectedEntityType !== "all" ||
+    selectedHouseFile !== "all" ||
     !!dateRange.from ||
     !!dateRange.to
 
@@ -47,6 +49,7 @@ export default function ComparisonsPage() {
     setSelectedParty("all")
     setSelectedState("all")
     setSelectedEntityType("all")
+    setSelectedHouseFile("all")
     setDateRange({ from: undefined, to: undefined })
   }
 
@@ -103,6 +106,18 @@ export default function ComparisonsPage() {
                 {US_STATES.map((s) => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+
+            {/* House file vs. prospecting — matches CompetitiveInsightCampaign/SmsQueue.isThirdParty */}
+            <Select value={selectedHouseFile} onValueChange={setSelectedHouseFile}>
+              <SelectTrigger className="w-full md:w-[160px]">
+                <SelectValue placeholder="House File / Prospecting" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">House File + Prospecting</SelectItem>
+                <SelectItem value="house_file">House File Only</SelectItem>
+                <SelectItem value="third_party">Prospecting Only</SelectItem>
               </SelectContent>
             </Select>
 
@@ -180,6 +195,7 @@ export default function ComparisonsPage() {
           selectedParty={selectedParty}
           selectedState={selectedState}
           selectedEntityType={selectedEntityType}
+          selectedHouseFile={selectedHouseFile}
           dateRange={dateRange}
         />
       </div>

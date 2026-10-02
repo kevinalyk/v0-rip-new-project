@@ -508,6 +508,7 @@ interface CiComparisonsViewProps {
   selectedParty: string
   selectedState: string
   selectedEntityType: string
+  selectedHouseFile: string
   dateRange: DateRange
 }
 
@@ -516,6 +517,7 @@ export function CiComparisonsView({
   selectedParty,
   selectedState,
   selectedEntityType,
+  selectedHouseFile,
   dateRange,
 }: CiComparisonsViewProps) {
   const [loading, setLoading] = useState(true)
@@ -542,6 +544,7 @@ export function CiComparisonsView({
       if (selectedParty && selectedParty !== "all") params.append("party", selectedParty)
       if (selectedState && selectedState !== "all") params.append("state", selectedState)
       if (selectedEntityType && selectedEntityType !== "all") params.append("entityType", selectedEntityType)
+      if (selectedHouseFile && selectedHouseFile !== "all") params.append("houseFile", selectedHouseFile)
       if (dateRange.from) params.append("fromDate", dateRange.from.toISOString())
       if (dateRange.to) params.append("toDate", dateRange.to.toISOString())
       params.append("sortBy", sortBy)
@@ -554,7 +557,7 @@ export function CiComparisonsView({
     } finally {
       setLoading(false)
     }
-  }, [clientSlug, selectedParty, selectedState, selectedEntityType, dateRange, sortBy, limit])
+  }, [clientSlug, selectedParty, selectedState, selectedEntityType, selectedHouseFile, dateRange, sortBy, limit])
 
   useEffect(() => { fetchData() }, [fetchData])
 

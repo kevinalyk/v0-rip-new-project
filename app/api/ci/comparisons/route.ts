@@ -62,6 +62,11 @@ export async function GET(request: NextRequest) {
     const party = searchParams.get("party") || undefined
     const state = searchParams.get("state") || undefined
     const entityType = searchParams.get("entityType") || undefined
+    // "all" | "house_file" | "third_party" — mirrors lib/slack-message-filters.ts's
+    // HOUSE_FILE_FILTER_VALUES. Matches CompetitiveInsightCampaign/SmsQueue.isThirdParty,
+    // which is frozen at assignment time (null = unassigned or entity is a data broker, so
+    // those rows never match either specific filter value).
+    const houseFile = searchParams.get("houseFile") || "all"
     const fromDate = searchParams.get("fromDate") || undefined
     const toDate = searchParams.get("toDate") || undefined
     const sortBy = (searchParams.get("sortBy") || "volume") as SortField
@@ -103,6 +108,9 @@ export async function GET(request: NextRequest) {
     if (toDate) dateFilter.lte = new Date(toDate)
     const hasDates = Object.keys(dateFilter).length > 0
 
+    const houseFileWhere: any =
+      houseFile === "house_file" ? { isThirdParty: false } : houseFile === "third_party" ? { isThirdParty: true } : {}
+
     // Fetch all matching entities with their campaigns and SMS
     const entities = await prisma.ciEntity.findMany({
       where: entityWhere,
@@ -118,6 +126,7 @@ export async function GET(request: NextRequest) {
             isDeleted: false,
             isHidden: false,
             ...(hasDates ? { dateReceived: dateFilter } : {}),
+            ...houseFileWhere,
           },
           select: {
             id: true,
@@ -135,6 +144,7 @@ export async function GET(request: NextRequest) {
           where: {
             processed: true,
             ...(hasDates ? { createdAt: dateFilter } : {}),
+            ...houseFileWhere,
           },
           select: {
             id: true,
@@ -263,7 +273,7 @@ export async function GET(request: NextRequest) {
       else if (avgInboxRate !== null && avgInboxRate < 40) chips.push("Spam Prone")
 
       // Recent subjects (first 5 from already-desc-sorted campaigns)
-      const recentSubjects = entity.campaigns.slice(0, 5).map((c) => c.subject)
+      const recentSubjects = entity.campaigns.slice(0, 5).map((c: { subject: string | null }) => c.subject)
 
       profiles.push({
         entityId: entity.id,

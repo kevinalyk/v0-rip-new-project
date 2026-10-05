@@ -1,0 +1,48 @@
+Generated from Eric's 162-row candidate CSV.
+Date range: 2026-07-01 through 2026-09-30 (exclusive upper bound 2026-10-01).
+Housefile definition: isThirdParty = false.
+Email source: CompetitiveInsightCampaign, excluding deleted rows.
+SMS source: SmsQueue, counting processed rows.
+Matched: 122; unmatched: 40.
+
+Unmatched candidates:
+Hallie Shoffner (AR, Senate)
+Joanna Mendoza (AZ, House-06)
+Amish Shah (AZ, House-01)
+Randy Villegas (CA, House-22)
+Marni von Wilpert (CA, House-48)
+Jared Moskowitz (FL, House-25)
+Chris Harden (GA, House-11)
+Christina Bohannan (IA, House-01)
+Todd Achilles (ID, Senate)
+Roger Marshall (KS, Senate)
+Tina Hines (MI, House-10)
+William Lawrence (MI, House-7)
+Scott Colom (MS, Senate)
+Don Davis (NC, House-01)
+Brinker Harding (NE, House-02)
+Denise Powell (NE, House-02)
+Justin Murphy (NJ, Senate)
+Dina Titus (NV, House-01)
+Laura Gillen (NY, House-04)
+Greg Landsman (OH, House-01)
+N'Kiyla Jasmine Thomas (OK, Senate)
+Bob Brooks (PA, House-07)
+Paige Cognetti (PA, House-08)
+Bob Harvie (PA, House-01)
+Scott Perry (PA, House-10)
+Janelle Stelson (PA, House-10)
+Jack Reed (RI, Senate)
+Jenny Costa Honeycutt (SC, House-01)
+Nancy Lacore (SC, House-01)
+Marquita Bradshaw (TN, Senate)
+Henry Cuellar (TX, House-28)
+Leticia Gutierrez (TX, House-09)
+Laura Jones (TX, House-08)
+Melissa McDonough (TX, House-38)
+Elaine Luria (VA, House-02)
+Shannon Taylor (VA, House-01)
+John Duresky (WA, House-04)
+Marie Gluesenkamp Perez (WA, House-03)
+Rachel Fetty Anderson (WV, Senate)
+James Byrd (WY, Senate)

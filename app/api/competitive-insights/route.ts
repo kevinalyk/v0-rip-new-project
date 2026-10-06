@@ -1,9 +1,19 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { Prisma } from "@prisma/client"
 import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth"
 import { normalizeSubject } from "@/lib/campaign-detector"
 import { getEntityMappings } from "@/lib/ci-mapping-cache"
 import { getFreeTierCIWindow } from "@/lib/subscription-utils"
+
+// Keep in sync with the mobile equivalent in lib/services/feed-service.ts (PLATFORM_DOMAINS)
+const DONATION_PLATFORM_DOMAINS: Record<string, string[]> = {
+  winred: ["winred.com", "secure.winred.com"],
+  actblue: ["actblue.com", "secure.actblue.com"],
+  anedot: ["anedot.com"],
+  psq: ["psqimpact.com", "secure.psqimpact.com", "politicalsurveyquestions.com", "psqsurveys.com"],
+  ngpvan: ["ngpvan.com", "click.ngpvan.com", "secure.ngpvan.com"],
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -197,6 +207,47 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // For donationPlatform filter: resolve matching campaign/SMS IDs DB-side (scoped
+    // by ctaLinks text search), instead of post-filtering only the current page of
+    // results — which previously produced false "no results" on pages that happened
+    // not to contain a match, even though the platform had plenty of matches overall.
+    let donationPlatformEmailIds: string[] | null = null
+    let donationPlatformSmsIds: string[] | null = null
+    if (donationPlatform && donationPlatform !== "all") {
+      if (donationPlatform === "substack") {
+        const rows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+          SELECT id FROM "CompetitiveInsightCampaign"
+          WHERE "senderEmail" ILIKE '%@substack.com'
+        `)
+        donationPlatformEmailIds = rows.map((r) => r.id)
+        donationPlatformSmsIds = [] // Substack is an email-only platform
+      } else {
+        const domains = DONATION_PLATFORM_DOMAINS[donationPlatform] || []
+        if (domains.length === 0) {
+          donationPlatformEmailIds = []
+          donationPlatformSmsIds = []
+        } else {
+          const emailDomainPredicates = domains.map(
+            (domain) => Prisma.sql`LOWER(c."ctaLinks"::text) LIKE ${`%${domain.toLowerCase()}%`}`,
+          )
+          const emailRows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+            SELECT c.id FROM "CompetitiveInsightCampaign" c
+            WHERE c."ctaLinks" IS NOT NULL AND (${Prisma.join(emailDomainPredicates, " OR ")})
+          `)
+          donationPlatformEmailIds = emailRows.map((r) => r.id)
+
+          const smsDomainPredicates = domains.map(
+            (domain) => Prisma.sql`LOWER(m."ctaLinks"::text) LIKE ${`%${domain.toLowerCase()}%`}`,
+          )
+          const smsRows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+            SELECT m.id FROM "SmsQueue" m
+            WHERE m."ctaLinks" IS NOT NULL AND (${Prisma.join(smsDomainPredicates, " OR ")})
+          `)
+          donationPlatformSmsIds = smsRows.map((r) => r.id)
+        }
+      }
+    }
+
     const emailWhere: any = {
       isHidden: authResult.user.role === "super_admin" ? undefined : false,
       isDeleted: false,
@@ -207,6 +258,7 @@ export async function GET(request: NextRequest) {
       ...(dateFilter && { dateReceived: dateFilter }),
       ...(thirdPartyCampaignIds !== null && { id: { in: thirdPartyCampaignIds } }),
       ...(houseFileCampaignIds !== null && { id: { in: houseFileCampaignIds } }),
+      ...(donationPlatformEmailIds !== null && { id: { in: donationPlatformEmailIds } }),
     }
 
     // entityId filters: AND together subscriptionsOnly and tag filters if both active
@@ -282,6 +334,7 @@ export async function GET(request: NextRequest) {
         type: { not: "data_broker" },
       },
       ...(dateFilter && { createdAt: dateFilter }),
+      ...(donationPlatformSmsIds !== null && { id: { in: donationPlatformSmsIds } }),
     }
 
     // Apply same entityId intersection logic to smsWhere
@@ -706,37 +759,9 @@ export async function GET(request: NextRequest) {
       new Date(b.dateReceived).getTime() - new Date(a.dateReceived).getTime()
     )
 
-    // donationPlatform post-filter runs on one page of results only — no longer 5000 rows
-    if (donationPlatform && donationPlatform !== "all") {
-      if (donationPlatform === "substack") {
-        allInsights = allInsights.filter((insight) =>
-          insight.senderEmail?.toLowerCase().endsWith("@substack.com")
-        )
-      } else {
-        const platformDomains: Record<string, string[]> = {
-          winred: ["winred.com", "secure.winred.com"],
-          actblue: ["actblue.com", "secure.actblue.com"],
-          anedot: ["anedot.com"],
-          psq: ["psqimpact.com", "secure.psqimpact.com"],
-          ngpvan: ["ngpvan.com", "click.ngpvan.com", "secure.ngpvan.com"],
-        }
-        const domains = platformDomains[donationPlatform] || []
-        allInsights = allInsights.filter((insight) => {
-          const ctaLinks = insight.ctaLinks || []
-          return ctaLinks.some((link: any) => {
-            const urlsToCheck: string[] = []
-            if (typeof link === "string") {
-              urlsToCheck.push(link)
-            } else {
-              if (link.strippedFinalUrl) urlsToCheck.push(link.strippedFinalUrl)
-              if (link.finalUrl) urlsToCheck.push(link.finalUrl)
-              if (link.url) urlsToCheck.push(link.url)
-            }
-            return urlsToCheck.some((url) => domains.some((domain) => url.toLowerCase().includes(domain)))
-          })
-        })
-      }
-    }
+    // donationPlatform is now filtered DB-side via donationPlatformEmailIds/donationPlatformSmsIds
+    // (applied to emailWhere/smsWhere above), so both the page of results and the total
+    // count below are already scoped to the selected platform.
 
     // Total count: use parallel count queries for each message type
     let totalCount: number

@@ -11,6 +11,7 @@ import {
   type SubscriptionPlan,
 } from "@/lib/subscription-utils"
 import type Stripe from "stripe"
+import { monthlyCheckoutDisclosure, trialCheckoutDisclosure } from "@/lib/checkout-disclosures"
 
 export async function createCheckoutSession(data: {
   plan: SubscriptionPlan
@@ -31,10 +32,16 @@ export async function createCheckoutSession(data: {
     if (!user?.client) {
       throw new Error("Client not found")
     }
+    if (user.role !== "owner" && user.role !== "admin") {
+      throw new Error("Only owners and admins can manage subscriptions")
+    }
 
     const client = user.client
 
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = []
+    let planMonthlyDollars = 0
+    let additionalSeats = 0
+    let addOnMonthlyDollars = 0
 
     let subscriptionType: "plan" | "ci" | "both" = "plan"
 
@@ -42,6 +49,7 @@ export async function createCheckoutSession(data: {
       (data.plan !== client.subscriptionPlan || !client.stripeSubscriptionId) && data.plan !== "enterprise"
     if (isNewPlan) {
       const planPrice = PLAN_PRICES[data.plan]
+      planMonthlyDollars = planPrice
       lineItems.push({
         price_data: {
           currency: "usd",
@@ -66,6 +74,7 @@ export async function createCheckoutSession(data: {
         })
 
         const additionalSeatsNeeded = calculateAdditionalSeatsNeeded(data.plan, activeUserCount)
+        additionalSeats = additionalSeatsNeeded
 
         console.log("[v0] User seat calculation:", {
           currentUsers: activeUserCount,
@@ -95,6 +104,7 @@ export async function createCheckoutSession(data: {
 
     const isNewCI = data.hasCompetitiveInsights && !client.hasCompetitiveInsights && data.plan !== "enterprise"
     if (isNewCI) {
+      addOnMonthlyDollars = CI_ADDON_PRICE
       lineItems.push({
         price_data: {
           currency: "usd",
@@ -131,6 +141,17 @@ export async function createCheckoutSession(data: {
       mode: "subscription",
       payment_method_types: ["card"],
       line_items: lineItems,
+      custom_text: {
+        submit: {
+          message: monthlyCheckoutDisclosure({
+            planMonthlyDollars,
+            additionalSeats,
+            seatMonthlyDollars: ADDITIONAL_USER_SEAT_PRICE,
+            addOnMonthlyDollars,
+            existingSubscriptionChargesContinue: !isNewPlan && isNewCI,
+          }),
+        },
+      },
       success_url: successUrl,
       cancel_url: cancelUrl,
       customer_email: user.email,
@@ -224,6 +245,9 @@ export async function createTrialCheckoutSession(clientId: string) {
       },
     },
     payment_method_collection: "always",
+    custom_text: {
+      submit: { message: trialCheckoutDisclosure(client.pendingTrialLengthDays, basicPrice) },
+    },
     success_url: successUrl,
     cancel_url: cancelUrl,
     customer_email: owner.email,
@@ -313,7 +337,9 @@ export async function cancelSubscription(
     "[v0] Subscription items:",
     subscription.items.data.map((item) => ({
       id: item.id,
-      product: typeof item.price.product === "object" ? item.price.product.name : item.price.product,
+      product: typeof item.price.product === "object" && !item.price.product.deleted
+        ? item.price.product.name
+        : item.price.product,
     })),
   )
 

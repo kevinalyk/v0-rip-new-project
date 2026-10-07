@@ -1,6 +1,6 @@
 import { neon } from "@neondatabase/serverless"
 import { getServerSettings } from "./email-connection"
-import { shouldUseGraphAPI } from "./microsoft-graph"
+import { shouldUseGraphAPI, moveOutlookMessageToInbox } from "./microsoft-graph"
 import { getValidAccessToken } from "./microsoft-oauth"
 import { decrypt } from "./encryption"
 import * as Imap from "node-imap"
@@ -352,7 +352,7 @@ export class EngagementSimulator {
 
     // Get unread emails for this account
     console.log(`📧 Checking ${account.email}`)
-    const emails = await this.getUnreadEmails(account)
+    const emails = await this.getUnreadEmails(account, forceFullEngagement)
 
     if (emails.length === 0) {
       console.log(`📭 No unread emails for ${account.email}, skipping`)
@@ -454,16 +454,16 @@ export class EngagementSimulator {
     }
   }
 
-  private async getUnreadEmails(account: SeedAccount): Promise<EmailToProcess[]> {
+  private async getUnreadEmails(account: SeedAccount, isDomainHealth = false): Promise<EmailToProcess[]> {
     try {
       console.log(`🔌 Connecting to ${account.provider} for ${account.email}`)
 
       if (shouldUseGraphAPI(account.provider)) {
         console.log(`📊 Using Graph API for ${account.email}`)
-        return await this.getOutlookUnreadEmails(account)
+        return await this.getOutlookUnreadEmails(account, isDomainHealth)
       } else {
         console.log(`📨 Using IMAP for ${account.email}`)
-        return await this.getImapUnreadEmails(account)
+        return await this.getImapUnreadEmails(account, isDomainHealth)
       }
     } catch (error) {
       console.error(`❌ Error fetching emails for ${account.email}:`, error)
@@ -471,7 +471,7 @@ export class EngagementSimulator {
     }
   }
 
-  private async getOutlookUnreadEmails(account: SeedAccount): Promise<EmailToProcess[]> {
+  private async getOutlookUnreadEmails(account: SeedAccount, isDomainHealth = false): Promise<EmailToProcess[]> {
     try {
       console.log(`🔑 Getting access token for ${account.email}`)
       const accessToken = await getValidAccessToken(account.id)
@@ -507,6 +507,17 @@ export class EngagementSimulator {
 
         console.log(`📬 Graph API returned ${messages.length} unread emails for ${account.email} in folder ${folder}`)
 
+        // Domain health: move anything sitting in Junk Email to the Inbox before we "engage" with it,
+        // so engagement actually counts toward inbox placement instead of silently happening in spam.
+        if (isDomainHealth && folder === "junkemail" && messages.length > 0) {
+          for (const message of messages) {
+            const moved = await moveOutlookMessageToInbox(account.id, message.id)
+            if (moved) {
+              console.log(`📥 Moved email "${message.subject}" from Junk Email to Inbox for ${account.email}`)
+            }
+          }
+        }
+
         allEmails.push(
           ...messages.map((message: any) => ({
             subject: message.subject || "",
@@ -525,7 +536,7 @@ export class EngagementSimulator {
     }
   }
 
-  private async getImapUnreadEmails(account: SeedAccount): Promise<EmailToProcess[]> {
+  private async getImapUnreadEmails(account: SeedAccount, isDomainHealth = false): Promise<EmailToProcess[]> {
     return new Promise((resolve) => {
       try {
         console.log(`🔐 Decrypting password for ${account.email}`)
@@ -595,6 +606,8 @@ export class EngagementSimulator {
             }
 
             const folderName = foldersToCheck[folderIndex]
+            const isSpamLikeFolder =
+              folderName.toLowerCase().includes("junk") || folderName.toLowerCase().includes("spam")
 
             console.log(`📬 Opening folder "${folderName}" for ${account.email}`)
             imap.openBox(folderName, false, (err, box) => {
@@ -636,6 +649,10 @@ export class EngagementSimulator {
                   bodies: "HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)",
                   struct: true,
                 })
+
+                // Domain health: every UID found in a spam-like folder gets moved to the Inbox
+                // after this fetch completes, so we engage with it in the Inbox, not in Spam.
+                const matchedUids: number[] = []
 
                 fetch.on("message", (msg, seqno) => {
                   let headers = ""
@@ -685,6 +702,10 @@ export class EngagementSimulator {
                         messageId,
                         uid,
                       })
+
+                      if (isDomainHealth && isSpamLikeFolder && uid) {
+                        matchedUids.push(uid)
+                      }
                     } catch (parseError) {
                       console.error(
                         `❌ Error parsing email headers in "${folderName}" for ${account.email}:`,
@@ -701,7 +722,24 @@ export class EngagementSimulator {
 
                 fetch.once("end", () => {
                   console.log(`✅ Finished fetching emails from "${folderName}" for ${account.email}`)
-                  checkNextFolder(folderIndex + 1)
+
+                  if (matchedUids.length > 0) {
+                    imap.move(matchedUids, "INBOX", (moveErr: any) => {
+                      if (moveErr) {
+                        console.error(
+                          `❌ Failed to move ${matchedUids.length} email(s) from "${folderName}" to Inbox for ${account.email}:`,
+                          moveErr,
+                        )
+                      } else {
+                        console.log(
+                          `📥 Moved ${matchedUids.length} email(s) from "${folderName}" to Inbox for ${account.email}`,
+                        )
+                      }
+                      checkNextFolder(folderIndex + 1)
+                    })
+                  } else {
+                    checkNextFolder(folderIndex + 1)
+                  }
                 })
               })
             })

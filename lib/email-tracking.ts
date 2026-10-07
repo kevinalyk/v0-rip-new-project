@@ -2,18 +2,20 @@ import { encrypt } from "./encryption"
 
 /**
  * Generate a tracked email link that logs clicks before redirecting.
- * Used for tracking engagement with daily digest emails.
+ * Used for tracking engagement with digest and product-update emails.
  */
 export function generateTrackedLink(
   userId: string,
-  emailType: "daily_digest" | "weekly_digest",
+  emailType: "daily_digest" | "weekly_digest" | "product_update",
   linkType:
     | "entity_profile"
     | "campaign"
     | "subscriptions"
     | "settings"
     | "feed"
-    | "unsubscribe",
+    | "unsubscribe"
+    | "whats_new"
+    | `article_${string}`,
   destination: string,
   baseUrl: string = process.env.APP_URL || "https://app.inbox.gop"
 ): string {

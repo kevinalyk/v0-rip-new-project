@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "seed": "tsx prisma/seed.ts",
     "start": "next start",
+    "test:email-unsubscribe": "tsx --test lib/__tests__/email-unsubscribe.test.ts",
     "test:mobile-db-preflight": "tsx lib/services/__tests__/test-db-preflight.test.ts",
     "test:mobile-entitlements": "tsx --test lib/services/__tests__/mobile-entitlements.test.ts",
     "test:mobile-personal-accounts": "tsx --test lib/services/__tests__/personal-account.test.ts",

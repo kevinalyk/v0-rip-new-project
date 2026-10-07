@@ -1,6 +1,11 @@
 // Mailgun email sending utility
 
 import { generateTrackedLink } from "./email-tracking"
+import {
+  addEmailUnsubscribeHeaders,
+  createEmailUnsubscribeUrl,
+  EMAIL_POSTAL_ADDRESS,
+} from "./email-unsubscribe"
 
 const ADMIN_NOTIFICATION_EMAIL = "kevin@rip-tool.com"
 
@@ -357,19 +362,9 @@ export async function sendWelcomeEmail(params: {
 
   const {
     firstName,
-    lastName,
     email,
-    organizationName,
-    plan = "Free Trial",
     loginUrl = "https://app.rip-tool.com/login",
   } = params
-
-  const formattedDate = new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "America/New_York",
-  }).format(new Date())
 
   const html = `
     <!DOCTYPE html>
@@ -1167,7 +1162,7 @@ export async function sendFollowingDigest(params: {
   const APP_URL = "https://app.rip-tool.com"
   const feedUrl = generateTrackedLink(userId, "daily_digest", "feed", `/${clientSlug}/ci/campaigns`, APP_URL)
   const subscriptionsUrl = generateTrackedLink(userId, "daily_digest", "subscriptions", `/${clientSlug}/ci/subscriptions`, APP_URL)
-  const settingsUrl = generateTrackedLink(userId, "daily_digest", "settings", `/${clientSlug}/account/settings`, APP_URL)
+  const unsubscribeUrl = createEmailUnsubscribeUrl(userId, APP_URL)
   const logoUrl = `${APP_URL}/images/IconOnly_Transparent_NoBuffer.png`
 
   const greeting = firstName ? `Hi ${firstName},` : "Hi there,"
@@ -1359,8 +1354,8 @@ export async function sendFollowingDigest(params: {
                 <a href="https://app.rip-tool.com" style="color:#6b7280;text-decoration:none;">app.rip-tool.com</a>.<br/>
                 View the full feed at
                 <a href="${feedUrl}" style="color:#6b7280;text-decoration:none;">app.rip-tool.com</a>.<br/>
-                To stop receiving this digest, visit your
-                <a href="${settingsUrl}" style="color:#6b7280;text-decoration:none;">email settings</a>.
+                <a href="${unsubscribeUrl}" style="color:#6b7280;text-decoration:underline;">Unsubscribe from email updates</a>.<br/>
+                ${EMAIL_POSTAL_ADDRESS}
               </p>
             </td>
           </tr>
@@ -1387,7 +1382,8 @@ ${activeSections
 View more: ${subscriptionsUrl}
 View full feed: ${feedUrl}
 
-To stop receiving this digest, update your email settings: ${settingsUrl}
+Unsubscribe from email updates: ${unsubscribeUrl}
+${EMAIL_POSTAL_ADDRESS}
 `
 
   const formData = new FormData()
@@ -1396,6 +1392,7 @@ To stop receiving this digest, update your email settings: ${settingsUrl}
   formData.append("subject", `Daily Digest - Inbox.GOP`)
   formData.append("html", html)
   formData.append("text", text)
+  addEmailUnsubscribeHeaders(formData, unsubscribeUrl)
 
   try {
     const response = await fetch(`https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`, {
@@ -1456,7 +1453,7 @@ export async function sendWeeklyDigest(params: {
   const APP_URL = "https://app.rip-tool.com"
   const feedUrl = generateTrackedLink(userId, "weekly_digest", "feed", `/${clientSlug}/ci/campaigns`, APP_URL)
   const subscriptionsUrl = generateTrackedLink(userId, "weekly_digest", "subscriptions", `/${clientSlug}/ci/subscriptions`, APP_URL)
-  const settingsUrl = generateTrackedLink(userId, "weekly_digest", "settings", `/${clientSlug}/account/settings`, APP_URL)
+  const unsubscribeUrl = createEmailUnsubscribeUrl(userId, APP_URL)
   const logoUrl = `${APP_URL}/images/IconOnly_Transparent_NoBuffer.png`
 
   const greeting = firstName ? `Hi ${firstName},` : "Hi there,"
@@ -1610,8 +1607,8 @@ export async function sendWeeklyDigest(params: {
                 <a href="https://app.rip-tool.com" style="color:#6b7280;text-decoration:none;">app.rip-tool.com</a>.<br/>
                 View the full feed at
                 <a href="${feedUrl}" style="color:#6b7280;text-decoration:none;">app.rip-tool.com</a>.<br/>
-                To stop receiving this digest, visit your
-                <a href="${settingsUrl}" style="color:#6b7280;text-decoration:none;">email settings</a>.
+                <a href="${unsubscribeUrl}" style="color:#6b7280;text-decoration:underline;">Unsubscribe from email updates</a>.<br/>
+                ${EMAIL_POSTAL_ADDRESS}
               </p>
             </td>
           </tr>
@@ -1642,7 +1639,8 @@ ${items
 View more: ${subscriptionsUrl}
 View full feed: ${feedUrl}
 
-To stop receiving this digest, update your email settings: ${settingsUrl}
+Unsubscribe from email updates: ${unsubscribeUrl}
+${EMAIL_POSTAL_ADDRESS}
 `
 
   const formData = new FormData()
@@ -1651,6 +1649,7 @@ To stop receiving this digest, update your email settings: ${settingsUrl}
   formData.append("subject", `Weekly Top Content - Inbox.GOP`)
   formData.append("html", html)
   formData.append("text", text)
+  addEmailUnsubscribeHeaders(formData, unsubscribeUrl)
 
   try {
     const response = await fetch(`https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`, {
@@ -1702,10 +1701,10 @@ export async function sendProductUpdateEmail(params: {
     return false
   }
 
-  const { to, firstName, items, clientSlug, userId } = params
+  const { to, firstName, items, userId } = params
   const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
 
-  const settingsUrl = generateTrackedLink(userId, "product_update", "settings", `/${clientSlug}/account/settings`, APP_URL)
+  const unsubscribeUrl = createEmailUnsubscribeUrl(userId, APP_URL)
   const whatsNewUrl = generateTrackedLink(userId, "product_update", "whats_new", `/news`, APP_URL)
   const logoUrl = `${APP_URL}/images/IconOnly_Transparent_NoBuffer.png`
 
@@ -1803,8 +1802,8 @@ export async function sendProductUpdateEmail(params: {
               <p style="margin:0;font-size:12px;color:#6b7280;text-align:center;line-height:1.8;">
                 You&apos;re receiving this because you have product updates enabled on
                 <a href="https://app.rip-tool.com" style="color:#374151;text-decoration:none;">app.rip-tool.com</a>.<br/>
-                To unsubscribe, visit your
-                <a href="${settingsUrl}" style="color:#374151;text-decoration:none;">email settings</a>.
+                <a href="${unsubscribeUrl}" style="color:#374151;text-decoration:underline;">Unsubscribe from email updates</a>.<br/>
+                ${EMAIL_POSTAL_ADDRESS}
               </p>
             </td>
           </tr>
@@ -1823,7 +1822,8 @@ What's New on Inbox.GOP
 ${items.map((item) => `${item.title}\n${formatDate(item.publishedAt)}\n\n${item.body}`).join("\n\n---\n\n")}
 
 View all updates: ${whatsNewUrl}
-To unsubscribe: ${settingsUrl}
+Unsubscribe from email updates: ${unsubscribeUrl}
+${EMAIL_POSTAL_ADDRESS}
 `
 
   const formData = new FormData()
@@ -1832,6 +1832,7 @@ To unsubscribe: ${settingsUrl}
   formData.append("subject", `What's New on Inbox.GOP`)
   formData.append("html", html)
   formData.append("text", text)
+  addEmailUnsubscribeHeaders(formData, unsubscribeUrl)
 
   try {
     const response = await fetch(`https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`, {
@@ -1870,6 +1871,7 @@ export interface CampaignAlertMatch {
 }
 
 export async function sendCampaignAlertDigest(params: {
+  userId: string
   to: string
   firstName: string | null
   matches: CampaignAlertMatch[]
@@ -1883,10 +1885,11 @@ export async function sendCampaignAlertDigest(params: {
     return false
   }
 
-  const { to, firstName, matches, runDate } = params
+  const { userId, to, firstName, matches, runDate } = params
   const APP_URL = "https://app.rip-tool.com"
   const radarUrl = `${APP_URL}/directory/new-campaigns`
   const settingsUrl = `${APP_URL}/directory/new-campaigns`
+  const unsubscribeUrl = createEmailUnsubscribeUrl(userId, APP_URL)
 
   const greeting = firstName ? `Hi ${firstName},` : "Hi there,"
 
@@ -2044,7 +2047,9 @@ export async function sendCampaignAlertDigest(params: {
             <td style="padding:16px 28px;border-top:1px solid #1f2937;">
               <p style="margin:0;font-size:11px;color:#4b5563;line-height:1.6;">
                 You received this email because you set up a Campaign Launch Alert on Inbox.GOP. 
-                <a href="${settingsUrl}" target="_blank" style="color:#6b7280;text-decoration:underline;">Manage your alerts</a>
+                <a href="${settingsUrl}" target="_blank" style="color:#6b7280;text-decoration:underline;">Manage your alerts</a>.<br/>
+                <a href="${unsubscribeUrl}" style="color:#6b7280;text-decoration:underline;">Unsubscribe from email alerts</a>.<br/>
+                ${EMAIL_POSTAL_ADDRESS}
               </p>
             </td>
           </tr>
@@ -2072,6 +2077,8 @@ ${matches
 
 View the Launch Radar: ${radarUrl}
 Manage your alerts: ${settingsUrl}
+Unsubscribe from email alerts: ${unsubscribeUrl}
+${EMAIL_POSTAL_ADDRESS}
 `
 
   const formData = new FormData()
@@ -2080,6 +2087,7 @@ Manage your alerts: ${settingsUrl}
   formData.append("subject", `${totalLaunches} new campaign${totalLaunches === 1 ? "" : "s"} match your alerts — ${runDate}`)
   formData.append("html", html)
   formData.append("text", text)
+  addEmailUnsubscribeHeaders(formData, unsubscribeUrl)
 
   try {
     const response = await fetch(`https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`, {

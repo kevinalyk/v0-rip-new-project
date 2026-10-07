@@ -434,6 +434,7 @@ export async function GET(request: Request) {
 
         // Fetch all alert subscriptions with user email
         const alertSubs = await prisma.campaignAlertSubscription.findMany({
+          where: { kind: "campaign_launch", enabled: true },
           include: {
             user: { select: { id: true, email: true, firstName: true } },
           },
@@ -500,6 +501,7 @@ export async function GET(request: Request) {
           if (matches.length === 0) continue
 
           const ok = await sendCampaignAlertDigest({
+            userId: user.id,
             to: user.email!,
             firstName: user.firstName ?? null,
             matches,

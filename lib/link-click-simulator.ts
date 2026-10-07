@@ -11,7 +11,7 @@
 
 import { neon } from "@neondatabase/serverless"
 import { getServerSettings } from "./email-connection"
-import { shouldUseGraphAPI } from "./microsoft-graph"
+import { shouldUseGraphAPI, moveOutlookMessageToInbox } from "./microsoft-graph"
 import { getValidAccessToken } from "./microsoft-oauth"
 import { decrypt } from "./encryption"
 import * as Imap from "node-imap"
@@ -529,7 +529,22 @@ function fetchImapEmailsWithBody(account: DomainHealthSeedAccount): Promise<Emai
               fetchReq.once("error", () => checkNextFolder(idx + 1))
               fetchReq.once("end", () => {
                 allEmails.push(...Object.values(emailMap))
-                checkNextFolder(idx + 1)
+
+                // Domain health only: move every email we're about to click through from a
+                // spam-like folder into the Inbox first, so the click reflects inbox engagement.
+                const isSpamLikeFolder = folder.toLowerCase().includes("junk") || folder.toLowerCase().includes("spam")
+                if (isSpamLikeFolder && uids.length > 0) {
+                  imap.move(uids, "INBOX", (moveErr: any) => {
+                    if (moveErr) {
+                      console.error(`  Failed to move ${uids.length} email(s) from "${folder}" to Inbox for ${account.email}:`, moveErr)
+                    } else {
+                      console.log(`  Moved ${uids.length} email(s) from "${folder}" to Inbox for ${account.email}`)
+                    }
+                    checkNextFolder(idx + 1)
+                  })
+                } else {
+                  checkNextFolder(idx + 1)
+                }
               })
             })
           })
@@ -576,7 +591,20 @@ async function fetchOutlookEmailsWithBody(account: DomainHealthSeedAccount): Pro
       if (!response.ok) continue
 
       const data = await response.json()
-      for (const msg of data.value || []) {
+      const messages = data.value || []
+
+      // Domain health only: move every email we're about to click through from Junk Email
+      // into the Inbox first, so the click reflects inbox engagement.
+      if (folder === "junkemail" && messages.length > 0) {
+        for (const msg of messages) {
+          const moved = await moveOutlookMessageToInbox(account.id, msg.id)
+          if (moved) {
+            console.log(`  Moved email "${msg.subject}" from Junk Email to Inbox for ${account.email}`)
+          }
+        }
+      }
+
+      for (const msg of messages) {
         allEmails.push({
           subject: msg.subject || "",
           sender: msg.from?.emailAddress?.address || "",

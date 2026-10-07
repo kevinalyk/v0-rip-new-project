@@ -229,13 +229,13 @@ export function CIPricingContent() {
 
   // A plan selected before sign-in still requires an explicit confirmation after sign-in.
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && canManageBilling) {
       const pendingPlan = searchParams.get("plan") as SubscriptionPlan | null
-      if (pendingPlan === "paid" || pendingPlan === "all") {
+      if ((pendingPlan === "paid" || pendingPlan === "all") && (pendingPlan !== currentPlan || currentStatus !== "active")) {
         setPendingPaidPlan(pendingPlan)
       }
     }
-  }, [isAuthenticated, searchParams])
+  }, [isAuthenticated, canManageBilling, currentPlan, currentStatus, searchParams])
 
   const fetchBillingData = async () => {
     try {
@@ -320,7 +320,7 @@ export function CIPricingContent() {
 
   const handleConfirmPaidPlan = async () => {
     const plan = pendingPaidPlan
-    if (!plan || !renewalTermsAccepted) return
+    if (!plan || !renewalTermsAccepted || !canManageBilling) return
 
     setCheckingOutPlan(plan)
     try {

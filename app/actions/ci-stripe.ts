@@ -4,6 +4,8 @@ import { stripe } from "@/lib/stripe"
 import { getServerSession } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { PLAN_PRICES, type SubscriptionPlan } from "@/lib/subscription-utils"
+import { monthlyCheckoutDisclosure } from "@/lib/checkout-disclosures"
+import type Stripe from "stripe"
 
 const PLAN_DISPLAY_NAMES: Record<string, string> = {
   free: "Starter",
@@ -24,6 +26,7 @@ const PLAN_TIER_ORDER: Record<string, number> = {
 export async function createCICheckoutSession(data: {
   plan: SubscriptionPlan
   clientSlug: string
+  renewalTermsAccepted: boolean
 }) {
   try {
     const session = await getServerSession()
@@ -38,6 +41,9 @@ export async function createCICheckoutSession(data: {
 
     if (!user?.client) {
       throw new Error("Client not found")
+    }
+    if (user.role !== "owner" && user.role !== "admin") {
+      throw new Error("Only owners and admins can manage subscriptions")
     }
 
     const client = user.client
@@ -70,9 +76,15 @@ export async function createCICheckoutSession(data: {
       }
     }
 
+    // This action can also update an existing subscription and invoice a proration immediately.
+    if (!data.renewalTermsAccepted) {
+      throw new Error("Confirm the recurring subscription terms before continuing")
+    }
+    const renewalTermsAcceptedAt = new Date().toISOString()
+
     if (client.stripeSubscriptionId && client.subscriptionStatus === "active") {
       // Client has an active subscription - handle upgrade or downgrade
-      const currentPlan = client.subscriptionPlan
+      const currentPlan = client.subscriptionPlan as SubscriptionPlan
       const currentPrice = PLAN_PRICES[currentPlan]
       const newPrice = PLAN_PRICES[data.plan]
 
@@ -150,6 +162,8 @@ export async function createCICheckoutSession(data: {
           metadata: {
             ...subscription.metadata,
             plan: data.plan,
+            renewalDisclosureVersion: "2026-10-07",
+            renewalTermsAcceptedAt,
           },
         })
 
@@ -185,7 +199,7 @@ export async function createCICheckoutSession(data: {
       : `${baseUrl}/billing?success=true`
     const cancelUrl = `${baseUrl}${slugPrefix || ""}/billing?canceled=true`
 
-    const lineItems: any[] = [
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
       {
         price_data: {
           currency: "usd",
@@ -202,6 +216,7 @@ export async function createCICheckoutSession(data: {
       },
     ]
 
+    let additionalSeats = 0
     if (data.plan === "all") {
       const activeUsers = await prisma.user.count({
         where: {
@@ -210,7 +225,7 @@ export async function createCICheckoutSession(data: {
       })
 
       const includedSeats = 3
-      const additionalSeats = Math.max(0, activeUsers - includedSeats)
+      additionalSeats = Math.max(0, activeUsers - includedSeats)
 
       if (additionalSeats > 0) {
         const product = await stripe.products.create({
@@ -242,15 +257,30 @@ export async function createCICheckoutSession(data: {
       mode: "subscription",
       payment_method_types: ["card"],
       line_items: lineItems,
+      custom_text: {
+        submit: {
+          message: monthlyCheckoutDisclosure({
+            planName,
+            planMonthlyDollars: planPrice,
+            additionalSeats,
+            seatMonthlyDollars: 50,
+          }),
+        },
+      },
       success_url: successUrl,
       cancel_url: cancelUrl,
       customer_email: user.email,
       client_reference_id: client.id,
+      subscription_data: {
+        metadata: { renewalDisclosureVersion: "2026-10-07", renewalTermsAcceptedAt },
+      },
       metadata: {
         clientId: client.id,
         userId: user.id,
         plan: data.plan,
         productType: "ci",
+        renewalDisclosureVersion: "2026-10-07",
+        renewalTermsAcceptedAt,
       },
     })
 

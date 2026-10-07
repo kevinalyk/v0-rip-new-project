@@ -4,8 +4,8 @@ import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Check, X, Loader2, AlertTriangle, Minus } from "lucide-react"
-import { PLAN_PRICES, type SubscriptionPlan } from "@/lib/subscription-utils"
+import { Check, X, Loader2, AlertTriangle } from "lucide-react"
+import { type SubscriptionPlan } from "@/lib/subscription-utils"
 import { createCICheckoutSession } from "@/app/actions/ci-stripe"
 import {
   AlertDialog,
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { cancelSubscription } from "@/app/actions/stripe"
 import { CancellationFeedbackFields } from "@/components/cancellation-feedback-fields"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface BillingData {
   client: {
@@ -27,7 +28,9 @@ interface BillingData {
     subscriptionPlan: SubscriptionPlan
     subscriptionStatus: string
     subscriptionRenewDate: string | null
+    stripeSubscriptionId: string | null
   }
+  userRole: string
 }
 
 type CellValue = boolean | string
@@ -168,7 +171,15 @@ const PLANS: { key: SubscriptionPlan; label: string; price: string; description:
   { key: "enterprise", label: "Enterprise", price: "Custom", description: "Custom solutions" },
 ]
 
-function CellDisplay({ value, planKey }: { value: CellValue; planKey: SubscriptionPlan }) {
+const PLAN_LEVEL: Record<SubscriptionPlan, number> = {
+  free: 0,
+  paid: 1,
+  all: 2,
+  basic_inboxing: 3,
+  enterprise: 4,
+}
+
+function CellDisplay({ value }: { value: CellValue }) {
   if (typeof value === "boolean") {
     if (value) {
       return (
@@ -191,8 +202,12 @@ export function CIPricingContent() {
   const searchParams = useSearchParams()
   const [currentPlan, setCurrentPlan] = useState<SubscriptionPlan>("free")
   const [currentStatus, setCurrentStatus] = useState<string>("active")
+  const [hasActiveStripeSubscription, setHasActiveStripeSubscription] = useState(false)
+  const [canManageBilling, setCanManageBilling] = useState(false)
   const [loading, setLoading] = useState(true)
   const [checkingOutPlan, setCheckingOutPlan] = useState<SubscriptionPlan | null>(null)
+  const [pendingPaidPlan, setPendingPaidPlan] = useState<SubscriptionPlan | null>(null)
+  const [renewalTermsAccepted, setRenewalTermsAccepted] = useState(false)
   const [clientSlug, setClientSlug] = useState<string>("")
  const [showCancelDialog, setShowCancelDialog] = useState(false)
  const [canceling, setCanceling] = useState(false)
@@ -212,15 +227,15 @@ export function CIPricingContent() {
     }
   }, [])
 
-  // After auth is confirmed, auto-trigger checkout if ?plan= is present
+  // A plan selected before sign-in still requires an explicit confirmation after sign-in.
   useEffect(() => {
-    if (isAuthenticated && clientSlug) {
+    if (isAuthenticated && canManageBilling) {
       const pendingPlan = searchParams.get("plan") as SubscriptionPlan | null
-      if (pendingPlan && ["paid", "all", "enterprise"].includes(pendingPlan)) {
-        handleSelectPlan(pendingPlan)
+      if ((pendingPlan === "paid" || pendingPlan === "all") && (pendingPlan !== currentPlan || currentStatus !== "active")) {
+        setPendingPaidPlan(pendingPlan)
       }
     }
-  }, [isAuthenticated, clientSlug])
+  }, [isAuthenticated, canManageBilling, currentPlan, currentStatus, searchParams])
 
   const fetchBillingData = async () => {
     try {
@@ -234,6 +249,8 @@ export function CIPricingContent() {
       const data: BillingData = await response.json()
       setCurrentPlan(data.client.subscriptionPlan)
       setCurrentStatus(data.client.subscriptionStatus)
+      setHasActiveStripeSubscription(Boolean(data.client.stripeSubscriptionId && data.client.subscriptionStatus === "active"))
+      setCanManageBilling(data.userRole === "owner" || data.userRole === "admin")
       setClientId(data.client.id)
       setSubscriptionRenewDate(data.client.subscriptionRenewDate || null)
       setIsAuthenticated(true)
@@ -275,6 +292,11 @@ export function CIPricingContent() {
       return
     }
 
+    if (!canManageBilling) {
+      alert("Only your organization's owner or admin can manage its subscription.")
+      return
+    }
+
     if (plan === currentPlan && currentStatus === "active") return
 
     if (plan === "free") {
@@ -292,9 +314,17 @@ export function CIPricingContent() {
       return
     }
 
+    setRenewalTermsAccepted(false)
+    setPendingPaidPlan(plan)
+  }
+
+  const handleConfirmPaidPlan = async () => {
+    const plan = pendingPaidPlan
+    if (!plan || !renewalTermsAccepted || !canManageBilling) return
+
     setCheckingOutPlan(plan)
     try {
-      const result = await createCICheckoutSession({ plan, clientSlug })
+      const result = await createCICheckoutSession({ plan, clientSlug, renewalTermsAccepted: true })
       if (result.url) {
         window.location.href = result.url
       }
@@ -303,6 +333,8 @@ export function CIPricingContent() {
       alert("Failed to start checkout. Please try again.")
     } finally {
       setCheckingOutPlan(null)
+      setPendingPaidPlan(null)
+      setRenewalTermsAccepted(false)
     }
   }
 
@@ -318,6 +350,9 @@ export function CIPricingContent() {
     })
   }
 
+  const isScheduledDowngrade = hasActiveStripeSubscription && pendingPaidPlan !== null && PLAN_LEVEL[currentPlan] > PLAN_LEVEL[pendingPaidPlan]
+  const isImmediateUpgrade = hasActiveStripeSubscription && pendingPaidPlan !== null && PLAN_LEVEL[currentPlan] < PLAN_LEVEL[pendingPaidPlan]
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -328,6 +363,58 @@ export function CIPricingContent() {
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-6xl">
+      <AlertDialog
+        open={pendingPaidPlan !== null}
+        onOpenChange={(open) => {
+          if (!open && checkingOutPlan === null) {
+            setPendingPaidPlan(null)
+            setRenewalTermsAccepted(false)
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm your subscription</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3 text-left">
+              <span className="block">
+                {pendingPaidPlan === "all" ? "Professional is $300/month and includes 3 users. Additional users are $50/month each." : "Basic is $50/month for one user."}
+                {isScheduledDowngrade
+                  ? " Your existing Professional plan continues until the end of the current billing period. Basic begins at the next renewal; there is no charge today."
+                  : isImmediateUpgrade
+                    ? " Upgrading can invoice a prorated charge to your saved payment method now. Future charges renew monthly at the new rate."
+                    : " Your subscription starts at checkout and renews automatically each month."}
+                {" "}Applicable tax may be added. You can cancel in Account &gt; Billing before the next renewal to stop future charges.
+              </span>
+              {isImmediateUpgrade ? (
+                <span className="block">This change can charge your saved payment method immediately. Review the plan and renewal terms before confirming.</span>
+              ) : isScheduledDowngrade ? (
+                <span className="block">Your current plan remains active until the end of its paid period.</span>
+              ) : (
+                <span className="block">Stripe will show the final amount, including any additional seats and tax, before payment.</span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex items-start gap-2">
+            <Checkbox
+              id="confirm-renewal-terms"
+              checked={renewalTermsAccepted}
+              onCheckedChange={(checked) => setRenewalTermsAccepted(checked === true)}
+            />
+            <label htmlFor="confirm-renewal-terms" className="text-sm leading-snug cursor-pointer">
+              I agree to the monthly automatic renewal and cancellation terms above.
+            </label>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={checkingOutPlan !== null}>Back</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmPaidPlan}
+              disabled={!renewalTermsAccepted || checkingOutPlan !== null}
+            >
+              {checkingOutPlan ? "Continuing..." : isScheduledDowngrade ? "Schedule downgrade" : isImmediateUpgrade ? "Confirm upgrade" : "Continue to secure checkout"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -459,7 +546,6 @@ export function CIPricingContent() {
                       <td key={plan.key} className="py-3.5 px-4">
                         <CellDisplay
                           value={row[plan.key as keyof Omit<FeatureRow, "label" | "note">] as CellValue}
-                          planKey={plan.key}
                         />
                       </td>
                     ))}
@@ -476,6 +562,11 @@ export function CIPricingContent() {
                 const isDowngrade = planIdx < currentPlanIdx
                 return (
                   <td key={plan.key} className="py-5 px-4 text-center">
+                    {(plan.key === "paid" || plan.key === "all") && !isCurrentPlan(plan.key) && (
+                      <p className="mb-3 text-xs leading-snug text-muted-foreground">
+                        {plan.key === "paid" ? "$50/month" : "$300/month, plus $50/month per user beyond 3"}; renews monthly until canceled in Account &gt; Billing.
+                      </p>
+                    )}
                     {isCurrentPlan(plan.key) ? (
                       <Button
                         size="sm"

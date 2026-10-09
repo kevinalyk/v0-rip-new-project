@@ -440,6 +440,16 @@ invalid token. Notification payloads contain only the feed item ID and message t
 tapping a notification opens the authenticated native message detail screen, where
 the normal feed authorization and retention rules run again.
 
+For SMS, a second seed phone may produce a different `SmsQueue` row ID for the same
+blast. A separate `MobileSmsPushClaim` atomically coalesces pushes per user, entity,
+and normalized redacted message for 15 minutes from the first claim. Recipient
+selection still enforces client visibility before the claim is made. Neither feed
+row is removed. Different messages and later sends can notify again.
+If Expo rejects every token or the network batch fails, the claim is released so a
+later copy can retry. The existing CI purge cron removes claims expired for 30 days.
+Deploy migration `20261009120000_add_mobile_sms_push_claim` before deploying the
+service code; otherwise SMS push attempts fail closed while feed ingestion continues.
+
 The same deduplication covers followed-entity notifications and custom-alert matches,
 so a user who qualifies through both paths still receives only one push. Shared seed
 messages may notify every opted-in user following the entity. Personal captures are

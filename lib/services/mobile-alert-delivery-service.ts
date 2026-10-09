@@ -5,6 +5,11 @@ import {
   getEffectiveMobileEntitlements,
   hasActiveApplePersonalSubscription,
 } from "@/lib/services/mobile-entitlements"
+import {
+  claimSmsPushAndCreateDelivery,
+  releaseFailedSmsPushClaim,
+  smsPushFingerprint,
+} from "@/lib/services/mobile-sms-push-dedupe"
 
 export type MobileAlertCandidate = {
   id: string
@@ -315,25 +320,41 @@ export async function notifyMobileAlertsForMessage(candidate: MobileAlertCandida
     if (user.mobilePushTokens.length) addRecipient(user.id, user.mobilePushTokens)
   }
 
-  const prepared: { deliveryId: string; tokens: PushTokenRecord[] }[] = []
+  const smsFingerprint = candidate.type === "sms" ? smsPushFingerprint(candidate) : null
+  const prepared: {
+    deliveryId: string
+    userId: string
+    tokens: PushTokenRecord[]
+  }[] = []
   for (const [userId, recipient] of recipients) {
-    let delivery: { id: string }
-    try {
-      delivery = await prisma.mobileAlertDelivery.create({
-        data: {
-          userId,
-          sourceType: candidate.type,
-          sourceId: candidate.id,
-          matchedAlertIds: [...recipient.matchedAlertIds],
-        },
-        select: { id: true },
+    let deliveryId: string | null
+    if (smsFingerprint) {
+      deliveryId = await claimSmsPushAndCreateDelivery({
+        userId,
+        sourceId: candidate.id,
+        fingerprint: smsFingerprint,
+        matchedAlertIds: [...recipient.matchedAlertIds],
       })
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") continue
-      throw error
+    } else {
+      try {
+        const delivery = await prisma.mobileAlertDelivery.create({
+          data: {
+            userId,
+            sourceType: candidate.type,
+            sourceId: candidate.id,
+            matchedAlertIds: [...recipient.matchedAlertIds],
+          },
+          select: { id: true },
+        })
+        deliveryId = delivery.id
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") continue
+        throw error
+      }
     }
+    if (!deliveryId) continue
 
-    prepared.push({ deliveryId: delivery.id, tokens: [...recipient.tokens.values()].slice(0, 100) })
+    prepared.push({ deliveryId, userId, tokens: [...recipient.tokens.values()].slice(0, 100) })
   }
 
   type PushJob = {
@@ -382,10 +403,10 @@ export async function notifyMobileAlertsForMessage(candidate: MobileAlertCandida
     })
   }
 
-  await Promise.all(prepared.map(({ deliveryId }) => {
+  await Promise.all(prepared.map(async ({ deliveryId, userId }) => {
     const tickets = ticketsByDelivery.get(deliveryId) || []
     const sent = tickets.some((ticket) => ticket.status === "ok")
-    return prisma.mobileAlertDelivery.update({
+    await prisma.mobileAlertDelivery.update({
       where: { id: deliveryId },
       data: {
         status: sent ? "sent" : "failed",
@@ -397,6 +418,9 @@ export async function notifyMobileAlertsForMessage(candidate: MobileAlertCandida
             : "Push tickets were rejected",
       },
     })
+    if (!sent && smsFingerprint) {
+      await releaseFailedSmsPushClaim({ userId, sourceId: candidate.id, fingerprint: smsFingerprint })
+    }
   }))
 }
 

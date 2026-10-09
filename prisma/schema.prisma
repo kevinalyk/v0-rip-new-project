@@ -54,6 +54,7 @@ model User {
   mobileRefreshTokens MobileRefreshToken[] // Mobile app refresh-token sessions (see lib/mobile-auth.ts)
   mobilePushTokens MobilePushToken[]
   mobileAlertDeliveries MobileAlertDelivery[]
+  mobileSmsPushClaims MobileSmsPushClaim[]
   clientJoinInvitations ClientJoinInvitation[] @relation("ClientJoinInvitee")
   clientJoinInvitationsSent ClientJoinInvitation[] @relation("ClientJoinInviter")
 
@@ -1247,6 +1248,23 @@ model MobileAlertDelivery {
 
   @@unique([userId, sourceType, sourceId])
   @@index([status, createdAt])
+}
+
+// Atomic, per-user rolling-window claim for the same SMS captured on multiple seed phones.
+// Feed records remain separate; only their mobile pushes are coalesced.
+model MobileSmsPushClaim {
+  id          String   @id @default(cuid())
+  userId      String
+  fingerprint String
+  sourceId    String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fingerprint])
+  @@index([expiresAt])
 }
 
 // ─── Spam Test ────────────────────────────────────────────────────────────────

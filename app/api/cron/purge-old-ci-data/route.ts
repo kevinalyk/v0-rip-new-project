@@ -24,6 +24,16 @@ export async function GET(request: Request) {
     const cutoff = THREE_MONTHS_AGO()
     const results: Record<string, number> = {}
 
+    // Claims only coordinate a 15-minute SMS push window. Keep a short tail for
+    // troubleshooting, then prune them so high-volume broadcasts cannot grow the
+    // claim table without bound. MobileAlertDelivery history is not affected.
+    const expiredSmsPushClaims = await sql`
+      DELETE FROM "MobileSmsPushClaim"
+      WHERE "expiresAt" < (NOW() AT TIME ZONE 'UTC') - INTERVAL '30 days'
+      RETURNING "id"
+    `
+    results.expiredSmsPushClaims = expiredSmsPushClaims.length
+
     // -------------------------------------------------------------------------
     // 1. UNASSIGNED emails — entityId IS NULL and no clientId (true orphans)
     //    Use createdAt since they were never acted on
@@ -95,7 +105,7 @@ export async function GET(request: Request) {
       cutoffDate: cutoff,
       totalDeleted,
       breakdown: results,
-      message: `Purged ${totalDeleted} records older than 3 months.`,
+      message: `Purged ${totalDeleted} expired CI records and SMS push claims.`,
     })
   } catch (error) {
     console.error("purge-old-ci-data error:", error)

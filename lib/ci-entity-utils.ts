@@ -4,6 +4,7 @@ import { z } from "zod"
 import { nanoid } from "nanoid"
 import { put, del } from "@vercel/blob"
 import { isSenderThirdParty, isPhoneThirdParty, invalidateEntityMappingCache } from "@/lib/ci-mapping-cache"
+import { isCorporateEntityType } from "@/lib/corporate-entity-types"
 
 const prisma = new PrismaClient()
 
@@ -999,6 +1000,7 @@ export async function createEntity(
         party,
         state,
         donationIdentifiers: donationIdentifiers || null,
+        isCorporate: isCorporateEntityType(type),
         ...(ballotpediaUrl ? { ballotpediaUrl } : {}),
       },
     })
@@ -1033,6 +1035,7 @@ export async function updateEntity(
         party,
         state,
         donationIdentifiers: donationIdentifiers || null,
+        isCorporate: isCorporateEntityType(type),
         ...(ballotpediaUrl !== undefined && { ballotpediaUrl: ballotpediaUrl || null }),
       },
     })
@@ -1117,7 +1120,7 @@ export async function updateEntityType(entityId: string, newType: string) {
     const before = entity.type
     const updated = await prisma.ciEntity.update({
       where: { id: entityId },
-      data: { type: newType },
+      data: { type: newType, isCorporate: isCorporateEntityType(newType) },
     })
 
     return { success: true, entity: updated, before, after: updated.type }

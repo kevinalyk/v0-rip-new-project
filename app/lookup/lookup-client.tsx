@@ -391,6 +391,10 @@ function EntityCard({ entity }: { entity: Entity }) {
       ? "Nonprofit"
       : entity.type === "state_party"
       ? "State Party"
+      : entity.type === "media"
+      ? "Media"
+      : entity.type === "retail"
+      ? "Retail"
       : entity.type
 
   return (
@@ -446,7 +450,7 @@ function EntityCard({ entity }: { entity: Entity }) {
   )
 }
 
-// ─── Results section ──────────────────────────────────────────────────────
+// ─��─ Results section ──────────────────────────────────────────────────────
 
 function SearchResults({
   query,

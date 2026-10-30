@@ -57,7 +57,7 @@
  * a new domain) without needing separate admin UI access.
  *
  * Tool 12 lets an entity's type (politician/pac/organization/nonprofit/
- * state_party) be corrected after creation (e.g. DLCC was miscategorized as
+ * state_party/media/retail) be corrected after creation (e.g. DLCC was miscategorized as
  * "organization" instead of a party committee) - restricted to only the
  * `type` field, same pattern as update_entity_donation_identifiers.
  *
@@ -376,10 +376,10 @@ const handler = createMcpHandler(
       {
         title: "Create Entity",
         description:
-          'Creates a new CiEntity (politician, PAC, organization, nonprofit/foundation, or state party committee) when no existing entity matches an unassigned message. Use "nonprofit" for 501(c) foundations and nonprofit advocacy groups (e.g. a legal foundation or a political action coalition\'s foundation arm) rather than forcing them into "organization". Use "state_party" for state-level party committees (e.g. the Maine Democratic Party) rather than forcing them into "organization" or "pac". Requires a "reasoning" string. Triggers an immediate admin email alert for review since a wrong new entity is the highest-risk mistake on this surface.',
+          'Creates a new CiEntity (politician, PAC, organization, nonprofit/foundation, state party committee, media outlet, or retailer) when no existing entity matches an unassigned message. Use "media" for news outlets and newsletter publishers (e.g. a conservative news site whose newsletter is sending marketing). Use "retail" for commercial retailers and brands (e.g. Target) rather than forcing them into "organization". Use "nonprofit" for 501(c) foundations and nonprofit advocacy groups (e.g. a legal foundation or a political action coalition\'s foundation arm) rather than forcing them into "organization". Use "state_party" for state-level party committees (e.g. the Maine Democratic Party) rather than forcing them into "organization" or "pac". Requires a "reasoning" string. Triggers an immediate admin email alert for review since a wrong new entity is the highest-risk mistake on this surface.',
         inputSchema: {
           name: z.string().min(1),
-          type: z.enum(["politician", "pac", "organization", "nonprofit", "state_party"]),
+          type: z.enum(["politician", "pac", "organization", "nonprofit", "state_party", "media", "retail"]),
           description: z.string().optional(),
           party: z.enum(["republican", "democrat", "independent"]).optional(),
           state: z.string().optional().describe('State abbreviation (e.g. "CA") or "Nationwide"'),
@@ -516,10 +516,10 @@ const handler = createMcpHandler(
       {
         title: "Update Entity Type",
         description:
-          'Changes an existing entity\'s type (e.g. "organization" -> "state_party" or "pac") to fix a miscategorization. Only this field is editable through this tool - name, party, state, donationIdentifiers, bio, and image stay off-limits. Use list_entities first to confirm the entityId and current type. Requires a "reasoning" string.',
+          'Changes an existing entity\'s type (e.g. "organization" -> "state_party", "pac", "media" or "retail") to fix a miscategorization. Only this field is editable through this tool - name, party, state, donationIdentifiers, bio, and image stay off-limits. Use list_entities first to confirm the entityId and current type. Requires a "reasoning" string.',
         inputSchema: {
           entityId: z.string(),
-          type: z.enum(["politician", "pac", "organization", "nonprofit", "state_party"]),
+          type: z.enum(["politician", "pac", "organization", "nonprofit", "state_party", "media", "retail"]),
           reasoning: z.string().min(1).describe("Why this entity's type is being corrected"),
         },
       },

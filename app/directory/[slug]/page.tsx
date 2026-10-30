@@ -404,6 +404,8 @@ function EntitySeoContent({
       case "organization": return "organization"
       case "nonprofit": return "nonprofit"
       case "state_party": return "state party"
+      case "media": return "media outlet"
+      case "retail": return "retailer"
       default: return "political entity"
     }
   })()

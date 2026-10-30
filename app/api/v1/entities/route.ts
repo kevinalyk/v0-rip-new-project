@@ -4,7 +4,7 @@
  * Query parameters:
  *   - limit: number (default: 20, max: 100)
  *   - offset: number (default: 0)
- *   - type: string (optional, filter by entity type: "politician", "pac", "organization")
+ *   - type: string (optional, filter by entity type: "politician", "pac", "organization", "media", "retail")
  *   - party: string (optional, filter by party: "republican", "democrat", "independent")
  *   - state: string (optional, filter by state abbreviation)
  *   - search: string (optional, search by name)

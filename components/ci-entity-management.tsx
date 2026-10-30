@@ -696,6 +696,8 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
         return <Building2 className="h-4 w-4" />
       case "state_party":
         return <Building2 className="h-4 w-4" />
+      case "retail":
+        return <Building2 className="h-4 w-4" />
       case "data_broker":
         return <Database className="h-4 w-4" />
       default:
@@ -954,6 +956,10 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
         return "bg-cyan-700 text-white hover:bg-cyan-800"
       case "state_party":
         return "bg-indigo-700 text-white hover:bg-indigo-800"
+      case "media":
+        return "bg-rose-700 text-white hover:bg-rose-800"
+      case "retail":
+        return "bg-orange-700 text-white hover:bg-orange-800"
       case "data_broker":
         return "bg-teal-700 text-white hover:bg-teal-800"
       default:
@@ -977,6 +983,10 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
         return "JFC"
       case "state_party":
         return "State Party"
+      case "media":
+        return "Media"
+      case "retail":
+        return "Retail"
       default:
         return type
     }
@@ -1620,6 +1630,8 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                         <SelectItem value="nonprofit">Nonprofit</SelectItem>
                         <SelectItem value="jfc">JFC</SelectItem>
                         <SelectItem value="state_party">State Party</SelectItem>
+<SelectItem value="media">Media</SelectItem>
+<SelectItem value="retail">Retail</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1958,6 +1970,8 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                     <SelectItem value="nonprofit">Nonprofit</SelectItem>
                     <SelectItem value="jfc">JFC</SelectItem>
                     <SelectItem value="state_party">State Party</SelectItem>
+<SelectItem value="media">Media</SelectItem>
+<SelectItem value="retail">Retail</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -2487,6 +2501,8 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
                         <SelectItem value="nonprofit">Nonprofit</SelectItem>
                         <SelectItem value="jfc">JFC</SelectItem>
                         <SelectItem value="state_party">State Party</SelectItem>
+<SelectItem value="media">Media</SelectItem>
+<SelectItem value="retail">Retail</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

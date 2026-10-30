@@ -87,6 +87,8 @@ function getEntityIcon(type: string) {
     case "organization": return <Building2 className="h-6 w-6" />
     case "nonprofit": return <Building2 className="h-6 w-6" />
     case "state_party": return <Building2 className="h-6 w-6" />
+    case "media": return <Building2 className="h-6 w-6" />
+    case "retail": return <Building2 className="h-6 w-6" />
     case "pac": return <Users className="h-6 w-6" />
     default: return <User className="h-6 w-6" />
   }

@@ -133,8 +133,8 @@ test("MAX_NEW_ENTITIES_PER_DAY has no finite cap", () => {
 // These types must be usable everywhere entity types are filtered/validated,
 // not just where entities are created (the earlier inconsistency bug).
 
-test("ENTITY_TYPE_FILTER_VALUES includes nonprofit and state_party alongside the original types", () => {
-  assert.deepEqual(ENTITY_TYPE_FILTER_VALUES, ["all", "politician", "pac", "organization", "nonprofit", "state_party"])
+  test("ENTITY_TYPE_FILTER_VALUES includes nonprofit, state_party, media and retail alongside the original types", () => {
+  assert.deepEqual(ENTITY_TYPE_FILTER_VALUES, ["all", "politician", "pac", "organization", "nonprofit", "state_party", "media", "retail"])
 })
 
 test("isValidEntityTypeFilter accepts nonprofit and state_party", () => {

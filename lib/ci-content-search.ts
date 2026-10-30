@@ -309,7 +309,7 @@ export async function listEntities(params: {
   query?: string
   party?: "R" | "D"
   state?: string
-  type?: "politician" | "pac" | "organization"
+  type?: "politician" | "pac" | "organization" | "media" | "retail"
   limit: number
   page: number
 }) {

@@ -406,6 +406,10 @@ export function CiDirectoryContent({
         return "bg-cyan-700 text-white hover:bg-cyan-800"
       case "state_party":
         return "bg-indigo-700 text-white hover:bg-indigo-800"
+      case "media":
+        return "bg-rose-700 text-white hover:bg-rose-800"
+      case "retail":
+        return "bg-orange-700 text-white hover:bg-orange-800"
       case "data_broker":
         return "bg-teal-700 text-white hover:bg-teal-800"
       default:
@@ -793,6 +797,8 @@ export function CiDirectoryContent({
                   <SelectItem value="nonprofit">Nonprofit</SelectItem>
                   <SelectItem value="data_broker">Data Broker</SelectItem>
                   <SelectItem value="jfc">JFC</SelectItem>
+<SelectItem value="media">Media</SelectItem>
+<SelectItem value="retail">Retail</SelectItem>
                   <SelectItem value="state_party">State Party</SelectItem>
                 </SelectContent>
               </Select>
@@ -855,6 +861,8 @@ export function CiDirectoryContent({
                 <SelectItem value="nonprofit">Nonprofit</SelectItem>
                 <SelectItem value="data_broker">Data Broker</SelectItem>
                 <SelectItem value="jfc">JFC</SelectItem>
+<SelectItem value="media">Media</SelectItem>
+<SelectItem value="retail">Retail</SelectItem>
               </SelectContent>
             </Select>
           </div>

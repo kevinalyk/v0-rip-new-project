@@ -784,6 +784,7 @@ model CiEntity {
   office             String?  // Office/title scraped from Ballotpedia infobox e.g. "Candidate, U.S. House New York District 23"
   ballotpediaUrl     String?  // The Ballotpedia URL that was scraped
   ballotpediaFetchedAt DateTime? // When the Ballotpedia data was last fetched
+  isCorporate        Boolean  @default(false) // Derived from type: true for "media" and "retail". Used to filter the corporate side of RIP; not shown in the UI.
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -798,6 +799,7 @@ model CiEntity {
   
   @@index([party])
   @@index([state])
+  @@index([isCorporate])
 }
 
 model CiEntityMapping {

@@ -148,10 +148,11 @@ export async function GET(request: Request, { params }: { params: { id: string }
       select: {
         rawHeaders: true,
         seenBySeedEmails: true,
+        entity: { select: { isCorporate: true } },
       },
     })
 
-    if (!campaign) {
+    if (!campaign || (campaign.entity?.isCorporate && user.role !== "super_admin")) {
       return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
     }
 

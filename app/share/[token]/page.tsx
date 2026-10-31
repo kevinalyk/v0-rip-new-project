@@ -80,6 +80,13 @@ export async function generateMetadata({ params }: { params: { token: string } }
       }
     }
 
+    if ((campaign as any).entity?.isCorporate) {
+      return {
+        title: "Shared Campaign - Inbox.GOP",
+        description: "View this shared campaign on Inbox.GOP",
+      }
+    }
+
     const entityName = campaign.entity?.name || (isSms ? (campaign as any).phoneNumber : (campaign as any).senderName)
     const title = `${entityName} - Inbox.GOP`
     const description = isSms

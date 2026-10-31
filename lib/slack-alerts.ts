@@ -74,7 +74,7 @@ export async function notifyFollowersOfNewMessage(params: NotifyParams): Promise
     }
 
     const subscriptions = await prisma.ciEntitySubscription.findMany({
-      where: { entityId: params.entityId },
+      where: { entityId: params.entityId, entity: { isCorporate: false } },
       select: { clientId: true },
       distinct: ["clientId"],
     })

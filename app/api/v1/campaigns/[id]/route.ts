@@ -51,7 +51,7 @@ async function handler(
     }
 
     // Check if campaign is hidden or deleted
-    if (campaign.isDeleted || campaign.isHidden) {
+    if (campaign.isDeleted || campaign.isHidden || campaign.entity?.isCorporate) {
       return NextResponse.json(
         {
           error: "Not found",

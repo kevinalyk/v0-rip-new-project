@@ -32,6 +32,10 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
       isSms = true
     }
 
+    if ((campaign as any).entity?.isCorporate) {
+      return NextResponse.json({ error: "Campaign not found or link expired" }, { status: 404 })
+    }
+
     // Note: view count is incremented server-side in app/share/[token]/page.tsx
     // to ensure it fires for all visitors including anonymous users.
 

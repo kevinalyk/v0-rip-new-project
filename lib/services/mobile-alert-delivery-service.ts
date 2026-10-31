@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client"
 
 import prisma from "@/lib/prisma"
+import { isCorporateEntityType } from "@/lib/corporate-entity-types"
 import {
   getEffectiveMobileEntitlements,
   hasActiveApplePersonalSubscription,
@@ -187,7 +188,13 @@ async function sendExpoPush(messages: Array<Record<string, unknown>>): Promise<E
  * of that user's alerts match. Failures never roll back message ingestion.
  */
 export async function notifyMobileAlertsForMessage(candidate: MobileAlertCandidate): Promise<void> {
-  if (!candidate.entityId || candidate.entityType.toLowerCase() === "data_broker") return
+  if (
+    !candidate.entityId ||
+    candidate.entityType.toLowerCase() === "data_broker" ||
+    isCorporateEntityType(candidate.entityType)
+  ) {
+    return
+  }
 
   const alerts = await prisma.campaignAlertSubscription.findMany({
     where: { kind: "ci_message", enabled: true },

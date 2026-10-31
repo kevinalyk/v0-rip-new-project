@@ -21,6 +21,8 @@ export interface SearchContentParams {
   entityLimit: number
   // Internal MCP only: adds per-email inbox/spam placement counts to email results.
   includePlacement?: boolean
+  // Internal MCP only: corporate (media/retail) entities are hidden from RIP and the client MCP by default.
+  includeCorporate?: boolean
 }
 
 function appUrl(): string {
@@ -49,7 +51,8 @@ function placementSummary(inbox: number, spam: number, notDelivered: number) {
 }
 
 export async function searchContent(params: SearchContentParams) {
-  const { query, match, startDate, endDate, type, party, limit, page, entityLimit, includePlacement } = params
+  const { query, match, startDate, endDate, type, party, limit, page, entityLimit, includePlacement, includeCorporate } = params
+  const corporateFilter = includeCorporate ? {} : { NOT: { entity: { isCorporate: true } } }
   const wantEmail = type === "email" || type === "both"
   const wantSms = type === "sms" || type === "both"
 
@@ -67,7 +70,7 @@ export async function searchContent(params: SearchContentParams) {
     isDeleted: false,
     isHidden: false,
     source: "seed",
-    NOT: { entity: { isCorporate: true } },
+    ...corporateFilter,
     ...(dateRange ? { dateReceived: dateRange } : {}),
     ...partyFilter,
     [termMode]: terms.map((term) => ({
@@ -84,7 +87,7 @@ export async function searchContent(params: SearchContentParams) {
     isDeleted: false,
     isHidden: false,
     source: "seed",
-    NOT: { entity: { isCorporate: true } },
+    ...corporateFilter,
     ...(dateRange ? { createdAt: dateRange } : {}),
     ...partyFilter,
     [termMode]: terms.map((term) => ({ message: { contains: term, mode: "insensitive" as const } })),
@@ -311,7 +314,7 @@ export async function listEntities(params: {
   query?: string
   party?: "R" | "D"
   state?: string
-  type?: "politician" | "pac" | "organization" | "media" | "retail"
+  type?: "politician" | "pac" | "organization"
   limit: number
   page: number
 }) {
@@ -350,6 +353,7 @@ export async function listEntities(params: {
 export async function getEntityBySlug(slug: string) {
   // Names are the stable key; slugs are derived, so match on the derived slug.
   const candidates = await prisma.ciEntity.findMany({
+    where: { isCorporate: false },
     select: { id: true, name: true, type: true, party: true, state: true, office: true, description: true, bio: true },
   })
   const entity = candidates.find((e: { name: string }) => nameToSlug(e.name) === slug)

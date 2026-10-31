@@ -141,12 +141,12 @@ const handler = createMcpHandler(
       "list_entities",
       {
         title: "List Entities",
-        description: "Lists and filters senders (politicians, PACs, organizations, media outlets, retailers) in the directory. Returns name, slug, type, party, state and office.",
+        description: "Lists and filters senders (politicians, PACs, organizations) in the directory. Returns name, slug, type, party, state and office.",
         inputSchema: {
           query: z.string().max(100).optional().describe("Name contains"),
           party: z.enum(["R", "D"]).optional(),
           state: z.string().max(2).optional().describe("Two-letter state code"),
-          type: z.enum(["politician", "pac", "organization", "media", "retail"]).optional(),
+          type: z.enum(["politician", "pac", "organization"]).optional(),
           limit: z.number().int().min(1).max(CLIENT_MCP_LIMITS.MAX_ENTITY_PAGE_SIZE).default(25),
           page: z.number().int().min(1).max(20).default(1),
         },

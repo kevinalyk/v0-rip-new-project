@@ -101,6 +101,7 @@ export async function POST(request: NextRequest) {
           "ballotpediaUrl"
         FROM "CiEntity"
         WHERE id = ANY(${matchedEntityIds})
+          AND "isCorporate" = false
         ORDER BY name ASC
       `
     }

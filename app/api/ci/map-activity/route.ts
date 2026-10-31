@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
         isDeleted: false,
         entity: {
           state: { not: null },
+          isCorporate: false,
         },
       },
       select: {
@@ -33,6 +34,7 @@ export async function GET(request: NextRequest) {
         isDeleted: false,
         entity: {
           state: { not: null },
+          isCorporate: false,
         },
       },
       select: {

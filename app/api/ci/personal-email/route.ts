@@ -118,6 +118,7 @@ export async function GET(request: NextRequest) {
       clientId: targetClientId,
       source: "personal",
       isHidden: false,
+      NOT: { entity: { isCorporate: true } },
     }
     if (dateFilter) where.dateReceived = dateFilter
     if (Object.keys(entityFilter).length > 0) {

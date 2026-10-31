@@ -48,6 +48,14 @@ export async function POST(request: NextRequest) {
       })
       return NextResponse.json({ subscribed: false })
     } else {
+      const targetEntity = await prisma.ciEntity.findUnique({
+        where: { id: entityId },
+        select: { isCorporate: true },
+      })
+      if (!targetEntity || targetEntity.isCorporate) {
+        return NextResponse.json({ error: "Entity not found" }, { status: 404 })
+      }
+
       const subscriptionPlan = (user.client?.subscriptionPlan || "free") as SubscriptionPlan
 
       // Count current subscriptions

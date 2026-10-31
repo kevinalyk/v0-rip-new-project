@@ -78,7 +78,7 @@ export async function GET(request: Request) {
       try {
         // Get each user's personal entity subscriptions for this client.
         const subscriptions = await prisma.ciEntitySubscription.findMany({
-          where: { clientId: client.id },
+          where: { clientId: client.id, entity: { isCorporate: false } },
           select: {
             userId: true,
             entityId: true,

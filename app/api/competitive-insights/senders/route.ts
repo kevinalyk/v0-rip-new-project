@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
 
     const entities = await prisma.ciEntity.findMany({
       where: {
-        type: { not: "data_broker" },
+        type: { not: "data_broker" }, isCorporate: false,
       },
       select: {
         id: true,

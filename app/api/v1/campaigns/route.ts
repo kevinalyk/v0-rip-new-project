@@ -45,6 +45,7 @@ async function handler(
     const where: any = {
       isDeleted: false,
       isHidden: false,
+      NOT: { entity: { isCorporate: true } },
     };
 
     if (entityId) {

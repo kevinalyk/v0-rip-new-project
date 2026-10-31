@@ -46,6 +46,7 @@ async function handler(
       isDeleted: false,
       isHidden: false,
       processed: true,
+      NOT: { entity: { isCorporate: true } },
     };
 
     if (entityId) {

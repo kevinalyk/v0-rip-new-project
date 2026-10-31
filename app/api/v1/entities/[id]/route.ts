@@ -52,7 +52,7 @@ async function handler(
       },
     });
 
-    if (!entity) {
+    if (!entity || entity.isCorporate) {
       return NextResponse.json(
         {
           error: "Not found",

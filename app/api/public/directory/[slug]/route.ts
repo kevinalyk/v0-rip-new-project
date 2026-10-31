@@ -51,7 +51,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     // Fetch all non-data_broker entities and find the one whose name matches the slug
     const entities = await prisma.ciEntity.findMany({
-      where: { type: { not: "data_broker" } },
+      where: { type: { not: "data_broker" }, isCorporate: false },
       include: {
         mappings: {
           select: {

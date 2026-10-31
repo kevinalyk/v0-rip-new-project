@@ -51,7 +51,7 @@ async function handler(
     }
 
     // Check if message is hidden or deleted
-    if (sms.isDeleted || sms.isHidden) {
+    if (sms.isDeleted || sms.isHidden || sms.entity?.isCorporate) {
       return NextResponse.json(
         {
           error: "Not found",

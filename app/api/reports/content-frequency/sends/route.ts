@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
 
     if (type === "subject") {
       const rows = await prisma.competitiveInsightCampaign.findMany({
-        where: { subject: key, isHidden: false, isDeleted: false, ...(entityId ? { entityId } : {}) },
+        where: { subject: key, isHidden: false, isDeleted: false, NOT: { entity: { isCorporate: true } }, ...(entityId ? { entityId } : {}) },
         select: {
           id: true, shareToken: true, dateReceived: true, subject: true,
           entity: { select: { name: true, party: true } },
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
 
     if (type === "email-body") {
       const rows = await prisma.competitiveInsightCampaign.findMany({
-        where: { bodyFingerprint: key, isHidden: false, isDeleted: false, ...(entityId ? { entityId } : {}) },
+        where: { bodyFingerprint: key, isHidden: false, isDeleted: false, NOT: { entity: { isCorporate: true } }, ...(entityId ? { entityId } : {}) },
         select: {
           id: true, shareToken: true, dateReceived: true, subject: true,
           entity: { select: { name: true, party: true } },
@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
 
     if (type === "sms-body") {
       const rows = await prisma.smsQueue.findMany({
-        where: { bodyFingerprint: key, isHidden: false, isDeleted: false, ...(entityId ? { entityId } : {}) },
+        where: { bodyFingerprint: key, isHidden: false, isDeleted: false, NOT: { entity: { isCorporate: true } }, ...(entityId ? { entityId } : {}) },
         select: {
           id: true, shareToken: true, createdAt: true, message: true, phoneNumber: true,
           entity: { select: { name: true, party: true } },

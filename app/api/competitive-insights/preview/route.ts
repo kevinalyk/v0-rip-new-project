@@ -28,11 +28,11 @@ export async function GET(request: NextRequest) {
           emailContent: true,
           emailPreview: true,
           ctaLinks: true,
-          entity: { select: { name: true } },
+          entity: { select: { name: true, isCorporate: true } },
         },
       })
 
-      if (!campaign) {
+      if (!campaign || (campaign.entity?.isCorporate && authResult.user.role !== "super_admin")) {
         return NextResponse.json({ error: "Not found" }, { status: 404 })
       }
 
@@ -69,11 +69,11 @@ export async function GET(request: NextRequest) {
           phoneNumber: true,
           createdAt: true,
           ctaLinks: true,
-          entity: { select: { name: true } },
+          entity: { select: { name: true, isCorporate: true } },
         },
       })
 
-      if (!sms) {
+      if (!sms || (sms.entity?.isCorporate && authResult.user.role !== "super_admin")) {
         return NextResponse.json({ error: "Not found" }, { status: 404 })
       }
 

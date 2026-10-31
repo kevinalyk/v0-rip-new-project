@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
               equals: entityParty,
               mode: "insensitive",
             },
-            type: { not: "data_broker" },
+            type: { not: "data_broker" }, isCorporate: false,
           },
         })
       : 0
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
           where: {
             id: { not: entityId },
             state: entityState,
-            type: { not: "data_broker" },
+            type: { not: "data_broker" }, isCorporate: false,
           },
         })
       : 0
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
                 equals: entityParty,
                 mode: "insensitive",
               },
-              type: { not: "data_broker" },
+              type: { not: "data_broker" }, isCorporate: false,
             },
           })
         : 0

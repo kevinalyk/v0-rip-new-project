@@ -97,6 +97,7 @@ async function countByEntity(
     by: ["entityId"],
     where: {
       entityId: { not: null },
+      entity: { isCorporate: false },
       isDeleted: false,
       [dateField]: { gte: start, lt: end },
     },

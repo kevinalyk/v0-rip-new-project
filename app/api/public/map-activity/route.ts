@@ -12,7 +12,7 @@ export async function GET() {
           createdAt: { gte: since },
           isHidden: false,
           isDeleted: false,
-          entity: { state: { not: null } },
+          entity: { state: { not: null }, isCorporate: false },
         },
         select: {
           id: true,
@@ -25,7 +25,7 @@ export async function GET() {
           createdAt: { gte: since },
           isHidden: false,
           isDeleted: false,
-          entity: { state: { not: null } },
+          entity: { state: { not: null }, isCorporate: false },
         },
         select: {
           id: true,

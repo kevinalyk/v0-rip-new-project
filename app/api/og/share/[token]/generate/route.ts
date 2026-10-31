@@ -46,6 +46,20 @@ export async function POST(
     let campaignId: string | null = null
     let smsId: string | null = null
 
+    const [corporateEmail, corporateSms] = await Promise.all([
+      prisma.competitiveInsightCampaign.findFirst({
+        where: { shareToken: token, entity: { isCorporate: true } },
+        select: { id: true },
+      }),
+      prisma.smsQueue.findFirst({
+        where: { shareToken: token, entity: { isCorporate: true } },
+        select: { id: true },
+      }),
+    ])
+    if (corporateEmail || corporateSms) {
+      return NextResponse.json({ error: "Token not found" }, { status: 404 })
+    }
+
     // Check if already generated
     const existing = await prisma.competitiveInsightCampaign.findUnique({
       where: { shareToken: token },

@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
         'sender' as type
       FROM "CompetitiveInsightCampaign"
       WHERE LOWER("senderName") LIKE ${searchPattern}
+        AND ("entityId" IS NULL OR "entityId" NOT IN (SELECT id FROM "CiEntity" WHERE "isCorporate" = true))
       LIMIT 5
 
       UNION
@@ -38,6 +39,7 @@ export async function GET(request: NextRequest) {
         'email' as type
       FROM "CompetitiveInsightCampaign"
       WHERE LOWER("senderEmail") LIKE ${searchPattern}
+        AND ("entityId" IS NULL OR "entityId" NOT IN (SELECT id FROM "CiEntity" WHERE "isCorporate" = true))
       LIMIT 5
 
       UNION
@@ -47,6 +49,7 @@ export async function GET(request: NextRequest) {
         'subject' as type
       FROM "CompetitiveInsightCampaign"
       WHERE LOWER("subject") LIKE ${searchPattern}
+        AND ("entityId" IS NULL OR "entityId" NOT IN (SELECT id FROM "CiEntity" WHERE "isCorporate" = true))
       LIMIT 5
     `
 
@@ -57,6 +60,7 @@ export async function GET(request: NextRequest) {
         'phone' as type
       FROM "SmsQueue"
       WHERE LOWER("phoneNumber") LIKE ${searchPattern}
+        AND ("entityId" IS NULL OR "entityId" NOT IN (SELECT id FROM "CiEntity" WHERE "isCorporate" = true))
       LIMIT 3
 
       UNION
@@ -66,6 +70,7 @@ export async function GET(request: NextRequest) {
         'sms' as type
       FROM "SmsQueue"
       WHERE LOWER("message") LIKE ${searchPattern}
+        AND ("entityId" IS NULL OR "entityId" NOT IN (SELECT id FROM "CiEntity" WHERE "isCorporate" = true))
       LIMIT 5
     `
 

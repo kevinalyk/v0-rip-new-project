@@ -63,6 +63,7 @@ export async function GET(request: NextRequest) {
         clientId: targetClientId,
         source: "personal",
         isHidden: false,
+        NOT: { entity: { isCorporate: true } },
         ...(dateFilter && { dateReceived: dateFilter }),
       },
       include: {
@@ -78,6 +79,7 @@ export async function GET(request: NextRequest) {
         clientId: targetClientId,
         source: "personal",
         isDeleted: false,
+        NOT: { entity: { isCorporate: true } },
         ...(dateFilter && { createdAt: dateFilter }),
       },
       include: {

@@ -40,6 +40,20 @@ export async function GET(
   const { token } = params
 
   try {
+    const [corporateEmail, corporateSms] = await Promise.all([
+      prisma.competitiveInsightCampaign.findFirst({
+        where: { shareToken: token, entity: { isCorporate: true } },
+        select: { id: true },
+      }),
+      prisma.smsQueue.findFirst({
+        where: { shareToken: token, entity: { isCorporate: true } },
+        select: { id: true },
+      }),
+    ])
+    if (corporateEmail || corporateSms) {
+      return new NextResponse("Not found", { status: 404 })
+    }
+
     // Check for pre-generated Blob URL first — instant, no cold start
     const campaign = await prisma.competitiveInsightCampaign.findUnique({
       where: { shareToken: token },

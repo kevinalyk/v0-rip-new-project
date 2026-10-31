@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     const hasEntityTypeFilter = entityType && entityType !== "all"
 
     if (hasEntityFilter || hasPartyFilter || hasStateFilter || hasEntityTypeFilter) {
-      const entityWhere: any = {}
+      const entityWhere: any = { isCorporate: false }
       if (hasEntityFilter) entityWhere.name = { in: senders, mode: "insensitive" }
       if (hasPartyFilter) entityWhere.party = { equals: party, mode: "insensitive" }
       if (hasStateFilter) entityWhere.state = { equals: state, mode: "insensitive" }
@@ -81,6 +81,7 @@ export async function GET(request: NextRequest) {
         isDeleted: false,
         isHidden: false,
         messageTypes: { isEmpty: false },
+        NOT: { entity: { isCorporate: true } },
         ...(entityIdFilter ? { entityId: entityIdFilter } : {}),
         ...(Object.keys(dateFilter).length > 0 ? { dateReceived: dateFilter } : {}),
       },
@@ -112,6 +113,7 @@ export async function GET(request: NextRequest) {
       where: {
         isDeleted: false,
         isHidden: false,
+        NOT: { entity: { isCorporate: true } },
         ...(entityIdFilter ? { entityId: entityIdFilter } : {}),
         ...(Object.keys(dateFilter).length > 0 ? { dateReceived: dateFilter } : {}),
       },

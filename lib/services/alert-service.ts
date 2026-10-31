@@ -54,7 +54,7 @@ export async function createAlert(userId: string, clientId: string, input: Mobil
   if (entityIds.length > 100) throw new MobileAuthError(400, "INVALID_BODY", "Select no more than 100 entities")
   if (entityIds.length) {
     const validEntities = await prisma.ciEntity.count({
-      where: { id: { in: entityIds }, type: { not: "data_broker" } },
+      where: { id: { in: entityIds }, type: { not: "data_broker" }, isCorporate: false },
     })
     if (validEntities !== entityIds.length) {
       throw new MobileAuthError(400, "INVALID_BODY", "One or more selected entities are unavailable")

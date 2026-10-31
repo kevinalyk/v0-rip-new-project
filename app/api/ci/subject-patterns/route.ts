@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
     const hasStateFilter = state && state !== "all"
 
     if (hasEntityFilter || hasPartyFilter || hasStateFilter) {
-      const entityWhere: any = {}
+      const entityWhere: any = { isCorporate: false }
       if (hasEntityFilter) entityWhere.name = { in: senders, mode: "insensitive" }
       if (hasPartyFilter) entityWhere.party = { equals: party, mode: "insensitive" }
       if (hasStateFilter) entityWhere.state = { equals: state, mode: "insensitive" }
@@ -75,6 +75,7 @@ export async function GET(request: NextRequest) {
       where: {
         isDeleted: false,
         isHidden: false,
+        NOT: { entity: { isCorporate: true } },
         ...(entityIdFilter ? { entityId: entityIdFilter } : {}),
         ...(Object.keys(dateFilter).length > 0 ? { dateReceived: dateFilter } : {}),
       },

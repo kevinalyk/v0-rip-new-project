@@ -5,7 +5,7 @@ import { MobileAuthError } from "@/lib/mobile-auth"
 
 export async function listFollowedEntities(clientId: string, userId: string) {
   const subs = await prisma.ciEntitySubscription.findMany({
-    where: { clientId, userId },
+    where: { clientId, userId, entity: { isCorporate: false } },
     include: { entity: true },
     orderBy: { createdAt: "desc" },
   })
@@ -64,8 +64,8 @@ export async function followEntity(
   entityId: string,
   attempt = 0,
 ): Promise<{ alreadyFollowing: boolean }> {
-  const entity = await prisma.ciEntity.findUnique({ where: { id: entityId }, select: { id: true } })
-  if (!entity) {
+  const entity = await prisma.ciEntity.findUnique({ where: { id: entityId }, select: { id: true, isCorporate: true } })
+  if (!entity || entity.isCorporate) {
     throw new MobileAuthError(404, "ENTITY_NOT_FOUND", "Entity not found")
   }
 

@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
           isHidden: authResult.user.role === "super_admin" ? undefined : false,
           entityId: { not: null },
           entity: {
-            type: { not: "data_broker" },
+            type: { not: "data_broker" }, isCorporate: false,
             ...(senders.length > 0 && { name: { in: senders } }),
           },
           ...(dateFilter && { dateReceived: dateFilter }),
@@ -188,7 +188,7 @@ export async function GET(request: NextRequest) {
             isDeleted: false,
             isHidden: authResult.user.role === "super_admin" ? undefined : false,
             entityId: { in: entitiesWithMappings },
-            entity: { type: { not: "data_broker" } },
+            entity: { type: { not: "data_broker" }, isCorporate: false },
           },
           select: { id: true, entityId: true, senderEmail: true },
         })
@@ -253,7 +253,7 @@ export async function GET(request: NextRequest) {
       isDeleted: false,
       entityId: { not: null },
       entity: {
-        type: { not: "data_broker" },
+        type: { not: "data_broker" }, isCorporate: false,
       },
       ...(dateFilter && { dateReceived: dateFilter }),
       ...(thirdPartyCampaignIds !== null && { id: { in: thirdPartyCampaignIds } }),
@@ -331,7 +331,7 @@ export async function GET(request: NextRequest) {
       isDeleted: false,
       entityId: { not: null },
       entity: {
-        type: { not: "data_broker" },
+        type: { not: "data_broker" }, isCorporate: false,
       },
       ...(dateFilter && { createdAt: dateFilter }),
       ...(donationPlatformSmsIds !== null && { id: { in: donationPlatformSmsIds } }),
@@ -406,7 +406,7 @@ export async function GET(request: NextRequest) {
           isDeleted: false,
           isHidden: authResult.user.role === "super_admin" ? undefined : false,
           entityId: { not: null },
-          entity: { type: { not: "data_broker" } },
+          entity: { type: { not: "data_broker" }, isCorporate: false },
           ...(thirdParty ? { entityId: { in: [...entitiesWithPhoneMappings] } } : {}),
         },
         select: { id: true, entityId: true, phoneNumber: true },

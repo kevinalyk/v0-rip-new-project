@@ -212,7 +212,7 @@ export async function createMobileSavedView(userId: string, clientId: string, va
   const entityIds = input.filters.entityIds || []
   const entities: SavedViewEntity[] = entityIds.length
     ? await prisma.ciEntity.findMany({
-        where: { id: { in: entityIds }, type: { not: "data_broker" } },
+        where: { id: { in: entityIds }, type: { not: "data_broker" }, isCorporate: false },
         select: { id: true, name: true },
       })
     : []
@@ -250,7 +250,7 @@ export async function listMobileSavedViews(userId: string, clientId: string) {
   const entities: SavedViewEntity[] = names.length || savedIds.length
     ? await prisma.ciEntity.findMany({
         where: {
-          type: { not: "data_broker" },
+          type: { not: "data_broker" }, isCorporate: false,
           OR: [
             ...(savedIds.length ? [{ id: { in: savedIds } }] : []),
             ...(names.length ? [{ name: { in: names, mode: "insensitive" as const } }] : []),

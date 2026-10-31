@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
     let entityIdFilter: { in: string[] } | undefined = undefined
 
     if (hasEntityFilter || hasPartyFilter || hasStateFilter) {
-      const entityWhere: any = {}
+      const entityWhere: any = { isCorporate: false }
       if (hasEntityFilter) entityWhere.name = { in: senders, mode: "insensitive" }
       if (hasPartyFilter) entityWhere.party = { equals: party, mode: "insensitive" }
       if (hasStateFilter) entityWhere.state = { equals: state, mode: "insensitive" }
@@ -182,6 +182,7 @@ export async function GET(request: NextRequest) {
         where: {
           isDeleted: false,
           isHidden: false,
+          NOT: { entity: { isCorporate: true } },
           ...(isThirdPartyFilter ? { entityId: { in: [...entitiesWithMappings] } } : { entityId: { not: null } }),
           ...(entityIdFilter ? { entityId: entityIdFilter } : {}),
         },
@@ -205,6 +206,7 @@ export async function GET(request: NextRequest) {
         where: {
           isDeleted: false,
           isHidden: false,
+          NOT: { entity: { isCorporate: true } },
           entityId: { not: null },
           ...(isThirdPartyFilter ? { entityId: { in: [...entitiesWithPhoneMappings] } } : {}),
           ...(entityIdFilter ? { entityId: entityIdFilter } : {}),
@@ -237,6 +239,7 @@ export async function GET(request: NextRequest) {
         where: {
           isDeleted: false,
           isHidden: false,
+          NOT: { entity: { isCorporate: true } },
           ...(entityIdFilter && !isThirdPartyFilter && !isHouseFileFilter ? { entityId: entityIdFilter } : {}),
           ...(thirdPartyOrHouseFileCampaignIds !== null ? { id: { in: thirdPartyOrHouseFileCampaignIds } } : {}),
           ...(Object.keys(dateFilter).length > 0 ? { dateReceived: dateFilter } : {}),
@@ -285,6 +288,7 @@ export async function GET(request: NextRequest) {
           ...(entityIdFilter ? { entityId: entityIdFilter } : {}),
           isDeleted: false,
           isHidden: false,
+          NOT: { entity: { isCorporate: true } },
           ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
           ...(thirdPartyOrHouseFileSmsIds !== null ? { id: { in: thirdPartyOrHouseFileSmsIds } } : {}),
         },

@@ -59,6 +59,9 @@ export async function GET(request: Request, { params }: { params: { id: string }
     })
 
     if (ciCampaign) {
+      if (ciCampaign.entity?.isCorporate && !(await isSystemAdmin(userId))) {
+        return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
+      }
       // CI campaigns are accessible to all authenticated users (or check specific permissions)
       return NextResponse.json(ciCampaign)
     }

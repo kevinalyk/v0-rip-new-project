@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
         where: {
           entityId: { in: entityIds },
           isHidden: false,
+          NOT: { entity: { isCorporate: true } },
           ...(dateFilter && { dateReceived: dateFilter }),
         },
         include: {
@@ -72,6 +73,7 @@ export async function GET(request: NextRequest) {
           entityId: { in: entityIds },
           processed: true,
           isHidden: false,
+          NOT: { entity: { isCorporate: true } },
           ...(dateFilter && { createdAt: dateFilter }),
         },
         include: {

@@ -1059,7 +1059,7 @@ const handler = createMcpHandler(
       },
     )
 
-    // ── Tool 7: delete_messages ─────────────��────────────────────────────────
+    // ── Tool 7: delete_messages ──────��──────��────────────────────────────────
     server.registerTool(
       "delete_messages",
       {
@@ -1734,7 +1734,7 @@ const handler = createMcpHandler(
       },
     )
 
-    // ── Tool 22: list_accounts ────────────────────────────────────────────
+    // ── Tool 22: list_accounts ─────────────────────────────────���──────────
     server.registerTool(
       "list_accounts",
       {
@@ -1953,6 +1953,7 @@ const handler = createMcpHandler(
             page,
             entityLimit,
             includePlacement: true,
+            includeCorporate: true,
           })
           return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] }
         } catch (error) {

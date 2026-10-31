@@ -1,7 +1,6 @@
 import { Prisma } from "@prisma/client"
 
 import prisma from "@/lib/prisma"
-import { isCorporateEntityType } from "@/lib/corporate-entity-types"
 import {
   getEffectiveMobileEntitlements,
   hasActiveApplePersonalSubscription,
@@ -190,11 +189,16 @@ async function sendExpoPush(messages: Array<Record<string, unknown>>): Promise<E
 export async function notifyMobileAlertsForMessage(candidate: MobileAlertCandidate): Promise<void> {
   if (
     !candidate.entityId ||
-    candidate.entityType.toLowerCase() === "data_broker" ||
-    isCorporateEntityType(candidate.entityType)
+    candidate.entityType.toLowerCase() === "data_broker"
   ) {
     return
   }
+
+  const entity = await prisma.ciEntity.findUnique({
+    where: { id: candidate.entityId },
+    select: { isCorporate: true },
+  })
+  if (!entity || entity.isCorporate) return
 
   const alerts = await prisma.campaignAlertSubscription.findMany({
     where: { kind: "ci_message", enabled: true },

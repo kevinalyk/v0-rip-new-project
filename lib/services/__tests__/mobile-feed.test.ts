@@ -138,6 +138,12 @@ async function main() {
   const dataBrokerEntity = await prisma.ciEntity.create({
     data: { name: `${PREFIX}Data Broker Entity`, type: "data_broker" },
   })
+  const flaggedEntity = await prisma.ciEntity.create({
+    data: { name: `${PREFIX}Flagged Organization`, type: "organization", isCorporate: true },
+  })
+  const unflaggedMediaEntity = await prisma.ciEntity.create({
+    data: { name: `${PREFIX}Unflagged Media`, type: "media", isCorporate: false },
+  })
 
   try {
     // ── Access scope: shared (entity-assigned) vs personal records ───────────
@@ -172,6 +178,26 @@ async function main() {
         inboxRate: 100,
       },
     })
+    const flaggedCampaign = await prisma.competitiveInsightCampaign.create({
+      data: {
+        entityId: flaggedEntity.id,
+        senderName: `${PREFIX}flagged_sender`,
+        senderEmail: "flagged@example.com",
+        subject: "Flagged corporate campaign",
+        dateReceived: new Date(),
+        inboxRate: 100,
+      },
+    })
+    const unflaggedMediaCampaign = await prisma.competitiveInsightCampaign.create({
+      data: {
+        entityId: unflaggedMediaEntity.id,
+        senderName: `${PREFIX}unflagged_media_sender`,
+        senderEmail: "media@example.com",
+        subject: "Unflagged media campaign",
+        dateReceived: new Date(),
+        inboxRate: 100,
+      },
+    })
 
     await test("feed listing includes shared (entity-assigned) campaigns for any client", async () => {
       const { items } = await getFeedPage(clientB.id, userB.id, PLAN, {}, null)
@@ -193,6 +219,15 @@ async function main() {
     await test("feed listing excludes campaigns assigned to a data_broker entity", async () => {
       const { items } = await getFeedPage(clientA.id, userA.id, PLAN, {}, null)
       assert(!items.some((i) => i.id === dataBrokerCampaign.id), "data_broker campaigns must be excluded")
+    })
+
+    await test("corporate access uses isCorporate rather than entity type", async () => {
+      const { items } = await getFeedPage(clientA.id, userA.id, PLAN, {}, null)
+      assert(!items.some((item) => item.id === flaggedCampaign.id), "flagged organization must be hidden from the feed")
+      assert(items.some((item) => item.id === unflaggedMediaCampaign.id), "unflagged media must remain visible")
+      assert(items.find((item) => item.id === unflaggedMediaCampaign.id)?.entity?.isCorporate === false, "feed must return the entity flag")
+      assert(await getFeedItemById(clientA.id, PLAN, flaggedCampaign.id, "email") === null, "flagged organization detail must be hidden")
+      assert((await getFeedItemById(clientA.id, PLAN, unflaggedMediaCampaign.id, "email"))?.entity?.isCorporate === false, "unflagged media detail must remain visible")
     })
 
     // Regression test for the entityType=data_broker exclusion bypass: entityAttributeWhere

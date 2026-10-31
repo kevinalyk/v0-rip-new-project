@@ -116,7 +116,7 @@ function partyWhere(party: string | undefined): Prisma.CiEntityWhereInput | null
 function directoryWhere(filters: DirectoryFilters): Prisma.CiEntityWhereInput {
   return {
     AND: [
-      { type: { not: "data_broker" } },
+      { type: { not: "data_broker" }, isCorporate: false },
       filters.search ? { name: { contains: filters.search, mode: "insensitive" } } : {},
       partyWhere(filters.party) ?? {},
       filters.state === "unknown"
@@ -181,7 +181,7 @@ export async function getDirectoryEntity(
   entityId: string,
 ) {
   const entity = (await prisma.ciEntity.findFirst({
-    where: { id: entityId, type: { not: "data_broker" } },
+    where: { id: entityId, type: { not: "data_broker" }, isCorporate: false },
     select: {
       ...directoryDetailSelect,
       subscriptions: {

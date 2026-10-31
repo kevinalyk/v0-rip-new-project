@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Build entity where clause
-    const entityWhere: any = {}
+    const entityWhere: any = { isCorporate: false }
     if (party && party !== "all") entityWhere.party = { equals: party, mode: "insensitive" }
     if (state && state !== "all") entityWhere.state = { equals: state, mode: "insensitive" }
     if (entityType && entityType !== "all") entityWhere.type = { equals: entityType, mode: "insensitive" }

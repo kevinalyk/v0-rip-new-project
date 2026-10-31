@@ -70,6 +70,8 @@ export async function GET(request: NextRequest) {
       search,
       ballotpedia,
       sortBy,
+      includeCorporate:
+        authResult.user.role === "super_admin" && searchParams.get("includeCorporate") === "true",
     })
 
     return NextResponse.json(result)

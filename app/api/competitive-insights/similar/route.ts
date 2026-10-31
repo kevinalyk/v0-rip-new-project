@@ -68,7 +68,10 @@ export async function GET(request: NextRequest) {
       const normalizedKey = normalizeSubject(source.subject || "")
 
       const all = await prisma.competitiveInsightCampaign.findMany({
-        where: source.entityId ? { entityId: source.entityId } : {},
+        where: {
+          NOT: { entity: { isCorporate: true } },
+          ...(source.entityId ? { entityId: source.entityId } : {}),
+        },
         select: {
           id: true,
           subject: true,
@@ -110,6 +113,7 @@ export async function GET(request: NextRequest) {
       const all = await prisma.competitiveInsightCampaign.findMany({
         where: {
           bodyFingerprint: { not: null },
+          NOT: { entity: { isCorporate: true } },
           ...(source.entityId ? { entityId: source.entityId } : {}),
         },
         select: {
@@ -157,6 +161,7 @@ export async function GET(request: NextRequest) {
         where: {
           isDeleted: false,
           bodyFingerprint: { not: null },
+          NOT: { entity: { isCorporate: true } },
           ...(smsSource.entityId ? { entityId: smsSource.entityId } : {}),
         },
         select: {

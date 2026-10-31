@@ -88,7 +88,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   try {
     const entities = await prisma.ciEntity.findMany({
-      where: { type: { not: "data_broker" } },
+      where: { type: { not: "data_broker" }, isCorporate: false },
       select: { name: true, state: true, party: true, updatedAt: true },
       orderBy: { name: "asc" },
     })

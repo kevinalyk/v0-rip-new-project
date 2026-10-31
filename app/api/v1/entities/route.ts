@@ -42,7 +42,7 @@ async function handler(
     const search = searchParams.get("search");
 
     // Build where clause
-    const where: any = {};
+    const where: any = { isCorporate: false };
 
     if (type) {
       where.type = type;

@@ -95,6 +95,7 @@ export async function GET(request: Request) {
           LEFT JOIN "CiEntity" e ON e.id = c."entityId"
           WHERE c."isHidden" = false
             AND c."isDeleted" = false
+            AND NOT EXISTS (SELECT 1 FROM "CiEntity" ce WHERE ce.id = c."entityId" AND ce."isCorporate" = true)
             ${partyClause}
             ${entityClause}
             ${fromClause}
@@ -113,6 +114,7 @@ export async function GET(request: Request) {
           FROM "CompetitiveInsightCampaign" c
           WHERE c."isHidden" = false
             AND c."isDeleted" = false
+            AND NOT EXISTS (SELECT 1 FROM "CiEntity" ce WHERE ce.id = c."entityId" AND ce."isCorporate" = true)
             AND c.subject IS NOT NULL
             AND c.subject IN (SELECT subject FROM agg WHERE subject IS NOT NULL)
           ORDER BY c.subject, c."dateReceived" DESC
@@ -180,6 +182,7 @@ export async function GET(request: Request) {
           WHERE c."bodyFingerprint" IS NOT NULL
             AND c."isHidden" = false
             AND c."isDeleted" = false
+            AND NOT EXISTS (SELECT 1 FROM "CiEntity" ce WHERE ce.id = c."entityId" AND ce."isCorporate" = true)
             ${partyClause}
             ${entityClause}
             ${fromClause}
@@ -198,6 +201,7 @@ export async function GET(request: Request) {
           WHERE c."bodyFingerprint" IS NOT NULL
             AND c."isHidden" = false
             AND c."isDeleted" = false
+            AND NOT EXISTS (SELECT 1 FROM "CiEntity" ce WHERE ce.id = c."entityId" AND ce."isCorporate" = true)
             AND c."bodyFingerprint" IN (SELECT "bodyFingerprint" FROM agg)
           ORDER BY c."bodyFingerprint", c."dateReceived" DESC
         )
@@ -243,6 +247,7 @@ export async function GET(request: Request) {
           WHERE s."bodyFingerprint" IS NOT NULL
             AND s."isHidden" = false
             AND s."isDeleted" = false
+            AND NOT EXISTS (SELECT 1 FROM "CiEntity" ce WHERE ce.id = s."entityId" AND ce."isCorporate" = true)
             ${party ? `AND e.party = '${party}'` : ""}
             ${smsEntityClause}
             ${smsFromClause}
@@ -274,6 +279,7 @@ export async function GET(request: Request) {
           WHERE s."bodyFingerprint" IS NOT NULL
             AND s."isHidden" = false
             AND s."isDeleted" = false
+            AND NOT EXISTS (SELECT 1 FROM "CiEntity" ce WHERE ce.id = s."entityId" AND ce."isCorporate" = true)
             AND s."bodyFingerprint" IN (SELECT "bodyFingerprint" FROM agg)
           ORDER BY s."bodyFingerprint", s."createdAt" DESC
         )

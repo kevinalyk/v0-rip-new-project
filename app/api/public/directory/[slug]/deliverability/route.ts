@@ -58,7 +58,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     } else {
       // Slug-based lookup — used from the public directory pages
       const entities = await prisma.ciEntity.findMany({
-        where: { type: { not: "data_broker" } },
+        where: { type: { not: "data_broker" }, isCorporate: false },
         select: { id: true, name: true },
       })
       entity = entities.find((e) => nameToSlug(e.name) === slug) ?? null

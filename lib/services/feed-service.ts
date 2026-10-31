@@ -245,7 +245,7 @@ export async function getMobileFeedDateFloor(clientId: string, plan: Subscriptio
  * exposing them.
  */
 function entityAttributeWhere(filters: FeedFilters): Record<string, unknown> {
-  const conditions: Record<string, unknown>[] = [{ type: { not: "data_broker" } }]
+  const conditions: Record<string, unknown>[] = [{ type: { not: "data_broker" }, isCorporate: false }]
   if (filters.party) {
     const party = filters.party.toLowerCase()
     if (party === "independent" || party === "third party") {
@@ -427,11 +427,11 @@ async function resolveOwnershipWhere(filters: FeedFilters): Promise<OwnershipWhe
   // File and Third Party messages disappear from mobile results.
   const [legacyEmails, legacySms] = await Promise.all([
     prisma.competitiveInsightCampaign.findMany({
-      where: { isThirdParty: null, entityId: { not: null }, entity: { type: { not: "data_broker" } } },
+      where: { isThirdParty: null, entityId: { not: null }, entity: { type: { not: "data_broker" }, isCorporate: false } },
       select: { id: true, entityId: true, senderEmail: true },
     }),
     prisma.smsQueue.findMany({
-      where: { isThirdParty: null, entityId: { not: null }, entity: { type: { not: "data_broker" } } },
+      where: { isThirdParty: null, entityId: { not: null }, entity: { type: { not: "data_broker" }, isCorporate: false } },
       select: { id: true, entityId: true, phoneNumber: true },
     }),
   ])
@@ -468,7 +468,7 @@ async function resolveOwnershipWhere(filters: FeedFilters): Promise<OwnershipWhe
 export async function listMobileFeedEntities(clientId: string, userId: string) {
   const [entities, subscriptions] = await Promise.all([
     prisma.ciEntity.findMany({
-      where: { type: { not: "data_broker" } },
+      where: { type: { not: "data_broker" }, isCorporate: false },
       select: { id: true, name: true, type: true, party: true, state: true },
       orderBy: { name: "asc" },
       take: 10000,

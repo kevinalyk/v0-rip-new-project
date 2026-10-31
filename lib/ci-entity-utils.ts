@@ -465,6 +465,8 @@ export async function getAllEntitiesWithCounts(options?: {
   ballotpedia?: string
   sortBy?: "name" | "newest" | "oldest"
   ids?: string[]
+  // Only the super-admin entity manager sets this; every RIP-facing caller leaves corporate entities out.
+  includeCorporate?: boolean
 }) {
   try {
     const page = options?.page || 1
@@ -475,6 +477,7 @@ export async function getAllEntitiesWithCounts(options?: {
     const where: any = {
       // Never show data brokers in the public/user-facing directory
       type: { not: "data_broker" },
+      ...(options?.includeCorporate ? {} : { isCorporate: false }),
     }
 
     // Filter by specific IDs (used for fetching followed entity details)

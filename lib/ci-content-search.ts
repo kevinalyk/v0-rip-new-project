@@ -67,6 +67,7 @@ export async function searchContent(params: SearchContentParams) {
     isDeleted: false,
     isHidden: false,
     source: "seed",
+    NOT: { entity: { isCorporate: true } },
     ...(dateRange ? { dateReceived: dateRange } : {}),
     ...partyFilter,
     [termMode]: terms.map((term) => ({
@@ -83,6 +84,7 @@ export async function searchContent(params: SearchContentParams) {
     isDeleted: false,
     isHidden: false,
     source: "seed",
+    NOT: { entity: { isCorporate: true } },
     ...(dateRange ? { createdAt: dateRange } : {}),
     ...partyFilter,
     [termMode]: terms.map((term) => ({ message: { contains: term, mode: "insensitive" as const } })),
@@ -246,7 +248,7 @@ export async function getMessage(kind: "email" | "sms", id: string) {
 
   if (kind === "email") {
     const row = await prisma.competitiveInsightCampaign.findFirst({
-      where: { id, isDeleted: false, isHidden: false, source: "seed" },
+      where: { id, isDeleted: false, isHidden: false, source: "seed", NOT: { entity: { isCorporate: true } } },
       select: {
         id: true,
         senderName: true,
@@ -277,7 +279,7 @@ export async function getMessage(kind: "email" | "sms", id: string) {
   }
 
   const row = await prisma.smsQueue.findFirst({
-    where: { id, isDeleted: false, isHidden: false, source: "seed" },
+    where: { id, isDeleted: false, isHidden: false, source: "seed", NOT: { entity: { isCorporate: true } } },
     select: {
       id: true,
       phoneNumber: true,
@@ -315,6 +317,7 @@ export async function listEntities(params: {
 }) {
   const { query, party, state, type, limit, page } = params
   const where = {
+    isCorporate: false,
     ...(query ? { name: { contains: query, mode: "insensitive" as const } } : {}),
     ...(party ? { party: { equals: party === "R" ? "republican" : "democrat", mode: "insensitive" as const } } : {}),
     ...(state ? { state: { equals: state, mode: "insensitive" as const } } : {}),

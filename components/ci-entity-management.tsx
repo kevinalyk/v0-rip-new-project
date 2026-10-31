@@ -293,7 +293,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
   const fetchAllEntitiesForAssignment = async () => {
     setLoadingAllEntities(true)
     try {
-      const response = await fetch("/api/ci-entities?pageSize=10000")
+      const response = await fetch("/api/ci-entities?pageSize=10000&includeCorporate=true")
 
       if (response.ok) {
         const data = await response.json()
@@ -397,6 +397,7 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
       const params = new URLSearchParams({
         page: pagination.page.toString(),
         pageSize: pagination.pageSize.toString(),
+        includeCorporate: "true",
       })
 
       if (filterParty !== "all") params.append("party", filterParty)

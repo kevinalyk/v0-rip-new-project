@@ -9,7 +9,7 @@ export async function getEntityBySlug(slug: string, hasFullAccess = false) {
     const cutoffAt = new Date(Date.now() - 3 * 60 * 60 * 1000)
 
     const entities = await prisma.ciEntity.findMany({
-      where: { type: { not: "data_broker" } },
+      where: { type: { not: "data_broker" }, isCorporate: false },
       select: {
         id: true,
         name: true,

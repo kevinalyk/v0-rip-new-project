@@ -5,7 +5,7 @@ import { checkEmailCompliance } from "@/lib/email-compliance-checker"
 export const runtime = "nodejs"
 export const maxDuration = 300
 
-
+const COMPLIANCE_BATCH_SIZE = 200
 
 export async function GET(request: Request) {
   try {
@@ -25,18 +25,19 @@ export async function GET(request: Request) {
       errors: 0,
     }
 
-    // Only process campaigns that have rawHeaders AND either no compliance record
-    // or a stale one (re-check every 1 day in case checker logic is updated)
-    const sevenDaysAgo = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000)
+    // Each row carries the full email HTML, so only fetch a small batch of campaigns that have
+    // never been checked. Re-checking existing records (e.g. after the checker logic changes)
+    // is opt-in via ?recheck=true and still runs in batches.
+    const recheckStale = new URL(request.url).searchParams.get("recheck") === "true"
+    const staleCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000)
 
     const campaigns = await prisma.competitiveInsightCampaign.findMany({
       where: {
         rawHeaders: { not: null },
         isDeleted: false,
-        OR: [
-          { compliance: null },
-          { compliance: { checkedAt: { lt: sevenDaysAgo } } },
-        ],
+        ...(recheckStale
+          ? { OR: [{ compliance: null }, { compliance: { checkedAt: { lt: staleCutoff } } }] }
+          : { compliance: null }),
       },
       select: {
         id: true,
@@ -48,6 +49,7 @@ export async function GET(request: Request) {
         compliance: { select: { id: true } },
       },
       orderBy: { createdAt: "desc" },
+      take: COMPLIANCE_BATCH_SIZE,
     })
 
     if (campaigns.length === 0) {

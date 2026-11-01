@@ -35,7 +35,7 @@
     },
     {
       "path": "/api/cron/unwrap-links",
-      "schedule": "*/5 * * * *"
+      "schedule": "*/30 * * * *"
     },
     {
       "path": "/api/cron/auto-assign-unassigned",

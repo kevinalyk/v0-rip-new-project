@@ -226,6 +226,7 @@ model Client {
   updatedAt         DateTime   @updatedAt
   
   users             User[]
+  brandUsers        BrandUser[] @relation("BrandUserToClient")
   campaigns         Campaign[] // Add relation to campaigns
   domains           Domain[]   @relation("DomainToClient")
   ciEntitySubscriptions CiEntitySubscription[]
@@ -1275,7 +1276,7 @@ model SpamTest {
   id            String    @id @default(uuid())
   clientId      String
   clientSlug    String
-  testAddress   String    @unique // e.g. test-abc123@mg.rip-tool.com
+  testAddress   String    @unique // e.g. test-abc123@mg.brandinbox.ai
   status        String    @default("pending") // "pending" | "received" | "expired"
   expiresAt     DateTime
   receivedAt    DateTime?
@@ -1377,7 +1378,7 @@ model AutomationSetting {
   updatedBy             String?
 }
 
-// ─── Mobile API (app/api/mobile/v1) ────────────────────────────────────────────
+// ─── Mobile API (app/api/mobile/v1) ───────────────────���────────────────────────
 // Entirely separate from the browser cookie session (lib/auth.ts) and the
 // developer API-key namespace (lib/api-auth.ts, ApiKey model). See
 // lib/mobile-auth.ts and docs/mobile-api.md.
@@ -1478,4 +1479,28 @@ model ClientMcpUsageLog {
 
   @@index([apiKeyId, createdAt])
   @@index([clientId, createdAt])
+}
+
+// Accounts created on brandinbox.ai. Deliberately separate from `User`
+// (the RIP team / client accounts) so the two products never share logins.
+// Brand only reads RIP's data; this table is the only thing Brand writes.
+model BrandUser {
+  id              String    @id @default(cuid())
+  email           String    @unique // always stored lowercased
+  firstName       String
+  lastName        String
+  password        String
+  company         String?
+  jobTitle        String?
+  agreedToTermsAt DateTime
+  signupIp        String?
+  lastLoginAt     DateTime?
+  blocked         Boolean   @default(false)
+  role            String    @default("viewer") // same vocabulary as User.role: "super_admin", "admin", "editor", "viewer"
+  clientId        String?   // Client (organization/workspace) this brand user belongs to
+  client          Client?   @relation("BrandUserToClient", fields: [clientId], references: [id], onDelete: SetNull)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([clientId])
 }

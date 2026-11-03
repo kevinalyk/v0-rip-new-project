@@ -98,3 +98,1448 @@ model Campaign {
   id                 String        @id @default(cuid())
   subject            String
   sender             String
+  fromEmail          String
+  deliveryRate       Float         @default(0)
+  sentDate           DateTime
+  summaryData        String?       @db.Text // JSON field for provider breakdown summary
+  domainId           String        // NEW: Link to domain
+  assignedToClientId String?       // Link to client who owns this campaign
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  // Relationships
+  domain             Domain        @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  assignedToClient   Client?       @relation(fields: [assignedToClientId], references: [id], onDelete: SetNull)
+  results            Result[]
+  emailContent       EmailContent?
+
+  @@index([domainId])
+  @@index([domainId, sentDate])
+  @@index([assignedToClientId])
+}
+
+model Result {
+  id              String    @id @default(cuid())
+  campaignId      String
+  campaign        Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  seedEmail       String
+  delivered       Boolean   @default(false)
+  inboxed         Boolean   @default(false)
+  placementStatus String?
+  emailProvider   String?
+  emailHeaders    String?   @db.Text
+  forwardedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EmailQueue {
+  id                 String    @id @default(cuid())
+  rawData            String    @db.Text
+  processed          Boolean   @default(false)
+  processingAttempts Int       @default(0)
+  error              String?   @db.Text
+  createdAt          DateTime  @default(now())
+  processedAt        DateTime?
+}
+
+model EmailContent {
+  id          String   @id @default(cuid())
+  campaignId  String   @unique
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  subject     String
+  sender      String
+  senderEmail String
+  htmlContent String?  @db.Text
+  textContent String?  @db.Text
+  receivedAt  DateTime
+  createdAt   DateTime @default(now())
+}
+
+model Client {
+  id                String     @id // e.g., "red_spark_strategy"
+  name              String     @unique // e.g., "Red Spark Strategy"
+  description       String?
+  accountKind       String     @default("organization") // "personal" for an auto-created one-user mobile workspace
+  // Which product owns this client: "rip" (default, every pre-existing row) or "brand" (brandinbox).
+  // Every client-scoped table inherits its product through clientId, so this one column is the
+  // discriminator for Slack, domains, API keys, MCP, support, tags, views, etc. Anything that lists
+  // or iterates clients for RIP (admin lists, digests, seed assignment) must filter product = "rip".
+  product           String     @default("rip")
+  active            Boolean    @default(true)
+  dataRetentionDays Int        @default(90)
+  slug              String     @unique // e.g., "redsparkstrategy"
+  
+  subscriptionPlan       String    @default("free") // "free", "paid", "all", "enterprise"
+  subscriptionStatus     String    @default("active") // "active", "cancelled", "past_due"
+  hasCompetitiveInsights Boolean   @default(false) // CI add-on
+  emailVolumeLimit       Int       @default(20000) // Based on plan
+  emailVolumeUsed        Int       @default(0) // Resets monthly (frozen when cancelled)
+  subscriptionStartDate  DateTime  @default(now())
+  subscriptionRenewDate  DateTime? // Next billing date
+  lastUsageReset         DateTime  @default(now()) // Last time emailVolumeUsed was reset
+  
+  stripeCustomerId           String?   @unique // Stripe customer ID
+  stripeSubscriptionId       String?   @unique // Main Stripe subscription ID for base plan (sub_xxx)
+  stripeCiSubscriptionId     String?   @unique // Separate Stripe subscription ID for CI if bought separately (sub_xxx)
+  stripeSubscriptionItemId   String?   @unique // Subscription item ID for base plan within main subscription (si_xxx)
+  stripeCiSubscriptionItemId String?   @unique // Subscription item ID for CI add-on (si_xxx)
+  stripeUserSeatsItemId      String?   @unique // Subscription item ID for additional user seats (si_xxx)
+  cancelAtPeriodEnd          Boolean   @default(false) // Added to track scheduled cancellation
+  scheduledDowngradePlan     String? // Plan tier user will downgrade to at next renewal
+  
+  userSeatsIncluded      Int       @default(0) // Number of user seats included in plan
+  additionalUserSeats    Int       @default(0) // Extra user seats purchased
+  stripeUserSeatPriceId  String?   // Stripe price ID for additional user seats
+  totalUsers             Int       @default(0) // Auto-updated count of users
+  paidUserSeats          Int?      // Total seats already paid for (custom/manual subscriptions only). When set, only charge for seats beyond this number.
+
+  // Additional (paid) Slack bot channels, on top of the one free bot included with every
+  // Slack integration. Gated by SLACK_MULTI_BOT_ENABLED (lib/feature-flags.ts) - the plumbing
+  // is fully wired but not user-facing until that flag flips.
+  additionalSlackBots    Int       @default(0) // Extra paid Slack bot channels purchased
+  stripeSlackBotsItemId  String?   @unique // Subscription item ID for additional Slack bots (si_xxx)
+  stripeSlackBotPriceId  String?   // Stripe price ID for additional Slack bots (per-bot, e.g. $50/mo)
+
+  // Free-trial state. subscriptionPlan is set to "enterprise" for the duration of the trial
+  // (unlimited users/reporting/filters); this field is what distinguishes an active trial from a
+  // real paying enterprise customer. Trials are now Stripe-backed (a card is required and Stripe
+  // auto-charges the Basic $50/mo plan when the trial ends, unless cancelled), so this is set by
+  // the Stripe webhook on checkout.session.completed, not directly at signup.
+  trialExpiresAt         DateTime?
+  // Flips to false whenever a trial is started or ends, so the "your trial ended, subscribe" popup
+  // shows exactly once on the next login. Has no meaning while trialExpiresAt is null.
+  trialEndedNoticeSeen   Boolean   @default(true)
+  // A TrialCode redeemed at signup, before the required Stripe checkout/card step completes.
+  // Signup no longer grants the trial directly — it stashes the redeemed code + length here and
+  // creates the client on "free", then redirects to Stripe Checkout. The webhook reads these on
+  // checkout.session.completed to actually start the trial, then clears them. If the user
+  // abandons checkout, the client stays on free with these set so the billing page can offer a
+  // "resume trial checkout" action instead of losing the redemption.
+  pendingTrialCodeId      String?
+  pendingTrialLengthDays  Int?
+  
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  
+  users             User[]
+  brandUsers        BrandUser[] @relation("BrandUserToClient")
+  campaigns         Campaign[] // Add relation to campaigns
+  domains           Domain[]   @relation("DomainToClient")
+  ciEntitySubscriptions CiEntitySubscription[]
+  ciViews           CiView[] // Added relation to CI Views owned by this client
+  entityTags        EntityTag[] // Added relation to entity tags
+  personalEmailDomains PersonalEmailDomain[] // Personal email domains for CI
+  personalPhoneNumbers PersonalPhoneNumber[] // Personal phone numbers for CI
+  clientDomains        ClientDomain[]        // Sending domains for deliverability monitoring
+  spamTests            SpamTest[]
+  slackIntegration     SlackIntegration?
+  slackEntityFilters   SlackEntityFilter[]
+  slackChannels        SlackChannel[] // Additional (paid, add-on) Slack bot channels
+  trialCodeRedemption  TrialCodeRedemption?
+  joinInvitations      ClientJoinInvitation[]
+  
+  @@index([totalUsers])
+  @@index([trialExpiresAt])
+  @@index([accountKind])
+  @@index([product])
+}
+
+model ClientJoinInvitation {
+  id             String   @id @default(uuid())
+  tokenHash      String   @unique
+  userId         String
+  targetClientId String
+  invitedRole    String
+  invitedByUserId String
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  user        User   @relation("ClientJoinInvitee", fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy   User   @relation("ClientJoinInviter", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  targetClient Client @relation(fields: [targetClientId], references: [id], onDelete: Cascade)
+
+  @@index([userId, acceptedAt])
+  @@index([targetClientId, acceptedAt])
+  @@index([expiresAt])
+}
+
+// A code an admin generates (e.g. "LAUNCH2026") that grants a new signup a time-limited
+// enterprise-equivalent trial. Reusable across unlimited different signups (one redemption per
+// client, enforced by TrialCodeRedemption's unique clientId) until deactivated or expired.
+model TrialCode {
+  id              String    @id @default(uuid())
+  code            String    @unique // e.g. "LAUNCH2026" - matched case-insensitively at signup
+  label           String? // Internal note for admins, e.g. "Spring conference giveaway"
+  trialLengthDays Int       @default(30)
+  active          Boolean   @default(true)
+  expiresAt       DateTime? // Null = no expiration until manually deactivated
+  createdAt       DateTime  @default(now())
+  createdBy       String? // User id of the super_admin who generated it
+  product         String    @default("rip") // "rip" | "brand"
+
+  redemptions     TrialCodeRedemption[]
+
+  @@index([active])
+  @@index([product])
+}
+
+// One row per client that has redeemed a trial code. The unique clientId enforces "one
+// redemption per client" regardless of how many different codes exist.
+model TrialCodeRedemption {
+  id           String    @id @default(uuid())
+  trialCodeId  String
+  clientId     String    @unique
+  redeemedAt   DateTime  @default(now())
+
+  trialCode    TrialCode @relation(fields: [trialCodeId], references: [id], onDelete: Cascade)
+  client       Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([trialCodeId])
+}
+
+// Company-wide Slack connection for a client. One row per client (never per-user) -
+// connecting Slack applies to the entire organization, and any member can see alerts
+// posted to the linked channel once an Owner/Admin has set it up.
+model SlackIntegration {
+  id                String    @id @default(cuid())
+  clientId          String    @unique
+  botAccessToken    String? // Encrypted (lib/encryption) Slack bot token (xoxb-...) from our own Slack app's OAuth v2 exchange
+  botUserId         String? // Slack's bot user ID within the workspace, e.g. "U0123ABC"
+  teamId            String?   @unique // Slack workspace (team) ID, e.g. "T0123ABC" - resolves inbound events to this client
+  teamName          String? // Slack workspace display name, shown in the UI
+  channelId         String? // Slack channel the bot posts alerts into
+  channelName       String? // Display name of the channel, e.g. "#rip-alerts"
+  status            String    @default("pending") // "pending" (install started, not yet completed) | "awaiting_channel" (authorized, channel not yet chosen) | "connected" | "disconnected"
+  // Per-alert-type toggle, company-wide (like the rest of this model). Add one boolean per
+  // future alert type here (e.g. notifyOnCampaignAssignment) rather than a JSON blob, so each
+  // is a plain indexed/queryable column and the settings UI can render a switch per row.
+  notifyOnFollowedEntityMessages Boolean @default(true)
+  // Whether this client has opted into filtering Slack alerts down to a specific set of
+  // entities (via SlackEntityFilter). False (the default) preserves legacy behavior: alert
+  // on every followed entity. Flip to true only once the client explicitly saves a filter
+  // selection, so existing connected workspaces see no behavior change until they do.
+  entityFilterConfigured Boolean @default(false)
+  // Message-level filters, applied in addition to the entity allow-list above (all must
+  // pass - AND, not OR). Each defaults to "all" (no restriction), which is the legacy
+  // behavior for every existing connected workspace until a client explicitly saves a
+  // narrower value. Mirrors the same dimensions as the CI Feed's own filters
+  // (components/competitive-insights.tsx) so Slack alerts and the CI Feed stay consistent -
+  // see lib/slack-message-filters.ts for the shared allowed-value lists and matching logic.
+  messageTypeFilter String @default("all") // "all" | "email" | "sms"
+  houseFileFilter   String @default("all") // "all" | "house_file" | "third_party"
+  partyFilter       String @default("all") // "all" | "republican" | "democrat" | "third party"
+  stateFilter       String @default("all") // "all" | two-letter state code (e.g. "CA")
+  entityTypeFilter  String @default("all") // "all" | "politician" | "pac" | "organization"
+  connectedByUserId String? // The Owner/Admin who completed setup, for audit purposes
+  connectedAt       DateTime?
+  disconnectedAt    DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  client            Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  connectedByUser   User?     @relation(fields: [connectedByUserId], references: [id], onDelete: SetNull)
+  additionalChannels SlackChannel[] // Extra paid bot channels riding on this same Slack workspace/bot token
+
+  @@index([teamId])
+  }
+
+  // An additional (paid, add-on) Slack bot channel on top of the one free bot on SlackIntegration.
+  // Reuses the parent SlackIntegration's bot token/workspace (one Slack app install per client),
+  // just posts alerts into a different channel with its own independent entity filter. Gated by
+  // SLACK_MULTI_BOT_ENABLED (lib/feature-flags.ts) - fully wired but hidden until that flag flips.
+  model SlackChannel {
+  id                String    @id @default(cuid())
+  clientId          String
+  slackIntegrationId String
+  label             String? // User-facing name, e.g. "Bot 2", set at creation time
+  channelId         String? // Slack channel this bot posts alerts into
+  channelName       String? // Display name of the channel, e.g. "#state-races-alerts"
+  status            String    @default("awaiting_channel") // "awaiting_channel" | "connected" | "disconnected"
+  notifyOnFollowedEntityMessages Boolean @default(true)
+  // Mirrors SlackIntegration.entityFilterConfigured - false means alert on every followed
+  // entity, true means limit to SlackChannelEntityFilter rows for this channel.
+  entityFilterConfigured Boolean @default(false)
+  // Same message-level filters as SlackIntegration, independent per add-on channel. See
+  // lib/slack-message-filters.ts.
+  messageTypeFilter String @default("all") // "all" | "email" | "sms"
+  houseFileFilter   String @default("all") // "all" | "house_file" | "third_party"
+  partyFilter       String @default("all") // "all" | "republican" | "democrat" | "third party"
+  stateFilter       String @default("all") // "all" | two-letter state code (e.g. "CA")
+  entityTypeFilter  String @default("all") // "all" | "politician" | "pac" | "organization"
+  connectedByUserId String?
+  connectedAt       DateTime?
+  disconnectedAt    DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  client            Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  slackIntegration  SlackIntegration  @relation(fields: [slackIntegrationId], references: [id], onDelete: Cascade)
+  connectedByUser   User?             @relation(fields: [connectedByUserId], references: [id], onDelete: SetNull)
+  entityFilters     SlackChannelEntityFilter[]
+
+  @@index([clientId])
+  @@index([slackIntegrationId])
+  }
+
+  // Entities a SlackChannel's alerts should be limited to, when that channel's
+  // entityFilterConfigured is true. Same pattern as SlackEntityFilter, but per add-on channel
+  // rather than per client, since each add-on bot has its own independent filter.
+  model SlackChannelEntityFilter {
+  id             String   @id @default(cuid())
+  slackChannelId String
+  entityId       String
+  createdAt      DateTime @default(now())
+
+  slackChannel   SlackChannel @relation(fields: [slackChannelId], references: [id], onDelete: Cascade)
+  entity         CiEntity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([slackChannelId, entityId])
+  @@index([slackChannelId])
+  @@index([entityId])
+  }
+
+  // Entities a client's Slack alerts should be limited to, when SlackIntegration.entityFilterConfigured
+  // is true. Independent from CiEntitySubscription ("Following" on the CI Feed) - seeded from it once
+  // during setup/first edit, but not kept in sync afterward, per product decision.
+  model SlackEntityFilter {
+  id        String   @id @default(cuid())
+  clientId  String
+  entityId  String
+  createdAt DateTime @default(now())
+
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  entity    CiEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, entityId])
+  @@index([clientId])
+  @@index([entityId])
+  }
+  
+  model ClientDomain {
+  id                  String    @id @default(uuid())
+  clientId            String
+  domain              String
+  status              String    @default("pending") // "pending" | "verified" | "failed"
+  verificationToken   String
+  verifiedAt          DateTime?
+  lastCheckedAt       DateTime?
+  submittedByUserId   String?
+  // Self-reported toggle: has this specific domain been verified in Google's bulk sender
+  // console / Postmaster Tools? Needed for the Google sender requirements program (Sept 8).
+  // Unique per ClientDomain row (i.e. per domain) - never carried over between domains.
+  googleVerified         Boolean   @default(false)
+  googleVerifiedAt       DateTime?
+  googleVerifiedByUserId String?
+  // Self-reported verification for Domain Health checks we cannot fully automate yet
+  // (e.g. "Unsubscribe Honored Within 2 Days", "Spam Rate Below 0.10%").
+  // { [checkId]: { verifiedAt: ISOString, verifiedByUserId: string, verifiedByEmail: string } }
+  manualCheckVerifications Json    @default("{}")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  client          Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  submittedBy     User?   @relation(fields: [submittedByUserId], references: [id], onDelete: SetNull)
+  googleVerifiedByUser User? @relation("GoogleVerifiedByUser", fields: [googleVerifiedByUserId], references: [id], onDelete: SetNull)
+  emailSamples    DomainHealthEmailSample[]
+  dnsResult       DomainHealthDnsResult?
+
+  @@unique([clientId, domain])
+  @@index([clientId])
+}
+
+// One row per unique email — deduplicated by messageId per clientDomain.
+// The cron upserts by messageId so the same email is never double-counted.
+model DomainHealthEmailSample {
+  id             String    @id @default(uuid())
+  clientDomainId String
+  clientId       String    // denormalised for fast per-client queries
+  messageId      String?   // RFC 2822 Message-ID header — used for deduplication
+  source         String    // "seed" | "ci"
+  seedEmail      String?   // which seed inbox it arrived in (when source=seed)
+  fromAddress    String?
+  subject        String?   @db.Text
+  receivedAt     DateTime?
+  firstSeenAt    DateTime  @default(now())
+  placement      String    @default("inbox") // "inbox" | "spam" | "promotions" | "social" | "other" — historical placement, never overwritten
+  // Raw boolean check results for THIS individual email:
+  // { spf: true, dkim: false, tls: true, ... }
+  checks         Json      @default("{}")
+  // Set when we detected this email landed in spam for a verified domain and moved it to the inbox.
+  // placement above stays "spam" so we retain that it originally misfired.
+  correctedToInbox Boolean   @default(false)
+  correctedAt      DateTime?
+  // First ~300 chars of plain-text body — enough for auto-reply classification without re-fetching mail.
+  emailPreview     String?   @db.Text
+  // First ~500 chars of raw headers — enough to check Auto-Submitted/Precedence for auto-reply safety.
+  rawHeadersSnippet String?  @db.Text
+  // Frozen at ingestion time from clientDomain.googleVerified — needed so reports can compare
+  // delivery before/after the Sept 8 Google bulk-sender requirements even if a domain's
+  // verified status later changes. Never overwritten after the row is created.
+  googleVerifiedSnapshot Boolean @default(false)
+
+  clientDomain   ClientDomain @relation(fields: [clientDomainId], references: [id], onDelete: Cascade)
+
+  @@unique([clientDomainId, messageId])  // dedup guard
+  @@index([clientDomainId])
+  @@index([clientId])
+  @@index([source])
+  @@index([receivedAt])
+  @@index([googleVerifiedSnapshot])
+}
+
+// Short auto-reply message pool for the auto-reply-verified-domains cron. messageType=null
+// rows are the generic fallback pool used when no category-specific template is active.
+model AutoReplyTemplate {
+  id          String   @id @default(uuid())
+  messageType String?  // "thank_you" | "event_invite" | "news_update" | "fundraising_ask" | "general" | null (generic)
+  body        String   @db.Text
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([messageType])
+}
+
+// One row per domain — latest DNS check results, upserted on every scan.
+model DomainHealthDnsResult {
+  id             String   @id @default(uuid())
+  clientDomainId String   @unique
+  checkedAt      DateTime @default(now())
+  // { spf: { status, value, note }, dmarc: {...}, mx_record: {...}, bimi_record: {...} }
+  results        Json     @default("{}")
+
+  clientDomain   ClientDomain @relation(fields: [clientDomainId], references: [id], onDelete: Cascade)
+}
+
+model BlockedDomain {
+  id        String   @id @default(cuid())
+  domain    String   @unique // e.g., "gmail.com", "microsoft.com"
+  reason    String?  // Why this domain is blocked
+  createdBy String   // User ID who added it
+  createdAt DateTime @default(now())
+
+  @@index([domain])
+}
+
+model EngagementLog {
+  id               Int       @id @default(autoincrement())
+  seedEmailId      String
+  action           String    // e.g., "open", "click", "reply", "delete"
+  emailSubject     String?   @db.Text
+  emailSender      String?
+  emailReceivedAt  DateTime?
+  performedAt      DateTime  @default(now())
+  success          Boolean   @default(true)
+  errorMessage     String?   @db.Text
+  clickedUrl       String?   @db.Text // URL that was clicked (for action="click")
+
+  seedEmail        SeedEmail @relation(fields: [seedEmailId], references: [id], onDelete: Cascade)
+
+  @@index([seedEmailId])
+  @@index([performedAt])
+  @@index([action])
+}
+
+model SenderFamiliarity {
+  id                Int       @id @default(autoincrement())
+  seedEmailId       String
+  senderEmail       String
+  engagementCount   Int       @default(0)
+  lastEngagementAt  DateTime?
+  trustScore        Float     @default(0.5)
+  createdAt         DateTime  @default(now())
+
+  seedEmail         SeedEmail @relation(fields: [seedEmailId], references: [id], onDelete: Cascade)
+
+  @@unique([seedEmailId, senderEmail])
+  @@index([seedEmailId])
+}
+
+model SeedEmail {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  password        String    @db.Text
+  provider        String    // e.g., "gmail", "yahoo", "outlook", "hotmail", "live", "aol"
+  creationDate    DateTime  @default(now())
+  recoveryEmail   String?
+  recoveryPhone   String?
+  securityInfo    String?   @db.Text // JSON string with security questions/answers
+  imapEnabled     Boolean   @default(false)
+  popEnabled      Boolean   @default(false)
+  twoFactorEnabled Boolean  @default(false)
+  appPassword     String?   @db.Text
+  notes           String?   @db.Text
+  active          Boolean   @default(true)
+  lastImapCheck   DateTime?
+  lastPopCheck    DateTime?
+  imapStatus      String?
+  popStatus       String?
+  ownedByClient   String?   // Who originally uploaded/owns this seed (never changes)
+  assignedToClient String?  // Who can currently use this seed (can be reassigned)
+  locked          Boolean   @default(false) // If true, seed cannot be reassigned by admins
+  // OAuth fields for Outlook integration
+  accessToken     String?   @db.Text // Encrypted OAuth access token
+  refreshToken    String?   @db.Text // Encrypted OAuth refresh token
+  tokenExpiry     DateTime? // When the access token expires
+  oauthConnected  Boolean   @default(false) // Whether OAuth is set up and working
+  // Domain health monitoring — when true, this seed is used for domain health scans for its assigned client
+  domainHealthMode  Boolean   @default(false)
+  // Free-text label for what this seed is being used for, e.g. "CI", "Personal", "Domain Health". Optional and admin-editable.
+  purpose         String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  engagementLogs  EngagementLog[]
+  senderFamiliarity SenderFamiliarity[]
+
+  @@index([oauthConnected])
+  @@index([provider, oauthConnected])
+  @@index([ownedByClient])
+  @@index([assignedToClient])
+  @@index([ownedByClient, assignedToClient])
+  @@index([domainHealthMode])
+}
+
+// Tracks emails landing in the 3 WinRed testing seed inboxes (redjohnson2025@outlook.com,
+// HudsonPopcorn@outlook.com, marcus.ellery.ridge62@gmail.com). Scanned once a day by the
+// winred-inbox-scan cron job and surfaced on the super_admin-only "WinRed Inbox" admin page.
+// This is unrelated to the actual WinRed platform — these are internal RIP test seeds.
+model WinRedInboxMessage {
+  id               String    @id @default(cuid())
+  seedEmailId      String
+  seedEmailAddress String
+  messageId        String?   // Provider message id, used for dedup where available
+  subject          String?   @db.Text
+  senderName       String?
+  senderEmail      String?
+  placement        String    @default("inbox") // "inbox" or "spam"
+  preview          String?   @db.Text // Plain-text snippet of the message body
+  receivedAt       DateTime
+  createdAt        DateTime  @default(now())
+
+  @@unique([seedEmailId, messageId])
+  @@index([seedEmailAddress])
+  @@index([receivedAt])
+}
+
+model EmailClickEvent {
+  id            String   @id @default(cuid())
+  userId        String   // User who clicked
+  emailType     String   // "daily_digest", "weekly_digest", etc.
+  linkType      String   // "entity_profile", "campaign", "subscriptions", "settings", "feed", "unsubscribe"
+  destination   String   // Where they clicked to (e.g., "/directory/john-smith")
+  referrer      String?  // Optional referrer data
+  product       String   @default("rip") // "rip" | "brand" (no index: write-heavy, nothing filters on it yet)
+  userAgent     String?  @db.Text // Browser/device info
+  clickedAt     DateTime @default(now())
+  
+  @@index([userId])
+  @@index([emailType])
+  @@index([linkType])
+  @@index([clickedAt])
+}
+
+model CompetitiveInsightCampaign {
+  id                  String   @id @default(cuid())
+  senderName          String
+  senderEmail         String
+  subject             String
+  rawSubject          String?  // Original subject line before name redaction/omission (used for dedup)
+  dateReceived        DateTime // When first detected
+  inboxCount          Int      @default(0) // How many of the 8 RIP emails went to inbox
+  spamCount           Int      @default(0) // How many went to spam
+  notDeliveredCount   Int      @default(0) // How many weren't delivered
+  inboxRate           Float    @default(0) // Calculated percentage
+  ctaLinks            Json?    // Array of CTA links found in email
+  tags                Json?    // Array of tags (Politician, PAC, Committee, etc.)
+  emailPreview        String?  @db.Text // Text snippet of email
+  emailContent        String?  @db.Text // Full email content for reference
+  resultIds           Json?    // Array of Result IDs that contributed to this campaign
+  seenBySeedEmails    Json     @default("[]") // Array of seed email addresses that have already contributed counts
+  entityId            String?  // Link to assigned entity
+  entity              CiEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  assignmentMethod    String?  // "auto_winred", "auto_anedot", "auto_actblue", "auto_domain", "auto_phone", "manual"
+  assignedAt          DateTime? // When the campaign was assigned to an entity
+  isThirdParty        Boolean? // Frozen at assignment time: true = sender not in entity's own mappings (rented/partner list), false = house file, null = unassigned or entity is a data broker
+  clientId            String?  // Client who subscribed via personal email
+  source              String   @default("seed") // "seed" or "personal"
+  shareToken          String?  @unique // Unique token for sharing
+  shareTokenCreatedAt DateTime? // When the share token was created
+  shareTokenSource    String?  // Who/what generated the token: "User", "Daily Digest", "Weekly Digest", "Twitter", "Similar", "Content Frequency", "Unknown"
+  shareCount          Int      @default(0) // How many times share button was clicked
+  shareViewCount      Int      @default(0) // How many times shared link was viewed
+  viewCount           Int      @default(0) // Total views (direct clicks + shared link views)
+  ogImageUrl          String?  // Pre-generated OG screenshot URL stored in Vercel Blob
+  isHidden            Boolean  @default(false) // Super admin hide/unhide control
+  hiddenAt            DateTime? // When it was hidden
+  hiddenBy            String?  // Which admin hid it
+  isDeleted           Boolean  @default(false) // Soft delete flag
+  deletedAt           DateTime? // When it was deleted
+  deletedBy           String?  // Which admin deleted it
+  donationPlatform    String?  // Detected donation platform: "winred" | "actblue" | "anedot" | "psq"
+  bodyFingerprint     String?  @db.Text // Shingle fingerprint of normalized email body for similarity detection
+  rawHeaders          String?  @db.Text // Raw email headers for compliance checking
+  dkimSelector        String?  // Raw parsed .s= value from DKIM-Signature header (e.g. "gears", "s1")
+  sendingIp           String?  // Parsed sending IP from rawHeaders (client-ip= / Received-SPF)
+  sendingProvider     String?  // Resolved friendly name — set by cron via DKIM → Unsub URL → IP tier
+  unsubDomain         String?  // Extracted List-Unsubscribe domain (e.g. "nucleusemail.com")
+  twitterPosted       Boolean  @default(false) // Whether this email has been posted to Twitter/X
+  twitterPostedAt     DateTime? // When it was posted to Twitter/X
+  messageTypes        String[] // AI-classified message types e.g. ["urgency_deadline", "personal_story"]
+  messageTypeReasoning String? @db.Text // AI explanation of why those types were assigned
+  subjectPatterns     String[] // Detected subject line patterns e.g. ["question", "personalization"]
+  // Frozen at ingestion time by matching the sender's domain against ClientDomain.googleVerified
+  // — null = sender domain didn't match any tracked ClientDomain (unknown), true/false = matched.
+  // Needed so reports can toggle "Google verified" to compare delivery before/after Sept 8
+  // even if a domain's verified status later changes. Never overwritten after creation.
+  googleVerifiedSnapshot Boolean?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  compliance          CIEmailCompliance?
+  
+  @@unique([senderEmail, subject]) // Prevent duplicate campaigns
+  @@index([senderEmail])
+  @@index([subject])
+  @@index([dateReceived])
+  @@index([inboxRate])
+  @@index([entityId])
+  @@index([clientId])
+  @@index([source])
+  @@index([shareToken])
+  @@index([isHidden])
+  @@index([assignedAt])
+  @@index([isDeleted])
+  @@index([donationPlatform])
+  @@index([dkimSelector])
+  @@index([sendingIp])
+  @@index([sendingProvider])
+  @@index([isThirdParty])
+  @@index([googleVerifiedSnapshot])
+  // Composite indexes for common CI query patterns
+  @@index([isDeleted, isHidden, dateReceived])
+  @@index([entityId, dateReceived])
+  @@index([isDeleted, entityId, dateReceived])
+  // Note: bodyFingerprint uses md5() functional indexes applied manually (raw values exceed 8191-byte B-tree limit)
+  // See scripts/add-body-fingerprint-indexes.sql
+}
+
+model CIEmailCompliance {
+  id         String   @id @default(cuid())
+  campaignId String   @unique
+  campaign   CompetitiveInsightCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  
+  // Section 1: All Senders
+  hasSpf                 Boolean?
+  hasDkim                Boolean?
+  hasTls                 Boolean?
+  hasValidMessageId      Boolean?
+  notImpersonatingGmail  Boolean?
+  hasArcHeaders          Boolean?
+  
+  // Section 2: Bulk Senders
+  hasBothSpfAndDkim             Boolean?
+  hasDmarc                      Boolean?
+  hasDmarcAlignment             Boolean?
+  hasOneClickUnsubscribeHeaders Boolean?
+  hasUnsubscribeLinkInBody      Boolean?
+  
+  // Section 3: Content
+  hasSingleFromAddress       Boolean?
+  noFakeReplyPrefix          Boolean?
+  hasValidFromTo             Boolean?
+  noDeceptiveEmojisInSubject Boolean?
+  noHiddenContent            Boolean?
+  
+  // Section 4: Display Name
+  displayNameClean             Boolean?
+  displayNameNoRecipient       Boolean?
+  displayNameNoReplyPattern    Boolean?
+  displayNameNoDeceptiveEmojis Boolean?
+  displayNameNotGmail          Boolean?
+  
+  // Scores (0.0 - 1.0)
+  section1Score Float?
+  section2Score Float?
+  section3Score Float?
+  section4Score Float?
+  totalScore    Float?
+  
+  checkedAt  DateTime @default(now())
+  
+  @@index([campaignId])
+  @@index([totalScore])
+}
+
+model CiEntity {
+  id                 String   @id @default(cuid())
+  name               String   @unique // e.g., "Donald Trump Campaign", "Democratic National Committee"
+  type               String   // "politician", "pac", "organization"
+  description        String?
+  party              String?  // "republican", "democrat", "independent"
+  state              String?  // State abbreviation (e.g., "CA", "NY") or "Nationwide"
+  donationIdentifiers Json?   // Platform-specific donation identifiers: {"winred": ["nrcc"], "anedot": ["jeff-hurd"], "actblue": ["elizabethwarren", "amy-for-america"]}
+  imageUrl           String?  // Headshot URL from Vercel Blob (scraped from Ballotpedia or manual override)
+  imageUrlSource     String?  // 'ballotpedia' = auto-scraped (refresh cron may overwrite); 'manual' = admin override (locked, refresh cron skips)
+  bio                String?  // Short bio text scraped from Ballotpedia
+  office             String?  // Office/title scraped from Ballotpedia infobox e.g. "Candidate, U.S. House New York District 23"
+  ballotpediaUrl     String?  // The Ballotpedia URL that was scraped
+  ballotpediaFetchedAt DateTime? // When the Ballotpedia data was last fetched
+  isCorporate        Boolean  @default(false) // Derived from type: true for "media" and "retail". Used to filter the corporate side of RIP; not shown in the UI.
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  campaigns       CompetitiveInsightCampaign[]
+  smsMessages     SmsQueue[]
+  mappings        CiEntityMapping[]
+  subscriptions   CiEntitySubscription[]
+  tags            EntityTag[]
+  campaignLaunches CampaignLaunch[]
+  slackEntityFilters SlackEntityFilter[]
+  slackChannelEntityFilters SlackChannelEntityFilter[]
+  
+  @@index([party])
+  @@index([state])
+  @@index([isCorporate])
+}
+
+model CiEntityMapping {
+  id           String   @id @default(cuid())
+  entityId     String
+  senderEmail  String?  // Exact email match (e.g., "info@donaldtrump.com")
+  senderDomain String?  // Domain match (e.g., "donaldtrump.com")
+  senderPhone  String?  // Phone number match (e.g., "+14342298933")
+  ctaDomain    String?  // Root domain match on CTA links (e.g., "fundconservatives.org")
+  createdAt    DateTime @default(now())
+
+  entity       CiEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityId])
+  @@index([senderEmail])
+  @@index([senderDomain])
+  @@index([senderPhone])
+  @@index([ctaDomain])
+}
+
+model CtaCategory {
+  id         String   @id @default(cuid())
+  url        String   @unique // The CTA URL (normalized)
+  category   String   // "donation", "petition", "event", "volunteer", "other"
+  confidence Float?   // AI confidence score (0-1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([url])
+  @@index([category])
+}
+
+model SmsQueue {
+  id                 String    @id @default(cuid())
+  rawData            String    @db.Text // Raw webhook payload from FullStack
+  processed          Boolean   @default(false)
+  processingAttempts Int       @default(0)
+  error              String?   @db.Text
+  phoneNumber        String?   // Extracted sender phone number
+  toNumber           String?   // Extracted recipient phone number
+  message            String?   @db.Text // Extracted SMS content
+  campaignId         String?   // Campaign ID from FullStack
+  companyId          Int?      // Company ID from FullStack
+  entityId           String?   // Link to assigned entity
+  entity             CiEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  clientId           String?   // Link to assigned client (for personal SMS)
+  source             String    @default("seed") // "seed" or "personal"
+  assignmentMethod   String?  // "auto_winred", "auto_anedot", "auto_actblue", "auto_phone", "manual"
+  assignedAt         DateTime? // When the SMS was assigned to an entity
+  isThirdParty       Boolean? // Frozen at assignment time: true = phone not in entity's own mappings (rented/partner list), false = house file, null = unassigned or entity is a data broker
+  ctaLinks           String?   @db.Text // JSON array of CTA links extracted from message
+  shareToken          String?  @unique // Unique token for sharing
+  shareTokenCreatedAt DateTime? // When the share token was created
+  shareTokenSource    String?  // Who/what generated the token: "User", "Daily Digest", "Weekly Digest", "Twitter", "Similar", "Content Frequency", "Unknown"
+  shareCount          Int      @default(0) // How many times share button was clicked
+  shareViewCount      Int      @default(0) // How many times shared link was viewed
+  viewCount           Int      @default(0) // Total views (direct clicks + shared link views)
+  ogImageUrl          String?  // Pre-generated OG screenshot URL stored in Vercel Blob
+  isHidden            Boolean  @default(false) // Super admin hide/unhide control
+  hiddenAt            DateTime? // When it was hidden
+  hiddenBy            String?  // Which admin hid it
+  isDeleted           Boolean  @default(false) // Soft delete flag
+  deletedAt           DateTime? // When it was deleted
+  deletedBy           String?  // Which admin deleted it
+  dedupHash           String?  @unique // SHA256(phoneNumber + normalizedMessage) for race-safe dedup
+  bodyFingerprint     String?  @db.Text // Shingle fingerprint of normalized SMS body for similarity detection
+  twitterPosted       Boolean  @default(false) // Whether this SMS has been posted to Twitter/X
+  twitterPostedAt     DateTime? // When it was posted to Twitter/X
+  createdAt          DateTime  @default(now())
+  processedAt        DateTime?
+
+  @@index([phoneNumber])
+  @@index([toNumber])
+  @@index([processed])
+  @@index([createdAt])
+  @@index([entityId])
+  @@index([isHidden])
+  @@index([shareToken])
+  @@index([assignedAt])
+  @@index([isDeleted])
+  @@index([clientId])
+  @@index([source])
+  @@index([isThirdParty])
+  // Composite indexes for CI SMS query patterns
+  @@index([isDeleted, entityId, createdAt])
+  @@index([isDeleted, isHidden, createdAt])
+  // Note: bodyFingerprint uses md5() functional indexes applied manually (raw values exceed 8191-byte B-tree limit)
+  // See scripts/add-body-fingerprint-indexes.sql
+}
+
+model PersonalPhoneNumber {
+  id          String   @id @default(cuid())
+  phoneNumber String   @unique
+  clientId    String
+  assignedBy  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+}
+
+model CiEntitySubscription {
+  id        String   @id @default(cuid())
+  clientId  String
+  userId    String
+  entityId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity    CiEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entityId])
+  @@index([clientId, userId])
+  @@index([entityId])
+  // Keep the legacy client-level table intact for zero-downtime deployment and rollback.
+  @@map("CiUserEntitySubscription")
+}
+
+model CiView {
+  id             String   @id @default(cuid())
+  name           String
+  clientId       String
+  filterSettings Json     // Stores all filter state as JSON
+  createdBy      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdByUser  User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([createdBy])
+  @@index([name])
+  // Personal saved views live in a parallel table so the previous deployment
+  // can continue using the legacy client-wide CiView table during rollout.
+  @@map("UserCiView")
+}
+
+model EntityTag {
+  id        String   @id @default(cuid())
+  clientId  String
+  entityId  String
+  tagName   String   @db.VarChar(50)
+  tagColor  String   @db.VarChar(7) // Hex color like #FF5733
+  createdBy String
+  createdAt DateTime @default(now())
+
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  entity    CiEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, entityId, tagName])
+  @@index([clientId])
+  @@index([entityId])
+  @@index([clientId, tagName])
+}
+
+model CronJobState {
+  id                    Int       @id @default(autoincrement())
+  jobName               String    @unique
+  lastProcessedEmailId  String?
+  lastProcessedSmsId    String?
+  lastRunAt             DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([jobName])
+}
+
+// Tracks newly-announced political campaigns from external sources (FEC, etc.)
+// This is an event log — separate from CiEntity which tracks comms senders.
+// A stub CiEntity is auto-created on import (name + state + party only),
+// and linkedEntityId ties the launch record to it for enrichment later.
+model CampaignLaunch {
+  id                 String    @id @default(cuid())
+  name               String                         // Candidate name
+  party              String?                        // "republican" | "democrat" | "independent"
+  state              String?                        // State abbreviation e.g. "CA"
+  office             String?                        // e.g. "U.S. House" | "U.S. Senate" | "Governor"
+  district           String?                        // e.g. "CA-45"
+  launchedAt         DateTime?                      // When they actually announced (may be unknown)
+  source             String                         // "fec" | "ballotpedia" | "manual"
+  sourceUrl          String?                        // Link back to source page for audit trail
+  sourceExternalId   String?                        // Source's own ID (e.g. FEC candidate_id) for dedup
+  linkedEntityId     String?                        // FK to CiEntity once auto-created
+  status             String    @default("active")   // "active" | "withdrawn" | "won" | "lost"
+  firstSeenAt        DateTime  @default(now())      // When we first pulled this record
+  updatedAt          DateTime  @updatedAt
+
+  linkedEntity       CiEntity? @relation(fields: [linkedEntityId], references: [id], onDelete: SetNull)
+
+  @@unique([source, sourceExternalId])              // prevent duplicate imports per source
+  @@index([source])
+  @@index([state])
+  @@index([party])
+  @@index([firstSeenAt])
+  @@index([linkedEntityId])
+}
+
+model Announcement {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  body        String   @db.Text
+  imageUrl    String?
+  publishedAt DateTime @default(now())
+  createdBy   String
+  product     String   @default("rip") // "rip" | "brand"
+  updatedAt   DateTime @updatedAt
+
+  @@index([publishedAt(sort: Desc)])
+  @@index([slug])
+  @@index([product])
+}
+
+model DigestArticle {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  summary     String?  @db.Text
+  body        String   @db.Text
+  imageUrl    String?
+  sources     Json?    // Array of { label: string; url: string }
+  tags        Json?    // Array of strings e.g. ["economy", "immigration"]
+  publishedAt DateTime @default(now())
+  createdBy   String   @default("claude")
+  product     String   @default("rip") // "rip" | "brand"
+  updatedAt   DateTime @updatedAt
+
+  @@index([publishedAt(sort: Desc)])
+  @@index([slug])
+  @@index([product])
+}
+
+model RedactedName {
+  id        String   @id @default(cuid())
+  name      String   @unique // The exact name/term to redact (case-sensitive)
+  addedBy   String?  // Who added this name
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+model PersonalEmailDomain {
+  id        String   @id @default(cuid())
+  domain    String   @unique // e.g., "realdailyreview.com"
+  clientId  String   // Client this domain belongs to
+  // When useSlug is true, the local part of the email (before @) is matched to client slug
+  // e.g. rip@realdailyreview.com → slug "rip" → look up client by slug
+  // When false, the entire domain maps to one specific clientId above
+  useSlug   Boolean  @default(true)
+  addedBy   String?  // Admin who added this domain
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([domain])
+  @@index([clientId])
+}
+
+model ApiKey {
+  id             String    @id @default(cuid())
+  name           String    // Friendly name for the key (e.g., "Production Key", "Dev Key")
+  keyHash        String    @unique // SHA-256 hash of the API key (never store raw key)
+  keyPrefix      String    // First 8 chars of key for identification (e.g., "rip_pk_a1b2...")
+  clientId       String?   // Optional: restrict key to a specific client's data
+  scopes         Json      @default("[\"campaigns:read\", \"sms:read\", \"entities:read\"]") // Array of allowed scopes
+  rateLimit      Int       @default(100) // Requests per minute
+  expiresAt      DateTime? // Optional expiration date
+  lastUsedAt     DateTime? // Track last usage
+  requestCount   Int       @default(0) // Total requests made with this key
+  isActive       Boolean   @default(true) // Enable/disable key
+  createdBy      String    // User ID who created this key
+  revokedAt      DateTime? // When the key was revoked
+  revokedBy      String?   // User ID who revoked this key
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  actionLogs     CiApiActionLog[] @relation("CiApiActionLogs")
+
+  @@index([keyHash])
+  @@index([keyPrefix])
+  @@index([clientId])
+  @@index([isActive])
+  @@index([expiresAt])
+  }
+
+model SiteVisit {
+  id            String    @id @default(cuid())
+  ip            String    // IP address of visitor
+  userAgent     String?   // Browser/client user agent
+  referer       String?   // Where they came from
+  path          String    // Which page/endpoint was accessed
+  method        String    @default("GET") // HTTP method
+  statusCode    Int?      // Response status code
+  userId        String?   // If authenticated, link to user
+  userEmail     String?   // If authenticated, store email for quick reference
+  isAuthenticated Boolean @default(false) // Quick flag to filter auth vs anon
+  country       String?   // Geo lookup (from Vercel headers)
+  city          String?   // Geo lookup (from Vercel headers)
+  product       String    @default("rip") // "rip" | "brand" (no index: written on every request)
+  createdAt     DateTime  @default(now())
+
+  @@index([ip])
+  @@index([userId])
+  @@index([isAuthenticated])
+  @@index([createdAt])
+  @@index([path])
+}
+
+model DkimSenderMapping {
+  id            String   @id @default(cuid())
+  selectorValue String   @unique  // Raw .s= value from DKIM-Signature, e.g. "gears", "s1", "k1"
+  friendlyName  String            // Human-readable provider name, e.g. "Message Gears"
+  notes         String?           // Optional internal notes
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model PhoneCarrierMapping {
+  id          String   @id @default(cuid())
+  phoneNumber String   @unique // Normalized sender phone number from SMS ingestion, e.g. "+14342298933"
+  carrierName String            // Human-readable carrier name, e.g. "AT&T", "Verizon", "T-Mobile"
+  notes       String?           // Optional internal notes
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([carrierName])
+}
+
+model DkimProviderMapping {
+  id           String   @id @default(cuid())
+  selector     String   @unique // DKIM .s= value (e.g. "gears", "s1", "k1")
+  providerName String   // Human-readable name (e.g. "Message Gears", "Sendgrid")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([selector])
+}
+
+model UnsubDomainMapping {
+  id           String   @id @default(cuid())
+  domain       String   @unique // e.g. "nucleusemail.com", "list.sailthru.com"
+  friendlyName String?           // Human-readable provider name — null until manually assigned
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([friendlyName])
+}
+
+model IpSenderMapping {
+  id             String    @id @default(cuid())
+  ip             String    @unique // The exact sending IP (e.g. "63.143.59.236")
+  cidr           String?   // CIDR block from RDAP (e.g. "63.143.59.128/25")
+  orgName        String?   // Raw org name from ARIN RDAP (e.g. "MessageGears, LLC")
+  friendlyName   String?   // Human-readable override set by admin (e.g. "MessageGears")
+  reverseDns     String?   // PTR record (e.g. "mail.messagegears.net") — fallback for generic cloud IPs
+  rdapChecked    Boolean   @default(false) // Whether an RDAP lookup has been attempted
+  lastLookedUpAt DateTime? // When the last RDAP lookup ran
+  notes          String?   // Optional internal notes
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([orgName])
+  @@index([friendlyName])
+  @@index([rdapChecked])
+}
+
+// ─── Who's Contacting Me? ��� public lookup tool ���───────────────────────────────
+
+model LookupSearch {
+  id        String   @id @default(cuid())
+  userId    String
+  query     String   // The phone number or email that was searched
+  queryType String   // "phone" | "email"
+  results   Json     // Snapshot of the matched entities at search time
+  createdAt DateTime @default(now())
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([query])
+}
+
+// ─── Campaign Launch Alerts ───────────────────────────────────────────────────
+
+model CampaignAlertSubscription {
+  id               String   @id @default(cuid())
+  userId           String
+  name             String   // User-given label, e.g. "Republican Senate in Alabama"
+  party            String?  // "republican" | "democrat" | "independent" | null = any
+  state            String?  // two-letter code, null = any
+  office           String?  // Legacy campaign-launch alert field
+  kind             String   @default("campaign_launch") // "campaign_launch" | "ci_message"
+  clientId         String?
+  search           String?
+  entityIds        String[] @default([])
+  entityType       String?
+  messageTypes     String[] @default([]) // "email" | "sms"; empty = either
+  ownershipTypes   String[] @default([]) // "house_file" | "third_party"; empty = either
+  donationPlatform String?
+  subscriptionsOnly Boolean @default(false)
+  tag              String?
+  enabled          Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([kind, enabled])
+  @@index([kind, clientId, enabled])
+}
+
+model MobilePushToken {
+  id               String   @id @default(cuid())
+  userId           String
+  expoPushToken    String   @unique
+  deviceId         String
+  platform         String   @default("ios")
+  enabled          Boolean  @default(true)
+  followingEnabled Boolean @default(true)
+  lastSeenAt       DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
+  @@index([userId, enabled])
+}
+
+model MobileAlertDelivery {
+  id              String   @id @default(cuid())
+  userId          String
+  sourceType      String   // "email" | "sms" | "announcement"
+  sourceId        String
+  status          String   @default("pending") // "pending" | "sent" | "failed"
+  expoTicketIds   String[] @default([])
+  matchedAlertIds String[] @default([])
+  error           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sourceType, sourceId])
+  @@index([status, createdAt])
+}
+
+// Atomic, per-user rolling-window claim for the same SMS captured on multiple seed phones.
+// Feed records remain separate; only their mobile pushes are coalesced.
+model MobileSmsPushClaim {
+  id          String   @id @default(cuid())
+  userId      String
+  fingerprint String
+  sourceId    String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fingerprint])
+  @@index([expiresAt])
+}
+
+// ─── Spam Test ────────────────────────────────────────────────────────────────
+
+model SpamTest {
+  id            String    @id @default(uuid())
+  clientId      String
+  clientSlug    String
+  testAddress   String    @unique // e.g. test-abc123@mg.brandinbox.ai
+  status        String    @default("pending") // "pending" | "received" | "expired"
+  expiresAt     DateTime
+  receivedAt    DateTime?
+  subject       String?   @db.Text
+  fromAddress   String?
+  score         Float?    // SpamAssassin score (lower = better)
+  maxScore      Float?    // Max possible score (usually 10)
+  spamRules     Json?     // Array of { name, score, description }
+  spfResult     String?   // "pass" | "fail" | "neutral" | "none"
+  dkimResult    String?   // "pass" | "fail" | "none"
+  dmarcResult   String?   // "pass" | "fail" | "none"
+  htmlAnalysis      Json?     // { hasHtml, linkCount, imageCount, textHtmlRatio, hasUnsubscribe }
+  rawHeaders        Json?     // Snapshot of key headers
+  bodyHtml          String?   @db.Text
+  bodyText          String?   @db.Text
+  blocklistResults  Json?     // Array of { list, listed, ip, domain }
+  linkCheckResults  Json?     // Array of { url, ok, statusCode, error }
+  createdAt         DateTime  @default(now())
+
+  client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([clientSlug])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ─── Subscription Cancellation Feedback ───────────────────────────────────────
+
+model SubscriptionCancellationFeedback {
+  id               String   @id @default(cuid())
+  clientId         String
+  clientName       String   // denormalized for easy admin display
+  userId           String?  // who clicked cancel
+  userEmail        String?
+  subscriptionType String   // "plan" | "ci"
+  plan             String   // plan they were cancelling from, e.g. "paid", "all", "advanced"
+  reason           String   // "too_expensive" | "not_using" | "missing_features" | "switching_competitor" | "poor_support" | "other"
+  comment          String?  @db.Text
+  createdAt        DateTime @default(now())
+
+  @@index([clientId])
+  @@index([reason])
+  @@index([createdAt])
+}
+
+// ─── Internal Changelog ───────────────────────────────────────────────────────
+
+model Changelog {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @db.Text  // Full description — written for Claude/blog readability
+  category    String   // "feature" | "improvement" | "fix" | "admin"
+  plan        String?  // e.g. "all", "enterprise", null = affects all users
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?  // User ID of who created the entry
+  product     String   @default("rip") // "rip" | "brand"
+
+  @@index([category])
+  @@index([publishedAt])
+  @@index([product])
+}
+
+// ─── Claude CI Assignment MCP API ─────────────────────────────────────────────
+// Reuses the existing ApiKey model/system (see ApiKey above, lib/api-auth.ts,
+// and app/api/admin/api-keys/*) with new scopes: "ci:read", "ci:assign",
+// "ci:create_entity", "ci:update_entity". Adds a dedicated audit trail below
+// since this endpoint runs fully autonomously and needs per-action Undo. See
+// docs/plans/CLAUDE_CI_ASSIGNMENT_MCP.md for the full design rationale.
+
+model CiApiActionLog {
+  id             String   @id @default(cuid())
+  apiKeyId       String
+  apiKey         ApiKey   @relation("CiApiActionLogs", fields: [apiKeyId], references: [id], onDelete: Cascade)
+  action         String   // "assign_messages" | "create_entity" | "update_entity_identifiers"
+  reasoning      String?  @db.Text // Claude's stated rationale for this action
+  targetType     String?  // "sms" | "campaign" | "entity"
+  targetIds      Json?    // array of affected record IDs (SmsQueue/CompetitiveInsightCampaign/CiEntity)
+  entityId       String?  // CiEntity involved, when applicable
+  beforeState    Json?    // minimal snapshot needed to support Undo
+  afterState     Json?
+  undone         Boolean  @default(false)
+  undoneAt       DateTime?
+  undoneBy       String?
+  requestIp      String?
+  createdAt      DateTime @default(now())
+
+  @@index([apiKeyId])
+  @@index([action])
+  @@index([entityId])
+  @@index([createdAt])
+  @@index([undone])
+}
+
+model AutomationSetting {
+  id                    String   @id @default(cuid())
+  ciAssignmentEnabled   Boolean  @default(true) // Global kill switch for the Claude CI assignment MCP tools
+  updatedAt             DateTime @updatedAt
+  updatedBy             String?
+}
+
+// ─── Mobile API (app/api/mobile/v1) ───────────────────���────────────────────────
+// Entirely separate from the browser cookie session (lib/auth.ts) and the
+// developer API-key namespace (lib/api-auth.ts, ApiKey model). See
+// lib/mobile-auth.ts and docs/mobile-api.md.
+
+model MobileRefreshToken {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String    @unique // SHA-256 hex of the raw refresh token — raw value is never stored
+  tokenFamilyId    String    // Shared by every token descended from one login; reuse of a revoked
+                              // token in a family revokes the whole family (replay detection).
+  deviceId         String?   // Client-supplied installation/device identifier
+  deviceName       String?
+  expiresAt        DateTime  // this token's own sliding expiry (now + 30d at issuance/rotation)
+  absoluteExpiresAt DateTime // fixed at family creation (issueMobileSession) = now + 30d and copied
+                              // unchanged on every rotation — caps the whole family's lifetime so
+                              // rotation can never extend a session past 30 days from login.
+  lastUsedAt       DateTime?
+  revokedAt        DateTime? // Set when rotated (superseded), logged out, or revoked for replay
+  revokedReason    String?   // "rotated" | "logout" | "replay_detected" | "password_reset_required" | "password_changed" | "schema_upgrade"
+  // "schema_upgrade" is set once, by the migration that added issuedPasswordFingerprint,
+  // on every row that predates that column — the migration cannot know which password was
+  // current when an older row was issued, so it revokes rather than risk blessing a stale
+  // token with the wrong fingerprint. See that migration's SQL comments.
+  issuedPasswordFingerprint String // sha256(password hash) at issuance/rotation time — compared
+  // against the user's *current* password hash on every requireMobileAuth call and every
+  // rotateMobileSession call, so a real password change permanently invalidates this row
+  // (and the whole family, via revokeMobileFamily) even if firstLogin has since been cleared
+  // again and even if this row is never used again before the change happens.
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([tokenFamilyId])
+  @@index([expiresAt])
+  @@index([absoluteExpiresAt])
+}
+
+model MobileAuthAttempt {
+  id          String   @id @default(cuid())
+  // Server-keyed hash of the rate-limit identifier (e.g. HMAC(secret, "ip:"+ip) or
+  // HMAC(secret, "email:"+normalizedEmail)) — never the raw IP, email, password, or token.
+  key         String
+  windowStart DateTime // Start of the fixed rate-limit window this row counts
+  count       Int      @default(1)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([key, windowStart])
+  @@index([windowStart])
+}
+
+// IP addresses locked out via the admin "Block" action on a User. Checked at login, signup,
+// and on every /api/auth/me poll (which nearly every authenticated page fetches on mount), so
+// an existing session from a blocked IP is killed on its next navigation, not just new attempts.
+// sourceUserId tracks which block action added the row, purely so unblocking that user can
+// clean up the rows it added (an IP added by more than one blocked user is left in place until
+// every one of them is unblocked).
+model BlockedIp {
+  id           String   @id @default(cuid())
+  ipAddress    String   @unique
+  reason       String?
+  sourceUserId String?
+  createdAt    DateTime @default(now())
+
+  @@index([sourceUserId])
+}
+
+// Records that a client's user accepted the Client MCP terms of use (no bulk
+// extraction / redistribution of the CI feed). One row per acceptance; the
+// latest row per client+version is what gates key creation and MCP calls.
+model ClientMcpTermsAcceptance {
+  id           String   @id @default(cuid())
+  clientId     String
+  userId       String
+  userEmail    String
+  termsVersion String
+  ipAddress    String?
+  acceptedAt   DateTime @default(now())
+
+  @@index([clientId, termsVersion])
+  @@index([userId])
+}
+
+// One row per client-facing MCP tool call. Doubles as the audit trail
+// (what was queried, how many rows came back) and the source of truth for
+// per-minute throttling and monthly result quotas, so limits hold across
+// serverless instances.
+model ClientMcpUsageLog {
+  id          String   @id @default(cuid())
+  apiKeyId    String
+  clientId    String
+  tool        String
+  params      Json?
+  resultCount Int      @default(0)
+  messageIds  Json?
+  status      String   @default("ok") // "ok" | "error" | "denied"
+  createdAt   DateTime @default(now())
+
+  @@index([apiKeyId, createdAt])
+  @@index([clientId, createdAt])
+}
+
+// NOTE: SupportTicket, PasswordResetToken, UserInvitation and the SeedEmailAssignmentView view exist
+// in the database but are intentionally NOT modeled here; they are created and queried with raw SQL.
+// Never run `prisma migrate dev` or `prisma db push` against the shared database, either may try to
+// drop them. Schema changes are hand-written SQL under prisma/migrations, applied once from the RIP
+// repo; `prisma generate` is the only Prisma command either repo should run.
+
+// Password reset tokens for BrandUser. Twin of the raw-SQL PasswordResetToken table (which has a
+// hard FK to User and so cannot hold Brand users). Only a SHA-256 hash of the token is stored.
+model BrandPasswordResetToken {
+  id          String    @id @default(cuid())
+  tokenHash   String    @unique
+  brandUserId String
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  brandUser   BrandUser @relation(fields: [brandUserId], references: [id], onDelete: Cascade)
+
+  @@index([brandUserId])
+  @@index([expiresAt])
+}
+
+// Accounts created on brandinbox.ai. Deliberately separate from `User`
+// (the RIP team / client accounts) so the two products never share logins.
+// Brand only reads RIP's data; this table is the only thing Brand writes.
+model BrandUser {
+  id              String    @id @default(cuid())
+  email           String    @unique // always stored lowercased
+  firstName       String
+  lastName        String
+  password        String
+  company         String?
+  jobTitle        String?
+  agreedToTermsAt DateTime
+  signupIp        String?
+  lastLoginAt     DateTime?
+  blocked         Boolean   @default(false)
+  role            String    @default("viewer") // same vocabulary as User.role: "super_admin", "admin", "editor", "viewer"
+  clientId        String?   // Client (organization/workspace) this brand user belongs to
+  client          Client?   @relation("BrandUserToClient", fields: [clientId], references: [id], onDelete: SetNull)
+  passwordResetTokens BrandPasswordResetToken[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([clientId])
+}

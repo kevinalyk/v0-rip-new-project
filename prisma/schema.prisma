@@ -16,7 +16,7 @@ model User {
   firstName     String?
   lastName      String?
   password      String
-  role          String    @default("viewer") // "admin", "editor", "viewer"
+  role          String    @default("user") // "owner", "admin", "user", "lookup", "super_admin"
   clientId      String?   // Links user to their client organization
   firstLogin      Boolean   @default(true)
   lastActive      DateTime?
@@ -169,6 +169,11 @@ model Client {
   name              String     @unique // e.g., "Red Spark Strategy"
   description       String?
   accountKind       String     @default("organization") // "personal" for an auto-created one-user mobile workspace
+  // Which product owns this client: "rip" (default, every pre-existing row) or "brand" (brandinbox).
+  // Every client-scoped table inherits its product through clientId, so this one column is the
+  // discriminator for Slack, domains, API keys, MCP, support, tags, views, etc. Anything that lists
+  // or iterates clients for RIP (admin lists, digests, seed assignment) must filter product = "rip".
+  product           String     @default("rip")
   active            Boolean    @default(true)
   dataRetentionDays Int        @default(90)
   slug              String     @unique // e.g., "redsparkstrategy"
@@ -245,6 +250,7 @@ model Client {
   @@index([totalUsers])
   @@index([trialExpiresAt])
   @@index([accountKind])
+  @@index([product])
 }
 
 model ClientJoinInvitation {
@@ -279,10 +285,12 @@ model TrialCode {
   expiresAt       DateTime? // Null = no expiration until manually deactivated
   createdAt       DateTime  @default(now())
   createdBy       String? // User id of the super_admin who generated it
+  product         String    @default("rip") // "rip" | "brand"
 
   redemptions     TrialCodeRedemption[]
 
   @@index([active])
+  @@index([product])
 }
 
 // One row per client that has redeemed a trial code. The unique clientId enforces "one
@@ -630,6 +638,7 @@ model EmailClickEvent {
   linkType      String   // "entity_profile", "campaign", "subscriptions", "settings", "feed", "unsubscribe"
   destination   String   // Where they clicked to (e.g., "/directory/john-smith")
   referrer      String?  // Optional referrer data
+  product       String   @default("rip") // "rip" | "brand" (no index: write-heavy, nothing filters on it yet)
   userAgent     String?  @db.Text // Browser/device info
   clickedAt     DateTime @default(now())
   
@@ -1012,10 +1021,12 @@ model Announcement {
   imageUrl    String?
   publishedAt DateTime @default(now())
   createdBy   String
+  product     String   @default("rip") // "rip" | "brand"
   updatedAt   DateTime @updatedAt
 
   @@index([publishedAt(sort: Desc)])
   @@index([slug])
+  @@index([product])
 }
 
 model DigestArticle {
@@ -1029,10 +1040,12 @@ model DigestArticle {
   tags        Json?    // Array of strings e.g. ["economy", "immigration"]
   publishedAt DateTime @default(now())
   createdBy   String   @default("claude")
+  product     String   @default("rip") // "rip" | "brand"
   updatedAt   DateTime @updatedAt
 
   @@index([publishedAt(sort: Desc)])
   @@index([slug])
+  @@index([product])
 }
 
 model RedactedName {
@@ -1103,6 +1116,7 @@ model SiteVisit {
   isAuthenticated Boolean @default(false) // Quick flag to filter auth vs anon
   country       String?   // Geo lookup (from Vercel headers)
   city          String?   // Geo lookup (from Vercel headers)
+  product       String    @default("rip") // "rip" | "brand" (no index: written on every request)
   createdAt     DateTime  @default(now())
 
   @@index([ip])
@@ -1335,9 +1349,11 @@ model Changelog {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   createdBy   String?  // User ID of who created the entry
+  product     String   @default("rip") // "rip" | "brand"
 
   @@index([category])
   @@index([publishedAt])
+  @@index([product])
 }
 
 // ─── Claude CI Assignment MCP API ─────────────────────────────────────────────
@@ -1481,6 +1497,28 @@ model ClientMcpUsageLog {
   @@index([clientId, createdAt])
 }
 
+// NOTE: SupportTicket, PasswordResetToken, UserInvitation and the SeedEmailAssignmentView view exist
+// in the database but are intentionally NOT modeled here; they are created and queried with raw SQL.
+// Never run `prisma migrate dev` or `prisma db push` against the shared database, either may try to
+// drop them. Schema changes are hand-written SQL under prisma/migrations, applied once from the RIP
+// repo; `prisma generate` is the only Prisma command either repo should run.
+
+// Password reset tokens for BrandUser. Twin of the raw-SQL PasswordResetToken table (which has a
+// hard FK to User and so cannot hold Brand users). Only a SHA-256 hash of the token is stored.
+model BrandPasswordResetToken {
+  id          String    @id @default(cuid())
+  tokenHash   String    @unique
+  brandUserId String
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  brandUser   BrandUser @relation(fields: [brandUserId], references: [id], onDelete: Cascade)
+
+  @@index([brandUserId])
+  @@index([expiresAt])
+}
+
 // Accounts created on brandinbox.ai. Deliberately separate from `User`
 // (the RIP team / client accounts) so the two products never share logins.
 // Brand only reads RIP's data; this table is the only thing Brand writes.
@@ -1496,9 +1534,10 @@ model BrandUser {
   signupIp        String?
   lastLoginAt     DateTime?
   blocked         Boolean   @default(false)
-  role            String    @default("viewer") // same vocabulary as User.role: "super_admin", "admin", "editor", "viewer"
+  role            String    @default("user") // "owner", "admin", "user", "super_admin"
   clientId        String?   // Client (organization/workspace) this brand user belongs to
   client          Client?   @relation("BrandUserToClient", fields: [clientId], references: [id], onDelete: SetNull)
+  passwordResetTokens BrandPasswordResetToken[]
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

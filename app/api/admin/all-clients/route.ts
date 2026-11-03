@@ -32,12 +32,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    // Defaults to RIP clients; ?product=brand or ?product=all lets a super admin see Brand clients too.
+    const productParam = request.nextUrl.searchParams.get("product")
+    const productFilter =
+      productParam === "all" ? undefined : { product: productParam === "brand" ? "brand" : "rip" }
+
     const clients = await prisma.client.findMany({
+      where: productFilter,
       orderBy: { name: "asc" },
       select: {
         id: true,
         name: true,
         slug: true,
+        product: true,
         active: true,
         subscriptionPlan: true,
         subscriptionStatus: true,

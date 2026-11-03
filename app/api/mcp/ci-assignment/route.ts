@@ -1059,7 +1059,7 @@ const handler = createMcpHandler(
       },
     )
 
-    // ── Tool 7: delete_messages ──────��──────��────────────────────────────────
+    // ── Tool 7: delete_messages ──────���──────��────────────────────────────────
     server.registerTool(
       "delete_messages",
       {
@@ -1734,7 +1734,7 @@ const handler = createMcpHandler(
       },
     )
 
-    // ── Tool 22: list_accounts ─────────────────────────────────���──────────
+    // ── Tool 22: list_accounts ────────────────────────────────������──────────
     server.registerTool(
       "list_accounts",
       {
@@ -1752,8 +1752,11 @@ const handler = createMcpHandler(
 
           const clients = await prisma.client.findMany({
             where: search
-              ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { slug: { contains: search, mode: "insensitive" } }] }
-              : undefined,
+              ? {
+                  product: "rip",
+                  OR: [{ name: { contains: search, mode: "insensitive" } }, { slug: { contains: search, mode: "insensitive" } }],
+                }
+              : { product: "rip" },
             orderBy: { name: "asc" },
             take: limit,
             select: {

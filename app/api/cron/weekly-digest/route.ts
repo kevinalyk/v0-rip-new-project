@@ -63,6 +63,7 @@ export async function GET(request: Request) {
 
     // ── Fetch all clients (free and paid get the weekly top 10) ─────────────
     const clients = await prisma.client.findMany({
+      where: { product: "rip" },
       select: { id: true, slug: true },
     })
 

@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
       targetClients = await prisma.client.findMany({
         where: {
           id: { in: clientIds },
+          product: "rip",
         },
         select: { id: true, name: true },
       })
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest) {
       targetClients = await prisma.client.findMany({
         where: {
           id: { not: "RIP" },
+          product: "rip",
         },
         select: { id: true, name: true },
       })

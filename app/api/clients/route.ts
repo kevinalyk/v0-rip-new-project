@@ -38,6 +38,7 @@ export async function GET() {
     const clients = await prisma.client.findMany({
       where: {
         active: true,
+        product: "rip",
       },
       select: {
         id: true,

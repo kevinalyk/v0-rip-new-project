@@ -61,7 +61,7 @@ export async function GET(request: Request) {
 
     // ── Fetch all non-free clients ───────────────────────────────────────────
     const clients = await prisma.client.findMany({
-      where: { subscriptionPlan: { not: "free" } },
+      where: { product: "rip", subscriptionPlan: { not: "free" } },
       select: { id: true, slug: true },
     })
 

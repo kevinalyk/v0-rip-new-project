@@ -232,6 +232,7 @@ model Client {
   
   users             User[]
   brandUsers        BrandUser[] @relation("BrandUserToClient")
+  brandEntitySubscriptions BrandEntitySubscription[]
   campaigns         Campaign[] // Add relation to campaigns
   domains           Domain[]   @relation("DomainToClient")
   ciEntitySubscriptions CiEntitySubscription[]
@@ -802,6 +803,7 @@ model CiEntity {
   smsMessages     SmsQueue[]
   mappings        CiEntityMapping[]
   subscriptions   CiEntitySubscription[]
+  brandSubscriptions BrandEntitySubscription[]
   tags            EntityTag[]
   campaignLaunches CampaignLaunch[]
   slackEntityFilters SlackEntityFilter[]
@@ -1337,7 +1339,7 @@ model SubscriptionCancellationFeedback {
   @@index([createdAt])
 }
 
-// ─── Internal Changelog ───────────────────────────────────────────────────────
+// ─── Internal Changelog ──────────────────────────────────��────────────────────
 
 model Changelog {
   id          String   @id @default(cuid())
@@ -1538,8 +1540,27 @@ model BrandUser {
   clientId        String?   // Client (organization/workspace) this brand user belongs to
   client          Client?   @relation("BrandUserToClient", fields: [clientId], references: [id], onDelete: SetNull)
   passwordResetTokens BrandPasswordResetToken[]
+  entitySubscriptions BrandEntitySubscription[]
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   @@index([clientId])
+}
+
+// Entities a Brand user follows. Table already exists in the shared database.
+model BrandEntitySubscription {
+  id        String     @id @default(cuid())
+  clientId  String
+  userId    String
+  entityId  String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  client    Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user      BrandUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity    CiEntity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entityId])
+  @@index([clientId, userId])
+  @@index([entityId])
 }

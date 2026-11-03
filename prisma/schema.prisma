@@ -16,7 +16,7 @@ model User {
   firstName     String?
   lastName      String?
   password      String
-  role          String    @default("viewer") // "admin", "editor", "viewer"
+  role          String    @default("user") // "owner", "admin", "user", "lookup", "super_admin"
   clientId      String?   // Links user to their client organization
   firstLogin      Boolean   @default(true)
   lastActive      DateTime?
@@ -1534,7 +1534,7 @@ model BrandUser {
   signupIp        String?
   lastLoginAt     DateTime?
   blocked         Boolean   @default(false)
-  role            String    @default("viewer") // same vocabulary as User.role: "super_admin", "admin", "editor", "viewer"
+  role            String    @default("user") // "owner", "admin", "user", "super_admin"
   clientId        String?   // Client (organization/workspace) this brand user belongs to
   client          Client?   @relation("BrandUserToClient", fields: [clientId], references: [id], onDelete: SetNull)
   passwordResetTokens BrandPasswordResetToken[]

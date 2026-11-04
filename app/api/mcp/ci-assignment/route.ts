@@ -129,6 +129,14 @@
  * both log before/after state to the audit trail and are individually
  * rate-limited.
  *
+ * Tools 29-31 give Grok the product changelog (the Changelog table behind
+ * the admin /changelog page): list_changelog_entries (read-only),
+ * create_changelog_entry and update_changelog_entry. They reuse the existing
+ * ci:news_write scope rather than adding a new one, since a changelog entry
+ * is another public product-announcement surface and a key trusted to
+ * publish news is trusted to publish these. There is deliberately no delete
+ * tool. Writes log before/after state to the audit trail.
+ *
  * Auth: bearer token -> ApiKey table (shared with the read-only public v1
  * API, distinguished by scope strings - see lib/ci-api-auth.ts). Every write
  * tool additionally checks the global kill switch (AutomationSetting) and a
@@ -1039,6 +1047,186 @@ const handler = createMcpHandler(
       },
     )
 
+    const CHANGELOG_CATEGORIES = ["feature", "improvement", "fix", "admin"] as const
+
+    // ── Tool 29: list_changelog_entries ──────────────────────────────────────
+    server.registerTool(
+      "list_changelog_entries",
+      {
+        title: "List Changelog Entries",
+        description:
+          'Read-only list of product changelog entries, newest first - id, title, full description, category, plan, product, publishedAt, createdBy. Use it to see what has already been announced before writing a new entry, or to find an entry id for update_changelog_entry. Filter by "product" ("rip" or "brand"), "category", and/or "search" (case-insensitive substring of the title or description). Defaults to the 20 most recent. Gated by ci:news_write (the same scope as the /news tools).',
+        inputSchema: {
+          product: z.enum(["rip", "brand"]).optional(),
+          category: z.enum(CHANGELOG_CATEGORIES).optional(),
+          search: z.string().min(1).optional(),
+          limit: z.number().int().min(1).max(100).default(20),
+        },
+      },
+      async ({ product, category, search, limit }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.NEWS_WRITE)
+
+          const entries = await prisma.changelog.findMany({
+            where: {
+              ...(product && { product }),
+              ...(category && { category }),
+              ...(search && {
+                OR: [
+                  { title: { contains: search, mode: "insensitive" as const } },
+                  { description: { contains: search, mode: "insensitive" as const } },
+                ],
+              }),
+            },
+            orderBy: { publishedAt: "desc" },
+            take: limit,
+          })
+
+          return { content: [{ type: "text" as const, text: JSON.stringify({ count: entries.length, entries }, null, 2) }] }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 30: create_changelog_entry ──────────────────────────────────────
+    server.registerTool(
+      "create_changelog_entry",
+      {
+        title: "Create Changelog Entry",
+        description:
+          'Publishes a new product changelog entry. "description" is the full write-up (plain text/markdown, written to read well on its own). "category" is one of feature, improvement, fix, admin. "plan" optionally limits who it affects (e.g. "enterprise"); leave it out for an entry that affects everyone. "product" is "rip" (default) or "brand". Published immediately, or at "publishedAt" if given - there is no draft step, so do not call this until the entry is ready to go live. Check list_changelog_entries first to avoid duplicating an existing entry. Requires a "reasoning" string.',
+        inputSchema: {
+          title: z.string().trim().min(1),
+          description: z.string().trim().min(1),
+          category: z.enum(CHANGELOG_CATEGORIES),
+          plan: z.string().optional().describe("Optional plan this affects, e.g. \"enterprise\"; omit for all users"),
+          product: z.enum(["rip", "brand"]).default("rip"),
+          publishedAt: z.string().optional().describe("ISO date to backdate/schedule publishedAt; defaults to now"),
+          reasoning: z.string().min(1).describe("Why this entry is being published now"),
+        },
+      },
+      async ({ title, description, category, plan, product, publishedAt, reasoning }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.NEWS_WRITE)
+          await assertAutomationEnabled()
+
+          const apiKeyId = extra.authInfo!.extra!.apiKeyId as string
+          await enforceCiRateLimit(apiKeyId, "create_changelog_entry")
+
+          let published = new Date()
+          if (publishedAt) {
+            published = new Date(publishedAt)
+            if (Number.isNaN(published.getTime())) {
+              throw new CiApiError("publishedAt must be a valid ISO date", 400)
+            }
+          }
+
+          const entry = await prisma.changelog.create({
+            data: {
+              id: `cl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+              title,
+              description,
+              category,
+              plan: plan?.trim() || null,
+              product,
+              publishedAt: published,
+              createdBy: "grok",
+            },
+          })
+
+          await logCiApiAction({
+            apiKeyId,
+            action: "create_changelog_entry",
+            reasoning,
+            targetType: "changelog_entry",
+            targetIds: [entry.id],
+            afterState: entry,
+          })
+
+          return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, entry }, null, 2) }] }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── Tool 31: update_changelog_entry ──────────────────────────────────────
+    server.registerTool(
+      "update_changelog_entry",
+      {
+        title: "Update Changelog Entry",
+        description:
+          'Edits an existing changelog entry in place (title, description, category, plan, publishedAt). Only pass the fields you want to change; omitted fields are left as-is. Pass plan: "" to clear the plan so the entry applies to everyone. Find the id with list_changelog_entries. Requires a "reasoning" string. There is no delete tool; correct a wrong entry by editing it.',
+        inputSchema: {
+          id: z.string().describe("The changelog entry id to update (from list_changelog_entries)"),
+          title: z.string().trim().min(1).optional(),
+          description: z.string().trim().min(1).optional(),
+          category: z.enum(CHANGELOG_CATEGORIES).optional(),
+          plan: z.string().optional().describe('New plan, or "" to clear it'),
+          publishedAt: z.string().optional().describe("ISO date to reschedule publishedAt"),
+          reasoning: z.string().min(1).describe("Why this entry is being edited"),
+        },
+      },
+      async ({ id, title, description, category, plan, publishedAt, reasoning }, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.NEWS_WRITE)
+          await assertAutomationEnabled()
+
+          const apiKeyId = extra.authInfo!.extra!.apiKeyId as string
+          await enforceCiRateLimit(apiKeyId, "update_changelog_entry")
+
+          if (
+            title === undefined &&
+            description === undefined &&
+            category === undefined &&
+            plan === undefined &&
+            publishedAt === undefined
+          ) {
+            throw new CiApiError("Provide at least one field to change", 400)
+          }
+
+          const before = await prisma.changelog.findUnique({ where: { id } })
+          if (!before) {
+            throw new CiApiError(`Changelog entry ${id} not found`, 404)
+          }
+
+          let published: Date | undefined
+          if (publishedAt !== undefined) {
+            published = new Date(publishedAt)
+            if (Number.isNaN(published.getTime())) {
+              throw new CiApiError("publishedAt must be a valid ISO date", 400)
+            }
+          }
+
+          const entry = await prisma.changelog.update({
+            where: { id },
+            data: {
+              ...(title !== undefined && { title }),
+              ...(description !== undefined && { description }),
+              ...(category !== undefined && { category }),
+              ...(plan !== undefined && { plan: plan.trim() || null }),
+              ...(published !== undefined && { publishedAt: published }),
+            },
+          })
+
+          await logCiApiAction({
+            apiKeyId,
+            action: "update_changelog_entry",
+            reasoning,
+            targetType: "changelog_entry",
+            targetIds: [id],
+            beforeState: before,
+            afterState: entry,
+          })
+
+          return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, entry }, null, 2) }] }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
     // ── Tool 6: list_delete_eligible_messages ────────────────────────────────
     server.registerTool(
       "list_delete_eligible_messages",
@@ -1734,7 +1922,7 @@ const handler = createMcpHandler(
       },
     )
 
-    // ── Tool 22: list_accounts ────────────────────────────────������──────────
+    // ── Tool 22: list_accounts ───────────────────────────────���������──────────
     server.registerTool(
       "list_accounts",
       {

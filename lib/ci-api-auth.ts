@@ -21,7 +21,8 @@
  *   - "ci:delete_entity"  delete_entity
  *   - "ci:digest_read"    read-only digest stat tools
  *   - "ci:digest_write"   create_digest_article (publishes a live DigestArticle)
- *   - "ci:news_write"     create_news_article (publishes a live Announcement on /news)
+ *   - "ci:news_write"     create_news_article (publishes a live Announcement on /news),
+ *                         list/create/update changelog entries
  */
 
 import { createHash, randomBytes } from "crypto"
@@ -252,7 +253,9 @@ export async function enforceCiRateLimit(
   | "create_digest_article"
   | "create_news_article"
   | "update_news_article"
-  | "delete_news_article",
+  | "delete_news_article"
+  | "create_changelog_entry"
+  | "update_changelog_entry",
   ): Promise<void> {
   const now = Date.now()
 
@@ -387,8 +390,10 @@ export async function logCiApiAction(params: {
   | "create_news_article"
   | "update_news_article"
   | "delete_news_article"
+  | "create_changelog_entry"
+  | "update_changelog_entry"
   reasoning?: string
-  targetType?: "sms" | "campaign" | "entity" | "digest_article" | "news_article"
+  targetType?: "sms" | "campaign" | "entity" | "digest_article" | "news_article" | "changelog_entry"
   targetIds?: string[]
   entityId?: string
   beforeState?: unknown

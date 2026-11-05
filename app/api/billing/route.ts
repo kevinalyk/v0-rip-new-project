@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
         scheduledDowngradePlan: true,
         pendingTrialCodeId: true,
         pendingTrialLengthDays: true,
+        trialExpiresAt: true,
       },
     })
 
@@ -124,6 +125,7 @@ export async function GET(request: NextRequest) {
         // step was abandoned. Lets the billing page offer to resume checkout with the same code.
         pendingTrialCodeId: client.pendingTrialCodeId,
         pendingTrialLengthDays: client.pendingTrialLengthDays,
+        trialExpiresAt: client.trialExpiresAt,
       },
       planLimits,
       hasAdminAccess,

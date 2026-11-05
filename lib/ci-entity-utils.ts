@@ -1238,39 +1238,119 @@ export async function updateEntityState(entityId: string, newState: string | nul
   }
 }
 
+const MAX_ENTITY_IMAGE_BYTES = 5 * 1024 * 1024
+const IMAGE_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/png": "png",
+  "image/gif": "gif",
+  "image/webp": "webp",
+}
+
+function isBlockedImageHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "")
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) return true
+  if (host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe80")) return true
+  const v4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (!v4) return false
+  const [a, b] = [Number(v4[1]), Number(v4[2])]
+  return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
+}
+
 /**
- * Set a manual `imageUrl` override for an entity (e.g. a headshot that's
- * missing, wrong, or unavailable from Ballotpedia) without touching any
- * other field (name, type, party, state, description, donationIdentifiers,
- * ballotpediaUrl, etc.). Used by the Claude/Grok-facing CI Assignment MCP's
- * `update_entity_image` tool, which is deliberately restricted to only this
- * one field - same pattern as updateEntityType/updateEntityName. Always sets
- * `imageUrlSource` to "manual" so the nightly Ballotpedia refresh cron treats
- * it as locked and never overwrites it. Returns the before/after state so
- * callers can log a full audit trail and support Undo.
+ * Set a manual profile image (politician photo, or logo for brands/orgs) for an
+ * entity without touching any other field (name, type, party, state,
+ * description, donationIdentifiers, ballotpediaUrl, etc.). Used by the
+ * Claude/Grok-facing CI Assignment MCP's `update_entity_image` tool, which is
+ * deliberately restricted to only this one field - same pattern as
+ * updateEntityType/updateEntityName.
+ *
+ * Like the admin "Image URL Override" field, the source image is downloaded and
+ * re-uploaded to our Blob storage so we control hosting, CORS and link rot.
+ * Always sets `imageUrlSource` to "manual" so the nightly Ballotpedia refresh
+ * cron treats it as locked and never overwrites it. Returns the before/after
+ * state so callers can log a full audit trail and support Undo.
  */
-export async function updateEntityImage(entityId: string, newImageUrl: string) {
+export async function updateEntityImage(entityId: string, sourceImageUrl: string) {
   try {
+    let parsed: URL
+    try {
+      parsed = new URL(sourceImageUrl)
+    } catch {
+      return { success: false as const, error: "imageUrl must be a valid URL", status: 400 }
+    }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return { success: false as const, error: "imageUrl must be an http(s) URL", status: 400 }
+    }
+    if (isBlockedImageHost(parsed.hostname)) {
+      return { success: false as const, error: "imageUrl must point at a public host", status: 400 }
+    }
+
     const entity = await prisma.ciEntity.findUnique({ where: { id: entityId } })
     if (!entity) {
-      return { success: false, error: `Entity ${entityId} not found` }
+      return { success: false as const, error: `Entity ${entityId} not found`, status: 404 }
+    }
+
+    let finalUrl = sourceImageUrl
+    const alreadyHosted = parsed.hostname.endsWith(".public.blob.vercel-storage.com")
+    if (!alreadyHosted) {
+      const res = await fetch(sourceImageUrl, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; RIPTool/1.0; +https://app.rip-tool.com)" },
+        signal: AbortSignal.timeout(15000),
+      }).catch(() => null)
+      if (!res || !res.ok) {
+        return {
+          success: false as const,
+          error: `Could not download the image${res ? ` (HTTP ${res.status})` : ""}. Try a different, direct image link.`,
+          status: 400,
+        }
+      }
+
+      const contentType = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase()
+      const ext = IMAGE_EXTENSIONS[contentType]
+      if (!ext) {
+        return {
+          success: false as const,
+          error: `That URL returned "${contentType || "unknown"}", not a jpg/png/gif/webp image (SVG is not supported). Use a direct link to the image file itself, not a web page.`,
+          status: 400,
+        }
+      }
+
+      const declaredLength = Number(res.headers.get("content-length") || 0)
+      if (declaredLength > MAX_ENTITY_IMAGE_BYTES) {
+        return { success: false as const, error: "Image is larger than 5 MB. Use a smaller version.", status: 400 }
+      }
+      const buffer = await res.arrayBuffer()
+      if (buffer.byteLength === 0 || buffer.byteLength > MAX_ENTITY_IMAGE_BYTES) {
+        return { success: false as const, error: "Image must be between 1 byte and 5 MB.", status: 400 }
+      }
+
+      const blob = await put(`entity-photos/${entityId}-${Date.now()}.${ext}`, buffer, {
+        access: "public",
+        contentType,
+      })
+      finalUrl = blob.url
     }
 
     const before = { imageUrl: entity.imageUrl, imageUrlSource: entity.imageUrlSource }
     const updated = await prisma.ciEntity.update({
       where: { id: entityId },
-      data: { imageUrl: newImageUrl, imageUrlSource: "manual" },
+      data: { imageUrl: finalUrl, imageUrlSource: "manual" },
     })
 
     return {
-      success: true,
+      success: true as const,
       entity: updated,
       before,
-      after: { imageUrl: updated.imageUrl, imageUrlSource: updated.imageUrlSource },
+      after: {
+        imageUrl: updated.imageUrl,
+        imageUrlSource: updated.imageUrlSource,
+        ...(alreadyHosted ? {} : { rehostedFrom: sourceImageUrl }),
+      },
     }
   } catch (error: any) {
     console.error("Error updating entity image:", error)
-    return { success: false, error: error.message }
+    return { success: false as const, error: error.message as string, status: 500 }
   }
 }
 

@@ -28,6 +28,7 @@ export async function GET(request: Request) {
 
     const expiredTrialClients = await prisma.client.findMany({
       where: {
+        product: "rip",
         trialExpiresAt: { not: null, lt: new Date() },
         stripeSubscriptionId: null,
       },

@@ -198,9 +198,11 @@ export async function createTrialCheckoutSession(clientId: string) {
     throw new Error("Client not found")
   }
 
-  if (!client.pendingTrialCodeId || !client.pendingTrialLengthDays) {
-    throw new Error("No pending trial to start checkout for")
+  // 0 means checkout is still required but the email already used its one free trial.
+  if (client.pendingTrialLengthDays === null) {
+    throw new Error("No pending checkout for this account")
   }
+  const trialDays = client.pendingTrialLengthDays
 
   const owner = client.users[0]
   if (!owner) {
@@ -228,7 +230,8 @@ export async function createTrialCheckoutSession(clientId: string) {
           currency: "usd",
           product_data: {
             name: "Basic",
-            description: `Basic Plan — starts after your ${client.pendingTrialLengthDays}-day free trial`,
+            description:
+              trialDays > 0 ? `Basic Plan — starts after your ${trialDays}-day free trial` : "Basic Plan — monthly subscription",
           },
           unit_amount: basicPrice * 100,
           recurring: {
@@ -238,15 +241,18 @@ export async function createTrialCheckoutSession(clientId: string) {
         quantity: 1,
       },
     ],
-    subscription_data: {
-      trial_period_days: client.pendingTrialLengthDays,
-      trial_settings: {
-        end_behavior: { missing_payment_method: "cancel" },
-      },
-    },
+    subscription_data:
+      trialDays > 0
+        ? {
+            trial_period_days: trialDays,
+            trial_settings: {
+              end_behavior: { missing_payment_method: "cancel" },
+            },
+          }
+        : undefined,
     payment_method_collection: "always",
     custom_text: {
-      submit: { message: trialCheckoutDisclosure(client.pendingTrialLengthDays, basicPrice) },
+      submit: { message: trialCheckoutDisclosure(trialDays, basicPrice) },
     },
     success_url: successUrl,
     cancel_url: cancelUrl,
@@ -255,8 +261,8 @@ export async function createTrialCheckoutSession(clientId: string) {
     metadata: {
       clientId: client.id,
       userId: owner.id,
-      trialCodeId: client.pendingTrialCodeId,
-      trialLengthDays: client.pendingTrialLengthDays.toString(),
+      ...(client.pendingTrialCodeId ? { trialCodeId: client.pendingTrialCodeId } : {}),
+      trialLengthDays: trialDays.toString(),
       checkoutPurpose: "trial",
     },
   })

@@ -19,6 +19,13 @@ export function monthlyCheckoutDisclosure(options: {
   return `${item}: $${monthlyTotal}/month${additionalSeats ? ` (includes ${additionalSeats} additional seat${additionalSeats === 1 ? "" : "s"} at $${seatMonthlyDollars}/month each)` : ""}${addOnMonthlyDollars ? ` (includes a $${addOnMonthlyDollars}/month add-on)` : ""}, plus any applicable tax. ${existingSubscriptionChargesContinue ? "Existing plan charges continue separately. " : ""}You are charged at checkout and automatically each month until you cancel. Cancel in Account > Billing before your next renewal to stop future charges.`
 }
 
+// Length of the card-required trial every new web signup gets. A redeemed trial code overrides it.
+export const DEFAULT_TRIAL_DAYS = 7
+
+// days === 0 means the email already used its one free trial, so checkout bills immediately.
 export function trialCheckoutDisclosure(days: number, monthlyDollars: number): string {
+  if (days === 0) {
+    return `Free trials are limited to one per person. Your Basic subscription starts today at $${monthlyDollars}/month plus any applicable tax, charged monthly until you cancel. Cancel in Account > Billing before your next renewal to stop future charges.`
+  }
   return `${days}-day free trial: $0 today. When the trial ends, your Basic subscription automatically starts at $${monthlyDollars}/month plus any applicable tax, charged monthly until you cancel. Cancel in Account > Billing before the trial ends to avoid the first charge.`
 }

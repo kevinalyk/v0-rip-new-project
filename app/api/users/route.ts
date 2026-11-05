@@ -196,7 +196,7 @@ export async function POST(request: Request) {
         email,
         firstName,
         lastName: lastName || "",
-        role: role || "viewer",
+        role: role || "user",
         password: hashedPassword,
         firstLogin: true,
       },

@@ -82,6 +82,7 @@ export async function POST(request: NextRequest) {
 
     // ── Fetch all clients (free and paid both get the weekly top 10) ─────────
     const clients = await prisma.client.findMany({
+      where: { product: "rip" },
       select: { id: true, slug: true },
     })
 

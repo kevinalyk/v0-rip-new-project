@@ -42,6 +42,7 @@ interface BillingData {
     stripeBillingInterval?: string | null // "month" | "year"
     pendingTrialCodeId?: string | null
     pendingTrialLengthDays?: number | null
+    trialExpiresAt?: string | null
   }
   planLimits: {
     emailVolumeLimit: number
@@ -322,12 +323,25 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
   }
 
   const { client, planLimits, userRole } = billingData
-  const planFeatures = getPlanFeatures(client.subscriptionPlan)
+  // A card-on-file trial is stored as plan "enterprise" / status "trialing" so the account gets full
+  // access, but it is sold and shown to the customer as a free trial of Professional.
+  const trialEndsAt = client.trialExpiresAt ? new Date(client.trialExpiresAt) : null
+  const isTrialing =
+    client.subscriptionStatus === "trialing" && !!trialEndsAt && trialEndsAt.getTime() > Date.now()
+  const trialDaysLeft = trialEndsAt
+    ? Math.max(1, Math.ceil((trialEndsAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+    : 0
+  const planFeatures = getPlanFeatures(isTrialing ? "professional" : client.subscriptionPlan)
+  const postTrialPrice =
+    client.stripeMonthlyAmount != null
+      ? `$${(client.stripeMonthlyAmount / 100).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}/${client.stripeBillingInterval ?? "month"}`
+      : "$50/month"
 
   const canManageBilling = userRole === "owner" || userRole === "admin"
   const isFreeTier = planFeatures.tier === "starter" && !client.stripeSubscriptionId
   const isCancelled = client.subscriptionStatus === "cancelled"
-  const hasNoActivePaidPlan = client.subscriptionStatus !== "active" && planFeatures.tier !== "starter"
+  const hasNoActivePaidPlan =
+    client.subscriptionStatus !== "active" && !isTrialing && planFeatures.tier !== "starter"
   const isScheduledForCancellation = client.cancelAtPeriodEnd && client.stripeSubscriptionId
   const isScheduledForDowngrade = client.scheduledDowngradePlan && client.scheduledDowngradePlan !== "free"
 
@@ -339,7 +353,7 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
           <p className="text-muted-foreground">Manage your subscription and monitor usage</p>
         </div>
 
-        {client.pendingTrialCodeId && (
+        {client.pendingTrialLengthDays && (
           <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <CreditCard className="h-5 w-5 text-blue-600 dark:text-blue-500 mt-0.5" />
@@ -348,11 +362,10 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
                   Finish starting your free trial
                 </h3>
                 <p className="text-sm text-blue-600/90 dark:text-blue-500/90 mt-1">
-                  You redeemed a{" "}
-                  {client.pendingTrialLengthDays ? `${client.pendingTrialLengthDays}-day ` : ""}
-                  free trial, but checkout wasn't completed. Add a card to start your trial — you
-                  won't be charged during the trial, and afterward you'll automatically move to our
-                  Basic plan ($50/month) unless you cancel first.
+                  Your {client.pendingTrialLengthDays}-day free trial hasn&apos;t started because checkout
+                  wasn&apos;t completed. Add a card to start it — you won&apos;t be charged during the trial,
+                  and afterward your card will be charged automatically for our Basic plan ($50/month)
+                  unless you cancel first.
                 </p>
                 {canManageBilling && (
                   <Button onClick={handleResumeTrialCheckout} className="mt-3" size="sm" disabled={resumingTrialCheckout}>
@@ -390,6 +403,12 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
                 <>
                   <span className="text-2xl font-bold">{planFeatures.name}</span>
                   <div className="flex items-center gap-2">
+                    {isTrialing && (
+                      <Badge className="text-lg px-3 py-1 bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 hover:bg-blue-500/15">
+                        Free Trial
+                      </Badge>
+                    )}
+                    {!isTrialing && (
                     <Badge variant="secondary" className="text-lg px-3 py-1">
                       {client.stripeMonthlyAmount != null
                         ? client.stripeMonthlyAmount === 0
@@ -399,6 +418,7 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
                         ? "Free"
                         : `${planFeatures.price}/mo`}
                     </Badge>
+                    )}
                     {isScheduledForDowngrade && client.subscriptionRenewDate && (
                       <Badge variant="outline" className="text-yellow-600 border-yellow-600">
                         Downgrades {format(new Date(client.subscriptionRenewDate), "MMM d")}
@@ -414,6 +434,19 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
                 </>
               )}
             </div>
+
+            {isTrialing && trialEndsAt && (
+              <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-4">
+                <p className="font-semibold text-blue-600 dark:text-blue-400">
+                  Free trial of Professional &middot; {trialDaysLeft} day{trialDaysLeft === 1 ? "" : "s"} left
+                </p>
+                <p className="mt-1 text-sm text-blue-600/90 dark:text-blue-400/90">
+                  {isScheduledForCancellation
+                    ? `Your trial is set to cancel. You keep full Professional access through ${format(trialEndsAt, "MMMM d, yyyy")}, you won't be charged, and your access to paid features ends after that. Reactivate before then to keep your plan.`
+                    : `You have full Professional access until ${format(trialEndsAt, "MMMM d, yyyy")}. On that date your card on file will be charged ${postTrialPrice} for the Basic plan unless you cancel before then.`}
+                </p>
+              </div>
+            )}
 
             {canManageBilling && (
               <div className="space-y-2 pt-2">
@@ -436,14 +469,16 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
                   </Button>
                 ) : (
                   <>
-                    <Button
-                      className="w-full"
-                      variant="default"
-                      style={{ backgroundColor: "#EB3847", color: "white" }}
-                      onClick={handleManageSubscription}
-                    >
-                      Manage Subscription
-                    </Button>
+                    {!isTrialing && (
+                      <Button
+                        className="w-full"
+                        variant="default"
+                        style={{ backgroundColor: "#EB3847", color: "white" }}
+                        onClick={handleManageSubscription}
+                      >
+                        Manage Subscription
+                      </Button>
+                    )}
 
                     {!hasNoActivePaidPlan && !isFreeTier && planFeatures.tier !== "starter" && (
                       <AlertDialog>
@@ -455,7 +490,7 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
                                 Canceling...
                               </>
                             ) : (
-                              "Cancel Subscription"
+                              isTrialing ? "Cancel Free Trial" : "Cancel Subscription"
                             )}
                           </Button>
                         </AlertDialogTrigger>
@@ -463,15 +498,25 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
                           <AlertDialogHeader>
                             <AlertDialogTitle className="flex items-center gap-2">
                               <AlertTriangle className="h-5 w-5 text-red-500" />
-                              Cancel {planFeatures.name} Plan?
+                              {isTrialing ? "Cancel Free Trial?" : `Cancel ${planFeatures.name} Plan?`}
                             </AlertDialogTitle>
                             <AlertDialogDescription>
-                              Your subscription will remain active until{" "}
-                              {client.subscriptionRenewDate
-                                ? format(new Date(client.subscriptionRenewDate), "MMMM d, yyyy")
-                                : "the end of your billing period"}
-                              . You'll retain full access to all {planFeatures.name} features until then. After that
-                              date, you'll be downgraded to the free Starter plan.
+                              {isTrialing && trialEndsAt ? (
+                                <>
+                                  Your free trial will stay active until {format(trialEndsAt, "MMMM d, yyyy")}. You'll
+                                  keep full Professional access until then and you won't be charged. After that date
+                                  your access to paid features will end.
+                                </>
+                              ) : (
+                                <>
+                                  Your subscription will remain active until{" "}
+                                  {client.subscriptionRenewDate
+                                    ? format(new Date(client.subscriptionRenewDate), "MMMM d, yyyy")
+                                    : "the end of your billing period"}
+                                  . You'll retain full access to all {planFeatures.name} features until then. After that
+                                  date, you'll be downgraded to the free Starter plan.
+                                </>
+                              )}
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <CancellationFeedbackFields
@@ -481,12 +526,12 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
                             onCommentChange={setCancelComment}
                           />
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Keep Subscription</AlertDialogCancel>
+                            <AlertDialogCancel>{isTrialing ? "Keep Trial" : "Keep Subscription"}</AlertDialogCancel>
                             <AlertDialogAction
                               onClick={handleCancelSubscription}
                               className="bg-red-500 hover:bg-red-600"
                             >
-                              Schedule Cancellation
+                              {isTrialing ? "Cancel Trial" : "Schedule Cancellation"}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
@@ -532,13 +577,30 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
             <CardContent className="space-y-4">
               <div className="space-y-3">
                 <div>
-                  <p className="text-sm text-muted-foreground">Start Date</p>
+                  <p className="text-sm text-muted-foreground">{isTrialing ? "Trial Started" : "Start Date"}</p>
                   <p className="text-lg font-medium">
                     {format(new Date(client.subscriptionStartDate), "MMMM d, yyyy")}
                   </p>
                 </div>
 
-                {!isCancelled && client.subscriptionRenewDate && (
+                {isTrialing && trialEndsAt && (
+                  <>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Trial Ends</p>
+                      <p className="text-lg font-medium">{format(trialEndsAt, "MMMM d, yyyy")}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">First Payment</p>
+                      <p className="text-lg font-medium">
+                        {isScheduledForCancellation
+                          ? "None — your trial will not convert"
+                          : `${postTrialPrice} (Basic plan) on ${format(trialEndsAt, "MMMM d, yyyy")}`}
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {!isCancelled && !isTrialing && client.subscriptionRenewDate && (
                   <div>
                     <p className="text-sm text-muted-foreground">Next Payment Date</p>
                     <p className="text-lg font-medium">

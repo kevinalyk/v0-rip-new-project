@@ -789,13 +789,16 @@ const handler = createMcpHandler(
     server.registerTool(
       "update_entity_image",
       {
-        title: "Update Entity Image",
+        title: "Update Entity Profile Image",
         description:
-          'Sets a manual imageUrl override for an existing entity (e.g. a missing headshot, or a wrong/broken one scraped from Ballotpedia). Only this field is editable through this tool - name, type, party, state, donationIdentifiers, bio, and ballotpediaUrl stay off-limits. The override is marked as "manual" so the nightly Ballotpedia refresh cron never overwrites it. Use list_entities first to confirm the entityId. Requires a "reasoning" string.',
+          'Sets the profile picture for an existing entity: a headshot for a politician, or a logo for a brand, PAC or organization (e.g. when it is missing, or the scraper picked a wrong/broken one). Pass a direct link to the image file (jpg, png, gif or webp, max 5 MB) - NOT a web page. The image is downloaded and re-hosted on our own storage, so the source link may be anywhere public. The image is marked "manual" so the nightly Ballotpedia refresh never overwrites it. Only this field is editable through this tool - name, type, party, state, donationIdentifiers, bio, and ballotpediaUrl stay off-limits. Use list_entities first to confirm the entityId. Requires a "reasoning" string.',
         inputSchema: {
           entityId: z.string(),
-          imageUrl: z.string().url().describe("The new image URL to use for this entity"),
-          reasoning: z.string().min(1).describe("Why this entity's image is being set/corrected"),
+          imageUrl: z
+            .string()
+            .url()
+            .describe("Direct public URL of the profile image file (headshot or logo): jpg/png/gif/webp, max 5 MB, not an HTML page or SVG"),
+          reasoning: z.string().min(1).describe("Why this entity's profile image is being set/corrected, and where the image came from"),
         },
       },
       async ({ entityId, imageUrl, reasoning }, extra) => {
@@ -809,7 +812,7 @@ const handler = createMcpHandler(
           const result = await updateEntityImage(entityId, imageUrl)
 
           if (!result.success) {
-            throw new CiApiError(result.error || "Failed to update entity image", 500)
+            throw new CiApiError(result.error || "Failed to update entity image", result.status)
           }
 
           await logCiApiAction({
@@ -1774,7 +1777,7 @@ const handler = createMcpHandler(
       },
     )
 
-    // ── Tool 17: get_digest_patterns_and_types ──────────────────────────────
+    // ── Tool 17: get_digest_patterns_and_types ─────��────────────────────────
     server.registerTool(
       "get_digest_patterns_and_types",
       {

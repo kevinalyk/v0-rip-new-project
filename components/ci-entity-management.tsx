@@ -2045,16 +2045,16 @@ export function CiEntityManagement({ clientSlug }: CiEntityManagementProps) {
               </div>
               {editingEntityId && (
                 <div>
-                  <Label htmlFor="entity-image-override">Image URL Override (Optional)</Label>
-                  <Input
-                    id="entity-image-override"
-                    placeholder="e.g., https://ballotpedia.s3.amazonaws.com/.../logo.jpg"
+  <Label htmlFor="entity-image-override">Profile Image URL (Optional)</Label>
+  <Input
+  id="entity-image-override"
+  placeholder="e.g., https://example.com/images/logo.png"
                     value={newEntityImageUrlOverride}
                     onChange={(e) => setNewEntityImageUrlOverride(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Use this to manually replace the entity photo when the scraper picks the wrong image.
-                    Paste the direct image URL — it will be re-uploaded to our storage.
+  Sets the profile picture: a headshot for politicians or a logo for brands and organizations.
+  Also use it to replace a wrong image the scraper picked. Paste the direct image URL — it will be re-uploaded to our storage.
                   </p>
                 </div>
               )}

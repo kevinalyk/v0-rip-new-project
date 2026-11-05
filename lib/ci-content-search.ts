@@ -23,7 +23,15 @@ export interface SearchContentParams {
   includePlacement?: boolean
   // Internal MCP only: corporate (media/retail) entities are hidden from RIP and the client MCP by default.
   includeCorporate?: boolean
+  // Client-safe: restrict emails to those with high seed-inbox placement WITHOUT returning any placement numbers.
+  // Emails only (SMS has no seed placement), results stay in date order.
+  highInboxOnly?: boolean
 }
+
+// What counts as "high" is fixed server-side and never exposed, so a client cannot probe the rate by varying a threshold.
+// The seed floor matters because most campaigns are seen by only 1-2 seed inboxes, where "100%" is meaningless.
+export const HIGH_INBOX_MIN_RATE_PCT = 90
+export const HIGH_INBOX_MIN_SEEDS = 3
 
 function appUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || "https://app.rip-tool.com"
@@ -51,10 +59,13 @@ function placementSummary(inbox: number, spam: number, notDelivered: number) {
 }
 
 export async function searchContent(params: SearchContentParams) {
-  const { query, match, startDate, endDate, type, party, limit, page, entityLimit, includePlacement, includeCorporate } = params
+  const { query, match, startDate, endDate, type, party, limit, page, entityLimit, includePlacement, includeCorporate, highInboxOnly } = params
+  if (highInboxOnly && type === "sms") {
+    throw new CiApiError('inboxPlacement "high" only applies to emails (SMS has no inbox placement). Use type "email" or "both".', 400)
+  }
   const corporateFilter = includeCorporate ? {} : { NOT: { entity: { isCorporate: true } } }
   const wantEmail = type === "email" || type === "both"
-  const wantSms = type === "sms" || type === "both"
+  const wantSms = (type === "sms" || type === "both") && !highInboxOnly
 
   const { from, to, range: dateRange } = parseDateRange(startDate, endDate)
 
@@ -73,6 +84,9 @@ export async function searchContent(params: SearchContentParams) {
     ...corporateFilter,
     ...(dateRange ? { dateReceived: dateRange } : {}),
     ...partyFilter,
+    ...(highInboxOnly
+      ? { inboxCount: { gte: HIGH_INBOX_MIN_SEEDS }, inboxRate: { gte: HIGH_INBOX_MIN_RATE_PCT } }
+      : {}),
     [termMode]: terms.map((term) => ({
       OR: [
         { senderName: { contains: term, mode: "insensitive" as const } },
@@ -230,7 +244,17 @@ export async function searchContent(params: SearchContentParams) {
   const total = emailTotal + smsTotal
 
   return {
-    query: { terms, match, startDate: from?.toISOString() ?? null, endDate: to?.toISOString() ?? null, type, party: party ?? null },
+    query: {
+      terms,
+      match,
+      startDate: from?.toISOString() ?? null,
+      endDate: to?.toISOString() ?? null,
+      type,
+      party: party ?? null,
+      ...(highInboxOnly
+        ? { inboxPlacement: "high", note: "Filtered to emails with high inbox placement. SMS is excluded. Placement numbers are never returned." }
+        : {}),
+    },
     totals: { total, emails: emailTotal, sms: smsTotal, unassigned: (unassigned?.emailCount ?? 0) + (unassigned?.smsCount ?? 0) },
     pagination: { page, limit, hasMore: page * limit < total },
     byEntity,

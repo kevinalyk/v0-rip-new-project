@@ -98,6 +98,12 @@ const handler = createMcpHandler(
           limit: z.number().int().min(1).max(CLIENT_MCP_LIMITS.MAX_PAGE_SIZE).default(10),
           page: z.number().int().min(1).max(20).default(1),
           entityLimit: z.number().int().min(1).max(25).default(15).describe("How many entities to include in the grouped counts"),
+          inboxPlacement: z
+            .enum(["any", "high"])
+            .default("any")
+            .describe(
+              'Set to "high" to only see emails that reliably reach the inbox (strong inbox placement in our seed testing), e.g. to study copy that works. Emails only - SMS is excluded. No placement numbers are ever returned; results simply narrow to the high-placement set.',
+            ),
         },
       },
       async (args, extra) =>
@@ -107,7 +113,8 @@ const handler = createMcpHandler(
           args,
           async () => {
             assertDepth(args.page, args.limit)
-            return searchContent(args)
+            const { inboxPlacement, ...rest } = args
+            return searchContent({ ...rest, highInboxOnly: inboxPlacement === "high" })
           },
           (r) => ({
             count: r.results.length + r.byEntity.length,

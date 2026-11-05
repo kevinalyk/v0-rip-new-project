@@ -1,6 +1,6 @@
 import type React from "react"
 import type { Metadata, Viewport } from "next"
-import { Hanken_Grotesk } from "next/font/google"
+import localFont from "next/font/local"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -8,10 +8,12 @@ import { Toaster } from "sonner"
 import { DomainProvider } from "@/lib/domain-context"
 import { CookieConsentBanner } from "@/components/cookie-consent-banner"
 
-const hankenGrotesk = Hanken_Grotesk({
-  subsets: ["latin"],
+// Self-hosted: the Google Fonts fetch at build time was failing on Vercel.
+const hankenGrotesk = localFont({
+  src: "./fonts/HankenGrotesk-Variable.woff2",
   variable: "--font-hanken-grotesk",
-  weight: ["400", "500", "600", "700", "800"],
+  weight: "100 900",
+  display: "swap",
 })
 
 export const metadata: Metadata = {

@@ -350,6 +350,8 @@ export async function sendWelcomeEmail(params: {
   email: string
   organizationName: string
   plan?: string
+  trialDays?: number
+  paymentRequired?: boolean
   loginUrl?: string
 }): Promise<boolean> {
   const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
@@ -363,8 +365,44 @@ export async function sendWelcomeEmail(params: {
   const {
     firstName,
     email,
+    trialDays,
+    paymentRequired = false,
     loginUrl = "https://app.rip-tool.com/login",
   } = params
+
+  // Web signups have no access until Stripe checkout is complete, so the free-Starter-plan
+  // copy only applies to signups that skip checkout.
+  const checkoutRequired = Boolean(trialDays) || paymentRequired
+  const trialHeading = trialDays ? `Your ${trialDays}-day free trial` : "Finish checkout to get started"
+  const trialNotice = trialDays
+    ? `Add a card to start your ${trialDays}-day free trial of full access. Your account isn't active until you do. You won't be charged today. When the trial ends, your card will automatically be charged $50/month for the Basic plan (plus any applicable tax) unless you cancel first in Account > Billing. We'll email you a reminder before your trial ends.`
+    : paymentRequired
+      ? `Free trials are limited to one per person, so your Basic plan ($50/month plus any applicable tax) is billed when you subscribe. Your account isn't active until checkout is complete, and you can cancel anytime in Account > Billing.`
+      : ""
+  const trialHtml = trialNotice
+    ? `<div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 16px; margin: 0 0 20px 0;">
+              <p style="margin: 0 0 6px 0; font-size: 14px; font-weight: 600; color: #9a3412;">${trialHeading}</p>
+              <p style="margin: 0; font-size: 14px; color: #7c2d12;">${trialNotice}</p>
+            </div>`
+    : ""
+  const trialText = trialNotice ? `${trialHeading.toUpperCase()}\n${trialNotice}\n\n` : ""
+  const freePlanHtml = checkoutRequired
+    ? ""
+    : `<p style="margin: 0 0 8px 0; font-size: 14px; color: #555; font-weight: 600;">Your free Starter plan gives you access to:</p>
+            <ul style="margin: 0 0 20px 0; padding-left: 20px; font-size: 14px; color: #333; line-height: 1.8;">
+              <li>The last 3 hours of email and SMS campaigns across the database</li>
+              <li>Basic campaign details for each message</li>
+            </ul>
+            <p style="margin: 0 0 16px 0; font-size: 14px; color: #555;">
+              Upgrading unlocks deeper history, search and filtering, the ability to follow specific entities, analytics, and our full inboxing and seed testing tools.
+            </p>`
+  const freePlanText = checkoutRequired
+    ? ""
+    : `Your free Starter plan gives you access to:
+- The last 3 hours of email and SMS campaigns across the database
+- Basic campaign details for each message
+
+Upgrading unlocks deeper history, search and filtering, the ability to follow specific entities, analytics, and our full inboxing and seed testing tools.`
 
   const html = `
     <!DOCTYPE html>
@@ -381,14 +419,8 @@ export async function sendWelcomeEmail(params: {
             <p style="margin: 0 0 16px 0; font-size: 15px; color: #1a1a1a;">
               Welcome to Inbox.GOP — the most comprehensive database of Republican political fundraising emails and SMS messages.
             </p>
-            <p style="margin: 0 0 8px 0; font-size: 14px; color: #555; font-weight: 600;">Your free Starter plan gives you access to:</p>
-            <ul style="margin: 0 0 20px 0; padding-left: 20px; font-size: 14px; color: #333; line-height: 1.8;">
-              <li>The last 3 hours of email and SMS campaigns across the database</li>
-              <li>Basic campaign details for each message</li>
-            </ul>
-            <p style="margin: 0 0 16px 0; font-size: 14px; color: #555;">
-              Upgrading unlocks deeper history, search and filtering, the ability to follow specific entities, analytics, and our full inboxing and seed testing tools.
-            </p>
+            ${trialHtml}
+            ${freePlanHtml}
             <p style="margin: 0 0 24px 0; font-size: 15px; color: #1a1a1a;">
               If you'd like a walkthrough of everything the platform can do, just reply to this email and we'll set up a time.
             </p>
@@ -411,11 +443,7 @@ Hi ${firstName},
 
 Welcome to Inbox.GOP — the most comprehensive database of Republican political fundraising emails and SMS messages.
 
-Your free Starter plan gives you access to:
-- The last 3 hours of email and SMS campaigns across the database
-- Basic campaign details for each message
-
-Upgrading unlocks deeper history, search and filtering, the ability to follow specific entities, analytics, and our full inboxing and seed testing tools.
+${trialText}${freePlanText}
 
 If you'd like a walkthrough of everything the platform can do, just reply to this email and we'll set up a time.
 

@@ -3,6 +3,8 @@ import bcryptjs from "bcryptjs"
 import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { sendNewSignupNotification, sendWelcomeEmail } from "@/lib/mailgun"
+import { DEFAULT_TRIAL_DAYS } from "@/lib/checkout-disclosures"
+import { isEligibleForFreeTrial } from "@/lib/trial-eligibility"
 import { createToken, isIpBlocked } from "@/lib/auth"
 import {
   checkMobileRateLimit,
@@ -178,6 +180,19 @@ export async function POST(request: NextRequest) {
       matchedTrialCode = { id: codeRow.id, trialLengthDays: codeRow.trialLengthDays }
     }
 
+    // Every new web signup must complete Stripe checkout before getting access. First-time emails
+    // get a card-required trial (a redeemed code sets the length, otherwise the default applies).
+    // Anyone who already had an account or Stripe customer under this email gets 0 days: they pay
+    // from day one, and any trial code is ignored and left unredeemed. iOS personal workspaces
+    // bill through Apple, so they skip checkout (null).
+    const eligibleForTrial = isIosSignup ? false : await isEligibleForFreeTrial(normalizedEmail)
+    if (!eligibleForTrial) matchedTrialCode = null
+    const trialLengthDays = isIosSignup
+      ? null
+      : eligibleForTrial
+        ? (matchedTrialCode?.trialLengthDays ?? DEFAULT_TRIAL_DAYS)
+        : 0
+
     // Generate description
     const createdDate = new Date().toLocaleDateString("en-US", {
       month: "2-digit",
@@ -208,10 +223,10 @@ export async function POST(request: NextRequest) {
           dataRetentionDays: 90,
           accountKind: isIosSignup ? "personal" : "organization",
           hasCompetitiveInsights: isIosSignup,
-          ...(matchedTrialCode
+          ...(trialLengthDays !== null
             ? {
-                pendingTrialCodeId: matchedTrialCode.id,
-                pendingTrialLengthDays: matchedTrialCode.trialLengthDays,
+                pendingTrialLengthDays: trialLengthDays,
+                ...(matchedTrialCode ? { pendingTrialCodeId: matchedTrialCode.id } : {}),
               }
             : {}),
         },
@@ -253,7 +268,14 @@ export async function POST(request: NextRequest) {
       lastName,
       email: normalizedEmail,
       organizationName: result.client.name,
-      plan: matchedTrialCode ? `${matchedTrialCode.trialLengthDays}-Day Free Trial (pending card on file)` : "Free",
+      plan:
+        trialLengthDays === null
+          ? "Free"
+          : trialLengthDays > 0
+            ? `${trialLengthDays}-Day Free Trial (pending card on file)`
+            : "Basic (payment required)",
+      trialDays: trialLengthDays || undefined,
+      paymentRequired: trialLengthDays === 0,
       loginUrl: "https://app.rip-tool.com/login",
     }).catch((err) => console.error("[Signup] Welcome email failed:", err))
 
@@ -287,10 +309,10 @@ export async function POST(request: NextRequest) {
         clientId: result.client.id,
         clientSlug: result.client.slug,
         userId: result.user.id,
-        // Tells the signup page to redirect straight to Stripe Checkout to collect a card and
-        // start the trial, instead of going to the dashboard. Only set when a valid trial code
-        // was redeemed above.
-        requiresTrialCheckout: Boolean(matchedTrialCode),
+        // Tells the signup page to redirect straight to Stripe Checkout. Access stays blocked
+        // until checkout completes. Set for every non-iOS signup.
+        requiresTrialCheckout: trialLengthDays !== null,
+        trialEligible: trialLengthDays !== null && trialLengthDays > 0,
         requiresWebOnboarding: isIosSignup,
         user: {
           id: result.user.id,

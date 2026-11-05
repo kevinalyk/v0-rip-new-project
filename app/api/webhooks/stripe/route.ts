@@ -358,6 +358,12 @@ export async function POST(req: NextRequest) {
             updateData.pendingTrialCodeId = null
             updateData.pendingTrialLengthDays = null
             console.log("[Stripe Webhook] Trial checkout completed, granting enterprise access until:", updateData.trialExpiresAt)
+          } else if (session.metadata?.checkoutPurpose === "trial" && subscription.status === "active") {
+            // Returning email with no trial: the subscription starts (and is charged) immediately.
+            // Clearing the pending fields is what lifts the checkout-required block.
+            updateData.pendingTrialCodeId = null
+            updateData.pendingTrialLengthDays = null
+            console.log("[Stripe Webhook] Paid checkout completed for returning email, access unlocked")
           }
 
           // Always reset these on a new checkout

@@ -229,6 +229,28 @@ export async function getAuthenticatedUser(request: Request) {
   return payload
 }
 
+// Routes a user with unfinished checkout still needs: auth, billing (the gate polls it), and the
+// slug lookups the app shell makes while loading.
+const CHECKOUT_EXEMPT_API_PREFIXES = ["/api/auth/", "/api/billing", "/api/client/slug", "/api/client/verify-access"]
+
+/**
+ * New web signups have no access until Stripe checkout completes. The signup flow marks the
+ * client with pendingTrialLengthDays and the Stripe webhook clears it, so a pending client is
+ * blocked here for every API route that authenticates through verifyAuth.
+ */
+async function isCheckoutPending(user: any, request: Request): Promise<boolean> {
+  if (user.role === "super_admin" || !user.clientId) return false
+
+  const pathname = new URL(request.url).pathname
+  if (CHECKOUT_EXEMPT_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return false
+
+  const client = await prisma.client.findUnique({
+    where: { id: user.clientId },
+    select: { pendingTrialLengthDays: true },
+  })
+  return client?.pendingTrialLengthDays != null
+}
+
 /**
  * Verify authentication for API routes
  * Returns success status and user info
@@ -241,6 +263,14 @@ export async function verifyAuth(request: Request) {
       return {
         success: false,
         error: "Unauthorized",
+        user: null,
+      }
+    }
+
+    if (await isCheckoutPending(user, request)) {
+      return {
+        success: false,
+        error: "Checkout required",
         user: null,
       }
     }

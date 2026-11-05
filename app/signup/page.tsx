@@ -141,8 +141,8 @@ export default function SignupPage() {
             return
           }
         } catch (checkoutError) {
-          // If Stripe checkout fails to start for any reason, fall back to the dashboard — the
-          // account still exists on the free plan and can resume checkout from billing.
+          // If Stripe checkout fails to start, fall back to the app — the account is blocked by the
+          // checkout-required screen there, which offers a retry.
           console.error("Failed to start trial checkout:", checkoutError)
         }
       }
@@ -310,7 +310,9 @@ export default function SignupPage() {
                 <strong>Free for {DEFAULT_TRIAL_DAYS} days, then $50/month.</strong> You&apos;ll add a card on the next
                 step and won&apos;t be charged today. After your {DEFAULT_TRIAL_DAYS}-day trial of full access, your
                 card is automatically charged $50/month (plus any applicable tax) for the Basic plan unless you
-                cancel first in Account &gt; Billing. We&apos;ll email you a reminder before the trial ends.
+                cancel first in Account &gt; Billing. We&apos;ll email you a reminder before the trial ends. Your
+                account is activated once you complete the card step. Free trials are limited to one per person; if
+                you&apos;ve had one before, your plan is billed at checkout.
               </AlertDescription>
             </Alert>
 
@@ -355,7 +357,7 @@ export default function SignupPage() {
             </div>
 
             <Button type="submit" variant="branded" className="w-full" disabled={loading}>
-              {loading ? "Creating account..." : "Create Account & Start Free Trial"}
+              {loading ? "Creating account..." : "Create Account & Continue"}
             </Button>
           </form>
         </CardContent>

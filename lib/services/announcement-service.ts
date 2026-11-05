@@ -110,16 +110,16 @@ function serializeAnnouncement(row: AnnouncementListRow) {
 }
 
 export async function listMobileAnnouncements(cursor: MobileAnnouncementCursor | null) {
-  const cursorDate = cursor ? new Date(cursor.publishedAt) : null
   const rows = await prisma.announcement.findMany({
-    where: cursorDate
-      ? {
+    where: {
+      product: "rip",
+      ...(cursor ? {
           OR: [
-            { publishedAt: { lt: cursorDate } },
-            { publishedAt: cursorDate, id: { lt: cursor.id } },
+            { publishedAt: { lt: new Date(cursor.publishedAt) } },
+            { publishedAt: new Date(cursor.publishedAt), id: { lt: cursor.id } },
           ],
-        }
-      : undefined,
+        } : {}),
+    },
     select: announcementListSelect,
     orderBy: [{ publishedAt: "desc" }, { id: "desc" }],
     take: MOBILE_ANNOUNCEMENT_PAGE_SIZE + 1,
@@ -140,8 +140,8 @@ export async function listMobileAnnouncements(cursor: MobileAnnouncementCursor |
 }
 
 export async function getMobileAnnouncement(slug: string) {
-  const announcement = await prisma.announcement.findUnique({
-    where: { slug },
+  const announcement = await prisma.announcement.findFirst({
+    where: { slug, product: "rip" },
     select: announcementListSelect,
   })
 

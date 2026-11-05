@@ -444,14 +444,17 @@ export async function notifyMobileDevicesForAnnouncement(announcement: {
   id: string
   slug: string
   title: string
+  product: string
 }): Promise<void> {
+  if (announcement.product !== "rip") return
+
   const tokens = await prisma.mobilePushToken.findMany({
     where: {
       enabled: true,
       user: {
         firstLogin: false,
         productUpdateEnabled: true,
-        client: { is: { active: true } },
+        client: { is: { active: true, product: "rip" } },
       },
     },
     select: { id: true, userId: true, expoPushToken: true },

@@ -12,6 +12,7 @@ interface MeResponse {
     slug: string
     trialExpiresAt: string | null
     trialEndedNoticeSeen: boolean
+    hasStripeSubscription?: boolean
   }
   iat?: number
 }
@@ -72,7 +73,7 @@ export function TrialStatusBanner() {
           <p className="flex-1 text-sm font-medium">
             You&apos;re on a free trial — {daysLeft} day{daysLeft === 1 ? "" : "s"} left.{" "}
             <Link href={`/${client?.slug}/account/billing`} className="underline underline-offset-2 hover:no-underline">
-              Subscribe now
+              {client?.hasStripeSubscription ? "View billing" : "Subscribe now"}
             </Link>
           </p>
           <button

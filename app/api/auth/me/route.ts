@@ -118,6 +118,7 @@ export async function GET(request: Request) {
             slug: true,
             trialExpiresAt: true,
             trialEndedNoticeSeen: true,
+            stripeSubscriptionId: true,
           },
         },
       },
@@ -151,7 +152,10 @@ export async function GET(request: Request) {
     
     // currentUser.iat is the JWT "issued at" claim — a fresh value minted on every login — used
     // client-side as a per-login session id to control the dismissible trial banner.
-    return NextResponse.json({ ...user, iat: currentUser.iat })
+    // Only expose whether a Stripe subscription exists, never its ID.
+    const { stripeSubscriptionId, ...clientFields } = user.client ?? ({} as NonNullable<typeof user.client>)
+    const client = user.client ? { ...clientFields, hasStripeSubscription: !!stripeSubscriptionId } : user.client
+    return NextResponse.json({ ...user, client, iat: currentUser.iat })
   } catch (error) {
     console.error("Error fetching current user:", error)
     return NextResponse.json({ error: "Failed to fetch user" }, { status: 500 })

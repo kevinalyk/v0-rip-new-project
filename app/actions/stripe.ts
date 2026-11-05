@@ -198,7 +198,7 @@ export async function createTrialCheckoutSession(clientId: string) {
     throw new Error("Client not found")
   }
 
-  if (!client.pendingTrialCodeId || !client.pendingTrialLengthDays) {
+  if (!client.pendingTrialLengthDays) {
     throw new Error("No pending trial to start checkout for")
   }
 
@@ -255,7 +255,7 @@ export async function createTrialCheckoutSession(clientId: string) {
     metadata: {
       clientId: client.id,
       userId: owner.id,
-      trialCodeId: client.pendingTrialCodeId,
+      ...(client.pendingTrialCodeId ? { trialCodeId: client.pendingTrialCodeId } : {}),
       trialLengthDays: client.pendingTrialLengthDays.toString(),
       checkoutPurpose: "trial",
     },

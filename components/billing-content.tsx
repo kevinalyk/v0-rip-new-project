@@ -339,7 +339,7 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
           <p className="text-muted-foreground">Manage your subscription and monitor usage</p>
         </div>
 
-        {client.pendingTrialCodeId && (
+        {client.pendingTrialLengthDays && (
           <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <CreditCard className="h-5 w-5 text-blue-600 dark:text-blue-500 mt-0.5" />
@@ -348,11 +348,10 @@ export function BillingContent({ clientSlug }: BillingContentProps) {
                   Finish starting your free trial
                 </h3>
                 <p className="text-sm text-blue-600/90 dark:text-blue-500/90 mt-1">
-                  You redeemed a{" "}
-                  {client.pendingTrialLengthDays ? `${client.pendingTrialLengthDays}-day ` : ""}
-                  free trial, but checkout wasn't completed. Add a card to start your trial — you
-                  won't be charged during the trial, and afterward you'll automatically move to our
-                  Basic plan ($50/month) unless you cancel first.
+                  Your {client.pendingTrialLengthDays}-day free trial hasn&apos;t started because checkout
+                  wasn&apos;t completed. Add a card to start it — you won&apos;t be charged during the trial,
+                  and afterward your card will be charged automatically for our Basic plan ($50/month)
+                  unless you cancel first.
                 </p>
                 {canManageBilling && (
                   <Button onClick={handleResumeTrialCheckout} className="mt-3" size="sm" disabled={resumingTrialCheckout}>

@@ -3,6 +3,7 @@ import bcryptjs from "bcryptjs"
 import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { sendNewSignupNotification, sendWelcomeEmail } from "@/lib/mailgun"
+import { DEFAULT_TRIAL_DAYS } from "@/lib/checkout-disclosures"
 import { createToken, isIpBlocked } from "@/lib/auth"
 import {
   checkMobileRateLimit,
@@ -178,6 +179,10 @@ export async function POST(request: NextRequest) {
       matchedTrialCode = { id: codeRow.id, trialLengthDays: codeRow.trialLengthDays }
     }
 
+    // Every new web signup gets a card-required trial. A redeemed code sets the length; without
+    // one the default applies. iOS personal workspaces bill through Apple, so they get no trial.
+    const trialLengthDays = isIosSignup ? null : (matchedTrialCode?.trialLengthDays ?? DEFAULT_TRIAL_DAYS)
+
     // Generate description
     const createdDate = new Date().toLocaleDateString("en-US", {
       month: "2-digit",
@@ -208,10 +213,10 @@ export async function POST(request: NextRequest) {
           dataRetentionDays: 90,
           accountKind: isIosSignup ? "personal" : "organization",
           hasCompetitiveInsights: isIosSignup,
-          ...(matchedTrialCode
+          ...(trialLengthDays
             ? {
-                pendingTrialCodeId: matchedTrialCode.id,
-                pendingTrialLengthDays: matchedTrialCode.trialLengthDays,
+                pendingTrialLengthDays: trialLengthDays,
+                ...(matchedTrialCode ? { pendingTrialCodeId: matchedTrialCode.id } : {}),
               }
             : {}),
         },
@@ -253,7 +258,8 @@ export async function POST(request: NextRequest) {
       lastName,
       email: normalizedEmail,
       organizationName: result.client.name,
-      plan: matchedTrialCode ? `${matchedTrialCode.trialLengthDays}-Day Free Trial (pending card on file)` : "Free",
+      plan: trialLengthDays ? `${trialLengthDays}-Day Free Trial (pending card on file)` : "Free",
+      trialDays: trialLengthDays ?? undefined,
       loginUrl: "https://app.rip-tool.com/login",
     }).catch((err) => console.error("[Signup] Welcome email failed:", err))
 
@@ -289,8 +295,8 @@ export async function POST(request: NextRequest) {
         userId: result.user.id,
         // Tells the signup page to redirect straight to Stripe Checkout to collect a card and
         // start the trial, instead of going to the dashboard. Only set when a valid trial code
-        // was redeemed above.
-        requiresTrialCheckout: Boolean(matchedTrialCode),
+        // is pending, which is every non-iOS signup.
+        requiresTrialCheckout: Boolean(trialLengthDays),
         requiresWebOnboarding: isIosSignup,
         user: {
           id: result.user.id,

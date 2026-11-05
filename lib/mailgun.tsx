@@ -350,6 +350,7 @@ export async function sendWelcomeEmail(params: {
   email: string
   organizationName: string
   plan?: string
+  trialDays?: number
   loginUrl?: string
 }): Promise<boolean> {
   const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
@@ -363,8 +364,20 @@ export async function sendWelcomeEmail(params: {
   const {
     firstName,
     email,
+    trialDays,
     loginUrl = "https://app.rip-tool.com/login",
   } = params
+
+  const trialNotice = trialDays
+    ? `Add a card to start your ${trialDays}-day free trial of full access. You won't be charged today. When the trial ends, your card will automatically be charged $50/month for the Basic plan (plus any applicable tax) unless you cancel first in Account > Billing. We'll email you a reminder before your trial ends.`
+    : ""
+  const trialHtml = trialDays
+    ? `<div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 16px; margin: 0 0 20px 0;">
+              <p style="margin: 0 0 6px 0; font-size: 14px; font-weight: 600; color: #9a3412;">Your ${trialDays}-day free trial</p>
+              <p style="margin: 0; font-size: 14px; color: #7c2d12;">${trialNotice}</p>
+            </div>`
+    : ""
+  const trialText = trialDays ? `YOUR ${trialDays}-DAY FREE TRIAL\n${trialNotice}\n\n` : ""
 
   const html = `
     <!DOCTYPE html>
@@ -381,7 +394,8 @@ export async function sendWelcomeEmail(params: {
             <p style="margin: 0 0 16px 0; font-size: 15px; color: #1a1a1a;">
               Welcome to Inbox.GOP — the most comprehensive database of Republican political fundraising emails and SMS messages.
             </p>
-            <p style="margin: 0 0 8px 0; font-size: 14px; color: #555; font-weight: 600;">Your free Starter plan gives you access to:</p>
+            ${trialHtml}
+            <p style="margin: 0 0 8px 0; font-size: 14px; color: #555; font-weight: 600;">${trialDays ? "Until your trial starts, the free Starter plan includes:" : "Your free Starter plan gives you access to:"}</p>
             <ul style="margin: 0 0 20px 0; padding-left: 20px; font-size: 14px; color: #333; line-height: 1.8;">
               <li>The last 3 hours of email and SMS campaigns across the database</li>
               <li>Basic campaign details for each message</li>
@@ -411,7 +425,7 @@ Hi ${firstName},
 
 Welcome to Inbox.GOP — the most comprehensive database of Republican political fundraising emails and SMS messages.
 
-Your free Starter plan gives you access to:
+${trialText}${trialDays ? "Until your trial starts, the free Starter plan includes:" : "Your free Starter plan gives you access to:"}
 - The last 3 hours of email and SMS campaigns across the database
 - Basic campaign details for each message
 

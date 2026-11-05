@@ -13,6 +13,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { Checkbox } from "@/components/ui/checkbox"
 import { createTrialCheckoutSession } from "@/app/actions/stripe"
+import { DEFAULT_TRIAL_DAYS } from "@/lib/checkout-disclosures"
 
 export default function SignupPage() {
   const router = useRouter()
@@ -299,16 +300,17 @@ export default function SignupPage() {
                 autoCapitalize="characters"
               />
               <p className="text-xs text-muted-foreground">
-                Get a free full-featured trial with unlimited users, reporting, and filters. You&apos;ll be asked to
-                add a card next — you won&apos;t be charged during the trial, but afterward you&apos;ll
-                automatically be subscribed to our Basic plan ($50/month) unless you cancel first.
+                Have a code for a different trial length? Enter it here. Otherwise you&apos;ll get the standard{" "}
+                {DEFAULT_TRIAL_DAYS}-day trial.
               </p>
             </div>
 
             <Alert>
               <AlertDescription className="text-xs">
-                Without a trial code, your account starts on the Free plan, which shows a 1-hour window of feed data
-                delayed by 24 hours (not live). Redeem a trial code above or upgrade anytime for real-time data.
+                <strong>Free for {DEFAULT_TRIAL_DAYS} days, then $50/month.</strong> You&apos;ll add a card on the next
+                step and won&apos;t be charged today. After your {DEFAULT_TRIAL_DAYS}-day trial of full access, your
+                card is automatically charged $50/month (plus any applicable tax) for the Basic plan unless you
+                cancel first in Account &gt; Billing. We&apos;ll email you a reminder before the trial ends.
               </AlertDescription>
             </Alert>
 
@@ -353,7 +355,7 @@ export default function SignupPage() {
             </div>
 
             <Button type="submit" variant="branded" className="w-full" disabled={loading}>
-              {loading ? "Creating account..." : "Create Account"}
+              {loading ? "Creating account..." : "Create Account & Start Free Trial"}
             </Button>
           </form>
         </CardContent>

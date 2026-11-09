@@ -36,6 +36,7 @@
  *   28. delete_news_article       (ci:news_write)
  *   29. search_content            (ci:content_read, or campaigns:read / sms:read)
  *   30. get_inbox_placement       (ci:content_read, or campaigns:read)
+ *   31. list_new_campaigns        (ci:read)
  *
  * Tool 30 reports where seed-inbox email is landing (inbox vs spam vs not
  * delivered), aggregated by overall / entity / sender / sender domain / party /
@@ -185,7 +186,7 @@ import {
 } from "@/lib/ci-entity-utils"
 import { sendCiEntityCreatedByApiNotification } from "@/lib/ci-api-notifications"
 import { nameToSlug } from "@/lib/directory-utils"
-import { searchContent, getInboxPlacement } from "@/lib/ci-content-search"
+import { searchContent, getInboxPlacement, listNewCampaignLaunches } from "@/lib/ci-content-search"
 import { SUBJECT_PATTERNS } from "@/lib/subject-line-classifier"
 import { MESSAGE_TYPE_LABELS } from "@/lib/message-classifier"
 
@@ -294,6 +295,33 @@ const handler = createMcpHandler(
           }))
 
           return { content: [{ type: "text" as const, text: JSON.stringify(results, null, 2) }] }
+        } catch (error) {
+          return toolError(error)
+        }
+      },
+    )
+
+    // ── list_new_campaigns ────────────────────────────────────────────────
+    server.registerTool(
+      "list_new_campaigns",
+      {
+        title: "List New Campaigns",
+        description:
+          'Read-only list of recently launched federal campaigns (new FEC candidate filings), newest first - the same data as the "Recently Launched Campaigns" page. Returns launch id, name, party, state, office, district, launchedAt (filing date), firstSeenAt (when we imported it), source and sourceUrl, status, and the linked directory entity (linkedEntityId, slug, profileUrl, imageUrl) when one exists. Launches without a linked entity or image are good candidates for follow-up work, e.g. set_entity_image after finding the candidate\'s photo. Defaults to the last 7 days (up to 90). Filter by party (R/D/I), state (two-letter code) and office (e.g. "House", "Senate"). Gated by ci:read.',
+        inputSchema: {
+          days: z.number().int().min(1).max(90).default(7).describe("How many days back to look"),
+          party: z.enum(["R", "D", "I"]).optional(),
+          state: z.string().max(2).optional().describe("Two-letter state code"),
+          office: z.string().max(50).optional().describe('Office contains, e.g. "House" or "Senate"'),
+          limit: z.number().int().min(1).max(100).default(25),
+          page: z.number().int().min(1).default(1),
+        },
+      },
+      async (args, extra) => {
+        try {
+          requireCiScope(extra.authInfo?.scopes, CI_SCOPES.READ)
+          const result = await listNewCampaignLaunches({ ...args, includeInternalIds: true })
+          return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] }
         } catch (error) {
           return toolError(error)
         }
@@ -1052,7 +1080,7 @@ const handler = createMcpHandler(
 
     const CHANGELOG_CATEGORIES = ["feature", "improvement", "fix", "admin"] as const
 
-    // ── Tool 29: list_changelog_entries ──────────────────────────────────────
+    // ── Tool 29: list_changelog_entries ────────���─────────────────────────────
     server.registerTool(
       "list_changelog_entries",
       {

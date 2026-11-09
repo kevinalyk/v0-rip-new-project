@@ -207,7 +207,7 @@ export function ClientMcpContent({ clientSlug }: { clientSlug: string }) {
               </div>
               <code className="block rounded bg-muted px-3 py-2 text-sm">Authorization: Bearer rip_cm_...</code>
               <p className="text-xs text-muted-foreground">
-                Tools: search_content, get_message, list_entities, get_entity. Up to {status.limits.requestsPerMinute}{" "}
+                Tools: search_content, get_message, list_entities, get_entity, list_new_campaigns. Up to {status.limits.requestsPerMinute}{" "}
                 requests per minute per key, {status.limits.maxPageSize} results per page, and{" "}
                 {status.limits.maxResultDepth} results deep per query.
               </p>

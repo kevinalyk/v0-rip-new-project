@@ -374,6 +374,89 @@ export async function listEntities(params: {
   }
 }
 
+const LAUNCH_PARTY = { R: "republican", D: "democrat", I: "independent" } as const
+
+type LaunchRow = {
+  id: string
+  name: string
+  party: string | null
+  state: string | null
+  office: string | null
+  district: string | null
+  status: string
+  source: string
+  sourceUrl: string | null
+  launchedAt: Date | null
+  firstSeenAt: Date
+  linkedEntityId: string | null
+  linkedEntity: {
+    name: string
+    imageUrl: string | null
+    office: string | null
+    party: string | null
+    state: string | null
+  } | null
+}
+
+// Same definition as the "Recently Launched Campaigns" page: active FEC-sourced launches whose filing date
+// (launchedAt, falling back to when we first saw them) is inside the window, newest first.
+export async function listNewCampaignLaunches(params: {
+  days: number
+  party?: "R" | "D" | "I"
+  state?: string
+  office?: string
+  limit: number
+  page: number
+  // Internal MCP only: adds database ids and status.
+  includeInternalIds?: boolean
+}) {
+  const { days, party, state, office, limit, page, includeInternalIds } = params
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+  const where = {
+    status: "active",
+    OR: [{ launchedAt: { gte: since } }, { AND: [{ launchedAt: null }, { firstSeenAt: { gte: since } }] }],
+    ...(party ? { party: { equals: LAUNCH_PARTY[party], mode: "insensitive" as const } } : {}),
+    ...(state ? { state: { equals: state, mode: "insensitive" as const } } : {}),
+    ...(office ? { office: { contains: office, mode: "insensitive" as const } } : {}),
+  }
+  const [rows, total] = await Promise.all([
+    prisma.campaignLaunch.findMany({
+      where,
+      orderBy: [{ launchedAt: "desc" }, { firstSeenAt: "desc" }],
+      skip: (page - 1) * limit,
+      take: limit,
+      include: { linkedEntity: { select: { name: true, imageUrl: true, office: true, party: true, state: true } } },
+    }),
+    prisma.campaignLaunch.count({ where }),
+  ])
+
+  return {
+    totals: { total, days, since: since.toISOString() },
+    pagination: { page, limit, hasMore: page * limit < total },
+    results: (rows as LaunchRow[]).map((launch) => {
+      const entity = launch.linkedEntity
+      // FEC uses "US" as the state for presidential candidates, which isn't a real state.
+      const rawState = launch.state || entity?.state || null
+      const slug = entity ? nameToSlug(entity.name) : null
+      return {
+        ...(includeInternalIds ? { id: launch.id, linkedEntityId: launch.linkedEntityId, status: launch.status } : {}),
+        name: launch.name,
+        party: launch.party || entity?.party || null,
+        state: rawState && rawState !== "US" ? rawState : null,
+        office: launch.office || entity?.office || null,
+        district: launch.district,
+        launchedAt: launch.launchedAt ? launch.launchedAt.toISOString() : null,
+        firstSeenAt: launch.firstSeenAt.toISOString(),
+        source: launch.source,
+        sourceUrl: launch.sourceUrl,
+        slug,
+        profileUrl: slug ? `${appUrl()}/directory/${slug}` : null,
+        imageUrl: entity?.imageUrl || null,
+      }
+    }),
+  }
+}
+
 export async function getEntityBySlug(slug: string) {
   // Names are the stable key; slugs are derived, so match on the derived slug.
   const candidates = await prisma.ciEntity.findMany({

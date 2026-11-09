@@ -1,13 +1,14 @@
 /**
  * Client-facing, READ-ONLY MCP server for the shared competitive-intelligence
  * feed (seed emails, SMS and entities). Deliberately separate from the internal
- * CI Assignment MCP: it registers exactly four read tools and nothing that can
+ * CI Assignment MCP: it registers exactly five read tools and nothing that can
  * write, so there is nothing to scope away.
  *
  *   1. search_content  keyword search with totals and per-entity counts
  *   2. get_message     one message (short preview only, never the full body)
  *   3. list_entities   browse/filter entities
  *   4. get_entity      one entity with message counts
+ *   5. list_new_campaigns  recently launched campaigns (new FEC filings)
  *
  * Every call re-checks the client's plan, trial, subscription status and terms
  * acceptance, enforces a per-minute throttle and a rolling monthly result
@@ -24,7 +25,7 @@ import {
   verifyClientMcpToken,
 } from "@/lib/client-mcp"
 import { CiApiError } from "@/lib/ci-api-auth"
-import { getEntityBySlug, getMessage, listEntities, searchContent } from "@/lib/ci-content-search"
+import { getEntityBySlug, getMessage, listEntities, listNewCampaignLaunches, searchContent } from "@/lib/ci-content-search"
 
 export const maxDuration = 60
 
@@ -187,6 +188,34 @@ const handler = createMcpHandler(
           args,
           () => getEntityBySlug(args.slug),
           () => ({ count: 1 }),
+        ),
+    )
+
+    server.registerTool(
+      "list_new_campaigns",
+      {
+        title: "List New Campaigns",
+        description:
+          'Lists recently launched federal campaigns (new FEC candidate filings), newest first - the same data as the "Recently Launched Campaigns" page. Returns name, party, state, office, district, launch (filing) date, source link, and, when the candidate already has a profile in the directory, a slug (usable with get_entity), profile link and photo. Defaults to the last 7 days; widen it with "days" (up to 30). Filter by party, state (two-letter code) and office (e.g. "House", "Senate", "Governor").',
+        inputSchema: {
+          days: z.number().int().min(1).max(30).default(7).describe("How many days back to look"),
+          party: z.enum(["R", "D", "I"]).optional(),
+          state: z.string().max(2).optional().describe("Two-letter state code"),
+          office: z.string().max(50).optional().describe('Office contains, e.g. "House" or "Senate"'),
+          limit: z.number().int().min(1).max(CLIENT_MCP_LIMITS.MAX_ENTITY_PAGE_SIZE).default(25),
+          page: z.number().int().min(1).max(20).default(1),
+        },
+      },
+      async (args, extra) =>
+        guarded(
+          extra,
+          "list_new_campaigns",
+          args,
+          async () => {
+            assertDepth(args.page, args.limit)
+            return listNewCampaignLaunches(args)
+          },
+          (r) => ({ count: r.results.length }),
         ),
     )
   },

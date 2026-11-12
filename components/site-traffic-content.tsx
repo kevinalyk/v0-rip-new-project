@@ -48,6 +48,14 @@ interface TrafficData {
     createdAt: string
     shareTokenSource: string | null
   }>
+  shareSignups: Array<{
+    id: string
+    email: string
+    createdAt: string
+    campaignId: string | null
+    campaignLabel: string | null
+    hasPaid: boolean
+  }>
 }
 
 export function SiteTrafficContent() {
@@ -374,6 +382,10 @@ export function SiteTrafficContent() {
             <Share2 className="h-4 w-4" />
             Share Visits
           </TabsTrigger>
+          <TabsTrigger value="share-signups" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Share Link Signups ({data.shareSignups.length})
+          </TabsTrigger>
         </TabsList>
 
         {/* Recent Visits Tab */}
@@ -530,6 +542,64 @@ export function SiteTrafficContent() {
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
                             {truncateUserAgent(visit.userAgent)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Share Link Signups Tab */}
+        <TabsContent value="share-signups">
+          <Card>
+            <CardHeader>
+              <CardTitle>Share Link Signups</CardTitle>
+              <CardDescription>
+                Accounts created from the shared-campaign preview (source=share_link) — last {data.summary.days} days.{" "}
+                {data.shareSignups.length} trial start{data.shareSignups.length === 1 ? "" : "s"},{" "}
+                {data.shareSignups.filter((s) => s.hasPaid).length} with a Stripe subscription.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Signed up</TableHead>
+                      <TableHead>User</TableHead>
+                      <TableHead>Campaign</TableHead>
+                      <TableHead>Source</TableHead>
+                      <TableHead>Subscription</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.shareSignups.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                          No share link signups in this period
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      data.shareSignups.map((signup) => (
+                        <TableRow key={signup.id}>
+                          <TableCell className="whitespace-nowrap text-sm">{formatDate(signup.createdAt)}</TableCell>
+                          <TableCell className="text-sm">{signup.email}</TableCell>
+                          <TableCell className="text-sm max-w-xs truncate">
+                            {signup.campaignLabel ?? signup.campaignId ?? "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs font-normal">
+                              share_link
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={signup.hasPaid ? "default" : "secondary"}>
+                              {signup.hasPaid ? "Subscribed" : "Trial / none"}
+                            </Badge>
                           </TableCell>
                         </TableRow>
                       ))

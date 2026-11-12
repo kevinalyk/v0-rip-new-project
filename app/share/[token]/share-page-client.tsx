@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Mail, Calendar, ExternalLink, Loader2, ZoomIn, ZoomOut, Smartphone, Phone, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { SharePreviewWall, type SharePreviewCampaign } from "@/components/share-preview-wall"
 
 interface Campaign {
   id: string
@@ -39,15 +40,14 @@ interface SharePageClientProps {
 export default function SharePageClient({ isAuthenticated, isTwitterShare, token }: SharePageClientProps) {
   const router = useRouter()
   const [campaign, setCampaign] = useState<Campaign | null>(null)
-  const [loading, setLoading] = useState(isAuthenticated || isTwitterShare)
+  const [previewCampaign, setPreviewCampaign] = useState<SharePreviewCampaign | null>(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [emailZoom, setEmailZoom] = useState(100)
   const [iframeContentHeight, setIframeContentHeight] = useState<number>(800)
 
   useEffect(() => {
-    if (isAuthenticated || isTwitterShare) {
-      fetchSharedCampaign()
-    }
+    fetchSharedCampaign()
   }, [token, isAuthenticated, isTwitterShare])
 
   // Auto-fit zoom on mobile when an email campaign loads
@@ -76,7 +76,11 @@ export default function SharePageClient({ isAuthenticated, isTwitterShare, token
       }
 
       const data = await response.json()
-      setCampaign(data.campaign)
+      if (data.preview) {
+        setPreviewCampaign(data.campaign)
+      } else {
+        setCampaign(data.campaign)
+      }
     } catch (err) {
       setError("Failed to load campaign.")
     } finally {
@@ -169,31 +173,6 @@ export default function SharePageClient({ isAuthenticated, isTwitterShare, token
     return text
   }
 
-  // Show login wall for unauthenticated users — except Twitter-posted shares which are public
-  if (!isAuthenticated && !isTwitterShare) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="max-w-md w-full text-center space-y-4">
-          <h1 className="text-2xl font-bold">Sign in to view this campaign</h1>
-          <p className="text-muted-foreground">
-            You need an Inbox.GOP account to view shared campaigns.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Button onClick={() => router.push(`/login?redirect=/share/${token}`)}>
-              Sign in
-            </Button>
-            <Button variant="outline" asChild>
-              <a href="https://app.rip-tool.com/signup">Sign up</a>
-            </Button>
-          </div>
-          <div className="pt-4 border-t">
-            <p className="text-xs text-muted-foreground">Powered by Inbox.GOP</p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -203,6 +182,10 @@ export default function SharePageClient({ isAuthenticated, isTwitterShare, token
         </div>
       </div>
     )
+  }
+
+  if (previewCampaign) {
+    return <SharePreviewWall campaign={previewCampaign} token={token} />
   }
 
   if (error || !campaign) {

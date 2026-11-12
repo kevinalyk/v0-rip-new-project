@@ -10,7 +10,6 @@ import {
 } from "@/lib/subscription-utils";
 import { MobileAuthError } from "@/lib/mobile-auth"
 import { getEntityMappings } from "@/lib/ci-mapping-cache"
-import { isCorporateEntityType } from "@/lib/corporate-entity-types"
 import { getMobileClientEntitlements } from "@/lib/services/mobile-entitlements"
 
 export const MOBILE_ENTITY_TYPES = [
@@ -43,6 +42,7 @@ type MobileFeedEntityOption = {
   id: string
   name: string
   type: string
+  isCorporate: boolean
   party: string | null
   state: string | null
   isFollowing: boolean
@@ -118,6 +118,7 @@ export interface FeedItem {
     id: string
     name: string
     type: string
+    isCorporate: boolean
     party: string | null
     state: string | null
     imageUrl: string | null
@@ -147,6 +148,7 @@ const mobileFeedEntitySelect = {
   id: true,
   name: true,
   type: true,
+  isCorporate: true,
   party: true,
   state: true,
   imageUrl: true,
@@ -470,7 +472,7 @@ export async function listMobileFeedEntities(clientId: string, userId: string) {
   const [entities, subscriptions] = await Promise.all([
     prisma.ciEntity.findMany({
       where: { type: { not: "data_broker" }, isCorporate: false },
-      select: { id: true, name: true, type: true, party: true, state: true },
+      select: { id: true, name: true, type: true, isCorporate: true, party: true, state: true },
       orderBy: { name: "asc" },
       take: 10000,
     }),
@@ -691,7 +693,7 @@ export async function getFeedItemById(
     // non-data-broker entity is shared (visible to any client), OR it's one of the
     // caller's own personal (unassigned) captures. Never another client's personal
     // record.
-    if (isCorporateEntityType(campaign.entity?.type)) return null
+    if (campaign.entity?.isCorporate) return null
     const isShared = campaign.entityId !== null && campaign.entity?.type !== "data_broker"
     const isOwnPersonal = campaign.clientId === clientId
     if (!isShared && !isOwnPersonal) return null
@@ -723,7 +725,7 @@ export async function getFeedItemById(
   if (dateBounds.gte && sms.createdAt < dateBounds.gte) return null
   if (dateBounds.lte && sms.createdAt > dateBounds.lte) return null
 
-  if (isCorporateEntityType(sms.entity?.type)) return null
+  if (sms.entity?.isCorporate) return null
   const isShared = sms.entityId !== null && sms.entity?.type !== "data_broker"
   const isOwnPersonal = sms.clientId === clientId
   if (!isShared && !isOwnPersonal) return null

@@ -344,14 +344,16 @@ Stripe Dashboard: ${stripeUrl}
   return sendMailgunEmail(`New Payment: ${amountFormatted} — ${clientId}`, html, text)
 }
 
+// Sent only once an account is actually set up: after Stripe checkout completes for web signups
+// ("trial" = card on file and trial running, "paid" = subscribed with no trial), or at signup for
+// iOS personal workspaces, which skip checkout and start on the free plan ("free").
 export async function sendWelcomeEmail(params: {
   firstName: string
   lastName: string
   email: string
   organizationName: string
-  plan?: string
-  trialDays?: number
-  paymentRequired?: boolean
+  stage: "trial" | "paid" | "free"
+  trialEndsAt?: Date
   loginUrl?: string
 }): Promise<boolean> {
   const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
@@ -362,23 +364,22 @@ export async function sendWelcomeEmail(params: {
     return false
   }
 
-  const {
-    firstName,
-    email,
-    trialDays,
-    paymentRequired = false,
-    loginUrl = "https://app.rip-tool.com/login",
-  } = params
+  const { firstName, email, stage, trialEndsAt, loginUrl = "https://app.rip-tool.com/login" } = params
 
-  // Web signups have no access until Stripe checkout is complete, so the free-Starter-plan
-  // copy only applies to signups that skip checkout.
-  const checkoutRequired = Boolean(trialDays) || paymentRequired
-  const trialHeading = trialDays ? `Your ${trialDays}-day free trial` : "Finish checkout to get started"
-  const trialNotice = trialDays
-    ? `Add a card to start your ${trialDays}-day free trial of full access. Your account isn't active until you do. You won't be charged today. When the trial ends, your card will automatically be charged $50/month for the Basic plan (plus any applicable tax) unless you cancel first in Account > Billing. We'll email you a reminder before your trial ends.`
-    : paymentRequired
-      ? `Free trials are limited to one per person, so your Basic plan ($50/month plus any applicable tax) is billed when you subscribe. Your account isn't active until checkout is complete, and you can cancel anytime in Account > Billing.`
-      : ""
+  const trialEndsLabel = trialEndsAt
+    ? new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" }).format(
+        trialEndsAt,
+      )
+    : null
+
+  const checkoutRequired = stage !== "free"
+  const trialHeading = stage === "trial" ? "Your free trial has started" : "Your Basic plan is active"
+  const trialNotice =
+    stage === "trial"
+      ? `You have full access to Inbox.GOP${trialEndsLabel ? ` until ${trialEndsLabel}` : " for the length of your trial"}. You won't be charged today. When the trial ends${trialEndsLabel ? ` on ${trialEndsLabel}` : ""}, your card on file will automatically be charged $50/month for the Basic plan (plus any applicable tax) unless you cancel first in Account > Billing. We'll email you a reminder 3 days before your trial ends.`
+      : stage === "paid"
+        ? `Thanks for subscribing. Your Basic plan ($50/month plus any applicable tax) is active, and you can manage or cancel anytime in Account > Billing.`
+        : ""
   const trialHtml = trialNotice
     ? `<div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 16px; margin: 0 0 20px 0;">
               <p style="margin: 0 0 6px 0; font-size: 14px; font-weight: 600; color: #9a3412;">${trialHeading}</p>
@@ -456,7 +457,10 @@ Questions? Just reply to this email.
   formData.append("from", `Inbox.GOP <inbox@${MAILGUN_DOMAIN}>`)
   formData.append("to", email)
   formData.append("h:Reply-To", "kevin@rip-tool.com, ryan@rip-tool.com")
-  formData.append("subject", `Welcome to Inbox.GOP, ${firstName}`)
+  formData.append(
+    "subject",
+    stage === "trial" ? `Your Inbox.GOP free trial has started, ${firstName}` : `Welcome to Inbox.GOP, ${firstName}`,
+  )
   formData.append("html", html)
   formData.append("text", text)
 
@@ -1701,7 +1705,7 @@ ${EMAIL_POSTAL_ADDRESS}
   }
 }
 
-// ──────────────────────────────────────────────────────────────────────��──────
+// ────────��─────────────────────────────────────────────────────────────��──────
 // Product Update Email
 // ─────────────────────────────────────────────────────────────────────────────
 

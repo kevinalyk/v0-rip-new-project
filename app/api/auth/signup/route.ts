@@ -271,22 +271,19 @@ export async function POST(request: NextRequest) {
       return { client, user }
     })
 
-    // Send welcome email to the new user — non-blocking
-    sendWelcomeEmail({
-      firstName,
-      lastName,
-      email: normalizedEmail,
-      organizationName: result.client.name,
-      plan:
-        trialLengthDays === null
-          ? "Free"
-          : trialLengthDays > 0
-            ? `${trialLengthDays}-Day Free Trial (pending card on file)`
-            : "Basic (payment required)",
-      trialDays: trialLengthDays || undefined,
-      paymentRequired: trialLengthDays === 0,
-      loginUrl: "https://app.rip-tool.com/login",
-    }).catch((err) => console.error("[Signup] Welcome email failed:", err))
+    // Web signups get their welcome email from the Stripe webhook once checkout completes, so
+    // nobody is told they're signed up before they've actually finished. Only iOS personal
+    // workspaces skip checkout, so they're welcomed here.
+    if (trialLengthDays === null) {
+      sendWelcomeEmail({
+        firstName,
+        lastName,
+        email: normalizedEmail,
+        organizationName: result.client.name,
+        stage: "free",
+        loginUrl: "https://app.rip-tool.com/login",
+      }).catch((err) => console.error("[Signup] Welcome email failed:", err))
+    }
 
     // Fire admin notification non-blocking — don't let email failure affect signup
     sendNewSignupNotification({

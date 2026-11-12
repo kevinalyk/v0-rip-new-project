@@ -1,9 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { getSession } from "@/lib/auth"
 
 export async function GET(request: NextRequest, { params }: { params: { token: string } }) {
   try {
-    // Authentication is enforced at the page level (app/share/[token]/page.tsx)
     const token = params.token
 
     let campaign = await prisma.competitiveInsightCampaign.findUnique({
@@ -38,6 +38,38 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
 
     // Note: view count is incremented server-side in app/share/[token]/page.tsx
     // to ensure it fires for all visitors including anonymous users.
+
+    // This route is public in middleware, so the full/preview split has to be enforced here: the
+    // page-level check only decides what the UI shows and cannot stop a direct API request.
+    const session = await getSession()
+    const isTwitterShare = (campaign as any).twitterPostedAt != null
+
+    if (!session && !isTwitterShare) {
+      // Non-members get only sender, subject and send date. Everything else (body, recipients,
+      // links, attachments, stats, who shared it) must stay out of this payload.
+      const entityName = (campaign as any).entity?.name ?? null
+      const sms = campaign as any
+      return NextResponse.json({
+        preview: true,
+        campaign: isSms
+          ? {
+              id: sms.id,
+              type: "sms",
+              senderName: sms.phoneNumber || "Unknown",
+              subject: "SMS Message",
+              dateReceived: sms.createdAt,
+              entity: entityName ? { name: entityName } : null,
+            }
+          : {
+              id: campaign.id,
+              type: "email",
+              senderName: campaign.senderName,
+              subject: campaign.subject,
+              dateReceived: campaign.dateReceived,
+              entity: entityName ? { name: entityName } : null,
+            },
+      })
+    }
 
     if (isSms) {
       const sms = campaign as any

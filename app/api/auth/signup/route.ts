@@ -58,6 +58,13 @@ export async function POST(request: NextRequest) {
     const signupSource = request.headers.get("x-inbox-signup-source") === "ios" ? "ios" : "web"
     const isIosSignup = signupSource === "ios"
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : ""
+    // Only the share_link tag is accepted; the ref is an opaque id and is length/charset-limited
+    // because it comes straight from a URL the visitor controls.
+    const acquisitionSource = body.acquisitionSource === "share_link" ? "share_link" : null
+    const acquisitionRef =
+      acquisitionSource && typeof body.acquisitionRef === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(body.acquisitionRef)
+        ? body.acquisitionRef
+        : null
 
     if (_hp) {
       return NextResponse.json({ error: "Invalid submission" }, { status: 400 })
@@ -255,6 +262,8 @@ export async function POST(request: NextRequest) {
           clientId: client.id,
           lastActive: new Date(),
           signupSource,
+          acquisitionSource,
+          acquisitionRef,
           webOnboardingCompletedAt: isIosSignup ? null : new Date(),
         },
       })

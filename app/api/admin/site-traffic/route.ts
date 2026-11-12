@@ -213,6 +213,45 @@ export async function GET(request: Request) {
       shareTokenSource: extractedToken ? (sourceMap.get(extractedToken) ?? null) : null,
     }))
 
+    // Signups that came through the shared-campaign preview (tagged source=share_link at signup)
+    const shareSignupUsers = await prisma.user.findMany({
+      where: { acquisitionSource: "share_link", createdAt: { gte: startDate } },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      select: {
+        id: true,
+        email: true,
+        createdAt: true,
+        acquisitionRef: true,
+        client: { select: { subscriptionPlan: true, subscriptionStatus: true, stripeSubscriptionId: true } },
+      },
+    })
+
+    const signupCampaignIds = [...new Set(shareSignupUsers.map(u => u.acquisitionRef).filter(Boolean))] as string[]
+    const [signupEmailCampaigns, signupSmsCampaigns] = signupCampaignIds.length > 0
+      ? await Promise.all([
+          prisma.competitiveInsightCampaign.findMany({
+            where: { id: { in: signupCampaignIds } },
+            select: { id: true, subject: true },
+          }),
+          prisma.smsQueue.findMany({
+            where: { id: { in: signupCampaignIds } },
+            select: { id: true },
+          }),
+        ])
+      : [[], []]
+    const campaignLabels = new Map<string, string>()
+    for (const c of signupEmailCampaigns) campaignLabels.set(c.id, c.subject)
+    for (const s of signupSmsCampaigns) campaignLabels.set(s.id, "SMS message")
+
+    const shareSignups = shareSignupUsers.map(u => ({
+      id: u.id,
+      email: u.email,
+      createdAt: u.createdAt,
+      campaignId: u.acquisitionRef,
+      campaignLabel: u.acquisitionRef ? (campaignLabels.get(u.acquisitionRef) ?? null) : null,
+      hasPaid: !!u.client?.stripeSubscriptionId,
+    }))
 
 
     return NextResponse.json({
@@ -244,7 +283,8 @@ export async function GET(request: Request) {
         anonymous: Number(v.anonymous)
       })),
       recentVisits,
-      shareVisits
+      shareVisits,
+      shareSignups
     })
   } catch (error) {
     console.error("Error fetching site traffic:", error)

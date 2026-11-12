@@ -35,8 +35,14 @@ export default function SignupPage() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
+  const [attribution, setAttribution] = useState<{ source?: string; ref?: string }>({})
+
   useEffect(() => {
     setLoadTime(Date.now())
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("source") === "share_link") {
+      setAttribution({ source: "share_link", ref: params.get("campaign") ?? undefined })
+    }
   }, [])
 
   const validatePassword = (password: string) => {
@@ -119,6 +125,8 @@ export default function SignupPage() {
           email: formData.email,
           password: formData.password,
           trialCode: formData.trialCode.trim() || undefined,
+          acquisitionSource: attribution.source,
+          acquisitionRef: attribution.ref,
           _hp: formData.website,
           _ts: loadTime,
         }),

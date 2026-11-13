@@ -11,6 +11,7 @@ import {
   sendNewPaymentNotification,
   sendTrialConvertedEmail,
   sendTrialEndingSoonEmail,
+  sendWelcomeEmail,
 } from "@/lib/mailgun"
 import { notifyClientUsersCoveredByWebPlan } from "@/lib/services/mobile-alert-delivery-service"
 import { getEffectiveMobileEntitlements } from "@/lib/services/mobile-entitlements"
@@ -557,6 +558,11 @@ export async function POST(req: NextRequest) {
           updateData.userSeatsIncluded = getUserSeatsIncluded(updateData.subscriptionPlan)
         }
 
+        // A signup that hasn't finished checkout still carries pendingTrialLengthDays. That is the
+        // marker for "this is the signup checkout" (as opposed to an existing account adding a
+        // subscription), and the update below clears it, so a redelivered event won't re-send.
+        const isSignupCheckout = client.pendingTrialLengthDays !== null
+
         await prisma.client.update({ where: { id: client.id }, data: updateData })
         await notifyCoveredMobileUsers(
           client.id,
@@ -565,6 +571,23 @@ export async function POST(req: NextRequest) {
           updateData.subscriptionStatus || client.subscriptionStatus,
         )
         console.log("[Stripe Webhook] Updated client on subscription.created:", client.id, updateData)
+
+        const welcomeStage =
+          fullSubscription.status === "trialing" ? "trial" : fullSubscription.status === "active" ? "paid" : null
+        if (isSignupCheckout && welcomeStage) {
+          const owner = await prisma.user.findFirst({ where: { clientId: client.id, role: "owner" } })
+          if (owner) {
+            sendWelcomeEmail({
+              firstName: owner.firstName,
+              lastName: owner.lastName,
+              email: owner.email,
+              organizationName: client.name,
+              stage: welcomeStage,
+              trialEndsAt: fullSubscription.trial_end ? new Date(fullSubscription.trial_end * 1000) : undefined,
+              loginUrl: "https://app.rip-tool.com/login",
+            }).catch((err) => console.error("[Stripe Webhook] Welcome email failed:", err))
+          }
+        }
         break
       }
 

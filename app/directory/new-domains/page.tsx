@@ -17,6 +17,17 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic"
 
+type DomainRow = {
+  id: string
+  domain: string
+  category: string
+  state: string | null
+  linkedEntityId: string | null
+  registeredOn: Date
+}
+type CategoryCount = { category: string; _count: { _all: number } }
+type StateCount = { state: string | null }
+
 const DAY_OPTIONS = [1, 3, 7, 14, 30]
 const DEFAULT_DAYS = 7
 const MAX_ROWS = 2000
@@ -61,7 +72,7 @@ export default async function NewDomainsPage({
 
   const windowWhere = { registeredOn: { gte: since } }
 
-  const [rows, categoryCounts, stateCounts, lastScan] = await Promise.all([
+  const [rowsRaw, categoryCountsRaw, stateCountsRaw, lastScan] = await Promise.all([
     prisma.newDomainRegistration.findMany({
       where: {
         ...windowWhere,
@@ -81,8 +92,13 @@ export default async function NewDomainsPage({
     prisma.newDomainRegistration.aggregate({ _max: { firstSeenAt: true } }),
   ])
 
+  // lib/prisma is loosely typed, so give the query results their shapes here.
+  const rows = rowsRaw as DomainRow[]
+  const categoryCounts = categoryCountsRaw as CategoryCount[]
+  const stateCounts = stateCountsRaw as StateCount[]
+
   const entityIds = Array.from(new Set(rows.map((row) => row.linkedEntityId).filter((id): id is string => !!id)))
-  const entities = entityIds.length
+  const entities: { id: string; name: string }[] = entityIds.length
     ? await prisma.ciEntity.findMany({ where: { id: { in: entityIds } }, select: { id: true, name: true } })
     : []
   const entityById = new Map(entities.map((entity) => [entity.id, entity.name]))

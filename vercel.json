@@ -74,6 +74,10 @@
       "schedule": "0 9 * * *"
     },
     {
+      "path": "/api/cron/scan-new-domains",
+      "schedule": "30 15 * * *"
+    },
+    {
       "path": "/api/cron/digest-following",
       "schedule": "0 12 * * *"
     },

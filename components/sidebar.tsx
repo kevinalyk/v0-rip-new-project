@@ -449,7 +449,7 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                 <NavItem
                   icon={<Building2 size={18} />}
                   label="Directory"
-                  active={pathname === "/directory" || (pathname.startsWith("/directory/") && !pathname.includes("/directory/new-campaigns"))}
+                  active={pathname === "/directory" || (pathname.startsWith("/directory/") && !pathname.includes("/directory/new-campaigns") && !pathname.includes("/directory/new-domains"))}
                   collapsed={false}
                   onClick={() => navigate("/directory")}
                 />
@@ -460,6 +460,15 @@ export function Sidebar({ collapsed, setCollapsed, isAdminView = false, onNaviga
                   collapsed={false}
                   onClick={() => navigate("/directory/new-campaigns")}
                 />
+                {userRole === "super_admin" && (
+                  <NavItem
+                    icon={<Globe size={18} />}
+                    label="New Domains"
+                    active={pathname.includes("/directory/new-domains")}
+                    collapsed={false}
+                    onClick={() => navigate("/directory/new-domains")}
+                  />
+                )}
                 <NavItem
                   icon={<Newspaper size={18} />}
                   label="Intelligence Digest"

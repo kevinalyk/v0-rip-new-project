@@ -1026,13 +1026,16 @@ model CampaignLaunch {
   matchedKeyword String?  // Which rule matched, e.g. "for senate"
   state          String?  // State abbreviation if the domain name contains a state name or the matched entity has one
   linkedEntityId String?  // CiEntity id when the domain contains a tracked candidate's name
+  confidence     String   @default("medium") // "high" | "medium" | "low": how likely this is a US campaign domain
+  hidden         Boolean  @default(false) // Hidden by a super admin; the unique domain keeps it from being re-inserted
   registeredOn   DateTime // Date of the newly registered domains list the domain appeared in
   firstSeenAt    DateTime @default(now())
-
+  
   @@index([registeredOn])
   @@index([category])
   @@index([state])
   @@index([linkedEntityId])
+  @@index([hidden, confidence])
   }
 
   model Announcement {

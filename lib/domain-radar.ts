@@ -62,9 +62,33 @@ const RULES: Rule[] = [
   {
     category: "general",
     keyword: "political keyword",
-    pattern: /^vote[a-z]{3,}|[a-z]{3,}vote(\d|$)|^elect(?!r|i?on)[a-z]{3,}|reelect|republican|conservativ|gopfor|forgop/,
+    pattern: /reelect|republican|conservativ|gopfor|forgop/,
   },
 ]
+
+export type Confidence = "high" | "medium" | "low"
+
+// A real campaign domain is nearly always "<name>for<office>", optionally
+// followed by a year or a short suffix, e.g. fergusonforsenate2028.
+const OFFICE_WORDS =
+  "president|potus|senator|senate|congressman|congresswoman|congress|representative|rep|house|governor|gov|mayor|sheriff|judge|councilman|councilwoman|council|commissioner|clerk|treasurer|schoolboard|attorneygeneral|attorney|auditor|coroner|constable|assessor|supervisor|alderman|selectboard|assemblyman|assemblywoman|assembly|statehouse|statesenate|statesen|staterep|delegate|legislature|ltgovernor|ltgov"
+const FOR_OFFICE_SHAPE = new RegExp(
+  `^[a-z0-9]{3,}(?:for|4)(?:us|the|our|state)?(?:${OFFICE_WORDS})(?:\\d{1,4}|hq|official|team|campaign|pac|now)*$`,
+)
+
+// Signals that only make sense for a US race. Office words like "mayor" or
+// "president" exist everywhere, so they do not count on their own.
+const US_SIGNAL =
+  /(for|4)us(senate|congress|house|rep)|^us(senate|congress|house|rep)|sheriff|schoolboard|statehouse|statesen|staterep|assembly(man|woman)?|county|potus|america|republican|conservativ|gopfor|forgop/
+const US_TOKEN = /(^|-)(gop|usa)(-|$)/
+
+// Spam, crypto and non-English words that slip in through the loose office keywords.
+const BLOCKED_WORDS =
+  /hyperliquid|hyperliuquid|moonshot|airdrop|crypto|bitcoin|memecoin|binance|solana|ethereum|casino|forex|giveaway|sweepstake|porn|xxx|diplomatie|diplomat|wahl|eleccion|votacion|votar/
+
+// Checked after state names are stripped, so "indiana" does not trip "india".
+const FOREIGN_PLACES =
+  /argentina|nigeria|ghana|gambia|kenya|uganda|pakistan|bangladesh|philippines|indonesia|brazil|ukraine|russia|turkey|egypt|morocco|algeria|tunisia|southafrica|zimbabwe|zambia|malawi|tanzania|cameroon|senegal|liberia|sierraleone|ethiopia|rwanda|somalia|sudan|nepal|srilanka|malaysia|vietnam|thailand|australia|newzealand|canada|canadian|mexico|jamaica|haiti|trinidad|guyana|peru|chile|colombia|venezuela|ecuador|israel|iran|iraq|syria|korea|japan|china|taiwan|hongkong|france|germany|italy|spain|portugal|netherlands|belgium|poland|romania|greece|sweden|norway|denmark|finland|switzerland|india/
 
 const GOP_TOKEN = /(^|-)gop(-|$)/
 
@@ -100,7 +124,10 @@ export interface DomainMatch {
   keyword: string | null
   state: string | null
   linkedEntityId: string | null
+  confidence: Confidence
 }
+
+const STATE_NAME_PATTERN = new RegExp(STATE_NAME_KEYS.join("|"), "g")
 
 function lettersOnly(value: string): string {
   return value.toLowerCase().replace(/[^a-z]/g, "")
@@ -180,6 +207,9 @@ export function classifyDomain(domain: string, names: NameIndexEntry[]): DomainM
 
   const compact = label.replace(/-/g, "")
 
+  if (BLOCKED_WORDS.test(compact)) return null
+  if (FOREIGN_PLACES.test(compact.replace(STATE_NAME_PATTERN, ""))) return null
+
   let category: DomainCategory | null = null
   let keyword: string | null = null
   for (const rule of RULES) {
@@ -226,7 +256,18 @@ export function classifyDomain(domain: string, names: NameIndexEntry[]): DomainM
   }
   if (!state && nameMatch) state = nameMatch.state
 
-  return { category, keyword, state, linkedEntityId: nameMatch?.entityId ?? null }
+  const hasUsSignal = tld === "us" || US_SIGNAL.test(compact) || US_TOKEN.test(label) || state !== null
+  const hasOfficeShape = FOR_OFFICE_SHAPE.test(compact)
+
+  let confidence: Confidence
+  if (nameMatch) confidence = "high"
+  else if (hasOfficeShape && hasUsSignal) confidence = "high"
+  else if (hasOfficeShape && (category === "senate" || category === "congress" || category === "governor")) {
+    confidence = "medium"
+  } else if (hasUsSignal) confidence = "medium"
+  else confidence = "low"
+
+  return { category, keyword, state, linkedEntityId: nameMatch?.entityId ?? null, confidence }
 }
 
 // WhoisDS publishes a free zip of newly registered domains per day. The file
@@ -293,6 +334,7 @@ export async function scanNewDomains(days: number): Promise<ScanSummary[]> {
       matchedKeyword: string | null
       state: string | null
       linkedEntityId: string | null
+      confidence: Confidence
       registeredOn: Date
     }[] = []
 
@@ -306,6 +348,7 @@ export async function scanNewDomains(days: number): Promise<ScanSummary[]> {
         matchedKeyword: match.keyword,
         state: match.state,
         linkedEntityId: match.linkedEntityId,
+        confidence: match.confidence,
         registeredOn,
       })
     }

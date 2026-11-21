@@ -5,7 +5,7 @@ import { notFound, redirect } from "next/navigation"
 import { verifyToken } from "@/lib/auth"
 import AppLayout from "@/components/app-layout"
 import { Card, CardContent } from "@/components/ui/card"
-import { Globe, MapPin, UserRound } from "lucide-react"
+import { ExternalLink, Globe, MapPin, UserRound } from "lucide-react"
 import prisma from "@/lib/prisma"
 import { nameToSlug } from "@/lib/directory"
 import { CATEGORY_LABELS, CATEGORY_ORDER, type DomainCategory } from "@/lib/domain-radar"
@@ -27,6 +27,17 @@ type DomainRow = {
 }
 type CategoryCount = { category: string; _count: { _all: number } }
 type StateCount = { state: string | null }
+
+const CATEGORY_ACCENTS: Record<string, { dot: string; badge: string }> = {
+  congress: { dot: "bg-sky-400", badge: "border-sky-400/30 bg-sky-400/10 text-sky-300" },
+  senate: { dot: "bg-violet-400", badge: "border-violet-400/30 bg-violet-400/10 text-violet-300" },
+  governor: { dot: "bg-amber-400", badge: "border-amber-400/30 bg-amber-400/10 text-amber-300" },
+  president: { dot: "bg-rose-400", badge: "border-rose-400/30 bg-rose-400/10 text-rose-300" },
+  state_legislature: { dot: "bg-emerald-400", badge: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300" },
+  local: { dot: "bg-teal-400", badge: "border-teal-400/30 bg-teal-400/10 text-teal-300" },
+  candidate_name: { dot: "bg-fuchsia-400", badge: "border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-300" },
+  general: { dot: "bg-zinc-400", badge: "border-border/60 bg-muted text-muted-foreground" },
+}
 
 const DAY_OPTIONS = [1, 3, 7, 14, 30]
 const DEFAULT_DAYS = 7
@@ -260,53 +271,67 @@ export default async function NewDomainsPage({
             </div>
           ) : (
             Array.from(rowsByDay.entries()).map(([dayKey, dayRows]) => (
-              <section key={dayKey} aria-labelledby={`day-${dayKey}`} className="space-y-3">
+              <section key={dayKey} aria-labelledby={`day-${dayKey}`} className="space-y-2">
                 <h2 id={`day-${dayKey}`} className="flex items-baseline gap-2 text-sm font-semibold">
                   {formatDay(new Date(`${dayKey}T00:00:00.000Z`))}
                   <span className="text-xs font-normal text-muted-foreground">
                     {dayRows.length} {dayRows.length === 1 ? "domain" : "domains"}
                   </span>
                 </h2>
-                <Card className="border-border/60 overflow-hidden">
-                  <ul className="divide-y divide-border/60">
-                    {dayRows.map((row) => {
-                      const entityName = row.linkedEntityId ? entityById.get(row.linkedEntityId) : null
-                      const { name, tld } = splitDomain(row.domain)
-                      const label = (CATEGORY_LABELS as Record<string, string>)[row.category] ?? row.category
-                      return (
-                        <li
-                          key={row.id}
-                          className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4"
+                <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  {dayRows.map((row) => {
+                    const entityName = row.linkedEntityId ? entityById.get(row.linkedEntityId) : null
+                    const { name, tld } = splitDomain(row.domain)
+                    const label = (CATEGORY_LABELS as Record<string, string>)[row.category] ?? row.category
+                    const accent = CATEGORY_ACCENTS[row.category] ?? CATEGORY_ACCENTS.general
+                    return (
+                      <li
+                        key={row.id}
+                        className="group flex flex-col gap-1.5 rounded-lg border border-border/60 bg-card px-3 py-2.5 transition-colors hover:border-foreground/25 hover:bg-muted/40"
+                      >
+                        <a
+                          href={`https://${row.domain}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex min-w-0 items-center gap-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
                         >
-                          <span className="min-w-0 flex-1 break-all text-sm font-medium font-sans">
+                          <span className="min-w-0 truncate">
                             {name}
                             <span className="text-muted-foreground">{tld}</span>
                           </span>
-                          <span className="flex flex-wrap items-center gap-1.5 sm:justify-end">
-                            {entityName && (
-                              <Link
-                                href={`/directory/${nameToSlug(entityName)}`}
-                                className="inline-flex items-center gap-1 rounded border border-[#EB3847]/30 bg-[#EB3847]/10 px-2 py-0.5 text-xs font-medium text-[#EB3847] hover:bg-[#EB3847]/20 transition-colors"
-                              >
-                                <UserRound className="h-3 w-3" />
-                                {entityName}
-                              </Link>
-                            )}
-                            {row.state && (
-                              <span className="inline-flex items-center gap-1 rounded border border-border/60 bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                                <MapPin className="h-2.5 w-2.5" />
-                                {row.state}
-                              </span>
-                            )}
-                            <span className="inline-flex items-center rounded border border-border/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                              {label}
-                            </span>
+                          <ExternalLink
+                            aria-hidden="true"
+                            className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                          />
+                          <span className="sr-only"> (opens in a new tab)</span>
+                        </a>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded border px-1.5 py-0.5 text-[11px] font-medium ${accent.badge}`}
+                          >
+                            <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${accent.dot}`} />
+                            {label}
                           </span>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </Card>
+                          {row.state && (
+                            <span className="inline-flex items-center gap-1 rounded border border-border/60 bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                              <MapPin className="h-2.5 w-2.5" />
+                              {row.state}
+                            </span>
+                          )}
+                          {entityName && (
+                            <Link
+                              href={`/directory/${nameToSlug(entityName)}`}
+                              className="inline-flex min-w-0 items-center gap-1 rounded border border-[#EB3847]/30 bg-[#EB3847]/10 px-1.5 py-0.5 text-[11px] font-medium text-[#EB3847] hover:bg-[#EB3847]/20 transition-colors"
+                            >
+                              <UserRound className="h-2.5 w-2.5 shrink-0" />
+                              <span className="truncate">{entityName}</span>
+                            </Link>
+                          )}
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
               </section>
             ))
           )}

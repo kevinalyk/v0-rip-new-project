@@ -5,10 +5,11 @@ import { notFound, redirect } from "next/navigation"
 import { verifyToken } from "@/lib/auth"
 import AppLayout from "@/components/app-layout"
 import { Card, CardContent } from "@/components/ui/card"
-import { ExternalLink, Globe, MapPin, UserRound } from "lucide-react"
+import { ExternalLink, Eye, EyeOff, Globe, MapPin, UserRound } from "lucide-react"
 import prisma from "@/lib/prisma"
 import { nameToSlug } from "@/lib/directory"
 import { CATEGORY_LABELS, CATEGORY_ORDER, type DomainCategory } from "@/lib/domain-radar"
+import { setDomainHidden } from "./actions"
 
 export const metadata: Metadata = {
   title: "New Political Domains - Inbox.GOP",
@@ -23,6 +24,8 @@ type DomainRow = {
   category: string
   state: string | null
   linkedEntityId: string | null
+  confidence: string
+  hidden: boolean
   registeredOn: Date
 }
 type CategoryCount = { category: string; _count: { _all: number } }
@@ -71,7 +74,7 @@ function splitDomain(domain: string): { name: string; tld: string } {
 export default async function NewDomainsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string; state?: string; days?: string; q?: string }>
+  searchParams: Promise<{ category?: string; state?: string; days?: string; q?: string; low?: string; hidden?: string }>
 }) {
   const params = await searchParams
 
@@ -92,9 +95,17 @@ export default async function NewDomainsPage({
   since.setUTCDate(since.getUTCDate() - days)
   since.setUTCHours(0, 0, 0, 0)
 
-  const windowWhere = { registeredOn: { gte: since } }
+  const showHidden = params.hidden === "1"
+  const showLow = !showHidden && params.low === "1"
 
-  const [rowsRaw, categoryCountsRaw, stateCountsRaw, lastScan] = await Promise.all([
+  // Default view: US-likely matches only. Low confidence and hidden domains are opt-in.
+  const visibilityWhere = showHidden
+    ? { hidden: true }
+    : { hidden: false, ...(showLow ? {} : { confidence: { in: ["high", "medium"] } }) }
+  const windowWhere = { registeredOn: { gte: since }, ...visibilityWhere }
+  const sinceWhere = { registeredOn: { gte: since } }
+
+  const [rowsRaw, categoryCountsRaw, stateCountsRaw, lastScan, lowCount, hiddenCount] = await Promise.all([
     prisma.newDomainRegistration.findMany({
       where: {
         ...windowWhere,
@@ -112,6 +123,8 @@ export default async function NewDomainsPage({
       _count: { _all: true },
     }),
     prisma.newDomainRegistration.aggregate({ _max: { firstSeenAt: true } }),
+    prisma.newDomainRegistration.count({ where: { ...sinceWhere, hidden: false, confidence: "low" } }),
+    prisma.newDomainRegistration.count({ where: { ...sinceWhere, hidden: true } }),
   ])
 
   // lib/prisma is loosely typed, so give the query results their shapes here.
@@ -145,15 +158,20 @@ export default async function NewDomainsPage({
 
   const filtersActive = !!(category || state || search)
 
-  function hrefFor(nextCategory?: string): string {
+  function hrefFor(nextCategory?: string, view: { low?: boolean; hidden?: boolean } = { low: showLow, hidden: showHidden }): string {
     const query = new URLSearchParams()
     if (nextCategory) query.set("category", nextCategory)
     if (state) query.set("state", state)
     if (search) query.set("q", search)
     if (days !== DEFAULT_DAYS) query.set("days", String(days))
+    if (view.low) query.set("low", "1")
+    if (view.hidden) query.set("hidden", "1")
     const qs = query.toString()
     return qs ? `/directory/new-domains?${qs}` : "/directory/new-domains"
   }
+
+  const viewToggleClass =
+    "inline-flex items-center gap-1.5 rounded-md border border-border/60 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
 
   const controlClass =
     "h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -171,9 +189,9 @@ export default async function NewDomainsPage({
               New Political Domains
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5 max-w-2xl">
-              Newly registered domains that look political, such as office keywords like &quot;for senate&quot; or
-              names of candidates we track. Scanned daily from a free sample of new registrations, so it won&apos;t
-              catch every domain.
+              Newly registered domains that look like US campaigns, such as &quot;name for senate&quot; or names of
+              candidates we track. Scanned daily from a free sample of new registrations, so it won&apos;t catch
+              every domain. Domains with no US signal are tucked under low confidence.
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               {lastScan._max.firstSeenAt
@@ -244,10 +262,30 @@ export default async function NewDomainsPage({
             )}
             <span className="ml-auto text-sm text-muted-foreground">
               {filtersActive ? `${rows.length} of ${totalInWindow}` : totalInWindow}{" "}
+              {showHidden ? "hidden " : ""}
               {totalInWindow === 1 ? "domain" : "domains"} in the last {days} {days === 1 ? "day" : "days"}
               {rows.length === MAX_ROWS ? ` (showing the first ${MAX_ROWS})` : ""}
             </span>
           </form>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {showHidden ? (
+              <Link href={hrefFor(category, {})} className={viewToggleClass}>
+                Back to domains
+              </Link>
+            ) : (
+              <>
+                <Link href={hrefFor(category, { low: !showLow })} className={viewToggleClass}>
+                  {showLow ? "Hide low confidence" : "Show low confidence"}
+                  <span className="tabular-nums opacity-80">{lowCount}</span>
+                </Link>
+                <Link href={hrefFor(category, { hidden: true })} className={viewToggleClass}>
+                  Hidden
+                  <span className="tabular-nums opacity-80">{hiddenCount}</span>
+                </Link>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 px-4 md:px-6 py-6 space-y-8">
@@ -289,22 +327,38 @@ export default async function NewDomainsPage({
                         key={row.id}
                         className="group flex flex-col gap-1.5 rounded-lg border border-border/60 bg-card px-3 py-2.5 transition-colors hover:border-foreground/25 hover:bg-muted/40"
                       >
-                        <a
-                          href={`https://${row.domain}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex min-w-0 items-center gap-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-                        >
-                          <span className="min-w-0 truncate">
-                            {name}
-                            <span className="text-muted-foreground">{tld}</span>
-                          </span>
-                          <ExternalLink
-                            aria-hidden="true"
-                            className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-                          />
-                          <span className="sr-only"> (opens in a new tab)</span>
-                        </a>
+                        <div className="flex items-center justify-between gap-2">
+                          <a
+                            href={`https://${row.domain}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex min-w-0 items-center gap-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                          >
+                            <span className="min-w-0 truncate">
+                              {name}
+                              <span className="text-muted-foreground">{tld}</span>
+                            </span>
+                            <ExternalLink
+                              aria-hidden="true"
+                              className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                            />
+                            <span className="sr-only"> (opens in a new tab)</span>
+                          </a>
+                          <form action={setDomainHidden}>
+                            <input type="hidden" name="id" value={row.id} />
+                            <input type="hidden" name="hidden" value={row.hidden ? "0" : "1"} />
+                            <button
+                              type="submit"
+                              title={row.hidden ? "Restore this domain" : "Hide this domain"}
+                              className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:opacity-0 md:group-hover:opacity-100"
+                            >
+                              {row.hidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                              <span className="sr-only">
+                                {row.hidden ? "Restore" : "Hide"} {row.domain}
+                              </span>
+                            </button>
+                          </form>
+                        </div>
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span
                             className={`inline-flex items-center gap-1.5 rounded border px-1.5 py-0.5 text-[11px] font-medium ${accent.badge}`}
@@ -312,6 +366,11 @@ export default async function NewDomainsPage({
                             <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${accent.dot}`} />
                             {label}
                           </span>
+                          {row.confidence === "low" && (
+                            <span className="inline-flex items-center rounded border border-dashed border-border px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                              Low confidence
+                            </span>
+                          )}
                           {row.state && (
                             <span className="inline-flex items-center gap-1 rounded border border-border/60 bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                               <MapPin className="h-2.5 w-2.5" />
